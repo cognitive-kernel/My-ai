@@ -106,6 +106,8 @@ class LearningEngine:
         if not project:
             return {"status":"no_project","message":"No generated project is available for security testing."}
         result=self.security.scan_code(project["code"],project["language"],fix)
+        if fix and result.get("fixed_code"):
+            execute("UPDATE generated_projects SET code=? WHERE id=?",(result["fixed_code"],project["id"]))
         result["project_id"]=project["id"]
         result["request"]=project["request"]
         return result
