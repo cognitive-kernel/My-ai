@@ -250,3 +250,12 @@ Security reports contain severity, file/line, evidence, potential impact, remedi
 ### امنیت و روش آزمون / Security methodology
 
 The security learning track is independent of PHP and can be applied to Python, PHP, JavaScript and other supported projects. Its methodology is informed by the OWASP Web Security Testing Guide and related secure-development practices. The current WSTG is maintained as an evolving project, with versioned releases available.
+
+## Target-scoped DAST and GitHub team integration
+
+- تست بگیر is report-only unless the user explicitly asks for remediation.
+- Local project paths are supported as before.
+- A public site can be tested only when its URL is explicitly supplied in the request, for example: پن تست آدرس: https://example.com. The scanner performs non-destructive HTTP checks and same-origin crawling; it does not follow redirects to a different host.
+- Remote remediation is disabled. Fix/retest applies to local project source only.
+- GitHub integration is available through GITHUB_TOKEN and the /git/* API endpoints. Reads are enabled by default; branch/file writes require allow_write=true explicitly.
+- For GitHub Enterprise, set GITHUB_API_URL to the API base URL.
