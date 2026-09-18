@@ -22,6 +22,11 @@ Tell the assistant in chat, for example:
 - «PHP را یاد بگیر»
 - «C را یاد بگیر»
 - «JavaScript را یاد بگیر»
+- «SQL Server را یاد بگیر»
+- «MySQL را یاد بگیر»
+- «SQLite را یاد بگیر»
+- «Android را یاد بگیر»
+- «iOS را یاد بگیر»
 
 Or call `POST /learning/learn`. The scheduler then:
 1. selects the next unfinished curriculum topic;
@@ -35,7 +40,9 @@ Or call `POST /learning/learn`. The scheduler then:
 
 The dashboard shows completed topics, total topics, percentage progress and average assessment.
 
-Current built-in curricula: **Python, C, PHP and JavaScript**. More languages can be added through the curriculum registry without changing the assistant architecture.
+Current built-in learning tracks: **Python, C, PHP, JavaScript, SQL Server/T-SQL, MySQL, SQLite, Android/Kotlin and iOS/Swift**.
+
+Database learning is a first-class part of the curriculum. The Android track covers SQLite/Room and the iOS track covers Core Data/SQLite; application-integration topics also connect SQL Server/MySQL/SQLite with Python, PHP and JavaScript.
 
 ### Coding after learning
 A chat command such as «برای من یک برنامه مدیریت فایل با پایتون بنویس» is routed to the coding engine. The engine retrieves learned knowledge, generates source code and, for Python, runs a bounded validation step.
@@ -158,7 +165,12 @@ Then verify:
 2. `http://127.0.0.1:8000` opens.
 3. Microphone permission works.
 4. «پایتون را یاد بگیر» starts a learning session.
-5. The dashboard changes after a completed topic.
-6. A Python coding request returns source code and validation.
+5. «SQL Server را یاد بگیر» starts the SQL Server track.
+6. «MySQL را یاد بگیر» starts the MySQL track.
+7. «SQLite را یاد بگیر» starts the SQLite track.
+8. «Android را یاد بگیر» starts the Android/Kotlin track.
+9. «iOS را یاد بگیر» starts the iOS/Swift track.
+10. The dashboard changes after a completed topic.
+11. A coding request for a selected language returns source code.
 
 CI runs the automated test suite on pushes and pull requests.
