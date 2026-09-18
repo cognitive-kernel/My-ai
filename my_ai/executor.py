@@ -17,7 +17,7 @@ def _run_subprocess(code:str)->ExecutionResult:
 def _run_container(code:str)->ExecutionResult:
     name=f"myai-exec-{uuid.uuid4().hex[:16]}"
     with tempfile.TemporaryDirectory(prefix="myai-exec-") as tmp:
-        p=Path(tmp)/"main.py"; p.write_text(code,encoding="utf-8")
+        p=Path(tmp)/"main.py"; p.write_text(code,encoding="utf-8"); os.chmod(tmp,0o755); os.chmod(p,0o644)
         cmd=["docker","run","--rm","--name",name,"--network","none","--read-only","--cap-drop","ALL","--security-opt","no-new-privileges","--pids-limit",str(settings.exec_pids),"--memory",settings.exec_memory,"--cpus",settings.exec_cpus,"--user","65532:65532","--tmpfs","/tmp:rw,noexec,nosuid,size=64m","--mount",f"type=bind,src={tmp},dst=/work,readonly",settings.exec_image,"python","-I","/work/main.py"]
         try:
             r=subprocess.run(cmd,capture_output=True,text=True,timeout=settings.exec_timeout+2)
