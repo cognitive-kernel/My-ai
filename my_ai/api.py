@@ -31,12 +31,12 @@ def chat(r:ChatRequest):
     try:
         msg=r.message.strip()
         low=msg.lower()
-        learn_words=("یاد بگیر","یادگیری","learn python","learn c","python را یاد","پایتون رو یاد")
+        learn_words=("یاد بگیر","یادگیری","learn python","learn c","learn php","learn javascript","go learn","start learning","python را یاد","پایتون رو یاد")
         if any(x in low for x in learn_words):
             language="C" if (" c " in f" {low} " or "زبان c" in low) else "Python"
             result=learner.autonomous_step(language)
             return {"type":"learning","answer":f"Learning step completed for {language}.","data":result}
-        code_words=("برنامه بنویس","کد بنویس","برام برنامه","write a program","write code","program")
+        code_words=("برنامه بنویس","کد بنویس","برام برنامه","write a program","write code","program","build an app","create an app")
         if any(x in low for x in code_words):
             result=learner.generate_program(msg)
             return {"type":"code","answer":"Generated program:","data":result}
