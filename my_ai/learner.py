@@ -13,7 +13,7 @@ class LearningEngine:
 
     def _discover_prerequisites(self,language,topic):
         prompt=("You are a curriculum architect. Analyze the requested programming subject and identify prerequisite subjects that must be learned before or alongside it. "
-                "Return JSON only: {"prerequisites":[{"name":"...","reason":"...","recommended_order":1}]}."
+                'Return JSON only: {"prerequisites":[{"name":"...","reason":"...","recommended_order":1}]}.'
                 " Do not duplicate the main topic. Only include concrete skills needed to build real projects. "
                 f"MAIN SUBJECT: {language}\nCURRENT TOPIC: {topic['topic']}\nGOAL: {topic['goal']}")
         try:
