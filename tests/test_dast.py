@@ -16,3 +16,21 @@ def test_dast_rejects_non_local_targets():
         assert False
     except ValueError:
         assert True
+
+
+
+def test_executor_container_flags(monkeypatch, tmp_path):
+    from my_ai import executor
+    calls=[]
+    class R:
+        stdout="ok"; stderr=""; returncode=0
+    monkeypatch.setattr(executor.subprocess,"run",lambda cmd,**kwargs:(calls.append(cmd) or R()))
+    monkeypatch.setattr(executor.settings,"exec_mode","container",raising=False)
+    result=executor._run_container("print(1)")
+    assert result.sandbox_mode=="container"
+    cmd=calls[0]
+    assert "--network" in cmd and "none" in cmd
+    assert "--read-only" in cmd
+    assert "--cap-drop" in cmd and "ALL" in cmd
+    assert "--security-opt" in cmd and "no-new-privileges" in cmd
+    assert "--pids-limit" in cmd
