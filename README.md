@@ -73,7 +73,11 @@ iOS یاد بگیر
 - برای Python یک اعتبارسنجی/اجرای محدود انجام دهد.
 - پروژه تولیدشده را در حافظه پروژه ثبت کند.
 
-> اجرای Python یک sandbox امنیتی قوی نیست. برای کد غیرقابل‌اعتماد از container/VM جداگانه استفاده کنید.
+### اجرای کد Python
+
+اجرای Python به‌صورت پیش‌فرض با **Container Executor** انجام می‌شود. کانتینر اجرای کد شبکه ندارد (`--network none`)، filesystem اصلی را فقط خواندنی می‌بیند، capabilityها حذف می‌شوند، `no-new-privileges` فعال است، RAM/CPU/PID محدود است و timeout و محدودیت خروجی دارد. کانتینر پس از اجرا حذف می‌شود.
+
+حالت subprocess فقط با `EXECUTOR_MODE=subprocess` فعال می‌شود و برای کد کاملاً غیرقابل‌اعتماد توصیه نمی‌شود. برای ایزولیشن بالاتر، VM جداگانه گزینه مناسب‌تری است.
 
 ## امنیت، Static Analysis و DAST
 
@@ -404,6 +408,12 @@ http://127.0.0.1:8000
 | DB_PATH | data/myai.db | پایگاه‌داده پایدار |
 | MAX_WEB_CHARS | 30000 | حداکثر متن استخراج‌شده از وب |
 | EXEC_TIMEOUT | 10 | timeout اجرای Python |
+| EXECUTOR_MODE | container | حالت اجرا: container یا subprocess |
+| EXECUTOR_IMAGE | python:3.11-slim | image اجرای Python |
+| EXEC_MEMORY | 256m | سقف RAM کانتینر |
+| EXEC_CPUS | 1.0 | سقف CPU کانتینر |
+| EXEC_PIDS | 64 | سقف process کانتینر |
+| EXEC_OUTPUT_CHARS | 12000 | سقف خروجی |
 | HOST | 127.0.0.1 | آدرس bind API |
 | PORT | 8000 | پورت API |
 | GITHUB_TOKEN | — | token اتصال GitHub |
@@ -429,7 +439,7 @@ Web UI / Voice
       +--> Ollama local LLM
       +--> SQLite + FTS5 memory
       +--> Official/reference web sources
-      +--> Python executor
+      +--> Container Python Executor
       +--> DAST runner
       +--> Learning scheduler
 ```
@@ -471,6 +481,7 @@ Web UI / Voice
 ```bash
 pip install -e .
 pytest -q
+python -m compileall -q my_ai tests
 ```
 
 موارد پایه برای بررسی دستی:
@@ -488,10 +499,22 @@ pytest -q
 CI تست‌های خودکار را روی push و pull request اجرا می‌کند.
 
 
-## وضعیت تکمیل
+## وضعیت فعلی پروژه
 
-- Container Executor برای اجرای Python با محدودیت‌های ایزوله
+قابلیت‌های اصلی و سخت‌سازی‌های فنی در repository پیاده‌سازی شده‌اند. اعلام «۱۰۰٪» فقط بعد از عبور موفق تست نهایی محیط واقعی انجام می‌شود.
+
+### تکمیل‌شده
+- Container Executor ایزوله برای Python
 - Web Learner با DNS/IP و redirect validation
 - Help UI بدون تزریق HTML از خروجی مدل
+- تأیید و رد به‌روزرسانی‌های راهنما
 - API با mutable defaultهای اصلاح‌شده
 - GitHub Actions برای compile و pytest
+- Static Security Analysis و DAST
+- curriculum، حافظه پایدار و Scheduler
+- Voice، Git/GitHub و رابط وب
+
+### تست نهایی باقی‌مانده
+- اجرای CI و بررسی نتیجه واقعی تست‌ها
+- تست end-to-end روی محیط دارای Ollama و Docker
+- تست دستی نهایی UI، Voice، Learning، GitHub و Security
