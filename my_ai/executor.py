@@ -9,7 +9,7 @@ class ExecutionResult:
 def _truncate(value:str)->str: return (value or "")[-settings.exec_output_chars:]
 def _run_subprocess(code:str)->ExecutionResult:
     with tempfile.TemporaryDirectory(prefix="myai-") as tmp:
-        p=Path(tmp)/"main.py"; p.write_text(code,encoding="utf-8")
+        p=Path(tmp)/"main.py"; p.write_text(code,encoding="utf-8"); os.chmod(tmp,0o755); os.chmod(p,0o644)
         try:
             r=subprocess.run([sys.executable,"-I",str(p)],cwd=tmp,capture_output=True,text=True,timeout=settings.exec_timeout,env={"PATH":os.environ.get("PATH","")})
             return ExecutionResult(_truncate(r.stdout),_truncate(r.stderr),False,r.returncode,"subprocess")
