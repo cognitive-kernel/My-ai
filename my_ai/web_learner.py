@@ -1,10 +1,22 @@
 from __future__ import annotations
 import ipaddress,re,socket
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote_plus
 import httpx
 from bs4 import BeautifulSoup
 from .config import settings
 class WebLearner:
+    def search(self, query, domains=None, limit=6):
+        q = query + ((" site:" + " OR site:".join(domains)) if domains else "")
+        url = "https://html.duckduckgo.com/html/?q=" + quote_plus(q)
+        r = httpx.get(url, timeout=20, follow_redirects=True, headers={"User-Agent":"My-AI/0.2"})
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "html.parser")
+        results = []
+        for a in soup.select("a.result__a")[:limit]:
+            href = a.get("href")
+            title = a.get_text(" ", strip=True)
+            if href and title: results.append({"title": title, "url": href})
+        return results
     @staticmethod
     def _safe_host(host):
         try:
