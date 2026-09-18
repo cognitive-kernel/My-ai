@@ -4,6 +4,7 @@ from fastapi import FastAPI,HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel,HttpUrl
 from .agent import Agent
+from .command_policy import parse_command
 from .config import settings
 from .curriculum import canonical_language,LANGUAGE_CURRICULA
 from .db import fetch_all,init_db
@@ -40,8 +41,9 @@ def chat(r:ChatRequest):
         for key,name in sorted(aliases.items(),key=lambda x:len(x[0]),reverse=True):
             if key in low: requested=name; break
         learn_intent=("یاد بگیر" in low or "یادگیری" in low or "learn" in low or "go learn" in low or "start learning" in low)
-        security_words=("پن تست" in low or "پنتست" in low or "تست نفوذ" in low or "تست امنیت" in low or "security test" in low or "pentest" in low or "penetration test" in low)
-        fix_requested=("رفع کن" in low or "رفعش کن" in low or "اصلاح کن" in low or "برطرف کن" in low or "fix" in low or "remediate" in low)
+        policy=parse_command(msg)
+        security_words=policy.security
+        fix_requested=(policy.security_action=="fix")
         code_words=("برنامه بنویس","کد بنویس","برام برنامه","write a program","write code","program","build an app","create an app")
         code_intent=any(x in low for x in code_words)
         if security_words:
