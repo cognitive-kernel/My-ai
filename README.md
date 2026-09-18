@@ -1,122 +1,87 @@
 # My-AI — Personal Local Learning Agent
 
-My-AI is a **zero-cost, local-first AI learning and coding agent** designed for a normal computer (for example, Intel Core i5 + 32 GB RAM + integrated graphics). It uses a locally hosted LLM through Ollama, persistent SQLite memory, web learning, a Python curriculum, code execution, evaluation, and project-oriented task planning.
-
-> The project does not train an LLM from scratch. It builds a persistent learning/agent layer around a local model. The model can be replaced later without losing the knowledge database.
+My-AI is a **zero-cost, local-first AI learning and coding agent** for an ordinary computer such as Core i5 + 32 GB RAM + integrated graphics. It uses a local LLM through Ollama, so the application itself does not require a paid AI subscription.
 
 ## فارسی
 
-**My-AI** یک عامل هوش مصنوعی شخصی و محلی است که برای اجرای رایگان روی سیستم معمولی طراحی شده است؛ مثلاً Core i5 با 32GB RAM و گرافیک آنبرد.
+My-AI یک عامل هوش مصنوعی شخصی و محلی است. هدف پروژه این است که یک مدل زبانی محلی را با **حافظه دائمی، مطالعه منابع، برنامه آموزشی، تمرین، اجرای کد، ارزیابی، برنامه‌ریزی پروژه و یادگیری دوره‌ای** ترکیب کند.
 
-امکانات اصلی:
-- اجرای مدل زبانی به‌صورت محلی با Ollama و بدون هزینه API.
-- چت و حافظه دائمی با SQLite.
-- یادگیری مرحله‌ای Python از منابع اینترنتی.
-- ذخیره دانش آموخته‌شده در حافظه قابل جست‌وجو.
-- اجرای کد Python و بررسی نتیجه.
-- برنامه درسی و آزمون برای Python.
-- جمع‌آوری محتوای وب بدون نیاز به API پولی.
-- ثبت تجربه‌ها، خطاها و نتایج یادگیری.
-- تعریف پروژه و تبدیل آن به وظایف مرحله‌ای.
-- API محلی با FastAPI.
-- امکان تعویض مدل بدون از دست دادن حافظه.
-- تست خودکار و CI.
+### امکانات پیاده‌سازی‌شده
+- مدل زبانی محلی با Ollama.
+- چت وب و REST API.
+- حافظه مکالمه.
+- حافظه دانش دائمی SQLite.
+- جست‌وجوی متنی سریع با SQLite FTS5.
+- مطالعه صفحات عمومی وب و ثبت منبع.
+- محافظت پایه در برابر دسترسی Web Learner به IPهای خصوصی/لوکال.
+- دوره آموزشی Python.
+- دوره آموزشی C.
+- گام‌های یادگیری خودکار و امتیازدهی اولیه.
+- تولید تمرین.
+- اجرای محدود Python با timeout و محدودیت خروجی.
+- برنامه‌ریزی پروژه و معیار پذیرش.
+- Scheduler برای مطالعه دوره‌ای.
+- رابط وب ساده.
+- Docker و docker-compose.
+- تست‌های خودکار و GitHub Actions.
+- معماری ماژولار برای مدل‌ها و زبان‌های بیشتر.
 
-### نکته مهم
-این پروژه «آموزش مجدد مدل زبانی از صفر» نیست. مدل محلی نقش موتور استدلال و تولید متن را دارد و My-AI لایه حافظه، مطالعه، تمرین، اجرا و ارزیابی را به آن اضافه می‌کند.
+### نحوه «یادگیری»
+این پروژه وزن‌های مدل را از صفر آموزش نمی‌دهد. مدل محلی موتور استدلال است و My-AI اطلاعات، یادداشت‌ها، منابع، مکالمات و نتایج را در حافظه نگه می‌دارد و در درخواست‌های بعدی بازیابی می‌کند. بنابراین با گذشت زمان **دانش قابل بازیابی و تجربه ثبت‌شده** افزایش می‌یابد.
+
+### نکته امنیتی
+اجرای Python با subprocess یک sandbox امنیتی کامل نیست. برای اجرای کد کاملاً غیرقابل اعتماد، باید executor کانتینری/VM واقعی اضافه شود. Web Learner نیز فقط درخواست‌های عمومی را اجازه می‌دهد و IPهای خصوصی/loopback را مسدود می‌کند.
+
+## English
+
+My-AI is a **zero-cost, local-first personal AI learning and coding agent**. It combines a locally hosted LLM with persistent memory, searchable knowledge, web ingestion, curricula, exercises, bounded code execution, project planning and scheduled learning.
+
+### Implemented capabilities
+- Local Ollama LLM.
+- Web UI and REST API.
+- Persistent conversation memory.
+- SQLite knowledge storage.
+- SQLite FTS5 retrieval.
+- Public web-page ingestion with source attribution.
+- Basic SSRF protection for private/loopback destinations.
+- Python curriculum.
+- C curriculum.
+- Autonomous learning steps with basic assessment.
+- Exercise generation.
+- Bounded Python execution with timeout/output limits.
+- Project planning with acceptance criteria.
+- Periodic study scheduler.
+- Docker deployment.
+- Automated tests and GitHub Actions.
+- Modular architecture for additional models/languages.
+
+### Learning model
+My-AI does **not** retrain a foundation model from scratch. The local LLM remains the reasoning engine. My-AI builds a persistent external memory and learning workflow around it: sources are processed, notes are stored, exercises can be generated, code can be executed, and results can be recorded for future retrieval.
 
 ## Architecture
 
-```
 User
   |
   v
-FastAPI
+Web UI / REST API
   |
-  +--> Local LLM (Ollama)
+  v
+Agent -----> Ollama local LLM
   |
-  +--> SQLite memory / knowledge
-  |
-  +--> Web learner
-  |
-  +--> Python executor
-  |
-  +--> Curriculum + evaluator
-  |
-  +--> Project planner
-```
-
-## Features
-
-### 1. Local LLM
-Default provider is Ollama. No paid API key is required.
-
-Recommended starting model for 32 GB RAM:
-- A small coding-capable 7B/8B quantized model.
-
-The exact model is configurable through `OLLAMA_MODEL`.
-
-### 2. Persistent memory
-The database stores:
-- conversations
-- knowledge items
-- learning sessions
-- experiments
-- project tasks
-
-### 3. Python learning
-The built-in curriculum starts with:
-1. syntax and execution
-2. variables and types
-3. control flow
-4. functions
-5. collections
-6. modules and packages
-7. exceptions
-8. files
-9. OOP
-10. typing
-11. testing
-12. async programming
-13. databases
-14. HTTP/API development
-15. packaging and deployment
-16. security and production practices
-
-The learner can study a source, summarize it, store knowledge, create an exercise, execute the solution, and record the result.
-
-### 4. Web learning
-The learner can fetch public web pages using ordinary HTTP requests. It is intentionally conservative:
-- respects HTTP errors
-- limits downloaded content
-- strips scripts/styles
-- extracts readable text
-- stores source URL with knowledge
-
-Use only sources you are legally allowed to access.
-
-### 5. Python execution
-Code is executed with:
-- timeout
-- output-size limit
-- temporary working directory
-- isolated process
-
-This is **not a perfect security sandbox**. Do not execute untrusted code on a machine containing sensitive data. Docker isolation can be added later.
-
-### 6. Project mode
-Send a project goal to `/projects/plan`. The planner creates structured tasks. Each task can then be handled by the local model and validated with tests.
+  +----> SQLite + FTS5 memory
+  +----> Web learner
+  +----> Curriculum
+  +----> Python executor
+  +----> Learning scheduler
+  +----> Project planner
 
 ## Installation
 
-### 1. Requirements
-
+Requirements:
 - Python 3.11+
 - Ollama
 - 16 GB RAM minimum; 32 GB recommended
-- Internet connection only for web learning/model download
-
-### 2. Install Python dependencies
+- Internet only for model download and web learning
 
 ```bash
 python -m venv .venv
@@ -124,99 +89,49 @@ python -m venv .venv
 .venv\\Scripts\\activate
 # Linux/macOS:
 # source .venv/bin/activate
-
 pip install -r requirements.txt
-```
-
-### 3. Install and start Ollama
-
-Install Ollama from its official installer, then download a suitable model:
-
-```bash
 ollama pull qwen2.5-coder:7b
-```
-
-If that exact tag is unavailable on your installation, set `OLLAMA_MODEL` to an available coding model.
-
-### 4. Start My-AI
-
-```bash
 python -m my_ai
 ```
 
-Open:
-``http://127.0.0.1:8000/docs``
+Open `http://127.0.0.1:8000` or `/docs`.
 
-## API examples
+## Main API
 
-### Chat
-
-```bash
-curl -X POST http://127.0.0.1:8000/chat ^
-  -H "Content-Type: application/json" ^
-  -d "{\"message\":\"Explain Python decorators\"}"
-```
-
-### Learn a web page
-
-```bash
-curl -X POST http://127.0.0.1:8000/learn/url ^
-  -H "Content-Type: application/json" ^
-  -d "{\"url\":\"https://docs.python.org/3/tutorial/\"}"
-```
-
-### Start Python learning
-
-```bash
-curl -X POST http://127.0.0.1:8000/learning/python/start
-```
-
-### Plan a project
-
-```bash
-curl -X POST http://127.0.0.1:8000/projects/plan ^
-  -H "Content-Type: application/json" ^
-  -d "{\"goal\":\"Build a FastAPI service with SQLite and tests\"}"
-```
+- `POST /chat`
+- `POST /learn/url`
+- `POST /learning/start`
+- `POST /learning/step`
+- `GET /learning/status`
+- `POST /learning/practice`
+- `POST /code/run`
+- `POST /projects/plan`
+- `GET /memory/search?q=...`
+- `GET /memory/knowledge`
+- `GET /projects/tasks`
+- `POST /scheduler/start`
+- `POST /scheduler/stop`
 
 ## Configuration
 
-Environment variables:
-
 | Variable | Default | Purpose |
 |---|---|---|
-| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama endpoint |
-| `OLLAMA_MODEL` | `qwen2.5-coder:7b` | Local model |
-| `DB_PATH` | `data/myai.db` | SQLite database |
-| `MAX_WEB_CHARS` | `30000` | Maximum extracted web text |
-| `EXEC_TIMEOUT` | `10` | Python execution timeout |
-| `HOST` | `127.0.0.1` | API bind address |
-| `PORT` | `8000` | API port |
+| OLLAMA_BASE_URL | http://127.0.0.1:11434 | Ollama endpoint |
+| OLLAMA_MODEL | qwen2.5-coder:7b | Local model |
+| DB_PATH | data/myai.db | Persistent database |
+| MAX_WEB_CHARS | 30000 | Maximum extracted page text |
+| EXEC_TIMEOUT | 10 | Python execution timeout |
+| HOST | 127.0.0.1 | API bind address |
+| PORT | 8000 | API port |
 
-## Testing
+## Tests
 
 ```bash
 pytest -q
 ```
 
-## English summary
+## Scope of this release
 
-My-AI is a local-first learning agent rather than a new foundation model. It combines a local LLM with persistent memory, web ingestion, curriculum management, Python execution, evaluation, and project planning. It is designed to be free to run after the local model is downloaded.
+The **core project is implemented**. It is not a claim that a small local model will have the same reasoning ability as a commercial frontier model, nor that external memory equals model-weight training. Those are separate technical capabilities.
 
-## Roadmap
-
-- [x] Local LLM adapter
-- [x] SQLite memory
-- [x] Web ingestion
-- [x] Python execution
-- [x] Python curriculum
-- [x] Learning sessions
-- [x] Project planning
-- [x] REST API
-- [x] Automated tests
-- [ ] Vector embeddings / semantic search
-- [ ] Docker code sandbox
-- [ ] Browser UI
-- [ ] Scheduled autonomous study
-- [ ] Multi-language curricula (C, C++, Rust, etc.)
-- [ ] Long-running autonomous agent loop
+Optional future upgrades can improve semantic retrieval, sandboxing, browser UX, autonomous multi-step project execution, Git integration and fine-tuning.
