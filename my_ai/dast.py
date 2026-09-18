@@ -106,12 +106,28 @@ class LocalDAST:
                     findings.append({"severity":"low","title":"User-controlled query value reflected","endpoint":ep,"evidence":"A harmless unique marker was reflected.","impact":"Reflection can become XSS if placed in an executable context.","remediation":"Contextually encode output and avoid unsafe HTML/JS sinks; confirm with source review."})
         return findings
 
+    def _crawl_public(self,base,limit=30):
+        basep=urlparse(base); seen={base}; queue=[base]
+        with httpx.Client(timeout=self.timeout,follow_redirects=False) as client:
+            while queue and len(seen)<limit:
+                cur=queue.pop(0)
+                try:r=client.get(cur)
+                except Exception:continue
+                if "text/html" not in r.headers.get("content-type","").lower(): continue
+                for href in re.findall(r'''href=["\\']([^"\\'#]+)''',r.text[:300000],re.I):
+                    nxt=urljoin(cur,href)
+                    p=urlparse(nxt)
+                    if p.scheme not in {"http","https"} or p.netloc.lower()!=basep.netloc.lower(): continue
+                    if nxt not in seen:
+                        seen.add(nxt); queue.append(nxt)
+        return sorted(urlparse(x).path or "/" for x in seen)[:limit]
+
     def scan_url(self,url:str,explicit=True):
         if not explicit: raise PermissionError("A target URL must be explicitly supplied by the user.")
         p=self._assert_public_explicit(url)
         base=p.scheme + "://" + p.netloc + (p.path or "/")
-        findings=self._checks(base,["/"])
-        result={"status":"completed","target":url,"mode":"explicit_external_url","endpoints":["/"],"findings":findings,"summary":self._summary(findings),"fixed":False}
+        endpoints=self._crawl_public(base); findings=self._checks(base,endpoints)
+        result={"status":"completed","target":url,"mode":"explicit_external_url","endpoints":endpoints,"findings":findings,"summary":self._summary(findings),"fixed":False}
         execute("INSERT INTO security_scans(project_path,status,summary,findings) VALUES(?,?,?,?)",(url,"dast_external_completed",json.dumps(result["summary"],ensure_ascii=False),json.dumps(findings,ensure_ascii=False)))
         return result
 
