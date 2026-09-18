@@ -78,9 +78,9 @@ The security workflow now has two complementary layers:
 
 The dynamic runner is deliberately restricted to localhost and does not scan arbitrary external targets. Supported local runtime detection currently covers common FastAPI/Flask Python projects, PHP built-in server projects, static HTML projects, and source-level endpoint discovery. Unsupported frameworks are reported instead of being guessed.
 
-The architecture follows the complementary model described by OWASP: source review can find issues dynamic testing misses, while testing the running application validates security controls at system level. citeturn0search1turn0search4
+The architecture follows the complementary model described by OWASP: source review can find issues dynamic testing misses, while testing the running application validates security controls at system level.
 
-For larger CI/CD deployments, OWASP ZAP also provides Docker-based baseline, full, and API scanning modes; this project keeps its built-in DAST local and controlled rather than silently targeting external systems. citeturn0search9turn0search3
+For larger CI/CD deployments, OWASP ZAP also provides Docker-based baseline, full, and API scanning modes; this project keeps its built-in DAST local and controlled rather than silently targeting external systems.
 
 ### End-to-end command examples
 
