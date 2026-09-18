@@ -78,32 +78,61 @@ class LocalDAST:
         return False
 
     def _checks(self,base,endpoints):
-        findings=[]; seen=set()
+        findings=[]; seen=set(); forms=[]
         with httpx.Client(timeout=self.timeout,follow_redirects=False) as client:
             for ep in endpoints:
                 url=urljoin(base.rstrip("/")+"/",ep.lstrip("/"))
                 try: r=client.get(url)
                 except Exception: continue
                 h={k.lower():v for k,v in r.headers.items()}
+                if "text/html" in h.get("content-type","").lower():
+                    for m in re.finditer(r"<form\b([^>]*)>(.*?)</form>",r.text[:300000],re.I|re.S):
+                        attrs,body=m.group(1),m.group(2)
+                        action=re.search(r"""action\s*=\s*["']([^"']*)""",attrs,re.I)
+                        method=re.search(r"""method\s*=\s*["']([^"']*)""",attrs,re.I)
+                        names=re.findall(r"""name\s*=\s*["']([^"']*)""",body,re.I)
+                        forms.append({"action":urljoin(url,action.group(1)) if action else url,"method":(method.group(1) if method else "GET").upper(),"inputs":names})
                 checks=[
-                    ("csp","medium","Missing Content-Security-Policy","CSP header is absent.","Browser-side injection and content-loading risks are harder to contain.","Define a restrictive Content-Security-Policy."),
-                    ("nosniff","low","Missing X-Content-Type-Options","X-Content-Type-Options is absent.","Some browsers may perform content sniffing.","Send X-Content-Type-Options: nosniff."),
+                    ("csp","medium","Missing Content-Security-Policy","content-security-policy","Define a restrictive Content-Security-Policy."),
+                    ("nosniff","low","Missing X-Content-Type-Options","x-content-type-options","Send X-Content-Type-Options: nosniff."),
+                    ("referrer","low","Missing Referrer-Policy","referrer-policy","Set a restrictive Referrer-Policy."),
+                    ("permissions","low","Missing Permissions-Policy","permissions-policy","Restrict browser capabilities with Permissions-Policy."),
                 ]
-                for key,sev,title,evidence,impact,remediation in checks:
-                    if key not in seen and (("csp"==key and "content-security-policy" not in h) or ("nosniff"==key and "x-content-type-options" not in h)):
-                        seen.add(key); findings.append({"severity":sev,"title":title,"endpoint":ep,"evidence":evidence,"impact":impact,"remediation":remediation})
+                for key,sev,title,header,remediation in checks:
+                    if key not in seen and header not in h:
+                        seen.add(key); findings.append({"severity":sev,"title":title,"endpoint":ep,"evidence":f"{header} is absent.","impact":"A browser security control is not explicitly configured.","remediation":remediation})
                 if "x-frame-options" not in h and "content-security-policy" not in h and "frame" not in seen:
-                    seen.add("frame"); findings.append({"severity":"medium","title":"Missing clickjacking protection","endpoint":ep,"evidence":"Neither X-Frame-Options nor CSP was observed.","impact":"Sensitive pages may be embeddable by another origin.","remediation":"Set X-Frame-Options or CSP frame-ancestors."})
+                    seen.add("frame"); findings.append({"severity":"medium","title":"Missing clickjacking protection","endpoint":ep,"evidence":"Neither X-Frame-Options nor CSP was observed.","impact":"Sensitive pages may be embeddable by another origin.","remediation":"Set X-Frame-Options or CSP frame-ancestors.")
+                if "server" in h and re.search(r"(?i)(uvicorn|werkzeug|php|express|apache|nginx)",h["server"]):
+                    findings.append({"severity":"low","title":"Technology/version disclosure","endpoint":ep,"evidence":h["server"][:120],"impact":"Detailed server identity can aid reconnaissance.","remediation":"Minimize unnecessary Server header/version disclosure."})
                 if r.status_code>=500:
                     findings.append({"severity":"medium","title":"Server error on reachable endpoint","endpoint":ep,"evidence":f"GET returned HTTP {r.status_code}.","impact":"Unhandled exceptions may expose availability or implementation problems.","remediation":"Inspect logs, validate inputs and add regression tests."})
                 body=r.text[:200000]
-                if re.search(r"(?i)(traceback \(most recent call last\)|stack trace|debug toolbar)",body):
+                if re.search(r"(?i)(traceback \(most recent call last\)|stack trace|debug toolbar|django debug)",body):
                     findings.append({"severity":"high","title":"Runtime debug/error details exposed","endpoint":ep,"evidence":"Response contains recognizable debug or stack-trace content.","impact":"Internal paths and implementation details may be disclosed.","remediation":"Disable debug output and return generic error pages."})
                 probe=url+("&" if "?" in url else "?")+"myai_probe=MYAI_REFLECTION_TEST"
                 try: rr=client.get(probe)
                 except Exception: rr=None
                 if rr is not None and "MYAI_REFLECTION_TEST" in rr.text:
                     findings.append({"severity":"low","title":"User-controlled query value reflected","endpoint":ep,"evidence":"A harmless unique marker was reflected.","impact":"Reflection can become XSS if placed in an executable context.","remediation":"Contextually encode output and avoid unsafe HTML/JS sinks; confirm with source review."})
+                try:
+                    tr=client.request("TRACE",url)
+                    if tr.status_code<400:
+                        findings.append({"severity":"medium","title":"TRACE method enabled","endpoint":ep,"evidence":f"TRACE returned HTTP {tr.status_code}.","impact":"An unnecessary HTTP method increases attack surface.","remediation":"Disable TRACE at the web server or application gateway."})
+                except Exception: pass
+                if "set-cookie" in h:
+                    cookie=h["set-cookie"].lower()
+                    if url.startswith("https://") and "secure" not in cookie:
+                        findings.append({"severity":"medium","title":"Cookie missing Secure attribute","endpoint":ep,"evidence":"A cookie was set without Secure.","impact":"The cookie may be exposed over an unencrypted connection.","remediation":"Set Secure on security-sensitive cookies."})
+                    if "httponly" not in cookie:
+                        findings.append({"severity":"low","title":"Cookie missing HttpOnly attribute","endpoint":ep,"evidence":"A cookie was set without HttpOnly.","impact":"Client-side scripts can access the cookie.","remediation":"Set HttpOnly for session cookies unless script access is required."})
+                    if "samesite" not in cookie:
+                        findings.append({"severity":"low","title":"Cookie missing SameSite attribute","endpoint":ep,"evidence":"A cookie was set without SameSite.","impact":"Cross-site request behavior is less restricted.","remediation":"Set an appropriate SameSite policy.","})
+            for form in forms:
+                if form["method"] in {"POST","PUT","PATCH","DELETE"}:
+                    csrf={"csrf","csrf_token","csrftoken","xsrf","xsrf_token","_token","authenticity_token"}
+                    if not csrf.intersection({x.lower() for x in form["inputs"]}):
+                        findings.append({"severity":"medium","title":"State-changing form has no recognizable CSRF token","endpoint":form["action"],"evidence":f"Method {form['method']} has no common CSRF token field.","impact":"A state-changing request may require CSRF protection.","remediation":"Use framework-supported CSRF protection and validate tokens server-side."})
         return findings
 
     def _crawl_public(self,base,limit=30):
