@@ -19,7 +19,7 @@ BUILD_WORDS=("بساز","بنویس","برنامه بنویس","پروژه بس�
 
 def parse_command(text: str) -> CommandPolicy:
     low=text.lower()
-    security=any(x in low for x in SEC_WORDS) or (any(x in low for x in TEST_WORDS) and any(x in low for x in PROJECT_WORDS))
+    security=any(x in low for x in SEC_WORDS) or any(x in low for x in TEST_WORDS)
     report=any(x in low for x in REPORT_WORDS) or (any(x in low for x in TEST_WORDS) and not any(x in low for x in SEC_WORDS))
     fix=any(x in low for x in FIX_WORDS)
     # Explicit user instruction always overrides the default.
