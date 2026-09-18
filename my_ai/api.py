@@ -21,6 +21,7 @@ class CodeRequest(BaseModel): code:str
 class ProgramRequest(BaseModel): request:str; language:str="Python"
 class LanguageRequest(BaseModel): language:str="Python"
 class SchedulerRequest(BaseModel): language:str="Python"; interval_seconds:int=3600
+class LearnRequest(BaseModel): language:str="Python"; interval_seconds:int=3600
 @app.get("/",response_class=HTMLResponse)
 def home(): return page()
 @app.get("/health")
@@ -49,7 +50,7 @@ def learn_url(r:URLRequest):
 def learning_start(r:LanguageRequest): return learner.start(r.language)
 @app.post("/learning/step")
 def learning_step(r:LanguageRequest):
-    try:return learner.autonomous_step(r.language)
+    try:return learner.learn_next(r.language)
     except Exception as e:raise HTTPException(502,str(e))
 @app.get("/learning/status")
 def learning_status(language:str|None=None): return learner.status(language)
@@ -77,6 +78,13 @@ def memory_search(q:str,limit:int=8):
 def project_tasks(): return fetch_all("SELECT * FROM project_tasks ORDER BY id")
 @app.post("/scheduler/start")
 def scheduler_start(r:SchedulerRequest):
+    if not 60<=r.interval_seconds<=86400: raise HTTPException(400,"interval_seconds must be 60..86400")
+    scheduler.interval_seconds=r.interval_seconds; scheduler.start(r.language)
+    return {"status":"started","language":r.language,"interval_seconds":r.interval_seconds}
+@app.get("/scheduler/status")
+def scheduler_status(): return {"running":scheduler.running(),"language":scheduler.language,"last_result":scheduler.last_result}
+@app.post("/learning/learn")
+def learning_learn(r:LearnRequest):
     if not 60<=r.interval_seconds<=86400: raise HTTPException(400,"interval_seconds must be 60..86400")
     scheduler.interval_seconds=r.interval_seconds; scheduler.start(r.language)
     return {"status":"started","language":r.language,"interval_seconds":r.interval_seconds}
