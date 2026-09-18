@@ -12,6 +12,7 @@ from .db import fetch_all,init_db
 from .learner import LearningEngine
 from .scheduler import StudyScheduler
 from .ui import page
+from .help import page as help_page
 from .git_connector import GitHubConnector
 
 scheduler=StudyScheduler()
@@ -32,6 +33,9 @@ class LearnRequest(BaseModel): language:str="Python"; interval_seconds:int=3600
 
 @app.get("/",response_class=HTMLResponse)
 def home(): return page()
+@app.get("/help",response_class=HTMLResponse)
+def help(): return help_page()
+
 @app.get("/health")
 def health(): return {"status":"ok","model":settings.ollama_model}
 
