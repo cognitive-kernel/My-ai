@@ -10,6 +10,24 @@ class LocalDAST:
     def __init__(self, timeout:float=8.0, startup_timeout:float=20.0):
         self.timeout=timeout; self.startup_timeout=startup_timeout
 
+    def _assert_local(self,url):
+        p=urlparse(url)
+        if p.scheme not in {"http","https"} or (p.hostname or "").lower() not in {"127.0.0.1","localhost","::1"}:
+            raise ValueError("Target is not local.")
+
+    def _assert_public_explicit(self,url):
+        p=urlparse(url)
+        if p.scheme not in {"http","https"} or not p.hostname:
+            raise ValueError("Target URL must be http:// or https://.")
+        try:
+            import ipaddress
+            ip=ipaddress.ip_address(socket.gethostbyname(p.hostname))
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+                raise ValueError("Public DAST target must resolve to a public address.")
+        except socket.gaierror as e:
+            raise ValueError("Target hostname could not be resolved.") from e
+        return p
+
     def _free_port(self):
         with socket.socket() as s:
             s.bind(("127.0.0.1",0)); return int(s.getsockname()[1])
@@ -87,6 +105,15 @@ class LocalDAST:
                 if rr is not None and "MYAI_REFLECTION_TEST" in rr.text:
                     findings.append({"severity":"low","title":"User-controlled query value reflected","endpoint":ep,"evidence":"A harmless unique marker was reflected.","impact":"Reflection can become XSS if placed in an executable context.","remediation":"Contextually encode output and avoid unsafe HTML/JS sinks; confirm with source review."})
         return findings
+
+    def scan_url(self,url:str,explicit=True):
+        if not explicit: raise PermissionError("A target URL must be explicitly supplied by the user.")
+        p=self._assert_public_explicit(url)
+        base=p.scheme + "://" + p.netloc + (p.path or "/")
+        findings=self._checks(base,["/"])
+        result={"status":"completed","target":url,"mode":"explicit_external_url","endpoints":["/"],"findings":findings,"summary":self._summary(findings),"fixed":False}
+        execute("INSERT INTO security_scans(project_path,status,summary,findings) VALUES(?,?,?,?)",(url,"dast_external_completed",json.dumps(result["summary"],ensure_ascii=False),json.dumps(findings,ensure_ascii=False)))
+        return result
 
     def _run(self,root:Path):
         port=self._free_port(); command,base=self._detect_command(root,port)
