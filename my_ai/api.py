@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel,HttpUrl
 from .agent import Agent
 from .config import settings
+from .curriculum import canonical_language,LANGUAGE_CURRICULA
 from .db import fetch_all,init_db
 from .learner import LearningEngine
 from .scheduler import StudyScheduler
@@ -31,14 +32,25 @@ def chat(r:ChatRequest):
     try:
         msg=r.message.strip()
         low=msg.lower()
-        learn_words=("یاد بگیر","یادگیری","learn python","learn c","learn php","learn javascript","go learn","start learning","python را یاد","پایتون رو یاد")
-        if any(x in low for x in learn_words):
-            language="C" if (" c " in f" {low} " or "زبان c" in low) else "Python"
-            result=learner.autonomous_step(language)
-            return {"type":"learning","answer":f"Learning step completed for {language}.","data":result}
+        known=LANGUAGE_CURRICULA
+        aliases={
+            "sql server":"SQL Server","sqlserver":"SQL Server","mssql":"SQL Server",
+            "mysql":"MySQL","sqlite":"SQLite","sql lite":"SQLite",
+            "android":"Android","اندروید":"Android","ios":"iOS","آی او اس":"iOS",
+            "python":"Python","پایتون":"Python","php":"PHP","c":"C","javascript":"JavaScript","js":"JavaScript"}
+        requested=None
+        for key,name in sorted(aliases.items(),key=lambda x:len(x[0]),reverse=True):
+            if key in low:
+                requested=name; break
+        learn_intent=("یاد بگیر" in low or "یادگیری" in low or "learn" in low or "go learn" in low or "start learning" in low)
+        if learn_intent:
+            language=requested or "Python"
+            result=learner.learn_next(language)
+            return {"type":"learning","answer":f"Learning step completed for {canonical_language(language)}.","data":result}
         code_words=("برنامه بنویس","کد بنویس","برام برنامه","write a program","write code","program","build an app","create an app")
         if any(x in low for x in code_words):
-            result=learner.generate_program(msg)
+            language=requested or "Python"
+            result=learner.generate_program(msg,language)
             return {"type":"code","answer":"Generated program:","data":result}
         return {"type":"chat","answer":agent.chat(msg)}
     except Exception as e:raise HTTPException(502,str(e))
@@ -64,6 +76,8 @@ def code_run(r:CodeRequest): return learner.validate_code(r.code)
 def code_generate(r:ProgramRequest):
     try:return learner.generate_program(r.request,r.language)
     except Exception as e:raise HTTPException(502,str(e))
+@app.get("/languages")
+def languages(): return {"languages":list(LANGUAGE_CURRICULA.keys())}
 @app.post("/projects/plan")
 def project_plan(r:ProjectRequest):
     try:return {"tasks":agent.plan_project(r.goal)}
