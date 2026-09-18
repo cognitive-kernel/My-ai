@@ -64,7 +64,10 @@ def canonical_language(language):
     for name in LANGUAGE_CURRICULA:
         if name.lower()==language.strip().lower(): return name
     return language.strip()
-def next_topic(language,completed=None):
+def next_topic(language="Python",completed=None):
+    # Backward-compatible form: next_topic({"completed topic", ...})
+    if isinstance(language,set) and completed is None:
+        completed=language; language="Python"
     completed=completed or set()
     return next((x for x in curriculum(language) if str(x["topic"]) not in completed),None)
 def source_urls(language):
