@@ -99,7 +99,7 @@ def code_generate(r:ProgramRequest):
 @app.post("/security/scan")
 def security_scan(r:SecurityRequest):
     try:
-        if r.target_url: return learner.security_assessment_url(r.target_url)
+        if r.target_url: return learner.security_assessment_url(r.target_url,r.headers)
         if r.project_path:
             if r.project_path.lower().startswith(("http://","https://")): return learner.security_assessment_url(r.project_path)
             return learner.security_assessment_path(r.project_path,r.fix)
