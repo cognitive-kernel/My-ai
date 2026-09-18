@@ -102,7 +102,7 @@ class LocalDAST:
                     if key not in seen and header not in h:
                         seen.add(key); findings.append({"severity":sev,"title":title,"endpoint":ep,"evidence":f"{header} is absent.","impact":"A browser security control is not explicitly configured.","remediation":remediation})
                 if "x-frame-options" not in h and "content-security-policy" not in h and "frame" not in seen:
-                    seen.add("frame"); findings.append({"severity":"medium","title":"Missing clickjacking protection","endpoint":ep,"evidence":"Neither X-Frame-Options nor CSP was observed.","impact":"Sensitive pages may be embeddable by another origin.","remediation":"Set X-Frame-Options or CSP frame-ancestors.")
+                    seen.add("frame"); findings.append({"severity":"medium","title":"Missing clickjacking protection","endpoint":ep,"evidence":"Neither X-Frame-Options nor CSP was observed.","impact":"Sensitive pages may be embeddable by another origin.","remediation":"Set X-Frame-Options or CSP frame-ancestors."})
                 if "server" in h and re.search(r"(?i)(uvicorn|werkzeug|php|express|apache|nginx)",h["server"]):
                     findings.append({"severity":"low","title":"Technology/version disclosure","endpoint":ep,"evidence":h["server"][:120],"impact":"Detailed server identity can aid reconnaissance.","remediation":"Minimize unnecessary Server header/version disclosure."})
                 if r.status_code>=500:
