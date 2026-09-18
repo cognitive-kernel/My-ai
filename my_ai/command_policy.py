@@ -23,12 +23,12 @@ def parse_command(text: str) -> CommandPolicy:
     report=any(x in low for x in REPORT_WORDS) or any(x in low for x in TEST_WORDS)
     fix=any(x in low for x in FIX_WORDS)
     # Explicit user instruction always overrides the default.
-    if report:
-        action="report"
-    elif fix:
+    if fix:
         action="fix"
+    elif report:
+        action="report"
     elif security:
-        action="fix"  # My-AI default for an explicit pentest request.
+        action="fix"  # Default for an explicit pentest request.
     else:
         action="default"
     learn=any(x in low for x in LEARN_WORDS)
