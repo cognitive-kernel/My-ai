@@ -12,7 +12,7 @@ from .db import fetch_all,init_db
 from .learner import LearningEngine
 from .scheduler import StudyScheduler
 from .ui import page
-from .help import page as help_page
+from .help import page as help_page, ask_help
 from .git_connector import GitHubConnector
 
 scheduler=StudyScheduler()
@@ -36,6 +36,30 @@ def home(): return page()
 @app.get("/help",response_class=HTMLResponse)
 def help(): return help_page()
 
+@app.get("/help/updates")
+def help_updates(status:str="pending"): return fetch_all("SELECT * FROM help_updates WHERE status=? ORDER BY id DESC",(status,))
+
+@app.post("/help/ask")
+def help_ask(r:ChatRequest):
+    try:
+        low=r.message.lower()
+        component="git" if any(x in low for x in ("git","github","گیت","گیت‌هاب")) else ("security" if any(x in low for x in ("امنیت","پن‌تست","pentest")) else ("docker" if "docker" in low else ("python" if "python" in low or "پایتون" in low else "general")))
+        return ask_help(r.message,component,agent.llm,learner.web)
+    except Exception as e: raise HTTPException(502,str(e))
+
+@app.post("/help/approve/{update_id}")
+def help_approve(update_id:int):
+    rows=fetch_all("SELECT * FROM help_updates WHERE id=? AND status='pending'",(update_id,))
+    if not rows: raise HTTPException(404,"Pending help update not found.")
+    execute("UPDATE help_updates SET status='approved' WHERE id=?",(update_id,))
+    return {"status":"approved","update_id":update_id,"message":"The proposed help update is now visible in /help."}
+
+@app.post("/help/reject/{update_id}")
+def help_reject(update_id:int):
+    rows=fetch_all("SELECT * FROM help_updates WHERE id=? AND status='pending'",(update_id,))
+    if not rows: raise HTTPException(404,"Pending help update not found.")
+    execute("UPDATE help_updates SET status='rejected' WHERE id=?",(update_id,))
+    return {"status":"rejected","update_id":update_id}
 @app.get("/health")
 def health(): return {"status":"ok","model":settings.ollama_model}
 
@@ -47,6 +71,11 @@ def chat(r:ChatRequest):
         requested=next((name for key,name in sorted(aliases.items(),key=lambda x:len(x[0]),reverse=True) if key in low),None)
         learn_intent=("یاد بگیر" in low or "یادگیری" in low or "learn" in low or "go learn" in low or "start learning" in low)
         policy=parse_command(msg); security_words=policy.security; fix_requested=policy.security_action=="fix"
+
+        help_intent=("راهنما" in low or "چطور وصل" in low or "چطور استفاده" in low or "how do i" in low or "how to" in low or "setup" in low)
+        if help_intent:
+            component="git" if any(x in low for x in ("git","github","گیت","گیت‌هاب")) else ("security" if any(x in low for x in ("امنیت","پن‌تست","pentest")) else ("docker" if "docker" in low else ("python" if "python" in low or "پایتون" in low else "general")))
+            return {"type":"help","answer":"راهنمای هوشمند آماده شد. پاسخ بر اساس راهنمای داخلی و جستجوی وب تهیه شده و هر تغییر پیشنهادی تا تأیید شما اعمال نمی‌شود.","data":ask_help(msg,component,agent.llm,learner.web)}
         code_words=("برنامه بنویس","کد بنویس","برام برنامه","write a program","write code","program","build an app","create an app")
         code_intent=any(x in low for x in code_words)
         if security_words:
