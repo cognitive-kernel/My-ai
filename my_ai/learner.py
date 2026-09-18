@@ -32,9 +32,31 @@ class LearningEngine:
         except ValueError:return 0
     def practice(self,task,language="Python"):
         return {"exercise":self.llm.chat(f"Create one {language} exercise. Return JSON keys description, starter_code, expected_behavior, hidden_tests. Task: {task}")}
+    def generate_program(self,request,language="Python"):
+        prompt=(f"Write a complete, runnable {language} program for this user request:\n{request}\n"
+                "Return ONLY source code, no markdown fences. Prefer standard library, clear structure, input validation and helpful comments.")
+        code=self.llm.chat(prompt,system="You are a careful senior software engineer.").strip()
+        if code.startswith("```"):
+            lines=code.splitlines()
+            lines=lines[1:] if lines else lines
+            lines=lines[:-1] if lines and lines[-1].strip()=="```" else lines
+            code="\n".join(lines).strip()
+        result={"language":language,"request":request,"code":code}
+        if language.lower()=="python": result["validation"]=self.validate_code(code)
+        return result
+
     def validate_code(self,code):
         r=run_python(code); p=r.return_code==0 and not r.timed_out
         execute("INSERT INTO experiments(language,code,output,error,passed) VALUES(?,?,?,?,?)",("Python",code,r.output,r.error,int(p)))
         return {"passed":p,"output":r.output,"error":r.error,"return_code":r.return_code,"timed_out":r.timed_out}
     def status(self,language=None):
-        return fetch_all("SELECT * FROM learning_sessions WHERE language=? ORDER BY id DESC",(language,)) if language else fetch_all("SELECT * FROM learning_sessions ORDER BY id DESC")
+        rows=fetch_all("SELECT * FROM learning_sessions WHERE language=? ORDER BY id DESC",(language,)) if language else fetch_all("SELECT * FROM learning_sessions ORDER BY id DESC")
+        from .curriculum import CURRICULA
+        out=[]
+        for lang,topics in CURRICULA.items():
+            total=len(topics)
+            completed=sum(1 for r in rows if r["language"]==lang and r["status"]=="completed")
+            scores=[float(r["score"]) for r in rows if r["language"]==lang and r["status"]=="completed" and r["score"] is not None]
+            out.append({"language":lang,"completed_topics":completed,"total_topics":total,"progress_percent":round(completed/total*100,1) if total else 0,"average_score":round(sum(scores)/len(scores),1) if scores else 0})
+        if language: out=[x for x in out if x["language"].lower()==language.lower()]
+        return {"languages":out,"sessions":rows}
