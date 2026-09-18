@@ -25,7 +25,6 @@ def test_executor_container_flags(monkeypatch, tmp_path):
     class R:
         stdout="ok"; stderr=""; returncode=0
     monkeypatch.setattr(executor.subprocess,"run",lambda cmd,**kwargs:(calls.append(cmd) or R()))
-    monkeypatch.setattr(executor.settings,"exec_mode","container",raising=False)
     result=executor._run_container("print(1)")
     assert result.sandbox_mode=="container"
     cmd=calls[0]
