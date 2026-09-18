@@ -48,29 +48,99 @@ JAVASCRIPT_CURRICULUM=[
 {"order":6,"topic":"Web APIs","goal":"DOM, fetch, storage and browser events"},
 {"order":7,"topic":"Node.js","goal":"Node runtime, filesystem, HTTP and processes"},
 {"order":8,"topic":"Testing and production","goal":"Testing, security, performance and deployment"}]
-LANGUAGE_CURRICULA={"Python":PYTHON_CURRICULUM,"C":C_CURRICULUM,"PHP":PHP_CURRICULUM,"JavaScript":JAVASCRIPT_CURRICULUM}
+
+SQLSERVER_CURRICULUM=[
+{"order":1,"topic":"SQL Server fundamentals","goal":"SQL Server architecture, databases, schemas, SSMS and connections"},
+{"order":2,"topic":"T-SQL basics","goal":"SELECT, INSERT, UPDATE, DELETE, filtering, sorting and aliases"},
+{"order":3,"topic":"Joins and subqueries","goal":"INNER, LEFT, RIGHT joins, subqueries and set operations"},
+{"order":4,"topic":"Data modeling","goal":"Tables, keys, constraints, normalization and relationships"},
+{"order":5,"topic":"Indexes","goal":"Clustered, nonclustered, composite indexes and query performance"},
+{"order":6,"topic":"Transactions and concurrency","goal":"Transactions, isolation levels, locks and deadlocks"},
+{"order":7,"topic":"Views procedures and functions","goal":"Views, stored procedures, functions and triggers"},
+{"order":8,"topic":"Security and administration","goal":"Users, roles, permissions, backups and recovery"},
+{"order":9,"topic":"Query optimization","goal":"Execution plans, statistics and performance tuning"},
+{"order":10,"topic":"Application integration","goal":"SQL Server access from Python, PHP, JavaScript and mobile backends"}]
+
+MYSQL_CURRICULUM=[
+{"order":1,"topic":"MySQL fundamentals","goal":"Server, databases, schemas, clients and connections"},
+{"order":2,"topic":"SQL basics","goal":"SELECT, INSERT, UPDATE, DELETE, filtering and sorting"},
+{"order":3,"topic":"Joins and subqueries","goal":"Joins, subqueries, unions and aggregation"},
+{"order":4,"topic":"Data modeling","goal":"Tables, keys, constraints, normalization and relationships"},
+{"order":5,"topic":"Indexes and storage engines","goal":"Indexes, InnoDB and query performance"},
+{"order":6,"topic":"Transactions","goal":"Transactions, isolation, locking and consistency"},
+{"order":7,"topic":"Views routines and triggers","goal":"Views, procedures, functions and triggers"},
+{"order":8,"topic":"Security and backup","goal":"Users, privileges, backups and recovery"},
+{"order":9,"topic":"Optimization","goal":"EXPLAIN, indexes, statistics and performance tuning"},
+{"order":10,"topic":"Application integration","goal":"MySQL access from Python, PHP, JavaScript and mobile backends"}]
+
+SQLITE_CURRICULUM=[
+{"order":1,"topic":"SQLite fundamentals","goal":"Embedded database architecture, files, connections and CLI"},
+{"order":2,"topic":"SQLite SQL","goal":"Tables, CRUD, filtering, sorting and aggregation"},
+{"order":3,"topic":"Relationships and constraints","goal":"Keys, foreign keys, constraints and normalization"},
+{"order":4,"topic":"Indexes and query planning","goal":"Indexes, EXPLAIN QUERY PLAN and performance"},
+{"order":5,"topic":"Transactions","goal":"Transactions, WAL, locking and concurrency"},
+{"order":6,"topic":"SQLite features","goal":"CTEs, window functions, JSON and full-text search"},
+{"order":7,"topic":"Application integration","goal":"SQLite with Python, PHP, JavaScript, Android and iOS"},
+{"order":8,"topic":"Reliability and deployment","goal":"Migrations, backups, corruption handling and production practices"}]
+
+ANDROID_CURRICULUM=[
+{"order":1,"topic":"Android platform fundamentals","goal":"Android architecture, SDK, projects, Gradle and Android Studio"},
+{"order":2,"topic":"Kotlin for Android","goal":"Kotlin syntax, null safety, classes, collections and coroutines"},
+{"order":3,"topic":"UI with Jetpack Compose","goal":"Composable UI, state, layouts, navigation and Material"},
+{"order":4,"topic":"Android app architecture","goal":"ViewModel, lifecycle, repositories and unidirectional data flow"},
+{"order":5,"topic":"Networking","goal":"HTTP APIs, JSON, Retrofit and error handling"},
+{"order":6,"topic":"Local databases","goal":"SQLite, Room, entities, DAOs, migrations and transactions"},
+{"order":7,"topic":"Security and permissions","goal":"App permissions, secure storage, authentication and networking security"},
+{"order":8,"topic":"Testing and release","goal":"Unit/UI tests, debugging, signing, builds and Play release"}]
+
+IOS_CURRICULUM=[
+{"order":1,"topic":"iOS platform fundamentals","goal":"iOS SDK, Xcode, projects, simulators and app lifecycle"},
+{"order":2,"topic":"Swift for iOS","goal":"Swift syntax, optionals, structs, classes, protocols and concurrency"},
+{"order":3,"topic":"SwiftUI","goal":"Views, state, navigation, lists and reusable components"},
+{"order":4,"topic":"iOS app architecture","goal":"Observable state, MVVM-style separation, lifecycle and data flow"},
+{"order":5,"topic":"Networking","goal":"URLSession, HTTP APIs, JSON decoding and error handling"},
+{"order":6,"topic":"Local databases","goal":"Core Data, SQLite, persistence, migrations and transactions"},
+{"order":7,"topic":"Security and permissions","goal":"Keychain, app permissions, privacy and secure networking"},
+{"order":8,"topic":"Testing and release","goal":"Unit/UI tests, debugging, signing, archives and App Store release"}]
+
+LANGUAGE_CURRICULA={
+"Python":PYTHON_CURRICULUM,"C":C_CURRICULUM,"PHP":PHP_CURRICULUM,"JavaScript":JAVASCRIPT_CURRICULUM,
+"SQL Server":SQLSERVER_CURRICULUM,"MySQL":MYSQL_CURRICULUM,"SQLite":SQLITE_CURRICULUM,
+"Android":ANDROID_CURRICULUM,"iOS":IOS_CURRICULUM}
 CURRICULA=LANGUAGE_CURRICULA
+LANGUAGE_ALIASES={
+"python":"Python","py":"Python","پایتون":"Python",
+"c":"C","سی":"C",
+"php":"PHP","پی اچ پی":"PHP",
+"javascript":"JavaScript","js":"JavaScript","جاوااسکریپت":"JavaScript",
+"sqlserver":"SQL Server","sql server":"SQL Server","mssql":"SQL Server","sql سرور":"SQL Server","اس کیو ال سرور":"SQL Server",
+"mysql":"MySQL","مای اس کیو ال":"MySQL",
+"sqlite":"SQLite","sql lite":"SQLite","اس کیو ال لایت":"SQLite",
+"android":"Android","اندروید":"Android",
+"ios":"iOS","i os":"iOS","آی او اس":"iOS"}
 LANGUAGE_SOURCES={
 "Python":["https://docs.python.org/3/tutorial/","https://docs.python.org/3/library/"],
 "C":["https://en.cppreference.com/w/c","https://www.gnu.org/software/gnu-c-manual/"],
 "PHP":["https://www.php.net/manual/en/","https://www.php.net/docs.php"],
-"JavaScript":["https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide","https://developer.mozilla.org/en-US/docs/Web/API"]
+"JavaScript":["https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide","https://developer.mozilla.org/en-US/docs/Web/API"],
+"SQL Server":["https://learn.microsoft.com/en-us/sql/sql-server/","https://learn.microsoft.com/en-us/sql/t-sql/"],
+"MySQL":["https://dev.mysql.com/doc/","https://dev.mysql.com/doc/refman/8.4/en/"],
+"SQLite":["https://www.sqlite.org/docs.html","https://www.sqlite.org/lang.html"],
+"Android":["https://developer.android.com/guide","https://developer.android.com/kotlin"],
+"iOS":["https://developer.apple.com/tutorials/swiftui","https://developer.apple.com/documentation/swift"]
 }
 def curriculum(language):
-    for name,data in LANGUAGE_CURRICULA.items():
-        if name.lower()==language.lower(): return data
-    return []
+    name=canonical_language(language)
+    return LANGUAGE_CURRICULA.get(name,[])
 def canonical_language(language):
+    raw=language.strip()
     for name in LANGUAGE_CURRICULA:
-        if name.lower()==language.strip().lower(): return name
-    return language.strip()
+        if name.lower()==raw.lower(): return name
+    return LANGUAGE_ALIASES.get(raw.lower(),raw)
 def next_topic(language="Python",completed=None):
-    # Backward-compatible form: next_topic({"completed topic", ...})
     if isinstance(language,set) and completed is None:
         completed=language; language="Python"
     completed=completed or set()
     return next((x for x in curriculum(language) if str(x["topic"]) not in completed),None)
 def source_urls(language):
-    for name,urls in LANGUAGE_SOURCES.items():
-        if name.lower()==language.lower(): return urls
-    return []
+    return LANGUAGE_SOURCES.get(canonical_language(language),[])
