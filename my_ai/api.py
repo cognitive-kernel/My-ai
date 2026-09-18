@@ -27,7 +27,19 @@ def home(): return page()
 def health(): return {"status":"ok","model":settings.ollama_model}
 @app.post("/chat")
 def chat(r:ChatRequest):
-    try:return {"answer":agent.chat(r.message)}
+    try:
+        msg=r.message.strip()
+        low=msg.lower()
+        learn_words=("یاد بگیر","یادگیری","learn python","learn c","python را یاد","پایتون رو یاد")
+        if any(x in low for x in learn_words):
+            language="C" if (" c " in f" {low} " or "زبان c" in low) else "Python"
+            result=learner.autonomous_step(language)
+            return {"type":"learning","answer":f"Learning step completed for {language}.","data":result}
+        code_words=("برنامه بنویس","کد بنویس","برام برنامه","write a program","write code","program")
+        if any(x in low for x in code_words):
+            result=learner.generate_program(msg)
+            return {"type":"code","answer":"Generated program:","data":result}
+        return {"type":"chat","answer":agent.chat(msg)}
     except Exception as e:raise HTTPException(502,str(e))
 @app.post("/learn/url")
 def learn_url(r:URLRequest):
