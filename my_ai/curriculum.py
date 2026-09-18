@@ -49,6 +49,7 @@ JAVASCRIPT_CURRICULUM=[
 {"order":7,"topic":"Node.js","goal":"Node runtime, filesystem, HTTP and processes"},
 {"order":8,"topic":"Testing and production","goal":"Testing, security, performance and deployment"}]
 LANGUAGE_CURRICULA={"Python":PYTHON_CURRICULUM,"C":C_CURRICULUM,"PHP":PHP_CURRICULUM,"JavaScript":JAVASCRIPT_CURRICULUM}
+CURRICULA=LANGUAGE_CURRICULA
 LANGUAGE_SOURCES={
 "Python":["https://docs.python.org/3/tutorial/","https://docs.python.org/3/library/"],
 "C":["https://en.cppreference.com/w/c","https://www.gnu.org/software/gnu-c-manual/"],
