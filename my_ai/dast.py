@@ -127,7 +127,7 @@ class LocalDAST:
                     if "httponly" not in cookie:
                         findings.append({"severity":"low","title":"Cookie missing HttpOnly attribute","endpoint":ep,"evidence":"A cookie was set without HttpOnly.","impact":"Client-side scripts can access the cookie.","remediation":"Set HttpOnly for session cookies unless script access is required."})
                     if "samesite" not in cookie:
-                        findings.append({"severity":"low","title":"Cookie missing SameSite attribute","endpoint":ep,"evidence":"A cookie was set without SameSite.","impact":"Cross-site request behavior is less restricted.","remediation":"Set an appropriate SameSite policy.","})
+                        findings.append({"severity":"low","title":"Cookie missing SameSite attribute","endpoint":ep,"evidence":"A cookie was set without SameSite.","impact":"Cross-site request behavior is less restricted.","remediation":"Set an appropriate SameSite policy."})
             for form in forms:
                 if form["method"] in {"POST","PUT","PATCH","DELETE"}:
                     csrf={"csrf","csrf_token","csrftoken","xsrf","xsrf_token","_token","authenticity_token"}
