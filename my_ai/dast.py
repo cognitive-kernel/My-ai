@@ -77,9 +77,9 @@ class LocalDAST:
             except Exception: time.sleep(.25)
         return False
 
-    def _checks(self,base,endpoints):
+    def _checks(self,base,endpoints,headers=None):
         findings=[]; seen=set(); forms=[]
-        with httpx.Client(timeout=self.timeout,follow_redirects=False) as client:
+        with httpx.Client(timeout=self.timeout,follow_redirects=False,headers=headers or {}) as client:
             for ep in endpoints:
                 url=urljoin(base.rstrip("/")+"/",ep.lstrip("/"))
                 try: r=client.get(url)
@@ -161,11 +161,11 @@ class LocalDAST:
                         seen.add(nxt); queue.append(nxt)
         return sorted(urlparse(x).path or "/" for x in seen)[:limit]
 
-    def scan_url(self,url:str,explicit=True):
+    def scan_url(self,url:str,explicit=True,headers=None):
         if not explicit: raise PermissionError("A target URL must be explicitly supplied by the user.")
         p=self._assert_public_explicit(url)
         base=p.scheme + "://" + p.netloc + (p.path or "/")
-        endpoints=sorted(set(self._crawl_public(base)+self._openapi_endpoints(base)))[:100]; findings=self._checks(base,endpoints)
+        endpoints=sorted(set(self._crawl_public(base)+self._openapi_endpoints(base)))[:100]; findings=self._checks(base,endpoints,headers)
         result={"status":"completed","target":url,"mode":"explicit_external_url","endpoints":endpoints,"findings":findings,"summary":self._summary(findings),"fixed":False}
         execute("INSERT INTO security_scans(project_path,status,summary,findings) VALUES(?,?,?,?)",(url,"dast_external_completed",json.dumps(result["summary"],ensure_ascii=False),json.dumps(findings,ensure_ascii=False)))
         return result
