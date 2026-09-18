@@ -37,44 +37,32 @@ def chat(r:ChatRequest):
     try:
         msg=r.message.strip(); low=msg.lower()
         aliases={"sql server":"SQL Server","sqlserver":"SQL Server","mssql":"SQL Server","mysql":"MySQL","sqlite":"SQLite","sql lite":"SQLite","android":"Android","اندروید":"Android","ios":"iOS","آی او اس":"iOS","python":"Python","پایتون":"Python","php":"PHP","c":"C","javascript":"JavaScript","js":"JavaScript","pentest":"Pentest","pen test":"Pentest","penetration testing":"Pentest","penetration test":"Pentest","پنتست":"Pentest","پن تست":"Pentest","تست نفوذ":"Pentest","امنیت":"Pentest"}
-        requested=None
-        for key,name in sorted(aliases.items(),key=lambda x:len(x[0]),reverse=True):
-            if key in low: requested=name; break
+        requested=next((name for key,name in sorted(aliases.items(),key=lambda x:len(x[0]),reverse=True) if key in low),None)
         learn_intent=("یاد بگیر" in low or "یادگیری" in low or "learn" in low or "go learn" in low or "start learning" in low)
-        policy=parse_command(msg)
-        security_words=policy.security
-        fix_requested=(policy.security_action=="fix")
+        policy=parse_command(msg); security_words=policy.security; fix_requested=policy.security_action=="fix"
         code_words=("برنامه بنویس","کد بنویس","برام برنامه","write a program","write code","program","build an app","create an app")
         code_intent=any(x in low for x in code_words)
         if security_words:
             if code_intent:
-                language=requested or "Python"
-                generated=learner.generate_program(msg,language)
-                result=learner.security_scan_code(generated["code"],language,fix_requested)
-                result["generated_project"]=generated
-                result["mode"]="pentest_and_fix" if fix_requested else "pentest_report"
-                return {"type":"security","answer":"Security test completed. Findings and remediation are included." if not fix_requested else "Security test and requested remediation completed.","data":result}
+                language=requested or "Python"; generated=learner.generate_program(msg,language)
+                result=learner.security_assessment_code(generated["code"],language,fix_requested)
+                result["generated_project"]=generated; result["mode"]="pentest_and_fix" if fix_requested else "pentest_report"
+                return {"type":"security","answer":"Security test completed with static + local dynamic checks." if not fix_requested else "Security test, remediation and retest completed.","data":result}
             path=None
-            for prefix in ("مسیر:", "path:", "project:", "پروژه:"):
-                if prefix in msg:
-                    path=msg.split(prefix,1)[1].strip().strip('"\'')
-                    break
+            for prefix in ("مسیر:","path:","project:","پروژه:"):
+                if prefix in msg: path=msg.split(prefix,1)[1].strip().strip('"\''); break
             if path:
-                result=learner.security_scan_path(path,fix_requested)
-                result["mode"]="pentest_and_fix" if fix_requested else "pentest_report"
-                return {"type":"security","answer":"Security test completed. Findings and remediation are included." if not fix_requested else "Security test and requested remediation completed.","data":result}
+                result=learner.security_assessment_path(path,fix_requested); result["mode"]="pentest_and_fix" if fix_requested else "pentest_report"
+                return {"type":"security","answer":"Security test completed with static + local dynamic checks." if not fix_requested else "Security test, remediation and retest completed.","data":result}
             result=learner.security_scan_latest_generated(fix_requested)
             if result.get("status")=="no_project":
-                return {"type":"security","answer":"برای پن‌تست پروژه خودت، مسیر پوشه پروژه را بده؛ مثال: «پن تست مسیر: C:\\\\projects\\\\login». برای پروژه‌ای که همین‌جا ساخته شده باشد، آخرین پروژه تولیدشده به‌صورت خودکار تست می‌شود.","data":result}
+                return {"type":"security","answer":"برای پن‌تست پروژه خودت، مسیر پوشه پروژه را بده؛ مثال: «پن تست مسیر: C:\\projects\\login». پروژه تولیدشده آخر هم خودکار بررسی می‌شود.","data":result}
             result["mode"]="pentest_and_fix" if fix_requested else "pentest_report"
-            return {"type":"security","answer":"Security test completed. Findings and remediation are included." if not fix_requested else "Security test and requested remediation completed.","data":result}
-
+            return {"type":"security","answer":"Security test completed with static + local dynamic checks." if not fix_requested else "Security test, remediation and retest completed.","data":result}
         if learn_intent:
-            language=requested or "Python"; result=learner.learn_next(language)
-            return {"type":"learning","answer":f"Learning step completed for {canonical_language(language)}.","data":result}
+            language=requested or "Python"; return {"type":"learning","answer":f"Learning step completed for {canonical_language(language)}.","data":learner.learn_next(language)}
         if code_intent:
-            language=requested or "Python"; result=learner.generate_program(msg,language)
-            return {"type":"code","answer":"Generated program:","data":result}
+            language=requested or "Python"; return {"type":"code","answer":"Generated program:","data":learner.generate_program(msg,language)}
         return {"type":"chat","answer":agent.chat(msg)}
     except Exception as e: raise HTTPException(502,str(e))
 
@@ -100,20 +88,15 @@ def code_run(r:CodeRequest): return learner.validate_code(r.code)
 def code_generate(r:ProgramRequest):
     try:return learner.generate_program(r.request,r.language)
     except Exception as e: raise HTTPException(502,str(e))
-
 @app.post("/security/scan")
 def security_scan(r:SecurityRequest):
     try:
-        if r.project_path:
-            return learner.security_scan_path(r.project_path,r.fix)
-        if r.code:
-            return learner.security_scan_code(r.code,r.language,r.fix)
+        if r.project_path: return learner.security_assessment_path(r.project_path,r.fix)
+        if r.code: return learner.security_assessment_code(r.code,r.language,r.fix)
         return learner.security_scan_latest_generated(r.fix)
     except Exception as e: raise HTTPException(400,str(e))
-
 @app.get("/security/history")
-def security_history(limit:int=20):
-    return learner.security.history(limit)
+def security_history(limit:int=20): return learner.security.history(limit)
 @app.get("/languages")
 def languages(): return {"languages":list(LANGUAGE_CURRICULA.keys())}
 @app.post("/projects/plan")
