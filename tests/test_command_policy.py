@@ -11,3 +11,9 @@ def test_generic_test_is_report_only():
 
 def test_explicit_fix_overrides_report():
     assert parse_command("تست بگیر و باگ‌ها را رفع کن").security_action == "fix"
+
+
+def test_plain_test_command_is_security_report():
+    p=parse_command("تست بگیر")
+    assert p.security is True
+    assert p.security_action == "report"
