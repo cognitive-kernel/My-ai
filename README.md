@@ -486,3 +486,12 @@ pytest -q
 10. تغییر پیشنهادی Help تا قبل از تأیید کاربر اعمال نمی‌شود.
 
 CI تست‌های خودکار را روی push و pull request اجرا می‌کند.
+
+
+## وضعیت تکمیل
+
+- Container Executor برای اجرای Python با محدودیت‌های ایزوله
+- Web Learner با DNS/IP و redirect validation
+- Help UI بدون تزریق HTML از خروجی مدل
+- API با mutable defaultهای اصلاح‌شده
+- GitHub Actions برای compile و pytest
