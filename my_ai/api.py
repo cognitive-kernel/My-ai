@@ -1,5 +1,6 @@
 from __future__ import annotations
 from contextlib import asynccontextmanager
+import re
 from fastapi import FastAPI,HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel,HttpUrl
@@ -11,6 +12,7 @@ from .db import fetch_all,init_db
 from .learner import LearningEngine
 from .scheduler import StudyScheduler
 from .ui import page
+from .git_connector import GitHubConnector
 
 scheduler=StudyScheduler()
 @asynccontextmanager
@@ -23,7 +25,8 @@ class ProjectRequest(BaseModel): goal:str
 class CodeRequest(BaseModel): code:str
 class ProgramRequest(BaseModel): request:str; language:str="Python"
 class LanguageRequest(BaseModel): language:str="Python"
-class SecurityRequest(BaseModel): project_path:str|None=None; code:str|None=None; language:str="Python"; fix:bool=False
+class SecurityRequest(BaseModel): project_path:str|None=None; target_url:str|None=None; code:str|None=None; language:str="Python"; fix:bool=False
+class GitRequest(BaseModel): repository:str; path:str|None=None; ref:str|None=None; branch:str|None=None; content:str|None=None; message:str|None=None; allow_write:bool=False
 class SchedulerRequest(BaseModel): language:str="Python"; interval_seconds:int=3600
 class LearnRequest(BaseModel): language:str="Python"; interval_seconds:int=3600
 
@@ -49,16 +52,21 @@ def chat(r:ChatRequest):
                 result["generated_project"]=generated; result["mode"]="pentest_and_fix" if fix_requested else "pentest_report"
                 return {"type":"security","answer":"Security test completed with static + local dynamic checks." if not fix_requested else "Security test, remediation and retest completed.","data":result}
             path=None
-            for prefix in ("مسیر:","path:","project:","پروژه:"):
-                if prefix in msg: path=msg.split(prefix,1)[1].strip().strip('"\''); break
+            for prefix in ("مسیر:","آدرس:","path:","url:","project:","پروژه:"):
+                if prefix in msg:
+                    path=msg.split(prefix,1)[1].strip().strip('"').strip("'")
+                    break
+            if not path:
+                m=re.search(r"https?://[^\s]+",msg)
+                if m: path=m.group(0).rstrip(".,)")
             if path:
-                result=learner.security_assessment_path(path,fix_requested); result["mode"]="pentest_and_fix" if fix_requested else "pentest_report"
-                return {"type":"security","answer":"Security test completed with static + local dynamic checks." if not fix_requested else "Security test, remediation and retest completed.","data":result}
-            result=learner.security_scan_latest_generated(fix_requested)
-            if result.get("status")=="no_project":
-                return {"type":"security","answer":"برای پن‌تست پروژه خودت، مسیر پوشه پروژه را بده؛ مثال: «پن تست مسیر: C:\\projects\\login». پروژه تولیدشده آخر هم خودکار بررسی می‌شود.","data":result}
-            result["mode"]="pentest_and_fix" if fix_requested else "pentest_report"
-            return {"type":"security","answer":"Security test completed with static + local dynamic checks." if not fix_requested else "Security test, remediation and retest completed.","data":result}
+                if path.lower().startswith(("http://","https://")):
+                    result=learner.security_assessment_url(path)
+                    if fix_requested: result["note"]="External targets are report-only; remediation is not applied remotely."
+                else:
+                    result=learner.security_assessment_path(path,fix_requested)
+                result["mode"]="external_report" if path.lower().startswith(("http://","https://")) else ("pentest_and_fix" if fix_requested else "pentest_report")
+                return {"type":"security","answer":"Security test completed for the explicitly supplied target.","data":result}
         if learn_intent:
             language=requested or "Python"; return {"type":"learning","answer":f"Learning step completed for {canonical_language(language)}.","data":learner.learn_next(language)}
         if code_intent:
@@ -91,12 +99,34 @@ def code_generate(r:ProgramRequest):
 @app.post("/security/scan")
 def security_scan(r:SecurityRequest):
     try:
-        if r.project_path: return learner.security_assessment_path(r.project_path,r.fix)
+        if r.target_url: return learner.security_assessment_url(r.target_url)
+        if r.project_path:
+            if r.project_path.lower().startswith(("http://","https://")): return learner.security_assessment_url(r.project_path)
+            return learner.security_assessment_path(r.project_path,r.fix)
         if r.code: return learner.security_assessment_code(r.code,r.language,r.fix)
         return learner.security_scan_latest_generated(r.fix)
     except Exception as e: raise HTTPException(400,str(e))
 @app.get("/security/history")
 def security_history(limit:int=20): return learner.security.history(limit)
+@app.get("/git/repo")
+def git_repo(repository:str): return GitHubConnector().repo(repository)
+@app.get("/git/tree")
+def git_tree(repository:str,ref:str="HEAD"): return GitHubConnector().tree(repository,ref)
+@app.get("/git/file")
+def git_file(repository:str,path:str,ref:str|None=None): return GitHubConnector().file(repository,path,ref)
+@app.get("/git/issues")
+def git_issues(repository:str,state:str="open"): return GitHubConnector().issues(repository,state)
+@app.get("/git/pulls")
+def git_pulls(repository:str,state:str="open"): return GitHubConnector().pull_requests(repository,state)
+@app.get("/git/branches")
+def git_branches(repository:str): return GitHubConnector().branches(repository)
+@app.post("/git/branch")
+def git_branch(r:GitRequest): return GitHubConnector().create_branch(r.repository,r.branch or "",r.ref or "main",r.allow_write)
+@app.put("/git/file")
+def git_update_file(r:GitRequest):
+    if not r.path or r.content is None or not r.message: raise HTTPException(400,"path, content and message are required")
+    return GitHubConnector().update_file(r.repository,r.path,r.content,r.message,r.branch or "main",r.allow_write)
+
 @app.get("/languages")
 def languages(): return {"languages":list(LANGUAGE_CURRICULA.keys())}
 @app.post("/projects/plan")
