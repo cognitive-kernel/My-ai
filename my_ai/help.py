@@ -1,4 +1,6 @@
 from __future__ import annotations
+import json
+from .db import execute, fetch_all
 
 HTML = """<!doctype html>
 <html lang="fa" dir="rtl">
@@ -34,4 +36,47 @@ nav a{margin:4px;display:inline-block}
 </main></body></html>"""
 
 def page():
-    return HTML
+    updates = fetch_all("SELECT * FROM help_updates WHERE status='approved' ORDER BY id DESC LIMIT 30")
+    extra = "".join(
+        f"<section class='card'><h2>به‌روزرسانی راهنما: {u['component']}</h2>"
+        f"<p>{u['answer']}</p><p><small>منابع: {u['sources']}</small></p></section>"
+        for u in updates
+    )
+    return HTML.replace("</main></body></html>", extra + "</main></body></html>")
+
+def ask_help(question, component, llm, web):
+    domains = {
+        "git": ["docs.github.com", "github.com"],
+        "security": ["owasp.org", "portswigger.net", "nmap.org"],
+        "python": ["docs.python.org"],
+        "php": ["php.net", "getcomposer.org"],
+        "javascript": ["developer.mozilla.org"],
+        "docker": ["docs.docker.com"],
+        "api": ["fastapi.tiangolo.com"],
+    }.get(component.lower(), None)
+    results = web.search(question, domains=domains, limit=6)
+    fetched = []
+    for item in results[:4]:
+        try:
+            title, body = web.fetch(item["url"])
+            fetched.append({"title": title, "url": item["url"], "content": body[:12000]})
+        except Exception:
+            fetched.append(item)
+    answer = llm.chat(
+        "Answer the user's question about using this My-AI feature. Be practical and concise. "
+        "If current external integration instructions may have changed, distinguish the current documented method from the project's existing implementation. "
+        "Do not invent steps. Sources are supplied below. QUESTION: "+question+
+        "\nCOMPONENT: "+component+"\nSOURCES:\n"+json.dumps(fetched,ensure_ascii=False),
+        system="You are the My-AI product help assistant. Cite source URLs in plain text."
+    )
+    proposal = llm.chat(
+        "Compare the current project help instructions with the supplied current documentation. "
+        "Return a concise proposed help update only if a real change is needed; otherwise return NO_CHANGE. "
+        "Never modify anything yourself.\nQUESTION:"+question+
+        "\nCURRENT HELP:\n"+HTML+
+        "\nCURRENT SOURCES:\n"+json.dumps(fetched,ensure_ascii=False),
+        system="Return either NO_CHANGE or a short proposed replacement/addition for the relevant help section."
+    )
+    rid=execute("INSERT INTO help_updates(component,question,status,answer,sources,proposed_update) VALUES(?,?,?,?,?,?)",
+                (component,question,"pending",answer,json.dumps([x.get("url") for x in fetched],ensure_ascii=False),proposal))
+    return {"id":rid,"component":component,"answer":answer,"sources":[x.get("url") for x in fetched],"proposed_update":proposal,"status":"pending"}
