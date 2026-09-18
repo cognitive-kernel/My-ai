@@ -6,9 +6,10 @@ from .executor import run_python
 from .llm import OllamaClient
 from .memory import remember
 from .web_learner import WebLearner
+from .security import SecurityEngine
 
 class LearningEngine:
-    def __init__(self,llm=None): self.llm=llm or OllamaClient(); self.web=WebLearner()
+    def __init__(self,llm=None): self.llm=llm or OllamaClient(); self.web=WebLearner(); self.security=SecurityEngine(self.llm)
 
     def _discover_prerequisites(self,language,topic):
         prompt=("You are a curriculum architect. Analyze the requested programming subject and identify prerequisite subjects that must be learned before or alongside it. "
@@ -85,7 +86,28 @@ class LearningEngine:
             if lines and lines[-1].strip()==fence: lines=lines[:-1]
             code="\n".join(lines).strip()
         result={"language":language,"request":request,"code":code}
+        pid=execute("INSERT INTO generated_projects(language,request,code) VALUES(?,?,?)",(language,request,code))
+        result["project_id"]=pid
         if language.lower()=="python": result["validation"]=self.validate_code(code)
+        return result
+
+    def security_scan_code(self,code,language="Python",fix=False):
+        return self.security.scan_code(code,language,fix)
+
+    def security_scan_path(self,project_path,fix=False):
+        return self.security.scan_path(project_path,fix)
+
+    def latest_generated_project(self):
+        rows=fetch_all("SELECT * FROM generated_projects ORDER BY id DESC LIMIT 1")
+        return rows[0] if rows else None
+
+    def security_scan_latest_generated(self,fix=False):
+        project=self.latest_generated_project()
+        if not project:
+            return {"status":"no_project","message":"No generated project is available for security testing."}
+        result=self.security.scan_code(project["code"],project["language"],fix)
+        result["project_id"]=project["id"]
+        result["request"]=project["request"]
         return result
 
     def validate_code(self,code):
