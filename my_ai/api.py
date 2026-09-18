@@ -10,6 +10,7 @@ from .db import fetch_all,init_db
 from .learner import LearningEngine
 from .scheduler import StudyScheduler
 from .ui import page
+
 scheduler=StudyScheduler()
 @asynccontextmanager
 async def lifespan(_): init_db(); yield; scheduler.stop()
@@ -23,65 +24,59 @@ class ProgramRequest(BaseModel): request:str; language:str="Python"
 class LanguageRequest(BaseModel): language:str="Python"
 class SchedulerRequest(BaseModel): language:str="Python"; interval_seconds:int=3600
 class LearnRequest(BaseModel): language:str="Python"; interval_seconds:int=3600
+
 @app.get("/",response_class=HTMLResponse)
 def home(): return page()
 @app.get("/health")
 def health(): return {"status":"ok","model":settings.ollama_model}
+
 @app.post("/chat")
 def chat(r:ChatRequest):
     try:
-        msg=r.message.strip()
-        low=msg.lower()
-        known=LANGUAGE_CURRICULA
-        aliases={
-            "sql server":"SQL Server","sqlserver":"SQL Server","mssql":"SQL Server",
-            "mysql":"MySQL","sqlite":"SQLite","sql lite":"SQLite",
-            "android":"Android","اندروید":"Android","ios":"iOS","آی او اس":"iOS",
-            "python":"Python","پایتون":"Python","php":"PHP","c":"C","javascript":"JavaScript","js":"JavaScript"}
+        msg=r.message.strip(); low=msg.lower()
+        aliases={"sql server":"SQL Server","sqlserver":"SQL Server","mssql":"SQL Server","mysql":"MySQL","sqlite":"SQLite","sql lite":"SQLite","android":"Android","اندروید":"Android","ios":"iOS","آی او اس":"iOS","python":"Python","پایتون":"Python","php":"PHP","c":"C","javascript":"JavaScript","js":"JavaScript","pentest":"Pentest","pen test":"Pentest","penetration testing":"Pentest","penetration test":"Pentest","پنتست":"Pentest","پن تست":"Pentest","تست نفوذ":"Pentest","امنیت":"Pentest"}
         requested=None
         for key,name in sorted(aliases.items(),key=lambda x:len(x[0]),reverse=True):
-            if key in low:
-                requested=name; break
+            if key in low: requested=name; break
         learn_intent=("یاد بگیر" in low or "یادگیری" in low or "learn" in low or "go learn" in low or "start learning" in low)
         if learn_intent:
-            language=requested or "Python"
-            result=learner.learn_next(language)
+            language=requested or "Python"; result=learner.learn_next(language)
             return {"type":"learning","answer":f"Learning step completed for {canonical_language(language)}.","data":result}
         code_words=("برنامه بنویس","کد بنویس","برام برنامه","write a program","write code","program","build an app","create an app")
         if any(x in low for x in code_words):
-            language=requested or "Python"
-            result=learner.generate_program(msg,language)
+            language=requested or "Python"; result=learner.generate_program(msg,language)
             return {"type":"code","answer":"Generated program:","data":result}
         return {"type":"chat","answer":agent.chat(msg)}
-    except Exception as e:raise HTTPException(502,str(e))
+    except Exception as e: raise HTTPException(502,str(e))
+
 @app.post("/learn/url")
 def learn_url(r:URLRequest):
     try:return learner.study_url(str(r.url),r.topic)
-    except Exception as e:raise HTTPException(400,str(e))
+    except Exception as e: raise HTTPException(400,str(e))
 @app.post("/learning/start")
 def learning_start(r:LanguageRequest): return learner.start(r.language)
 @app.post("/learning/step")
 def learning_step(r:LanguageRequest):
     try:return learner.learn_next(r.language)
-    except Exception as e:raise HTTPException(502,str(e))
+    except Exception as e: raise HTTPException(502,str(e))
 @app.get("/learning/status")
 def learning_status(language:str|None=None): return learner.status(language)
 @app.post("/learning/practice")
 def practice(r:ChatRequest):
     try:return learner.practice(r.message)
-    except Exception as e:raise HTTPException(502,str(e))
+    except Exception as e: raise HTTPException(502,str(e))
 @app.post("/code/run")
 def code_run(r:CodeRequest): return learner.validate_code(r.code)
 @app.post("/code/generate")
 def code_generate(r:ProgramRequest):
     try:return learner.generate_program(r.request,r.language)
-    except Exception as e:raise HTTPException(502,str(e))
+    except Exception as e: raise HTTPException(502,str(e))
 @app.get("/languages")
 def languages(): return {"languages":list(LANGUAGE_CURRICULA.keys())}
 @app.post("/projects/plan")
 def project_plan(r:ProjectRequest):
     try:return {"tasks":agent.plan_project(r.goal)}
-    except Exception as e:raise HTTPException(502,str(e))
+    except Exception as e: raise HTTPException(502,str(e))
 @app.get("/memory/knowledge")
 def knowledge(): return fetch_all("SELECT * FROM knowledge ORDER BY id DESC")
 @app.get("/memory/search")
