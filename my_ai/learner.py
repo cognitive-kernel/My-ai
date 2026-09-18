@@ -92,9 +92,9 @@ class LearningEngine:
     def security_scan_path(self,project_path,fix=False):
         return self.security.scan_path(project_path,fix)
 
-    def security_assessment_url(self,target_url):
+    def security_assessment_url(self,target_url,headers=None):
         return {"static":{"status":"not_applicable","findings":[],"summary":{"critical":0,"high":0,"medium":0,"low":0}},
-                "dynamic":self.dast.scan_url(target_url,explicit=True),
+                "dynamic":self.dast.scan_url(target_url,explicit=True,headers=headers),
                 "code":None,"fixed":False,"target":target_url}
 
     def security_assessment_code(self,code,language="Python",fix=False):
