@@ -18,6 +18,7 @@ class ChatRequest(BaseModel): message:str
 class URLRequest(BaseModel): url:HttpUrl; topic:str="Python"
 class ProjectRequest(BaseModel): goal:str
 class CodeRequest(BaseModel): code:str
+class ProgramRequest(BaseModel): request:str; language:str="Python"
 class LanguageRequest(BaseModel): language:str="Python"
 class SchedulerRequest(BaseModel): language:str="Python"; interval_seconds:int=3600
 @app.get("/",response_class=HTMLResponse)
@@ -46,6 +47,10 @@ def practice(r:ChatRequest):
     except Exception as e:raise HTTPException(502,str(e))
 @app.post("/code/run")
 def code_run(r:CodeRequest): return learner.validate_code(r.code)
+@app.post("/code/generate")
+def code_generate(r:ProgramRequest):
+    try:return learner.generate_program(r.request,r.language)
+    except Exception as e:raise HTTPException(502,str(e))
 @app.post("/projects/plan")
 def project_plan(r:ProjectRequest):
     try:return {"tasks":agent.plan_project(r.goal)}
