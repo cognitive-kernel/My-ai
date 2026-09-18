@@ -64,7 +64,32 @@ A chat command such as «برای من یک برنامه مدیریت فایل �
 
 Important: Python execution is an execution utility, not a strong security sandbox. Do not run untrusted code. For hostile/untrusted generated code, use container/VM isolation.
 
-## Voice
+
+### Full local security pipeline
+
+The security workflow now has two complementary layers:
+
+1. **Static/source analysis** — scans source for common insecure patterns.
+2. **Local DAST** — materializes supported generated code or runs a supplied local project, binds it to loopback, discovers common route declarations, sends real HTTP requests, checks security headers/runtime errors, and performs a harmless reflection probe.
+3. **Report** — every finding includes severity, endpoint/file evidence, impact, and remediation guidance.
+4. **Remediation** — when the command explicitly requests fixing, static findings are remediated, then the resulting code/project is tested again dynamically and statically.
+5. **Report-only** — commands such as «فقط گزارش بده» or «تست بگیر» never request remediation.
+6. **Explicit override** — an explicit fix command has higher priority than report wording; otherwise an explicit report request has higher priority than the Pentest default.
+
+The dynamic runner is deliberately restricted to localhost and does not scan arbitrary external targets. Supported local runtime detection currently covers common FastAPI/Flask Python projects, PHP built-in server projects, static HTML projects, and source-level endpoint discovery. Unsupported frameworks are reported instead of being guessed.
+
+The architecture follows the complementary model described by OWASP: source review can find issues dynamic testing misses, while testing the running application validates security controls at system level. citeturn0search1turn0search4
+
+For larger CI/CD deployments, OWASP ZAP also provides Docker-based baseline, full, and API scanning modes; this project keeps its built-in DAST local and controlled rather than silently targeting external systems. citeturn0search9turn0search3
+
+### End-to-end command examples
+
+- «یک صفحه لاگین با پایتون بساز و پن تست بگیر» → generate → static scan → local runtime scan → report → fix by default → retest.
+- «یک صفحه لاگین با پایتون بساز و فقط گزارش بده» → generate → static + local runtime scan → report only.
+- «از این پروژه تست بگیر» → static + local runtime scan → report only.
+- «از این پروژه تست بگیر و باگ‌ها را رفع کن» → scan → remediation → retest.
+- «پروژه را فقط بررسی کن» → no source modification.
+\n## Voice
 
 The web UI uses browser speech capabilities:
 - Speech recognition: `SpeechRecognition` / `webkitSpeechRecognition`
