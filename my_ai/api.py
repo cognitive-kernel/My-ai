@@ -22,6 +22,7 @@ class ProjectRequest(BaseModel): goal:str
 class CodeRequest(BaseModel): code:str
 class ProgramRequest(BaseModel): request:str; language:str="Python"
 class LanguageRequest(BaseModel): language:str="Python"
+class SecurityRequest(BaseModel): project_path:str|None=None; code:str|None=None; language:str="Python"; fix:bool=False
 class SchedulerRequest(BaseModel): language:str="Python"; interval_seconds:int=3600
 class LearnRequest(BaseModel): language:str="Python"; interval_seconds:int=3600
 
@@ -39,11 +40,37 @@ def chat(r:ChatRequest):
         for key,name in sorted(aliases.items(),key=lambda x:len(x[0]),reverse=True):
             if key in low: requested=name; break
         learn_intent=("یاد بگیر" in low or "یادگیری" in low or "learn" in low or "go learn" in low or "start learning" in low)
+        security_words=("پن تست" in low or "پنتست" in low or "تست نفوذ" in low or "تست امنیت" in low or "security test" in low or "pentest" in low or "penetration test" in low)
+        fix_requested=("رفع کن" in low or "رفعش کن" in low or "اصلاح کن" in low or "برطرف کن" in low or "fix" in low or "remediate" in low)
+        code_words=("برنامه بنویس","کد بنویس","برام برنامه","write a program","write code","program","build an app","create an app")
+        code_intent=any(x in low for x in code_words)
+        if security_words:
+            if code_intent:
+                language=requested or "Python"
+                generated=learner.generate_program(msg,language)
+                result=learner.security_scan_code(generated["code"],language,fix_requested)
+                result["generated_project"]=generated
+                result["mode"]="pentest_and_fix" if fix_requested else "pentest_report"
+                return {"type":"security","answer":"Security test completed. Findings and remediation are included." if not fix_requested else "Security test and requested remediation completed.","data":result}
+            path=None
+            for prefix in ("مسیر:", "path:", "project:", "پروژه:"):
+                if prefix in msg:
+                    path=msg.split(prefix,1)[1].strip().strip('"\'')
+                    break
+            if path:
+                result=learner.security_scan_path(path,fix_requested)
+                result["mode"]="pentest_and_fix" if fix_requested else "pentest_report"
+                return {"type":"security","answer":"Security test completed. Findings and remediation are included." if not fix_requested else "Security test and requested remediation completed.","data":result}
+            result=learner.security_scan_latest_generated(fix_requested)
+            if result.get("status")=="no_project":
+                return {"type":"security","answer":"برای پن‌تست پروژه خودت، مسیر پوشه پروژه را بده؛ مثال: «پن تست مسیر: C:\\\\projects\\\\login». برای پروژه‌ای که همین‌جا ساخته شده باشد، آخرین پروژه تولیدشده به‌صورت خودکار تست می‌شود.","data":result}
+            result["mode"]="pentest_and_fix" if fix_requested else "pentest_report"
+            return {"type":"security","answer":"Security test completed. Findings and remediation are included." if not fix_requested else "Security test and requested remediation completed.","data":result}
+
         if learn_intent:
             language=requested or "Python"; result=learner.learn_next(language)
             return {"type":"learning","answer":f"Learning step completed for {canonical_language(language)}.","data":result}
-        code_words=("برنامه بنویس","کد بنویس","برام برنامه","write a program","write code","program","build an app","create an app")
-        if any(x in low for x in code_words):
+        if code_intent:
             language=requested or "Python"; result=learner.generate_program(msg,language)
             return {"type":"code","answer":"Generated program:","data":result}
         return {"type":"chat","answer":agent.chat(msg)}
@@ -71,6 +98,20 @@ def code_run(r:CodeRequest): return learner.validate_code(r.code)
 def code_generate(r:ProgramRequest):
     try:return learner.generate_program(r.request,r.language)
     except Exception as e: raise HTTPException(502,str(e))
+
+@app.post("/security/scan")
+def security_scan(r:SecurityRequest):
+    try:
+        if r.project_path:
+            return learner.security_scan_path(r.project_path,r.fix)
+        if r.code:
+            return learner.security_scan_code(r.code,r.language,r.fix)
+        return learner.security_scan_latest_generated(r.fix)
+    except Exception as e: raise HTTPException(400,str(e))
+
+@app.get("/security/history")
+def security_history(limit:int=20):
+    return learner.security.history(limit)
 @app.get("/languages")
 def languages(): return {"languages":list(LANGUAGE_CURRICULA.keys())}
 @app.post("/projects/plan")
