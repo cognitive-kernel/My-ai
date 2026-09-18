@@ -191,3 +191,37 @@ Then verify:
 11. A coding request for a selected language returns source code.
 
 CI runs the automated test suite on pushes and pull requests.
+
+## دستورها و حالت اجرای دستیار / Assistant Command Modes
+
+### فارسی
+
+رفتار دستیار از یک پیش‌فرض مشخص پیروی می‌کند، اما **دستور صریح کاربر همیشه بر پیش‌فرض غلبه دارد**.
+
+- «پایتون یاد بگیر» → یادگیری مرحله‌به‌مرحله و ثبت درصد پیشرفت.
+- «یک صفحه ورود با پایتون بنویس و پن‌تست بگیر» → ساخت برنامه، بررسی امنیتی و اصلاح خودکار یافته‌ها.
+- «از این پروژه تست بگیر» → فقط بررسی و گزارش؛ فایل‌ها تغییر نمی‌کنند.
+- «پن‌تست بگیر و فقط گزارش بده» → فقط گزارش امنیتی؛ هیچ اصلاحی انجام نمی‌شود.
+- «پن‌تست بگیر و باگ‌ها را رفع کن» → بررسی، اصلاح و بررسی مجدد.
+- «پروژه را بررسی کن و فقط اشکالات را بگو» → گزارش بدون تغییر.
+- دستور صریح شما همیشه از حالت پیش‌فرض مهم‌تر است.
+
+گزارش امنیتی شامل شدت، فایل و خط، شواهد، اثر احتمالی، وضعیت اصلاح و راهکار پیشنهادی است. توضیح اثر و مسیر رفع مشکل ارائه می‌شود، اما اجرای حمله روی سامانه‌های خارج از محیط مجاز و محلی هدف این قابلیت نیست.
+
+### English
+
+The assistant has a defined default behavior, but **an explicit user instruction always overrides the default**.
+
+- “Learn Python” → incremental learning with persistent progress tracking.
+- “Build a Python login page and pentest it” → build the program, perform security checks, and remediate findings by default.
+- “Test this project” → test and report only; source files are not changed.
+- “Pentest it, report only” → security report only; no remediation.
+- “Pentest it and fix the bugs” → test, remediate, and retest.
+- “Review the project and only tell me the issues” → report without changing the project.
+- Explicit user instructions always take precedence over defaults.
+
+Security reports contain severity, file/line, evidence, potential impact, remediation status, and recommended remediation. The security workflow is intended for authorized local/isolated projects and defensive development.
+
+### امنیت و روش آزمون / Security methodology
+
+The security learning track is independent of PHP and can be applied to Python, PHP, JavaScript and other supported projects. Its methodology is informed by the OWASP Web Security Testing Guide and related secure-development practices. The current WSTG is maintained as an evolving project, with versioned releases available.
