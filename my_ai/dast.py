@@ -135,6 +135,16 @@ class LocalDAST:
                         findings.append({"severity":"medium","title":"State-changing form has no recognizable CSRF token","endpoint":form["action"],"evidence":f"Method {form['method']} has no common CSRF token field.","impact":"A state-changing request may require CSRF protection.","remediation":"Use framework-supported CSRF protection and validate tokens server-side."})
         return findings
 
+    def _openapi_endpoints(self,base):
+        for path in ("/openapi.json","/swagger.json","/api/openapi.json"):
+            try:
+                r=httpx.get(urljoin(base,path.lstrip("/")),timeout=self.timeout,follow_redirects=False)
+                if r.status_code==200 and "json" in r.headers.get("content-type","").lower():
+                    data=r.json(); paths=data.get("paths",{}) if isinstance(data,dict) else {}
+                    return sorted(str(x) for x in paths.keys())[:100]
+            except Exception: pass
+        return []
+
     def _crawl_public(self,base,limit=30):
         basep=urlparse(base); seen={base}; queue=[base]
         with httpx.Client(timeout=self.timeout,follow_redirects=False) as client:
@@ -155,7 +165,7 @@ class LocalDAST:
         if not explicit: raise PermissionError("A target URL must be explicitly supplied by the user.")
         p=self._assert_public_explicit(url)
         base=p.scheme + "://" + p.netloc + (p.path or "/")
-        endpoints=self._crawl_public(base); findings=self._checks(base,endpoints)
+        endpoints=sorted(set(self._crawl_public(base)+self._openapi_endpoints(base)))[:100]; findings=self._checks(base,endpoints)
         result={"status":"completed","target":url,"mode":"explicit_external_url","endpoints":endpoints,"findings":findings,"summary":self._summary(findings),"fixed":False}
         execute("INSERT INTO security_scans(project_path,status,summary,findings) VALUES(?,?,?,?)",(url,"dast_external_completed",json.dumps(result["summary"],ensure_ascii=False),json.dumps(findings,ensure_ascii=False)))
         return result
