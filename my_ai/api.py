@@ -25,7 +25,7 @@ class ProjectRequest(BaseModel): goal:str
 class CodeRequest(BaseModel): code:str
 class ProgramRequest(BaseModel): request:str; language:str="Python"
 class LanguageRequest(BaseModel): language:str="Python"
-class SecurityRequest(BaseModel): project_path:str|None=None; target_url:str|None=None; code:str|None=None; language:str="Python"; fix:bool=False
+class SecurityRequest(BaseModel): project_path:str|None=None; target_url:str|None=None; code:str|None=None; language:str="Python"; fix:bool=False; headers:dict[str,str]= {}
 class GitRequest(BaseModel): repository:str; path:str|None=None; ref:str|None=None; branch:str|None=None; content:str|None=None; message:str|None=None; allow_write:bool=False
 class SchedulerRequest(BaseModel): language:str="Python"; interval_seconds:int=3600
 class LearnRequest(BaseModel): language:str="Python"; interval_seconds:int=3600
