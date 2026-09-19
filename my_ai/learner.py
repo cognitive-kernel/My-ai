@@ -40,6 +40,13 @@ class LearningEngine:
 
     def start(self,language="Python"):
         language=canonical_language(language)
+        active=fetch_all("SELECT * FROM learning_sessions WHERE language=? AND status='started' ORDER BY id DESC LIMIT 1",(language,))
+        if active:
+            row=active[0]
+            try: topic=json.loads(row["notes"] or "{}")
+            except Exception: topic={}
+            if topic.get("topic"):
+                return {"status":"started","session_id":row["id"],"topic":topic}
         rows=fetch_all("SELECT topic FROM learning_sessions WHERE language=? AND status='completed'",(language,))
         topic=next_topic(language,{str(r["topic"]) for r in rows})
         if not topic:return {"status":"completed","message":f"{language} curriculum is complete."}
