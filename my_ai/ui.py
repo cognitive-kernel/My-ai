@@ -14,12 +14,12 @@ window.myAiSend=window.myAiSend||async function(){
   if(!m)return;
   el.value='';
   var box=document.getElementById('messages');
-  if(box){box.insertAdjacentHTML('beforeend','<div class="msg user"></div>');box.lastElementChild.textContent=m;}
+  if(box){box.insertAdjacentHTML('beforeend','<div class="msg user"></div>');box.lastElementChild.textContent=m;saveLocalHistory();}
   try{
     var r=await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:m})});
     var t=await r.text();
     var j;try{j=JSON.parse(t)}catch(e){j={answer:t}}
-    if(box){box.insertAdjacentHTML('beforeend','<div class="msg ai"></div>');box.lastElementChild.textContent=j.answer||JSON.stringify(j);box.scrollTop=box.scrollHeight;}
+    if(box){box.insertAdjacentHTML('beforeend','<div class="msg ai"></div>');box.lastElementChild.textContent=j.answer||JSON.stringify(j);box.scrollTop=box.scrollHeight;saveLocalHistory();}
   }catch(e){
     if(box){box.insertAdjacentHTML('beforeend','<div class="msg ai"></div>');box.lastElementChild.textContent='خطا: '+e.message;}
   }
@@ -35,11 +35,13 @@ function add(t,w){var d=document.createElement('div');d.className='msg '+w;d.tex
 function setLang(l){uiLang=l;document.documentElement.lang=l;document.documentElement.dir=l==='fa'?'rtl':'ltr';var t=T[l];$('subtitle').textContent=t.sub;$('chatTitle').firstChild.textContent=t.chat;$('sendBtn').textContent=t.send;$('voiceBtn').textContent=t.voice;$('stopBtn').textContent=t.stop;$('progressTitle').firstChild.textContent=t.progress;$('securityTitle').firstChild.textContent=t.security;$('learnTitle').firstChild.textContent=t.learn;$('msg').placeholder=t.ph;$('policy').textContent=t.policy}
 async function post(p,b){var r=await fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});var text=await r.text();var j;try{j=JSON.parse(text)}catch(_){throw Error('HTTP '+r.status+': '+text.slice(0,300))}if(!r.ok)throw Error(j.detail||'HTTP '+r.status);return j}
 function renderResult(j){var a=j.answer||'';if(j.type==='code'&&j.data)a+='\n\n'+(j.data.code||'');if(j.type==='security'&&j.data){a+='\n\n';a+=(uiLang==='fa'?'خلاصه: ':'Summary: ')+JSON.stringify(j.data.summary||{});(j.data.findings||[]).forEach(function(f){a+='\n['+f.severity+'] '+f.title+' — '+(f.file||'')+':'+(f.line||'')+'\n'+(uiLang==='fa'?'راهکار: ':'Fix: ')+(f.remediation||'')})}if(j.type==='learning'&&j.data)a+='\n'+JSON.stringify(j.data);return a||JSON.stringify(j,null,2)}
-async function send(){if(busy)return;var m=$('msg').value.trim();if(!m)return;busy=true;$('sendBtn').disabled=true;add(m,'user');$('msg').value='';try{var j=await post('/chat',{message:m});var a=renderResult(j);add(a,'ai');speak(a);loadDash()}catch(e){add('خطا: '+(e.message||String(e)),'ai')}finally{busy=false;$('sendBtn').disabled=false;$('msg').focus()}}
+async function send(){if(busy)return;var m=$('msg').value.trim();if(!m)return;busy=true;$('sendBtn').disabled=true;add(m,'user');saveLocalHistory();$('msg').value='';try{var j=await post('/chat',{message:m});var a=renderResult(j);add(a,'ai');saveLocalHistory();speak(a);loadDash()}catch(e){add('خطا: '+(e.message||String(e)),'ai')}finally{busy=false;$('sendBtn').disabled=false;$('msg').focus()}}
 function voiceInput(){var SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){add(uiLang==='fa'?'تشخیص گفتار در این مرورگر پشتیبانی نمی‌شود.':'Speech Recognition is not supported in this browser.','ai');return}recognition=new SR();recognition.lang=voiceLocale;recognition.interimResults=false;recognition.onresult=function(e){$('msg').value=e.results[0][0].transcript;send()};recognition.onerror=function(e){add('Voice error: '+e.error,'ai')};recognition.start()}
 function stopVoice(){if(recognition)recognition.stop();if(window.speechSynthesis)speechSynthesis.cancel()}
 function speak(t){if(window.speechSynthesis){speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(t);u.lang=voiceLocale;speechSynthesis.speak(u)}}
-async function loadHistory(){try{var r=await fetch('/chat/history?limit=100',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);var j=await r.json();$('messages').innerHTML='';(j.messages||[]).forEach(function(x){add(x.content,x.role==='user'?'user':'ai')})}catch(e){console.error(e)}}
+function saveLocalHistory(){try{var items=[];document.querySelectorAll('#messages .msg').forEach(function(x){items.push({role:x.classList.contains('user')?'user':'assistant',content:x.textContent})});localStorage.setItem('myai_chat_history',JSON.stringify(items.slice(-200)))}catch(e){}} 
+function renderHistory(items){$('messages').innerHTML='';(items||[]).forEach(function(x){add(x.content,x.role==='user'?'user':'ai')})}
+async function loadHistory(){var local=[];try{local=JSON.parse(localStorage.getItem('myai_chat_history')||'[]')}catch(e){}if(local.length)renderHistory(local);try{var r=await fetch('/chat/history?limit=200',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);var j=await r.json();if((j.messages||[]).length){renderHistory(j.messages);saveLocalHistory()}}catch(e){console.error(e)}}
 async function learn(lang){$('learnout').textContent='در حال مطالعه '+lang+'... این مرحله ممکن است چند دقیقه زمان ببرد.';try{var j=await post('/learning/step',{language:lang});$('learnout').textContent=JSON.stringify(j,null,2);loadDash()}catch(e){$('learnout').textContent='خطا: '+(e.message||String(e));loadDash()}}
 async function loadDash(){try{var r=await fetch('/learning/status');var j=await r.json(),rows=j.languages||[],h='<table style="width:100%"><tr><th>زبان / Language</th><th>موضوعات</th><th>درصد</th><th>میانگین</th></tr>';rows.forEach(function(x){h+='<tr><td>'+x.language+'</td><td>'+x.completed_topics+'/'+x.total_topics+'</td><td>'+x.progress_percent+'%<div class="bar"><div class="fill" style="width:'+x.progress_percent+'%">'+x.progress_percent+'%</div></div></td><td>'+x.average_score+'%</td></tr>'});h+='</table>';$('dashboard').innerHTML=h}catch(e){$('dashboard').textContent='خطا: '+(e.message||String(e))}}
 function init(){
