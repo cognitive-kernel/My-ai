@@ -201,6 +201,16 @@ def delete_git_token():
         return {"saved":False,"authenticated":bool(__import__("os").getenv("GITHUB_TOKEN"))}
     except Exception as e: raise HTTPException(500,str(e))
 
+@app.get("/git/whoami")
+def git_whoami():
+    try:
+        c=GitHubConnector()
+        if not c.token: raise HTTPException(401,"GitHub Token تنظیم نشده است.")
+        data=c.whoami()
+        return {"authenticated":True,"login":data.get("login"),"name":data.get("name")}
+    except HTTPException: raise
+    except Exception as e: raise HTTPException(502,str(e))
+
 @app.get("/git/repo")
 def git_repo(repository:str):
     try:
