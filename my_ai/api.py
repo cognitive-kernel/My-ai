@@ -17,7 +17,12 @@ from .git_connector import GitHubConnector
 
 scheduler=StudyScheduler()
 @asynccontextmanager
-async def lifespan(_): init_db(); yield; scheduler.stop()
+async def lifespan(_):
+    init_db()
+    active=fetch_all("SELECT language FROM learning_sessions WHERE status='started' ORDER BY id DESC LIMIT 1")
+    if active: scheduler.start(active[0]["language"])
+    yield
+    scheduler.stop()
 app=FastAPI(title="My-AI",version="0.2.0",description="Local-first personal learning and coding agent.",lifespan=lifespan)
 agent=Agent(); learner=LearningEngine()
 class ChatRequest(BaseModel): message:str
