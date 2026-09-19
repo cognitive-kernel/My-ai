@@ -32,7 +32,7 @@ class SchedulerRequest(BaseModel): language:str="Python"; interval_seconds:int=3
 class LearnRequest(BaseModel): language:str="Python"; interval_seconds:int=3600
 
 @app.get("/",response_class=HTMLResponse)
-def home(): return page()
+def home():\n    return HTMLResponse(page(),headers={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0","Pragma":"no-cache","Expires":"0"})
 @app.get("/help",response_class=HTMLResponse)
 def help(): return help_page()
 @app.get("/help/updates")
