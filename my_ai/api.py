@@ -182,11 +182,39 @@ def security_scan(r:SecurityRequest):
     except Exception as e: raise HTTPException(400,str(e))
 @app.get("/security/history")
 def security_history(limit:int=20): return learner.security.history(limit)
+@app.post("/git/login")
+def git_login():
+    try:
+        if not GitHubConnector.gh_available():
+            raise HTTPException(503,"GitHub CLI (gh) نصب نیست. GitHub CLI را نصب کنید و دوباره تلاش کنید.")
+        authenticated=GitHubConnector.gh_logged_in()
+        if not authenticated:
+            authenticated=GitHubConnector.gh_login()
+        return {"authenticated":bool(authenticated),"token_source":GitHubConnector.token_source(),"message":"ورود GitHub با مرورگر انجام شد." if authenticated else "ورود GitHub تکمیل نشد."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502,str(e))
+
+@app.post("/git/logout")
+def git_logout():
+    try:
+        GitHubConnector.save_token("")
+        exe=GitHubConnector._gh_executable()
+        if exe:
+            import subprocess
+            r=subprocess.run([exe,"auth","logout","--hostname","github.com","--yes"],capture_output=True,text=True,timeout=30,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
+            if r.returncode != 0:
+                raise RuntimeError((r.stderr or r.stdout or "GitHub logout failed").strip())
+        return {"authenticated":False,"message":"از GitHub خارج شدی."}
+    except Exception as e:
+        raise HTTPException(502,str(e))
+
 @app.get("/git/connection")
 def git_connection():
     try:
         data=GitHubConnector().repo("cognitive-kernel/My-ai")
-        return {"connected":True,"authenticated":bool(__import__("os").getenv("GITHUB_TOKEN")),"repository":data.get("full_name"),"private":data.get("private",False)}
+        return {"connected":True,"authenticated":GitHubConnector.token_status(),"repository":data.get("full_name"),"private":data.get("private",False)}
     except Exception as e:
         return {"connected":False,"authenticated":bool(__import__("os").getenv("GITHUB_TOKEN")),"error":str(e)}
 @app.post("/git/token")
