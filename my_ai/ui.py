@@ -7,6 +7,25 @@ body{font-family:Tahoma,system-ui;margin:0;background:#f3f4f6;color:#17202a}main
 <div class='card'><h2 id='securityTitle'>گزارش امنیتی <a class='helpBtn' href='/help#security' target='_blank'>راهنما</a></h2><div class='grid'><div class='card ok'><b>اصلاح خودکار</b><p>با درخواست صریح شما فعال می‌شود یا طبق پیش‌فرض پن‌تست.</p></div><div class='card danger'><b>گزارش فقط</b><p>با «فقط تست بگیر» یا «فقط گزارش بده» هیچ تغییری در پروژه ایجاد نمی‌شود.</p></div></div></div>
 <div class='card'><h2 id='learnTitle'>یادگیری سریع <a class='helpBtn' href='/help#learning' target='_blank'>راهنما</a></h2><button type='button' data-learn='Python'>Python</button><button type='button' data-learn='PHP'>PHP</button><button type='button' data-learn='JavaScript'>JavaScript</button><button type='button' data-learn='Pentest'>Pentest</button><pre id='learnout'></pre></div>
 <script>
+window.myAiSend=window.myAiSend||async function(){
+  var el=document.getElementById('msg');
+  if(!el)return;
+  var m=(el.value||'').trim();
+  if(!m)return;
+  el.value='';
+  var box=document.getElementById('messages');
+  if(box){box.insertAdjacentHTML('beforeend','<div class="msg user"></div>');box.lastElementChild.textContent=m;}
+  try{
+    var r=await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:m})});
+    var t=await r.text();
+    var j;try{j=JSON.parse(t)}catch(e){j={answer:t}}
+    if(box){box.insertAdjacentHTML('beforeend','<div class="msg ai"></div>');box.lastElementChild.textContent=j.answer||JSON.stringify(j);box.scrollTop=box.scrollHeight;}
+  }catch(e){
+    if(box){box.insertAdjacentHTML('beforeend','<div class="msg ai"></div>');box.lastElementChild.textContent='خطا: '+e.message;}
+  }
+};
+</script>
+<script>
 (function(){
 'use strict';
 var recognition=null,voiceLocale='fa-IR',uiLang='fa',busy=false;
