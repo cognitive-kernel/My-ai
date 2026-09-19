@@ -251,11 +251,11 @@ def git_check(repository:str="cognitive-kernel/My-ai"):
     except Exception as e:
         if isinstance(e, __import__("my_ai.git_connector", fromlist=["GitHubAPIError"]).GitHubAPIError):
             if e.status_code == 401:
-                return {"authenticated":False,"repository":repository,"status":"invalid_token","http_status":401,"github_message":e.message,"message":"GitHub این Token را رد کرد؛ ممکن است revoke شده یا واقعاً نامعتبر باشد."}
+                return {"authenticated":False,"repository":repository,"status":"invalid_token","http_status":401,"token_source":token_source,"github_message":e.message,"message":"GitHub این Token را رد کرد؛ ممکن است revoke شده یا واقعاً نامعتبر باشد."}
             if e.status_code == 403:
-                return {"authenticated":False,"repository":repository,"status":"auth_forbidden","http_status":403,"github_message":e.message,"message":"GitHub Token شناخته شد، اما سیاست یا دسترسی GitHub این درخواست را رد کرد."}
-            return {"authenticated":False,"repository":repository,"status":"github_auth_error","http_status":e.status_code,"github_message":e.message,"message":f"GitHub خطای {e.status_code} در احراز هویت برگرداند."}
-        return {"authenticated":False,"repository":repository,"status":"network_error","message":f"اتصال به GitHub برقرار نشد: {e}"}
+                return {"authenticated":False,"repository":repository,"status":"auth_forbidden","http_status":403,"token_source":token_source,"github_message":e.message,"message":"GitHub Token شناخته شد، اما سیاست یا دسترسی GitHub این درخواست را رد کرد."}
+            return {"authenticated":False,"repository":repository,"status":"github_auth_error","http_status":e.status_code,"token_source":token_source,"github_message":e.message,"message":f"GitHub خطای {e.status_code} در احراز هویت برگرداند."}
+        return {"authenticated":False,"repository":repository,"status":"network_error","token_source":token_source,"message":f"اتصال به GitHub برقرار نشد: {e}"}
     try:
         data=c.repo(repository)
         return {
