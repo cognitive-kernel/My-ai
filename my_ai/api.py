@@ -201,9 +201,15 @@ def git_token(r:ChatRequest):
         c=GitHubConnector()
         try:
             identity=c.whoami()
-        except Exception:
-            GitHubConnector.save_token("")
-            raise HTTPException(401,"توکن GitHub معتبر نیست یا منقضی شده است.")
+        except Exception as e:
+            if isinstance(e, __import__("my_ai.git_connector", fromlist=["GitHubAPIError"]).GitHubAPIError):
+                if e.status_code == 401:
+                    GitHubConnector.save_token("")
+                    raise HTTPException(401, f"GitHub Token رد شد: {e.message}")
+                if e.status_code == 403:
+                    raise HTTPException(403, f"GitHub Token احراز هویت شد اما GitHub دسترسی این درخواست را رد کرد: {e.message}")
+                raise HTTPException(502, f"GitHub API خطای {e.status_code} داد: {e.message}")
+            raise HTTPException(502, f"اتصال به GitHub برقرار نشد: {e}")
         return {
             "saved":True,
             "authenticated":True,
@@ -230,7 +236,10 @@ def git_whoami():
         data=c.whoami()
         return {"authenticated":True,"login":data.get("login"),"name":data.get("name")}
     except HTTPException: raise
-    except Exception as e: raise HTTPException(502,str(e))
+    except Exception as e:
+        if isinstance(e, __import__("my_ai.git_connector", fromlist=["GitHubAPIError"]).GitHubAPIError):
+            raise HTTPException(e.status_code if e.status_code in (401,403,404,429) else 502, f"GitHub API: {e.message}")
+        raise HTTPException(502,f"اتصال به GitHub برقرار نشد: {e}")
 
 @app.get("/git/check")
 def git_check(repository:str="cognitive-kernel/My-ai"):
@@ -239,8 +248,14 @@ def git_check(repository:str="cognitive-kernel/My-ai"):
         return {"authenticated":False,"repository":repository,"status":"no_token","message":"GitHub Token تنظیم نشده است."}
     try:
         identity=c.whoami()
-    except Exception:
-        return {"authenticated":False,"repository":repository,"status":"invalid_token","message":"Token نامعتبر یا منقضی شده است."}
+    except Exception as e:
+        if isinstance(e, __import__("my_ai.git_connector", fromlist=["GitHubAPIError"]).GitHubAPIError):
+            if e.status_code == 401:
+                return {"authenticated":False,"repository":repository,"status":"invalid_token","http_status":401,"github_message":e.message,"message":"GitHub این Token را رد کرد؛ ممکن است revoke شده یا واقعاً نامعتبر باشد."}
+            if e.status_code == 403:
+                return {"authenticated":False,"repository":repository,"status":"auth_forbidden","http_status":403,"github_message":e.message,"message":"GitHub Token شناخته شد، اما سیاست یا دسترسی GitHub این درخواست را رد کرد."}
+            return {"authenticated":False,"repository":repository,"status":"github_auth_error","http_status":e.status_code,"github_message":e.message,"message":f"GitHub خطای {e.status_code} در احراز هویت برگرداند."}
+        return {"authenticated":False,"repository":repository,"status":"network_error","message":f"اتصال به GitHub برقرار نشد: {e}"}
     try:
         data=c.repo(repository)
         return {
@@ -253,22 +268,13 @@ def git_check(repository:str="cognitive-kernel/My-ai"):
             "message":"Token معتبر است و به مخزن دسترسی دارد.",
         }
     except Exception as e:
-        msg=str(e)
-        if "GitHub API 404" in msg:
-            return {
-                "authenticated":True,
-                "repository":repository,
-                "status":"repo_forbidden_or_missing",
-                "login":identity.get("login"),
-                "message":"Token معتبر است، اما مخزن پیدا نشد یا این Token به مخزن دسترسی ندارد.",
-            }
-        return {
-            "authenticated":True,
-            "repository":repository,
-            "status":"github_error",
-            "login":identity.get("login"),
-            "message":msg,
-        }
+        if isinstance(e, __import__("my_ai.git_connector", fromlist=["GitHubAPIError"]).GitHubAPIError):
+            if e.status_code == 404:
+                return {"authenticated":True,"repository":repository,"status":"repo_forbidden_or_missing","http_status":404,"login":identity.get("login"),"github_message":e.message,"message":"Token معتبر است، اما GitHub این مخزن را برای این Token قابل دسترسی نمی‌داند."}
+            if e.status_code == 403:
+                return {"authenticated":True,"repository":repository,"status":"repo_forbidden","http_status":403,"login":identity.get("login"),"github_message":e.message,"message":"Token معتبر است، اما GitHub دسترسی این مخزن یا permission لازم را رد کرد."}
+            return {"authenticated":True,"repository":repository,"status":"github_error","http_status":e.status_code,"login":identity.get("login"),"github_message":e.message,"message":f"GitHub خطای {e.status_code} داد."}
+        return {"authenticated":True,"repository":repository,"status":"network_error","login":identity.get("login"),"message":f"اتصال به GitHub برقرار نشد: {e}"}
 
 @app.get("/git/repo")
 def git_repo(repository:str):
