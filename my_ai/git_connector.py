@@ -15,7 +15,7 @@ class GitHubAPIError(ValueError):
 class GitHubConnector:
     """Explicit GitHub repository connector. Reads by default; writes require allow_write=True."""
     def __init__(self, token: str | None = None, api_url: str | None = None):
-        self.token = token or os.getenv("GITHUB_TOKEN") or self._saved_token()
+        # The token explicitly supplied by the caller wins. Otherwise prefer the\n        # token saved through the UI, then fall back to the environment token.\n        # This prevents an unrelated GITHUB_TOKEN from overriding a valid UI token.\n        self.token = token if token is not None else (self._saved_token() or os.getenv("GITHUB_TOKEN"))
         self.api_url = (api_url or os.getenv("GITHUB_API_URL") or "https://api.github.com").rstrip("/")
         self.timeout = float(os.getenv("MYAI_GITHUB_TIMEOUT", "15"))
 
