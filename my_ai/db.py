@@ -7,8 +7,9 @@ from typing import Any
 from .config import settings
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS chat_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,kind TEXT NOT NULL DEFAULT 'chat',language TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS conversations (
- id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT NOT NULL, content TEXT NOT NULL,
+ id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, role TEXT NOT NULL, content TEXT NOT NULL,
  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS knowledge (
  id INTEGER PRIMARY KEY AUTOINCREMENT, topic TEXT NOT NULL, title TEXT NOT NULL,
@@ -51,6 +52,11 @@ def connect() -> sqlite3.Connection:
 def init_db() -> None:
     with connect() as conn:
         conn.executescript(SCHEMA)
+        cols=[r[1] for r in conn.execute("PRAGMA table_info(conversations)").fetchall()]
+        if "session_id" not in cols: conn.execute("ALTER TABLE conversations ADD COLUMN session_id INTEGER")
+        if conn.execute("SELECT COUNT(*) FROM chat_sessions").fetchone()[0]==0:
+            cur=conn.execute("INSERT INTO chat_sessions(title) VALUES(?)",("گفتگوی قبلی",))
+            conn.execute("UPDATE conversations SET session_id=? WHERE session_id IS NULL",(cur.lastrowid,))
         # Keep FTS synchronized for rows created by this application.
         conn.executescript("""
         CREATE TRIGGER IF NOT EXISTS knowledge_ai AFTER INSERT ON knowledge BEGIN
