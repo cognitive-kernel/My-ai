@@ -15,7 +15,7 @@ class GitHubAPIError(ValueError):
 class GitHubConnector:
     """Explicit GitHub repository connector. Reads by default; writes require allow_write=True."""
     def __init__(self, token: str | None = None, api_url: str | None = None):
-        # The token explicitly supplied by the caller wins. Otherwise prefer the\n        # token saved through the UI, then fall back to the environment token.\n        # This prevents an unrelated GITHUB_TOKEN from overriding a valid UI token.\n        self.token = token if token is not None else (self._saved_token() or os.getenv("GITHUB_TOKEN"))
+        # The token explicitly supplied by the caller wins. Otherwise prefer the\n        # token saved through the UI, then fall back to the environment token.\n        # This prevents an unrelated GITHUB_TOKEN from overriding a valid UI token.\n        self._explicit_token = token
         self.api_url = (api_url or os.getenv("GITHUB_API_URL") or "https://api.github.com").rstrip("/")
         self.timeout = float(os.getenv("MYAI_GITHUB_TIMEOUT", "15"))
 
@@ -56,9 +56,16 @@ class GitHubConnector:
     def token_status(cls):
         return cls.token_source() != "none"
 
+    def _effective_token(self):
+        if self._explicit_token is not None:
+            return self._explicit_token
+        return self._saved_token() or os.getenv("GITHUB_TOKEN")
+
     def _headers(self):
         h={"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28","User-Agent":"My-AI-GitHub-Connector"}
-        if self.token: h["Authorization"]="Bearer "+self.token
+        token=self._effective_token()
+        if token:
+            h["Authorization"]="Bearer "+token
         return h
 
     @staticmethod
