@@ -49,7 +49,29 @@ def home():
 @app.get("/help",response_class=HTMLResponse)
 def help(): return help_page()
 @app.get("/chat/sessions")
-def chat_sessions(): return {"sessions":fetch_all("SELECT id,title,kind,language,created_at,updated_at FROM chat_sessions ORDER BY updated_at DESC,id DESC")}
+def chat_sessions(): return {"sessions":fetch_all("SELECT id,title,kind,language,pinned,created_at,updated_at FROM chat_sessions ORDER BY pinned DESC,updated_at DESC,id DESC")}
+@app.patch("/chat/sessions/{session_id}")
+def update_chat_session(session_id:int,r:ChatRequest):
+    rows=fetch_all("SELECT id FROM chat_sessions WHERE id=?",(session_id,))
+    if not rows: raise HTTPException(404,"Chat session not found")
+    payload=r.message.strip()
+    if payload:
+        execute("UPDATE chat_sessions SET title=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",(payload[:80],session_id))
+    return {"status":"updated","id":session_id}
+@app.post("/chat/sessions/{session_id}/pin")
+def pin_chat_session(session_id:int):
+    rows=fetch_all("SELECT id,pinned FROM chat_sessions WHERE id=?",(session_id,))
+    if not rows: raise HTTPException(404,"Chat session not found")
+    new_value=0 if rows[0]["pinned"] else 1
+    execute("UPDATE chat_sessions SET pinned=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",(new_value,session_id))
+    return {"id":session_id,"pinned":bool(new_value)}
+@app.delete("/chat/sessions/{session_id}")
+def delete_chat_session(session_id:int):
+    rows=fetch_all("SELECT id FROM chat_sessions WHERE id=?",(session_id,))
+    if not rows: raise HTTPException(404,"Chat session not found")
+    execute("DELETE FROM conversations WHERE session_id=?",(session_id,))
+    execute("DELETE FROM chat_sessions WHERE id=?",(session_id,))
+    return {"status":"deleted","id":session_id}
 @app.post("/chat/sessions")
 def create_chat_session(r:ChatRequest):
     sid=execute("INSERT INTO chat_sessions(title) VALUES(?)",((r.message or "گفتگوی جدید").strip()[:60],)); return {"id":sid}
@@ -119,7 +141,7 @@ def chat(r:ChatRequest):
             execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"assistant",answer)); execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(sid,))
             return {"type":"learning","answer":answer,"data":{"status":"started","language":language,"interval_seconds":3600,"session_id":sid},"session_id":sid}
         if code_intent: language=requested or "Python"; return {"type":"code","answer":"Generated program:","data":learner.generate_program(msg,language)}
-        return {"type":"chat","answer":agent.chat(msg,sid)}
+        return {"type":"chat","answer":agent.chat(msg,sid),"session_id":sid}
     except Exception as e: raise HTTPException(502,str(e))
 
 @app.post("/learn/url")
@@ -156,6 +178,13 @@ def security_scan(r:SecurityRequest):
     except Exception as e: raise HTTPException(400,str(e))
 @app.get("/security/history")
 def security_history(limit:int=20): return learner.security.history(limit)
+@app.get("/git/connection")
+def git_connection():
+    try:
+        data=GitHubConnector().repo("cognitive-kernel/My-ai")
+        return {"connected":True,"authenticated":bool(__import__("os").getenv("GITHUB_TOKEN")),"repository":data.get("full_name"),"private":data.get("private",False)}
+    except Exception as e:
+        return {"connected":False,"authenticated":bool(__import__("os").getenv("GITHUB_TOKEN")),"error":str(e)}
 @app.get("/git/repo")
 def git_repo(repository:str): return GitHubConnector().repo(repository)
 @app.get("/git/tree")
