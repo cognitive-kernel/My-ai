@@ -75,12 +75,16 @@ class GitHubConnector:
         if not exe:
             raise RuntimeError("GitHub CLI (gh) نصب نیست.")
         try:
-            r = subprocess.run([exe, "auth", "login", "--hostname", "github.com", "--web", "--git-protocol", "https"], capture_output=True, text=True, timeout=600, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-            if r.returncode != 0:
-                raise RuntimeError((r.stderr or r.stdout or "GitHub login failed").strip())
+            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            if os.name == "nt":
+                flags |= getattr(subprocess, "DETACHED_PROCESS", 0)
+            subprocess.Popen(
+                [exe, "auth", "login", "--hostname", "github.com", "--web", "--git-protocol", "https"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL, creationflags=flags,
+                start_new_session=(os.name != "nt"),
+            )
             return cls.gh_logged_in()
-        except subprocess.TimeoutExpired as e:
-            raise RuntimeError("ورود GitHub زمان‌بر شد؛ مرورگر را بررسی کنید و دوباره وضعیت اتصال را بزنید.") from e
 
     @classmethod
     def gh_token(cls):
