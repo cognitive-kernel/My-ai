@@ -57,8 +57,9 @@ class GitHubConnector:
         return cls.token_source() != "none"
 
     def _effective_token(self):
-        if self._explicit_token is not None:
-            return self._explicit_token
+        explicit = getattr(self, "_explicit_token", None)
+        if explicit is not None:
+            return explicit
         return self._saved_token() or os.getenv("GITHUB_TOKEN")
 
     def _headers(self):
