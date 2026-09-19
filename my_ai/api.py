@@ -25,7 +25,7 @@ async def lifespan(_):
     scheduler.stop()
 app=FastAPI(title="My-AI",version="0.2.0",description="Local-first personal learning and coding agent.",lifespan=lifespan)
 agent=Agent(); learner=LearningEngine()
-class ChatRequest(BaseModel): message:str
+class ChatRequest(BaseModel): message:str; session_id:int|None=None
 class URLRequest(BaseModel): url:HttpUrl; topic:str="Python"
 class ProjectRequest(BaseModel): goal:str
 class CodeRequest(BaseModel): code:str
@@ -48,12 +48,17 @@ def home():
     )
 @app.get("/help",response_class=HTMLResponse)
 def help(): return help_page()
+@app.get("/chat/sessions")
+def chat_sessions(): return {"sessions":fetch_all("SELECT id,title,kind,language,created_at,updated_at FROM chat_sessions ORDER BY updated_at DESC,id DESC")}
+@app.post("/chat/sessions")
+def create_chat_session(r:ChatRequest):
+    sid=execute("INSERT INTO chat_sessions(title) VALUES(?)",((r.message or "گفتگوی جدید").strip()[:60],)); return {"id":sid}
 @app.get("/chat/history")
-def chat_history(limit:int=100):
+def chat_history(limit:int=100,session_id:int|None=None):
     limit=max(1,min(limit,500))
-    rows=fetch_all("SELECT role,content,created_at FROM conversations ORDER BY id DESC LIMIT ?",(limit,))
-    rows.reverse()
-    return {"messages":rows}
+    if session_id is None: rows=fetch_all("SELECT role,content,created_at FROM conversations ORDER BY id DESC LIMIT ?",(limit,))
+    else: rows=fetch_all("SELECT role,content,created_at FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT ?",(session_id,limit))
+    rows.reverse(); return {"messages":rows}
 
 @app.get("/help/updates")
 def help_updates(status:str="pending"): return fetch_all("SELECT * FROM help_updates WHERE status=? ORDER BY id DESC",(status,))
@@ -85,7 +90,7 @@ def chat(r:ChatRequest):
     try:
         msg=r.message.strip(); low=msg.lower()
         aliases={"sql server":"SQL Server","sqlserver":"SQL Server","mssql":"SQL Server","mysql":"MySQL","sqlite":"SQLite","sql lite":"SQLite","android":"Android","اندروید":"Android","ios":"iOS","آی او اس":"iOS","python":"Python","پایتون":"Python","php":"PHP","c":"C","javascript":"JavaScript","js":"JavaScript","pentest":"Pentest","pen test":"Pentest","penetration testing":"Pentest","penetration test":"Pentest","پنتست":"Pentest","پن تست":"Pentest","تست نفوذ":"Pentest","امنیت":"Pentest"}; requested=next((name for key,name in sorted(aliases.items(),key=lambda x:len(x[0]),reverse=True) if key in low),None)
-        learn_intent=("یاد بگیر" in low or "یادگیری" in low or "learn" in low or "go learn" in low or "start learning" in low); policy=parse_command(msg); security_words=policy.security; fix_requested=policy.security_action=="fix"
+        learn_intent=("یاد بگیر" in low or "یادگیری" in low or "learn" in low or "go learn" in low or "start learning" in low); sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language) VALUES(?,?,?)",(msg[:60] or "گفتگوی جدید","learning" if learn_intent else "chat",requested)); policy=parse_command(msg); security_words=policy.security; fix_requested=policy.security_action=="fix"
         help_intent=("راهنما" in low or "چطور وصل" in low or "چطور استفاده" in low or "how do i" in low or "how to" in low or "setup" in low)
         if help_intent:
             component="git" if any(x in low for x in ("git","github","گیت","گیت‌هاب")) else ("security" if any(x in low for x in ("امنیت","پن‌تست","pentest")) else ("docker" if "docker" in low else ("python" if "python" in low or "پایتون" in low else "general")))
@@ -107,14 +112,14 @@ def chat(r:ChatRequest):
         if learn_intent:
             language=requested or "Python"
             language=canonical_language(language)
-            execute("INSERT INTO conversations(role,content) VALUES(?,?)",("user",msg))
+            execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"user",msg))
             scheduler.interval_seconds=3600
             scheduler.start(language)
             answer=f"یادگیری {language} در پس‌زمینه شروع شد."
-            execute("INSERT INTO conversations(role,content) VALUES(?,?)",("assistant",answer))
-            return {"type":"learning","answer":answer,"data":{"status":"started","language":language,"interval_seconds":3600}}
+            execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"assistant",answer)); execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(sid,))
+            return {"type":"learning","answer":answer,"data":{"status":"started","language":language,"interval_seconds":3600,"session_id":sid},"session_id":sid}
         if code_intent: language=requested or "Python"; return {"type":"code","answer":"Generated program:","data":learner.generate_program(msg,language)}
-        return {"type":"chat","answer":agent.chat(msg)}
+        return {"type":"chat","answer":agent.chat(msg,sid)}
     except Exception as e: raise HTTPException(502,str(e))
 
 @app.post("/learn/url")
