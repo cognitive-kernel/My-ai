@@ -247,6 +247,15 @@ def git_whoami():
             raise HTTPException(e.status_code if e.status_code in (401,403,404,429) else 502, f"GitHub API: {e.message}")
         raise HTTPException(502,f"اتصال به GitHub برقرار نشد: {e}")
 
+@app.get("/git/token/diagnostics")
+def git_token_diagnostics():
+    try:
+        c=GitHubConnector()
+        d=c.token_diagnostics()
+        return {"authenticated":False,**d}
+    except Exception as e:
+        raise HTTPException(500,f"GitHub token diagnostics error: {e}")
+
 @app.get("/git/check")
 def git_check(repository:str="cognitive-kernel/My-ai"):
     c=GitHubConnector()
