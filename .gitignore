@@ -12,3 +12,4 @@ data/*.sqlite3
 .DS_Store
 .vscode/
 .idea/
+data/.github_token
