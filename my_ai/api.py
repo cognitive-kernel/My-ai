@@ -182,7 +182,7 @@ def scheduler_start(r:SchedulerRequest):
     if not 60<=r.interval_seconds<=86400: raise HTTPException(400,"interval_seconds must be 60..86400")
     scheduler.interval_seconds=r.interval_seconds; scheduler.start(r.language); return {"status":"started","language":r.language,"interval_seconds":r.interval_seconds}
 @app.get("/scheduler/status")
-def scheduler_status(): return {"running":scheduler.running(),"language":scheduler.language,"last_result":scheduler.last_result}
+def scheduler_status(): return scheduler.status()
 @app.post("/learning/learn")
 def learning_learn(r:LearnRequest):
     if not 60<=r.interval_seconds<=86400: raise HTTPException(400,"interval_seconds must be 60..86400")
