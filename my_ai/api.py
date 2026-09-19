@@ -43,6 +43,13 @@ def home():
     )
 @app.get("/help",response_class=HTMLResponse)
 def help(): return help_page()
+@app.get("/chat/history")
+def chat_history(limit:int=100):
+    limit=max(1,min(limit,500))
+    rows=fetch_all("SELECT role,content,created_at FROM conversations ORDER BY id DESC LIMIT ?",(limit,))
+    rows.reverse()
+    return {"messages":rows}
+
 @app.get("/help/updates")
 def help_updates(status:str="pending"): return fetch_all("SELECT * FROM help_updates WHERE status=? ORDER BY id DESC",(status,))
 @app.post("/help/ask")
