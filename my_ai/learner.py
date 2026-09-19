@@ -25,9 +25,9 @@ class LearningEngine:
         except Exception: return []
 
     def _learn_sources_for_topic(self,language,topic,prerequisites):
-        queries=[topic["topic"]]+[p.get("name","") for p in prerequisites[:5]]
+        queries=[topic["topic"]]+[p.get("name","") for p in prerequisites[:3]]
         knowledge=[]
-        for url in source_urls(language)[:4]:
+        for url in source_urls(language)[:2]:
             try:
                 title,source=self.web.fetch(url)
                 note=self.llm.chat("Extract only accurate knowledge relevant to these study targets from the supplied source. "
@@ -53,19 +53,25 @@ class LearningEngine:
         sid=execute("INSERT INTO learning_sessions(language,topic,status,notes) VALUES(?,?,?,?)",(language,str(topic["topic"]),"started",json.dumps(topic,ensure_ascii=False)))
         return {"status":"started","session_id":sid,"topic":topic}
 
-    def learn_next(self,language="Python"):
+    def learn_next(self,language="Python",progress_callback=None):
         language=canonical_language(language); s=self.start(language)
         if s["status"]=="completed": return s
-        t=s["topic"]; prerequisites=self._discover_prerequisites(language,t)
+        t=s["topic"]
+        if progress_callback: progress_callback("prerequisites",t["topic"])
+        prerequisites=self._discover_prerequisites(language,t)
+        if progress_callback: progress_callback("sources",t["topic"])
         sources=self._learn_sources_for_topic(language,t,prerequisites)
+        if progress_callback: progress_callback("lesson",t["topic"])
         lesson=self.llm.chat("Teach the topic as a complete, structured study unit. Include prerequisite lessons first, then the main topic, examples, exercises, tests, common mistakes, security considerations and a mastery checklist. "
                              "Do not claim mastery unless supported by the supplied knowledge. Return clear sections.\n"
                              f"LANGUAGE: {language}\nTOPIC: {t['topic']}\nGOAL: {t['goal']}\n"
                              f"DISCOVERED PREREQUISITES: {json.dumps(prerequisites,ensure_ascii=False)}\n"
                              f"LEARNED KNOWLEDGE: {json.dumps(search_knowledge(language+' '+t['topic'],12),ensure_ascii=False)}")
         remember(language,"Mastery lesson: "+t["topic"],lesson)
+        if progress_callback: progress_callback("assessment",t["topic"])
         score=self.assess(t["topic"],lesson)
         execute("UPDATE learning_sessions SET status='completed',score=?,notes=? WHERE id=?",(score,lesson,s["session_id"]))
+        if progress_callback: progress_callback("completed",t["topic"])
         return {"status":"completed","session_id":s["session_id"],"language":language,"topic":t,"prerequisites":prerequisites,"score":score,"sources":sources}
 
     def autonomous_step(self,language="Python"): return self.learn_next(language)
