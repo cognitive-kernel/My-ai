@@ -246,7 +246,7 @@ def git_whoami():
 @app.get("/git/check")
 def git_check(repository:str="cognitive-kernel/My-ai"):
     c=GitHubConnector()
-    if not c.token:
+    if token_source == "none":
         return {"authenticated":False,"repository":repository,"status":"no_token","message":"GitHub Token تنظیم نشده است."}
     try:
         identity=c.whoami()
