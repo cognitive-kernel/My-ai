@@ -219,7 +219,9 @@ def git_token(r:ChatRequest):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(502,str(e))
+        if isinstance(e, __import__("my_ai.git_connector", fromlist=["GitHubAPIError"]).GitHubAPIError):
+            raise HTTPException(e.status_code if e.status_code in (400,401,403,404,409,422,429) else 502, f"GitHub API: {e.message}")
+        raise HTTPException(502,f"GitHub connector error: {e}")
 
 @app.delete("/git/token")
 def delete_git_token():
