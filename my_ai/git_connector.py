@@ -1,14 +1,44 @@
 from __future__ import annotations
 import base64, os
+from pathlib import Path
 from urllib.parse import urlparse
 import httpx
 
 class GitHubConnector:
     """Explicit GitHub repository connector. Reads by default; writes require allow_write=True."""
     def __init__(self, token: str | None = None, api_url: str | None = None):
-        self.token = token or os.getenv("GITHUB_TOKEN")
+        self.token = token or os.getenv("GITHUB_TOKEN") or self._saved_token()
         self.api_url = (api_url or os.getenv("GITHUB_API_URL") or "https://api.github.com").rstrip("/")
         self.timeout = float(os.getenv("MYAI_GITHUB_TIMEOUT", "15"))
+
+    @staticmethod
+    def _token_path():
+        return Path(os.getenv("MYAI_GITHUB_TOKEN_FILE", "data/.github_token"))
+
+    @classmethod
+    def _saved_token(cls):
+        try:
+            p=cls._token_path()
+            return p.read_text(encoding="utf-8").strip() or None if p.exists() else None
+        except OSError:
+            return None
+
+    @classmethod
+    def save_token(cls, token):
+        token=token.strip()
+        p=cls._token_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        if token:
+            p.write_text(token,encoding="utf-8")
+            try: os.chmod(p,0o600)
+            except OSError: pass
+        elif p.exists():
+            p.unlink()
+        return bool(token)
+
+    @classmethod
+    def token_status(cls):
+        return bool(os.getenv("GITHUB_TOKEN") or cls._saved_token())
 
     def _headers(self):
         h={"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"}
