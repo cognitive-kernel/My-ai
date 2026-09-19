@@ -4,6 +4,14 @@ from pathlib import Path
 from urllib.parse import urlparse
 import httpx
 
+class GitHubAPIError(ValueError):
+    def __init__(self, status_code, message, *, headers=None, body=None):
+        self.status_code = status_code
+        self.message = message
+        self.headers = dict(headers or {})
+        self.body = body if isinstance(body, dict) else {}
+        super().__init__(f"GitHub API {status_code}: {message}")
+
 class GitHubConnector:
     """Explicit GitHub repository connector. Reads by default; writes require allow_write=True."""
     def __init__(self, token: str | None = None, api_url: str | None = None):
@@ -41,7 +49,7 @@ class GitHubConnector:
         return bool(os.getenv("GITHUB_TOKEN") or cls._saved_token())
 
     def _headers(self):
-        h={"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"}
+        h={"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28","User-Agent":"My-AI-GitHub-Connector"}
         if self.token: h["Authorization"]="Bearer "+self.token
         return h
 
@@ -65,7 +73,12 @@ class GitHubConnector:
         with httpx.Client(timeout=self.timeout, follow_redirects=False) as c:
             r=c.request(method,self.api_url+path,headers=self._headers(),**kwargs)
         if r.status_code >= 400:
-            raise ValueError(f"GitHub API {r.status_code}: {r.text[:500]}")
+            try:
+                body = r.json()
+            except ValueError:
+                body = {}
+            message = str(body.get("message") or r.text[:500] or "GitHub API request failed")
+            raise GitHubAPIError(r.status_code, message, headers=r.headers, body=body)
         return r.json() if r.content else {}
 
     def whoami(self):
