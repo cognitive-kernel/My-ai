@@ -68,6 +68,9 @@ class GitHubConnector:
             raise ValueError(f"GitHub API {r.status_code}: {r.text[:500]}")
         return r.json() if r.content else {}
 
+    def whoami(self):
+        return self._request("GET","/user")
+
     def repo(self, repository):
         owner,name=self.parse_repo(repository)
         return self._request("GET",f"/repos/{owner}/{name}")
