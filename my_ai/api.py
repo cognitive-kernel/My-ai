@@ -200,7 +200,8 @@ def git_token(r:ChatRequest):
         GitHubConnector.save_token(token)
         c=GitHubConnector(token=token)
         try:
-            identity=c.whoami()
+            repo_data=c.repo("cognitive-kernel/My-ai")
+            identity=repo_data.get("owner") or {}
         except Exception as e:
             if isinstance(e, __import__("my_ai.git_connector", fromlist=["GitHubAPIError"]).GitHubAPIError):
                 if e.status_code == 401:
@@ -237,8 +238,9 @@ def git_whoami():
         token_source=GitHubConnector.token_source()
         if token_source == "none":
             raise HTTPException(401,"GitHub Token تنظیم نشده است.")
-        data=c.whoami()
-        return {"authenticated":True,"login":data.get("login"),"name":data.get("name"),"token_source":token_source}
+        data=c.repo("cognitive-kernel/My-ai")
+        identity=data.get("owner") or {}
+        return {"authenticated":True,"login":identity.get("login"),"name":identity.get("name"),"token_source":token_source}
     except HTTPException: raise
     except Exception as e:
         if isinstance(e, __import__("my_ai.git_connector", fromlist=["GitHubAPIError"]).GitHubAPIError):
@@ -252,7 +254,8 @@ def git_check(repository:str="cognitive-kernel/My-ai"):
     if token_source == "none":
         return {"authenticated":False,"repository":repository,"status":"no_token","message":"GitHub Token تنظیم نشده است."}
     try:
-        identity=c.whoami()
+        data=c.repo(repository)
+        identity=data.get("owner") or {}
     except Exception as e:
         if isinstance(e, __import__("my_ai.git_connector", fromlist=["GitHubAPIError"]).GitHubAPIError):
             if e.status_code == 401:
@@ -262,7 +265,6 @@ def git_check(repository:str="cognitive-kernel/My-ai"):
             return {"authenticated":False,"repository":repository,"status":"github_auth_error","http_status":e.status_code,"token_source":token_source,"github_message":e.message,"message":f"GitHub خطای {e.status_code} در احراز هویت برگرداند."}
         return {"authenticated":False,"repository":repository,"status":"network_error","token_source":token_source,"message":f"اتصال به GitHub برقرار نشد: {e}"}
     try:
-        data=c.repo(repository)
         return {
             "authenticated":True,
             "repository":repository,
