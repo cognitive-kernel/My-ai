@@ -102,9 +102,12 @@ def chat(r:ChatRequest):
         if learn_intent:
             language=requested or "Python"
             language=canonical_language(language)
+            execute("INSERT INTO conversations(role,content) VALUES(?,?)",("user",msg))
             scheduler.interval_seconds=3600
             scheduler.start(language)
-            return {"type":"learning","answer":f"یادگیری {language} در پس‌زمینه شروع شد.","data":{"status":"started","language":language,"interval_seconds":3600}}
+            answer=f"یادگیری {language} در پس‌زمینه شروع شد."
+            execute("INSERT INTO conversations(role,content) VALUES(?,?)",("assistant",answer))
+            return {"type":"learning","answer":answer,"data":{"status":"started","language":language,"interval_seconds":3600}}
         if code_intent: language=requested or "Python"; return {"type":"code","answer":"Generated program:","data":learner.generate_program(msg,language)}
         return {"type":"chat","answer":agent.chat(msg)}
     except Exception as e: raise HTTPException(502,str(e))
