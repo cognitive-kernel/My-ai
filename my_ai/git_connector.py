@@ -21,7 +21,13 @@ class GitHubConnector:
 
     @staticmethod
     def _token_path():
-        return Path(os.getenv("MYAI_GITHUB_TOKEN_FILE", "data/.github_token"))
+        configured = os.getenv("MYAI_GITHUB_TOKEN_FILE")
+        if configured:
+            path = Path(configured).expanduser()
+            if path.is_absolute():
+                return path
+            return Path(__file__).resolve().parent.parent / path
+        return Path(__file__).resolve().parent.parent / "data" / ".github_token"
 
     @classmethod
     def _saved_token(cls):
