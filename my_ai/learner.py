@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-from .curriculum import next_topic,canonical_language,source_urls
+from .curriculum import next_topic,canonical_language,source_urls,LANGUAGE_CURRICULA
 from .db import execute,fetch_all,search_knowledge
 from .executor import run_python
 from .llm import OllamaClient
@@ -131,11 +131,10 @@ class LearningEngine:
 
     def status(self,language=None):
         rows=fetch_all("SELECT * FROM learning_sessions ORDER BY id DESC")
-        from .curriculum import CURRICULA
         out=[]
-        for lang,topics in CURRICULA.items():
+        for lang,topics in LANGUAGE_CURRICULA.items():
             total=len(topics); completed=sum(1 for r in rows if r["language"]==lang and r["status"]=="completed")
             scores=[float(r["score"]) for r in rows if r["language"]==lang and r["status"]=="completed" and r["score"] is not None]
             out.append({"language":lang,"completed_topics":completed,"total_topics":total,"progress_percent":round(completed/total*100,1) if total else 0,"average_score":round(sum(scores)/len(scores),1) if scores else 0})
         if language: out=[x for x in out if x["language"].lower()==canonical_language(language).lower()]
-        return {"languages":out,"sessions":rows,"available_languages":list(CURRICULA.keys())}
+        return {"languages":out,"sessions":rows,"available_languages":list(LANGUAGE_CURRICULA.keys())}
