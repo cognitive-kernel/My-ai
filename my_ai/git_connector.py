@@ -1,5 +1,5 @@
 from __future__ import annotations
-import base64, os
+import base64, os, shutil, subprocess
 from pathlib import Path
 from urllib.parse import urlparse
 import httpx
@@ -50,8 +50,53 @@ class GitHubConnector:
             p.unlink()
         return bool(token)
 
+    @staticmethod
+    def _gh_executable():
+        return shutil.which("gh") or shutil.which("gh.exe")
+
+    @classmethod
+    def gh_available(cls):
+        return bool(cls._gh_executable())
+
+    @classmethod
+    def gh_logged_in(cls):
+        exe = cls._gh_executable()
+        if not exe:
+            return False
+        try:
+            r = subprocess.run([exe, "auth", "status", "--hostname", "github.com"], capture_output=True, text=True, timeout=8, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            return r.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            return False
+
+    @classmethod
+    def gh_login(cls):
+        exe = cls._gh_executable()
+        if not exe:
+            raise RuntimeError("GitHub CLI (gh) نصب نیست.")
+        try:
+            r = subprocess.run([exe, "auth", "login", "--hostname", "github.com", "--web", "--git-protocol", "https"], capture_output=True, text=True, timeout=600, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            if r.returncode != 0:
+                raise RuntimeError((r.stderr or r.stdout or "GitHub login failed").strip())
+            return cls.gh_logged_in()
+        except subprocess.TimeoutExpired as e:
+            raise RuntimeError("ورود GitHub زمان‌بر شد؛ مرورگر را بررسی کنید و دوباره وضعیت اتصال را بزنید.") from e
+
+    @classmethod
+    def gh_token(cls):
+        exe = cls._gh_executable()
+        if not exe or not cls.gh_logged_in():
+            return None
+        try:
+            r = subprocess.run([exe, "auth", "token", "--hostname", "github.com"], capture_output=True, text=True, timeout=8, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else None
+        except (OSError, subprocess.SubprocessError):
+            return None
+
     @classmethod
     def token_source(cls):
+        if cls.gh_logged_in():
+            return "github_cli_oauth"
         if cls._saved_token():
             return "saved"
         if os.getenv("GITHUB_TOKEN"):
@@ -66,7 +111,7 @@ class GitHubConnector:
         explicit = getattr(self, "_explicit_token", None)
         if explicit is not None:
             return explicit
-        return self._saved_token() or os.getenv("GITHUB_TOKEN")
+        return self._saved_token() or os.getenv("GITHUB_TOKEN") or self.gh_token()
 
     def _headers(self):
         h={"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28","User-Agent":"My-AI-GitHub-Connector"}
