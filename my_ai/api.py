@@ -185,15 +185,36 @@ def security_history(limit:int=20): return learner.security.history(limit)
 @app.post("/git/login")
 def git_login():
     try:
-        if not GitHubConnector.gh_available():
-            raise HTTPException(503,"GitHub CLI (gh) نصب نیست. GitHub CLI را نصب کنید و دوباره تلاش کنید.")
-        authenticated=GitHubConnector.gh_logged_in()
-        if not authenticated:
-            GitHubConnector.gh_login()
-            return {"authenticated":False,"pending":True,"token_source":GitHubConnector.token_source(),"message":"مرورگر برای ورود GitHub باز شد. بعد از تأیید، «بررسی اتصال» را بزنید."}
-        return {"authenticated":True,"pending":False,"token_source":GitHubConnector.token_source(),"message":"ورود GitHub قبلاً انجام شده است."}
+        if GitHubConnector.gh_available():
+            if not GitHubConnector.gh_logged_in():
+                GitHubConnector.gh_login()
+                return {"authenticated":False,"pending":True,"method":"gh","token_source":GitHubConnector.token_source(),"message":"مرورگر برای ورود GitHub باز شد. بعد از تأیید، «بررسی اتصال» را بزنید."}
+            return {"authenticated":True,"pending":False,"method":"gh","token_source":GitHubConnector.token_source(),"message":"ورود GitHub قبلاً انجام شده است."}
+        if not GitHubConnector.oauth_available():
+            raise HTTPException(503,"GitHub CLI نصب نیست و MYAI_GITHUB_CLIENT_ID نیز تنظیم نشده است.")
+        if GitHubConnector.token_status():
+            return {"authenticated":True,"pending":False,"method":"oauth","token_source":GitHubConnector.token_source(),"message":"اتصال GitHub قبلاً برقرار است."}
+        flow=GitHubConnector.oauth_start()
+        return {"authenticated":False,"pending":True,"method":"oauth",**flow,"message":"صفحه ورود GitHub باز شد. کد نمایش‌داده‌شده را در GitHub تأیید کنید."}
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(502,str(e))
+
+@app.get("/git/login/status")
+def git_login_status():
+    try:
+        if GitHubConnector.gh_available() and GitHubConnector.gh_logged_in():
+            return {"authenticated":True,"pending":False,"method":"gh","token_source":GitHubConnector.token_source()}
+        if GitHubConnector.token_status():
+            return {"authenticated":True,"pending":False,"method":"oauth","token_source":GitHubConnector.token_source()}
+        if not GitHubConnector.oauth_available():
+            return {"authenticated":False,"pending":False,"method":"none","message":"OAuth Client ID تنظیم نشده است."}
+        result=GitHubConnector.oauth_status()
+        result["authenticated"]=result.get("status")=="authenticated"
+        result["pending"]=result.get("status")=="pending"
+        result["method"]="oauth"
+        return result
     except Exception as e:
         raise HTTPException(502,str(e))
 
