@@ -234,9 +234,11 @@ def delete_git_token():
 def git_whoami():
     try:
         c=GitHubConnector()
-        if not c.token: raise HTTPException(401,"GitHub Token تنظیم نشده است.")
+        token_source=GitHubConnector.token_source()
+        if token_source == "none":
+            raise HTTPException(401,"GitHub Token تنظیم نشده است.")
         data=c.whoami()
-        return {"authenticated":True,"login":data.get("login"),"name":data.get("name")}
+        return {"authenticated":True,"login":data.get("login"),"name":data.get("name"),"token_source":token_source}
     except HTTPException: raise
     except Exception as e:
         if isinstance(e, __import__("my_ai.git_connector", fromlist=["GitHubAPIError"]).GitHubAPIError):
