@@ -198,7 +198,7 @@ def git_token(r:ChatRequest):
 def delete_git_token():
     try:
         GitHubConnector.save_token("")
-        return {"saved":False,"authenticated":bool(__import__("os").getenv("GITHUB_TOKEN"))}
+        return {"saved":False,"authenticated":GitHubConnector.token_status()}
     except Exception as e: raise HTTPException(500,str(e))
 
 @app.get("/git/whoami")
@@ -216,7 +216,7 @@ def git_repo(repository:str):
     try:
         data=GitHubConnector().repo(repository)
         data["connected"]=True
-        data["authenticated"]=bool(__import__("os").getenv("GITHUB_TOKEN"))
+        data["authenticated"]=GitHubConnector.token_status()
         return data
     except Exception as e:
         msg=str(e)
