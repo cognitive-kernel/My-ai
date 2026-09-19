@@ -66,8 +66,28 @@ class GitHubConnector:
         h={"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28","User-Agent":"My-AI-GitHub-Connector"}
         token=self._effective_token()
         if token:
+            # GitHub accepts fine-grained PATs with the Bearer scheme.
             h["Authorization"]="Bearer "+token
         return h
+
+    def token_diagnostics(self):
+        token=self._effective_token()
+        if not token:
+            return {"present":False,"length":0,"prefix":"","suffix":"","kind":"none"}
+        t=token.strip()
+        if t.startswith("github_pat_"):
+            kind="fine_grained"
+        elif t.startswith(("ghp_","gho_","ghu_","ghs_","ghr_")):
+            kind="legacy_or_app"
+        else:
+            kind="unknown"
+        return {
+            "present":True,
+            "length":len(t),
+            "prefix":t[:11],
+            "suffix":t[-4:],
+            "kind":kind,
+        }
 
     @staticmethod
     def parse_repo(value: str):
