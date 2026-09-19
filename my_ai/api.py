@@ -99,7 +99,12 @@ def chat(r:ChatRequest):
                 if path.lower().startswith(("http://","https://")): result=learner.security_assessment_url(path,r.headers if hasattr(r,"headers") else None); result["note"]="External targets are report-only; remediation is not applied remotely."
                 else: result=learner.security_assessment_path(path,fix_requested)
                 result["mode"]="external_report" if path.lower().startswith(("http://","https://")) else ("pentest_and_fix" if fix_requested else "pentest_report"); return {"type":"security","answer":"Security test completed for the explicitly supplied target.","data":result}
-        if learn_intent: language=requested or "Python"; return {"type":"learning","answer":f"Learning step completed for {canonical_language(language)}.","data":learner.learn_next(language)}
+        if learn_intent:
+            language=requested or "Python"
+            language=canonical_language(language)
+            scheduler.interval_seconds=3600
+            scheduler.start(language)
+            return {"type":"learning","answer":f"یادگیری {language} در پس‌زمینه شروع شد.","data":{"status":"started","language":language,"interval_seconds":3600}}
         if code_intent: language=requested or "Python"; return {"type":"code","answer":"Generated program:","data":learner.generate_program(msg,language)}
         return {"type":"chat","answer":agent.chat(msg)}
     except Exception as e: raise HTTPException(502,str(e))
