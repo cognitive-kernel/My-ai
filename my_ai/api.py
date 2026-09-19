@@ -12,7 +12,7 @@ from .db import fetch_all,init_db,execute
 from .learner import LearningEngine
 from .scheduler import StudyScheduler
 from .ui import page
-from .help import page as help_page, ask_help
+from .help import page as help_page, ask_help, local_help_html, apply_help_update
 from .git_connector import GitHubConnector
 
 scheduler=StudyScheduler()
@@ -90,6 +90,10 @@ def help_ask(r:ChatRequest):
         low=r.message.lower(); component="git" if any(x in low for x in ("git","github","گیت","گیت‌هاب")) else ("security" if any(x in low for x in ("امنیت","پن‌تست","pentest")) else ("docker" if "docker" in low else ("python" if "python" in low or "پایتون" in low else "general")))
         return ask_help(r.message,component,agent.llm,learner.web)
     except Exception as e: raise HTTPException(502,str(e))
+@app.get("/help/local")
+def help_local(component:str="chat"):
+    return HTMLResponse("<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><title>My-AI — راهنمای محلی</title><style>body{font-family:Tahoma;max-width:900px;margin:30px auto;padding:20px;line-height:2;background:#f3f4f6}main{background:#fff;padding:25px;border-radius:14px}</style><main>"+local_help_html(component)+"</main></html>")
+
 @app.post("/help/approve/{update_id}")
 def help_approve(update_id:int):
     rows=fetch_all("SELECT * FROM help_updates WHERE id=? AND status='pending'",(update_id,))
