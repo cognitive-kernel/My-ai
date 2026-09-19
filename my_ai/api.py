@@ -189,8 +189,9 @@ def git_login():
             raise HTTPException(503,"GitHub CLI (gh) نصب نیست. GitHub CLI را نصب کنید و دوباره تلاش کنید.")
         authenticated=GitHubConnector.gh_logged_in()
         if not authenticated:
-            authenticated=GitHubConnector.gh_login()
-        return {"authenticated":bool(authenticated),"token_source":GitHubConnector.token_source(),"message":"ورود GitHub با مرورگر انجام شد." if authenticated else "ورود GitHub تکمیل نشد."}
+            GitHubConnector.gh_login()
+            return {"authenticated":False,"pending":True,"token_source":GitHubConnector.token_source(),"message":"مرورگر برای ورود GitHub باز شد. بعد از تأیید، «بررسی اتصال» را بزنید."}
+        return {"authenticated":True,"pending":False,"token_source":GitHubConnector.token_source(),"message":"ورود GitHub قبلاً انجام شده است."}
     except HTTPException:
         raise
     except Exception as e:
