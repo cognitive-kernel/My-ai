@@ -111,7 +111,7 @@ class GitHubConnector:
         explicit = getattr(self, "_explicit_token", None)
         if explicit is not None:
             return explicit
-        return self._saved_token() or os.getenv("GITHUB_TOKEN") or self.gh_token()
+        return self.gh_token() or self._saved_token() or os.getenv("GITHUB_TOKEN")
 
     def _headers(self):
         h={"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28","User-Agent":"My-AI-GitHub-Connector"}
