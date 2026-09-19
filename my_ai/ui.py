@@ -7,25 +7,6 @@ body{font-family:Tahoma,system-ui;margin:0;background:#f3f4f6;color:#17202a}main
 <div class='card'><h2 id='securityTitle'>گزارش امنیتی <a class='helpBtn' href='/help#security' target='_blank'>راهنما</a></h2><div class='grid'><div class='card ok'><b>اصلاح خودکار</b><p>با درخواست صریح شما فعال می‌شود یا طبق پیش‌فرض پن‌تست.</p></div><div class='card danger'><b>گزارش فقط</b><p>با «فقط تست بگیر» یا «فقط گزارش بده» هیچ تغییری در پروژه ایجاد نمی‌شود.</p></div></div></div>
 <div class='card'><h2 id='learnTitle'>یادگیری سریع <a class='helpBtn' href='/help#learning' target='_blank'>راهنما</a></h2><button type='button' data-learn='Python'>Python</button><button type='button' data-learn='PHP'>PHP</button><button type='button' data-learn='JavaScript'>JavaScript</button><button type='button' data-learn='Pentest'>Pentest</button><pre id='learnout'></pre></div>
 <script>
-window.myAiSend=window.myAiSend||async function(){
-  var el=document.getElementById('msg');
-  if(!el)return;
-  var m=(el.value||'').trim();
-  if(!m)return;
-  el.value='';
-  var box=document.getElementById('messages');
-  if(box){box.insertAdjacentHTML('beforeend','<div class="msg user"></div>');box.lastElementChild.textContent=m;saveLocalHistory();}
-  try{
-    var r=await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:m})});
-    var t=await r.text();
-    var j;try{j=JSON.parse(t)}catch(e){j={answer:t}}
-    if(box){box.insertAdjacentHTML('beforeend','<div class="msg ai"></div>');box.lastElementChild.textContent=j.answer||JSON.stringify(j);box.scrollTop=box.scrollHeight;saveLocalHistory();}
-  }catch(e){
-    if(box){box.insertAdjacentHTML('beforeend','<div class="msg ai"></div>');box.lastElementChild.textContent='خطا: '+e.message;}
-  }
-};
-</script>
-<script>
 (function(){
 'use strict';
 var recognition=null,voiceLocale='fa-IR',uiLang='fa',busy=false;
@@ -45,7 +26,7 @@ async function loadHistory(){var local=[];try{local=JSON.parse(localStorage.getI
 async function learn(lang){$('learnout').textContent='در حال مطالعه '+lang+'... این مرحله ممکن است چند دقیقه زمان ببرد.';try{var j=await post('/learning/step',{language:lang});$('learnout').textContent=JSON.stringify(j,null,2);loadDash()}catch(e){$('learnout').textContent='خطا: '+(e.message||String(e));loadDash()}}
 async function loadDash(){try{var r=await fetch('/learning/status');var j=await r.json(),rows=j.languages||[],h='<table style="width:100%"><tr><th>زبان / Language</th><th>موضوعات</th><th>درصد</th><th>میانگین</th></tr>';rows.forEach(function(x){h+='<tr><td>'+x.language+'</td><td>'+x.completed_topics+'/'+x.total_topics+'</td><td>'+x.progress_percent+'%<div class="bar"><div class="fill" style="width:'+x.progress_percent+'%">'+x.progress_percent+'%</div></div></td><td>'+x.average_score+'%</td></tr>'});h+='</table>';$('dashboard').innerHTML=h}catch(e){$('dashboard').textContent='خطا: '+(e.message||String(e))}}
 function init(){
-$('faBtn').addEventListener('click',function(){setLang('fa')});$('enBtn').addEventListener('click',function(){setLang('en')});$('voiceLang').addEventListener('change',function(){voiceLocale=this.value});$('voiceBtn').addEventListener('click',voiceInput);$('stopBtn').addEventListener('click',stopVoice);document.querySelectorAll('[data-learn]').forEach(function(b){b.addEventListener('click',function(){learn(this.getAttribute('data-learn'))})});setLang('fa');loadHistory();loadDash();setInterval(loadDash,10000);$('msg').focus()}
+$('faBtn').addEventListener('click',function(){setLang('fa')});$('enBtn').addEventListener('click',function(){setLang('en')});$('voiceLang').addEventListener('change',function(){voiceLocale=this.value});$('voiceBtn').addEventListener('click',voiceInput);$('stopBtn').addEventListener('click',stopVoice);document.querySelectorAll('[data-learn]').forEach(function(b){b.addEventListener('click',function(){learn(this.getAttribute('data-learn'))})});setLang('fa');loadLocalHistory();loadHistory();loadDash();setInterval(loadDash,10000);$('msg').focus()}
 window.myAiSend=send;if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
 </script></main></body></html>"""
