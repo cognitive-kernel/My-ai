@@ -1,6 +1,32 @@
 from __future__ import annotations
 import json
+from pathlib import Path
+from html import escape
 from .db import execute, fetch_all
+
+
+DOCS_DIR = Path(__file__).resolve().parent.parent / "docs" / "help"
+DOC_FILES = {"chat":"chat.md","learning":"learning.md","coding":"coding.md","security":"security.md","git":"github.md","memory":"memory.md","scheduler":"scheduler.md","voice":"voice.md","api":"api.md","docker":"docker.md"}
+DOC_TITLES = {"chat":"چت و گفتگو","learning":"یادگیری","coding":"برنامه‌نویسی","security":"امنیت و پن‌تست","git":"Git / GitHub","memory":"حافظه","scheduler":"Scheduler","voice":"صدا","api":"API","docker":"Docker"}
+def local_help(component):
+    key=(component or "chat").lower().strip()
+    p=DOCS_DIR/DOC_FILES.get(key,"chat.md")
+    return p.read_text(encoding="utf-8") if p.exists() else ""
+def local_help_html(component):
+    out=[]
+    for line in local_help(component).splitlines():
+        if line.startswith("# "): out.append("<h2>"+escape(line[2:])+"</h2>")
+        elif line.startswith("## "): out.append("<h3>"+escape(line[3:])+"</h3>")
+        elif line.startswith("- "): out.append("<li>"+escape(line[2:])+"</li>")
+        elif line.strip(): out.append("<p>"+escape(line)+"</p>")
+    return "".join(out)
+def apply_help_update(component, proposal):
+    key=(component or "").lower().strip()
+    if key not in DOC_FILES: return False
+    p=DOCS_DIR/DOC_FILES[key]
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(proposal.strip()+"\n",encoding="utf-8")
+    return True
 
 HTML = """<!doctype html>
 <html lang="fa" dir="rtl">
@@ -19,10 +45,10 @@ nav a{margin:4px;display:inline-block}
 <body><main>
 <h1>راهنمای My-AI</h1>
 <p>این صفحه برای استفاده همزمان با برنامه طراحی شده است. هر بخش رابط کاربری دکمه «راهنما» دارد و همین صفحه را در یک تب جدید، روی بخش مربوط، باز می‌کند.</p>
-<nav><a href="#assistant">دستیار راهنما</a>
+<nav><a href="#assistant">دستیار راهنما</a><a href="#local-files">راهنماهای محلی</a>
 <a href="#chat">دستورها</a><a href="#learning">یادگیری</a><a href="#coding">برنامه‌نویسی</a><a href="#security">امنیت و پن‌تست</a><a href="#git">Git/GitHub</a><a href="#github-online">راهنمای آنلاین GitHub</a><a href="#memory">حافظه</a><a href="#scheduler">یادگیری خودکار</a><a href="#voice">صدا</a><a href="#api">API</a><a href="#docker">Docker</a><a href="#projects">پروژه</a><a href="#weblearn">URL Learning</a><a href="#practice">تمرین</a><a href="#coderun">Code Run</a>
 </nav>
-<section id="assistant" class="card"><h2>پرسش از خود My-AI درباره راهنما</h2><p>اگر نمی‌دانید یک قابلیت را چطور استفاده کنید، سؤال را همین‌جا بپرسید. دستیار هم راهنمای داخلی را بررسی می‌کند و هم در وب مستندات جدید را جست‌وجو می‌کند.</p><textarea id="helpq" rows="3" style="width:100%;box-sizing:border-box;padding:10px" placeholder="مثلاً: GitHub را چطور به My-AI وصل کنم؟ اگر روش GitHub عوض شده بررسی کن"></textarea><button onclick="askHelp()">پرسش</button><pre id="helpanswer"></pre><div id="proposal"></div><script>
+<section id="local-files" class="card"><h2>راهنماهای محلی مستقل</h2><p>هر بخش فایل راهنمای مستقل دارد و بدون اینترنت قابل خواندن است. سؤال را از My-AI بپرسید؛ اگر اطلاعات محلی کافی نباشد، مستندات آنلاین بررسی می‌شود و فقط بعد از تأیید شما فایل محلی تغییر می‌کند.</p><div><a href="/help/local?component=chat" target="_blank">چت و گفتگو</a> · <a href="/help/local?component=learning" target="_blank">یادگیری</a> · <a href="/help/local?component=coding" target="_blank">برنامه‌نویسی</a> · <a href="/help/local?component=security" target="_blank">امنیت و پن‌تست</a> · <a href="/help/local?component=git" target="_blank">Git / GitHub</a> · <a href="/help/local?component=memory" target="_blank">حافظه</a> · <a href="/help/local?component=scheduler" target="_blank">Scheduler</a> · <a href="/help/local?component=voice" target="_blank">صدا</a> · <a href="/help/local?component=api" target="_blank">API</a> · <a href="/help/local?component=docker" target="_blank">Docker</a> · </div></section><section id="assistant" class="card"><h2>پرسش از خود My-AI درباره راهنما</h2><p>اگر نمی‌دانید یک قابلیت را چطور استفاده کنید، سؤال را همین‌جا بپرسید. دستیار هم راهنمای داخلی را بررسی می‌کند و هم در وب مستندات جدید را جست‌وجو می‌کند.</p><textarea id="helpq" rows="3" style="width:100%;box-sizing:border-box;padding:10px" placeholder="مثلاً: GitHub را چطور به My-AI وصل کنم؟ اگر روش GitHub عوض شده بررسی کن"></textarea><button onclick="askHelp()">پرسش</button><pre id="helpanswer"></pre><div id="proposal"></div><script>
 async function askHelp(){const q=document.getElementById("helpq").value.trim();if(!q)return;const a=document.getElementById("helpanswer");a.textContent="در حال بررسی راهنمای داخلی و مستندات وب...";const r=await fetch("/help/ask",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:q})});const j=await r.json();a.textContent=j.answer+"\n\nSources:\n"+(j.sources||[]).join("\n");const p=document.getElementById("proposal");if(j.proposed_update&&j.proposed_update!=="NO_CHANGE"){p.textContent="";const box=document.createElement("div");box.className="tip";const b=document.createElement("b");b.textContent="پیشنهاد تغییر راهنما:";const pre=document.createElement("pre");pre.textContent=j.proposed_update;const ok=document.createElement("button");ok.textContent="تأیید و اعمال در راهنما";ok.onclick=()=>approve(j.id);const no=document.createElement("button");no.textContent="رد";no.onclick=()=>reject(j.id);box.append(b,pre,ok,no);p.appendChild(box)}else p.textContent="تغییری برای راهنما پیشنهاد نشده است."}
 async function approve(id){const r=await fetch("/help/approve/"+id,{method:"POST"});document.getElementById("proposal").textContent=(await r.json()).message}
 async function reject(id){const r=await fetch("/help/reject/"+id,{method:"POST"});document.getElementById("proposal").textContent=(await r.json()).message}
@@ -77,7 +103,7 @@ def ask_help(question, component, llm, web):
         "Compare the current project help instructions with the supplied current documentation. "
         "Return a concise proposed help update only if a real change is needed; otherwise return NO_CHANGE. "
         "Never modify anything yourself.\nQUESTION:"+question+
-        "\nCURRENT HELP:\n"+HTML+
+        "\nCURRENT LOCAL HELP:\n"+local_help(component)+"\nLEGACY HELP:\n"+HTML+
         "\nCURRENT SOURCES:\n"+json.dumps(fetched,ensure_ascii=False),
         system="Return either NO_CHANGE or a short proposed replacement/addition for the relevant help section."
     )
