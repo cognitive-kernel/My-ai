@@ -186,7 +186,14 @@ def git_connection():
     except Exception as e:
         return {"connected":False,"authenticated":bool(__import__("os").getenv("GITHUB_TOKEN")),"error":str(e)}
 @app.get("/git/repo")
-def git_repo(repository:str): return GitHubConnector().repo(repository)
+def git_repo(repository:str):
+    try:
+        data=GitHubConnector().repo(repository)
+        data["connected"]=True
+        data["authenticated"]=bool(__import__("os").getenv("GITHUB_TOKEN"))
+        return data
+    except Exception as e:
+        raise HTTPException(502,str(e))
 @app.get("/git/tree")
 def git_tree(repository:str,ref:str="HEAD"): return GitHubConnector().tree(repository,ref)
 @app.get("/git/file")
