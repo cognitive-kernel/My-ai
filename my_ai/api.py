@@ -193,7 +193,9 @@ def git_repo(repository:str):
         data["authenticated"]=bool(__import__("os").getenv("GITHUB_TOKEN"))
         return data
     except Exception as e:
-        raise HTTPException(502,str(e))
+        msg=str(e)
+        code=404 if "GitHub API 404" in msg else 502
+        raise HTTPException(code,msg)
 @app.get("/git/tree")
 def git_tree(repository:str,ref:str="HEAD"): return GitHubConnector().tree(repository,ref)
 @app.get("/git/file")
