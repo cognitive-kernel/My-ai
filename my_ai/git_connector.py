@@ -1,5 +1,5 @@
 from __future__ import annotations
-import base64, os, shutil, subprocess
+import base64, os, shutil, subprocess, threading, time, webbrowser
 from pathlib import Path
 from urllib.parse import urlparse
 import httpx
@@ -13,6 +13,8 @@ class GitHubAPIError(ValueError):
         super().__init__(f"GitHub API {status_code}: {message}")
 
 class GitHubConnector:
+    _oauth_pending = None
+    _oauth_lock = threading.Lock()
     """Explicit GitHub repository connector. Reads by default; writes require allow_write=True."""
     def __init__(self, token: str | None = None, api_url: str | None = None):
         # The token explicitly supplied by the caller wins. Otherwise prefer the\n        # token saved through the UI, then fall back to the environment token.\n        # This prevents an unrelated GITHUB_TOKEN from overriding a valid UI token.\n        self._explicit_token = token
@@ -57,6 +59,84 @@ class GitHubConnector:
     @classmethod
     def gh_available(cls):
         return bool(cls._gh_executable())
+
+    @classmethod
+    def oauth_client_id(cls):
+        return (os.getenv("MYAI_GITHUB_CLIENT_ID") or os.getenv("GITHUB_CLIENT_ID") or "").strip()
+
+    @classmethod
+    def oauth_available(cls):
+        return bool(cls.oauth_client_id())
+
+    @classmethod
+    def oauth_start(cls):
+        client_id = cls.oauth_client_id()
+        if not client_id:
+            raise RuntimeError("MYAI_GITHUB_CLIENT_ID تنظیم نشده است. یک GitHub OAuth App بسازید و Client ID را در این متغیر محیطی قرار دهید.")
+        with cls._oauth_lock:
+            now = time.time()
+            if cls._oauth_pending and cls._oauth_pending.get("expires_at", 0) > now:
+                return {k: cls._oauth_pending[k] for k in ("verification_uri", "user_code", "expires_in", "interval")}
+            with httpx.Client(timeout=15, follow_redirects=False) as c:
+                r = c.post("https://github.com/login/device/code", data={"client_id": client_id, "scope": "repo read:user"})
+            if r.status_code >= 400:
+                try: body = r.json()
+                except ValueError: body = {}
+                raise RuntimeError(str(body.get("error_description") or body.get("error") or r.text[:300] or "GitHub OAuth device flow failed"))
+            data = r.json()
+            device_code = data.get("device_code")
+            if not device_code or not data.get("user_code") or not data.get("verification_uri"):
+                raise RuntimeError("GitHub OAuth پاسخ معتبری برنگرداند.")
+            interval = max(5, int(data.get("interval", 5)))
+            expires_in = int(data.get("expires_in", 900))
+            cls._oauth_pending = {
+                "device_code": device_code,
+                "user_code": data["user_code"],
+                "verification_uri": data["verification_uri"],
+                "expires_in": expires_in,
+                "interval": interval,
+                "expires_at": time.time() + expires_in,
+                "next_poll_at": time.time(),
+            }
+            result = {k: cls._oauth_pending[k] for k in ("verification_uri", "user_code", "expires_in", "interval")}
+        try:
+            webbrowser.open(result["verification_uri"])
+        except Exception:
+            pass
+        return result
+
+    @classmethod
+    def oauth_poll(cls):
+        with cls._oauth_lock:
+            pending = cls._oauth_pending
+            if not pending:
+                return {"status": "none"}
+            now = time.time()
+            if now >= pending["expires_at"]:
+                cls._oauth_pending = None
+                return {"status": "expired"}
+            if now < pending.get("next_poll_at", 0):
+                return {"status": "pending"}
+            pending["next_poll_at"] = now + pending["interval"]
+            client_id = cls.oauth_client_id()
+            device_code = pending["device_code"]
+        with httpx.Client(timeout=15, follow_redirects=False) as c:
+            r = c.post("https://github.com/login/oauth/access_token", headers={"Accept": "application/json"}, data={"client_id": client_id, "device_code": device_code, "grant_type": "urn:ietf:params:oauth:grant-type:device_code"})
+        try: data = r.json()
+        except ValueError: data = {}
+        if data.get("access_token"):
+            cls.save_token(data["access_token"])
+            with cls._oauth_lock: cls._oauth_pending = None
+            return {"status": "authenticated", "token_source": "saved"}
+        error = data.get("error")
+        if error in {"authorization_pending", "slow_down"}:
+            return {"status": "pending"}
+        with cls._oauth_lock: cls._oauth_pending = None
+        return {"status": "error", "error": str(data.get("error_description") or error or r.text[:300] or "GitHub OAuth failed")}
+
+    @classmethod
+    def oauth_status(cls):
+        return cls.oauth_poll()
 
     @classmethod
     def gh_logged_in(cls):
