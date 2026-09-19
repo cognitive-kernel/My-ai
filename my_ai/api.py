@@ -185,6 +185,22 @@ def git_connection():
         return {"connected":True,"authenticated":bool(__import__("os").getenv("GITHUB_TOKEN")),"repository":data.get("full_name"),"private":data.get("private",False)}
     except Exception as e:
         return {"connected":False,"authenticated":bool(__import__("os").getenv("GITHUB_TOKEN")),"error":str(e)}
+@app.post("/git/token")
+def git_token(r:ChatRequest):
+    token=r.message.strip()
+    if token and len(token)<20: raise HTTPException(400,"توکن GitHub نامعتبر است.")
+    try:
+        GitHubConnector.save_token(token)
+        return {"saved":bool(token),"authenticated":GitHubConnector.token_status()}
+    except Exception as e: raise HTTPException(500,str(e))
+
+@app.delete("/git/token")
+def delete_git_token():
+    try:
+        GitHubConnector.save_token("")
+        return {"saved":False,"authenticated":bool(__import__("os").getenv("GITHUB_TOKEN"))}
+    except Exception as e: raise HTTPException(500,str(e))
+
 @app.get("/git/repo")
 def git_repo(repository:str):
     try:
