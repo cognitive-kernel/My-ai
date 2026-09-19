@@ -85,6 +85,8 @@ class GitHubConnector:
                 start_new_session=(os.name != "nt"),
             )
             return cls.gh_logged_in()
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise RuntimeError(f"اجرای ورود GitHub ناموفق بود: {exc}") from exc
 
     @classmethod
     def gh_token(cls):
