@@ -198,7 +198,7 @@ def git_token(r:ChatRequest):
             GitHubConnector.save_token("")
             return {"saved":False,"authenticated":False}
         GitHubConnector.save_token(token)
-        c=GitHubConnector()
+        c=GitHubConnector(token=token)
         try:
             identity=c.whoami()
         except Exception as e:
