@@ -45,8 +45,16 @@ class GitHubConnector:
         return bool(token)
 
     @classmethod
+    def token_source(cls):
+        if cls._saved_token():
+            return "saved"
+        if os.getenv("GITHUB_TOKEN"):
+            return "environment"
+        return "none"
+
+    @classmethod
     def token_status(cls):
-        return bool(os.getenv("GITHUB_TOKEN") or cls._saved_token())
+        return cls.token_source() != "none"
 
     def _headers(self):
         h={"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28","User-Agent":"My-AI-GitHub-Connector"}
