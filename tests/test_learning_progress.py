@@ -1,3 +1,6 @@
+import sqlite3
+
+from my_ai import db as db_module
 from my_ai import learner as learner_module
 from my_ai.learner import LearningEngine
 from my_ai.scheduler import StudyScheduler
@@ -67,3 +70,35 @@ def test_scheduler_switches_language_when_already_running(monkeypatch):
     scheduler.start("SQL Server")
     assert scheduler.language == "SQL Server"
     scheduler.stop()
+
+
+def test_knowledge_memory_deduplicates_normalized_content(monkeypatch):
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        "CREATE TABLE knowledge (id INTEGER PRIMARY KEY AUTOINCREMENT, topic TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL, source_url TEXT, content_hash TEXT)"
+    )
+    monkeypatch.setattr(db_module, "connect", lambda: conn)
+
+    first = db_module.remember_knowledge("Python", "One", "  Same   knowledge\ncontent. ")
+    second = db_module.remember_knowledge("Python", "Two", "Same knowledge content.", "https://example.test/source")
+
+    assert first == second
+    rows = conn.execute("SELECT COUNT(*) FROM knowledge").fetchone()[0]
+    assert rows == 1
+    source = conn.execute("SELECT source_url FROM knowledge WHERE id=?", (first,)).fetchone()[0]
+    assert source == "https://example.test/source"
+    conn.close()
+
+
+def test_openai_provider_requires_key(monkeypatch):
+    from my_ai import llm as llm_module
+
+    monkeypatch.setattr(llm_module.settings, "llm_provider", "openai")
+    monkeypatch.setattr(llm_module.settings, "openai_api_key", "")
+    try:
+        llm_module.create_llm()
+    except llm_module.LLMError as exc:
+        assert "OPENAI_API_KEY" in str(exc)
+    else:
+        raise AssertionError("Expected missing OpenAI API key to fail")
