@@ -4,7 +4,7 @@ from .curriculum import next_topic,canonical_language,source_urls,LANGUAGE_CURRI
 from .advanced_curriculum import seed_for
 from .db import execute,fetch_all,search_knowledge
 from .executor import run_python
-from .llm import OllamaClient
+from .llm import create_llm
 from .memory import remember
 from .web_learner import WebLearner
 from .security import SecurityEngine
@@ -12,12 +12,12 @@ from .dast import LocalDAST
 
 class LearningEngine:
     def __init__(self,llm=None):
-        self.llm=llm or OllamaClient(); self.web=WebLearner()
+        self.llm=llm or create_llm(); self.web=WebLearner()
         self.security=SecurityEngine(self.llm); self.dast=LocalDAST()
 
     def _discover_prerequisites(self,language,topic):
         prompt=("You are a curriculum architect. Analyze the requested programming subject and identify prerequisite subjects that must be learned before or alongside it. "
-                 'Return JSON only: {"prerequisites":[{"name":"...","reason":"...","recommended_order":1}]}. '
+                 '{"prerequisites":[{"name":"...","reason":"...","recommended_order":1}]}. '
                  "Do not duplicate the main topic. Only include concrete skills needed to build real projects. "
                  f"MAIN SUBJECT: {language}\nCURRENT TOPIC: {topic['topic']}\nGOAL: {topic['goal']}")
         try:
@@ -107,65 +107,30 @@ class LearningEngine:
         if language.lower()=="python": result["validation"]=self.validate_code(code)
         return result
 
-    def security_scan_code(self,code,language="Python",fix=False):
-        return self.security.scan_code(code,language,fix)
-
-    def security_scan_path(self,project_path,fix=False):
-        return self.security.scan_path(project_path,fix)
-
-    def security_assessment_url(self,target_url,headers=None):
-        return {"static":{"status":"not_applicable","findings":[],"summary":{"critical":0,"high":0,"medium":0,"low":0}},
-                "dynamic":self.dast.scan_url(target_url,explicit=True,headers=headers),
-                "code":None,"fixed":False,"target":target_url}
-
+    def security_scan_code(self,code,language="Python",fix=False): return self.security.scan_code(code,language,fix)
+    def security_scan_path(self,project_path,fix=False): return self.security.scan_path(project_path,fix)
+    def security_assessment_url(self,target_url,headers=None): return {"static":{"status":"not_applicable","findings":[],"summary":{"critical":0,"high":0,"medium":0,"low":0}},"dynamic":self.dast.scan_url(target_url,explicit=True,headers=headers),"code":None,"fixed":False,"target":target_url}
     def security_assessment_code(self,code,language="Python",fix=False):
-        static=self.security.scan_code(code,language,fix)
-        final_code=static.get("fixed_code",code) if fix else code
-        dynamic=self.dast.scan_code(final_code,language)
-        result={"static":static,"dynamic":dynamic,"code":final_code,"fixed":bool(fix and static.get("fixed_code"))}
-        if fix and final_code!=code:
-            result["post_static"]=self.security.scan_code(final_code,language,False)
+        static=self.security.scan_code(code,language,fix); final_code=static.get("fixed_code",code) if fix else code; dynamic=self.dast.scan_code(final_code,language); result={"static":static,"dynamic":dynamic,"code":final_code,"fixed":bool(fix and static.get("fixed_code"))}
+        if fix and final_code!=code: result["post_static"]=self.security.scan_code(final_code,language,False)
         return result
-
     def security_assessment_path(self,project_path,fix=False):
-        static=self.security.scan_path(project_path,fix)
-        dynamic=self.dast.scan_path(project_path)
-        return {"static":static,"dynamic":dynamic,"fixed":bool(fix and static.get("fixed"))}
-
+        static=self.security.scan_path(project_path,fix); dynamic=self.dast.scan_path(project_path); return {"static":static,"dynamic":dynamic,"fixed":bool(fix and static.get("fixed"))}
     def latest_generated_project(self):
-        rows=fetch_all("SELECT * FROM generated_projects ORDER BY id DESC LIMIT 1")
-        return rows[0] if rows else None
-
+        rows=fetch_all("SELECT * FROM generated_projects ORDER BY id DESC LIMIT 1"); return rows[0] if rows else None
     def security_scan_latest_generated(self,fix=False):
         project=self.latest_generated_project()
         if not project:return {"status":"no_project","message":"No generated project is available for security testing."}
         result=self.security_assessment_code(project["code"],project["language"],fix)
-        if fix and result.get("code") and result["code"]!=project["code"]:
-            execute("UPDATE generated_projects SET code=? WHERE id=?",(result["code"],project["id"]))
-        result["project_id"]=project["id"]; result["request"]=project["request"]
-        return result
-
+        if fix and result.get("code") and result["code"]!=project["code"]: execute("UPDATE generated_projects SET code=? WHERE id=?",(result["code"],project["id"]))
+        result["project_id"]=project["id"]; result["request"]=project["request"]; return result
     def validate_code(self,code):
-        r=run_python(code); p=r.return_code==0 and not r.timed_out
-        execute("INSERT INTO experiments(language,code,output,error,passed) VALUES(?,?,?,?,?)",("Python",code,r.output,r.error,int(p)))
-        return {"passed":p,"output":r.output,"error":r.error,"return_code":r.return_code,"timed_out":r.timed_out}
-
+        r=run_python(code); p=r.return_code==0 and not r.timed_out; execute("INSERT INTO experiments(language,code,output,error,passed) VALUES(?,?,?,?,?)",("Python",code,r.output,r.error,int(p))); return {"passed":p,"output":r.output,"error":r.error,"return_code":r.return_code,"timed_out":r.timed_out}
     @staticmethod
-    def _half_percent(value):
-        # Keep progress on an explicit 0.5% grid and never allow invalid UI values.
-        return max(0.0,min(100.0,round(value*2)/2))
-
+    def _half_percent(value): return max(0.0,min(100.0,round(value*2)/2))
     def status(self,language=None):
-        rows=fetch_all("SELECT * FROM learning_sessions ORDER BY id DESC")
-        out=[]
+        rows=fetch_all("SELECT * FROM learning_sessions ORDER BY id DESC"); out=[]
         for lang,topics in LANGUAGE_CURRICULA.items():
-            topic_names={str(x["topic"]) for x in topics}
-            completed_topics={str(r["topic"]) for r in rows if r["language"]==lang and r["status"]=="completed" and str(r["topic"]) in topic_names}
-            completed=len(completed_topics)
-            total=len(topics)
-            scores=[float(r["score"]) for r in rows if r["language"]==lang and r["status"]=="completed" and str(r["topic"]) in topic_names and r["score"] is not None]
-            raw=(completed/total*100) if total else 0
-            progress=self._half_percent(raw)
-            out.append({"language":lang,"completed_topics":completed,"total_topics":total,"progress_percent":progress,"progress_step":"0.5%","average_score":round(sum(scores)/len(scores),1) if scores else 0})
+            topic_names={str(x["topic"]) for x in topics}; completed_topics={str(r["topic"]) for r in rows if r["language"]==lang and r["status"]=="completed" and str(r["topic"]) in topic_names}; completed=len(completed_topics); total=len(topics); scores=[float(r["score"]) for r in rows if r["language"]==lang and r["status"]=="completed" and str(r["topic"]) in topic_names and r["score"] is not None]; raw=(completed/total*100) if total else 0; progress=self._half_percent(raw); out.append({"language":lang,"completed_topics":completed,"total_topics":total,"progress_percent":progress,"progress_step":"0.5%","average_score":round(sum(scores)/len(scores),1) if scores else 0})
         if language: out=[x for x in out if x["language"].lower()==canonical_language(language).lower()]
         return {"languages":out,"sessions":rows,"available_languages":list(LANGUAGE_CURRICULA.keys())}
