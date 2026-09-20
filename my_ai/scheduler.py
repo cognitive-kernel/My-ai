@@ -37,7 +37,7 @@ class StudyScheduler:
             language = known
         else:
             language = resolve_learning_target(self._latest_learning_message(), language)
-        language = ensure_domain(language, LearningEngine().llm) or canonical_language(language)
+            language = ensure_domain(language, LearningEngine().llm) or canonical_language(language)
         if self._thread and self._thread.is_alive():
             if self.language == language:
                 return
