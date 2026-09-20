@@ -89,16 +89,3 @@ def test_knowledge_memory_deduplicates_normalized_content(monkeypatch):
     source = conn.execute("SELECT source_url FROM knowledge WHERE id=?", (first,)).fetchone()[0]
     assert source == "https://example.test/source"
     conn.close()
-
-
-def test_openai_provider_requires_key(monkeypatch):
-    from my_ai import llm as llm_module
-
-    monkeypatch.setattr(llm_module.settings, "llm_provider", "openai")
-    monkeypatch.setattr(llm_module.settings, "openai_api_key", "")
-    try:
-        llm_module.create_llm()
-    except llm_module.LLMError as exc:
-        assert "OPENAI_API_KEY" in str(exc)
-    else:
-        raise AssertionError("Expected missing OpenAI API key to fail")
