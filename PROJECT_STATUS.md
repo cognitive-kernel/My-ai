@@ -63,6 +63,45 @@ SQL Server نیز به‌صورت curriculum جداگانه برای موضوع�
 
 در طراحی فعلی، مدل باید بتواند دانش اولیه را از Seed دریافت کند و سپس با منابع معتبر، تمرین، اجرای کد و آزمون آن را تکمیل و verify کند.
 
+### Dynamic learning domains
+
+از این نسخه، learning فقط محدود به زبان‌ها و موضوعات از قبل تعریف‌شده نیست.
+
+وقتی کاربر می‌گوید یک زبان یا موضوع جدید یاد گرفته شود:
+
+1. نام موضوع از درخواست استخراج می‌شود.
+2. اگر domain از قبل وجود داشته باشد، همان curriculum ادامه پیدا می‌کند.
+3. اگر جدید باشد، برای آن یک domain مستقل ساخته و در `learning_domains` ذخیره می‌شود.
+4. curriculum جدید از سطح beginner تا expert ساخته می‌شود و تا حد امکان شامل prerequisites، fundamentals، intermediate، advanced، internals، security، testing، debugging، performance، architecture، production و capstone است.
+5. منابع رسمی در کنار curriculum ذخیره می‌شوند.
+6. domain جدید بلافاصله در لیست progress قرار می‌گیرد.
+7. progress آن مستقل از Python، SQL Server و سایر domainها محاسبه می‌شود.
+8. curriculum جدید بدون حذف یا reset کردن داده‌های قبلی اضافه می‌شود.
+
+فایل‌های اصلی:
+
+- `my_ai/dynamic_learning.py`
+- `my_ai/domain_registry.py`
+- `my_ai/scheduler.py`
+
+### Weekly knowledge maintenance
+
+بعد از کامل‌شدن یک domain، سیستم برای آن برنامه‌ی بررسی هفتگی ثبت می‌کند.
+
+هر 7 روز:
+
+1. domainهای موعدرسیده پیدا می‌شوند.
+2. فقط domainهایی که curriculum فعلی‌شان کامل شده بررسی می‌شوند.
+3. منابع رسمی ذخیره‌شده و در صورت نیاز جست‌وجوی وب بررسی می‌شوند.
+4. مدل تشخیص می‌دهد آیا واقعاً مطلب یا تغییر جدیدی وجود دارد.
+5. فقط مطالب جدید و غیرتکراری به curriculum اضافه می‌شوند.
+6. موارد جدید دوباره وارد صف یادگیری و progress همان domain می‌شوند.
+7. اگر چیز جدیدی وجود نداشته باشد، زمان بررسی بعدی 7 روز جلو می‌رود.
+
+این بررسی به معنی ادعای خودکارِ «یادگیری کامل» نیست؛ مطالب جدید باید همان مسیر مطالعه، تمرین و verification را طی کنند.
+
+زمان‌بندی با UTC/زمان‌های timezone-aware انجام می‌شود تا محاسبات هفتگی پایدار باشند؛ مستندات رسمی Python نیز استفاده از datetimeهای aware را برای نمایش یک لحظه مشخص توصیه می‌کند. citeturn0search0
+
 ### Progress
 
 مشکل قبلی این بود که هنگام تغییر موضوع از Python به SQL Server، worker قبلی می‌توانست ادامه پیدا کند و تعداد topicهای تکراری نیز باعث می‌شد progress از سقف curriculum عبور کند؛ نمونه‌هایی مثل `17/16` یا `20/16` و حتی بالاتر از 100% دیده شده بود.
@@ -75,6 +114,8 @@ SQL Server نیز به‌صورت curriculum جداگانه برای موضوع�
 - نمایش progress با گام 0.5% است: `0 → 0.5 → 1 → 1.5 → ... → 99.5 → 100`.
 - تغییر زبان باید وضعیت learning هر زبان را مستقل نگه دارد.
 - داده‌های قبلی نباید reset یا حذف شوند.
+- domainهای جدید نیز به همین سیستم progress اضافه می‌شوند.
+- بعد از اضافه‌شدن موضوعات جدید در بررسی هفتگی، progress همان domain دوباره بر اساس curriculum واقعی محاسبه می‌شود و هرگز از 100% عبور نمی‌کند.
 
 ### Self-update / self-repair
 
@@ -121,11 +162,14 @@ Workflowهای GitHub Actions برای نصب، compile و pytest فعال هس�
 
 - `2bf30f6338ee874b2f182fd82a38b1146284a38f` — Fix learning progress bounds and deduplicate topics
 - `c50b78d8200f80ac20d3ac5a3ce2d6767461cfe9` — Add regression tests for learning progress and language switching
+- `d5a234e48dc9c5795fff6b0c5264906440842f6c` — Add dynamic learning domains and weekly knowledge review
+- `54fa3985830dc00b9dc93efe623c6f585bbf3e71` — Harden scheduler for dynamic domains and review scheduling
+- `712ea6d769172e65a37540155e31881e563d49f7` — Add regression tests for dynamic domains and weekly review scheduling
 
-آخرین CIهای بررسی‌شده برای اصلاحات progress موفق بوده‌اند:
+آخرین CI بررسی‌شده برای نسخه فعلی:
 
-- CI: موفق
-- tests: موفق
+- tests workflow: موفق
+- CI workflow: موفق
 - compileall: موفق
 - pytest: موفق
 
@@ -159,6 +203,7 @@ Workflowهای GitHub Actions برای نصب، compile و pytest فعال هس�
 - یادگیری مجدد مباحث ضعیف
 - version-aware revalidation
 - داشبورد دقیق progress برای هر domain
+- اتصال نتایج بررسی هفتگی به صف یادگیری و verification
 
 ## 9. معیار موفقیت یادگیری
 
@@ -181,5 +226,7 @@ Workflowهای GitHub Actions برای نصب، compile و pytest فعال هس�
 ## 10. نکته برای چت‌های آینده
 
 اگر کاربر در چت جدید گفت «ادامه پروژه My-AI» یا مشابه آن، ابتدا این فایل را به‌عنوان وضعیت مرجع بخوان و سپس وضعیت واقعی `main` را با repo مقایسه کن. فرض نکن تغییرات ادعاشده در چت‌های قبلی هنوز روی branch فعلی وجود دارند؛ commitها و فایل‌های فعلی را بررسی کن.
+
+اگر کاربر گفت «این زبان/موضوع را یاد بگیر»، آن را به‌عنوان یک learning domain مستقل در نظر بگیر؛ اگر domain جدید است آن را به curriculum و progress اضافه کن، نه اینکه progress زبان دیگری را تغییر بدهی.
 
 این سند باید بعد از هر update مهم، bug fix، تغییر معماری، تغییر curriculum، تغییر وضعیت تست‌ها یا تغییر milestone به‌روزرسانی شود.
