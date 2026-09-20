@@ -1,5 +1,6 @@
 from __future__ import annotations
 import threading
+import time
 from .learner import LearningEngine
 
 class StudyScheduler:
@@ -15,12 +16,19 @@ class StudyScheduler:
         self._lock=threading.Lock()
 
     def start(self,language="Python"):
-        if self._thread and self._thread.is_alive(): return
+        language=language.strip() or "Python"
+        if self._thread and self._thread.is_alive():
+            if self.language == language:
+                return
+            # A language switch must stop the old learner first; otherwise the
+            # existing Python worker keeps running and ignores the new request.
+            self._stop.set()
+            self._thread.join(timeout=2.0)
         self.language=language
         self.last_result=None
         self.error=None
         self.stage="starting"
-        self._stop.clear()
+        self._stop=threading.Event()
         self._thread=threading.Thread(target=self._loop,args=(language,),daemon=True)
         self._thread.start()
 
@@ -53,14 +61,3 @@ class StudyScheduler:
                 self.update_progress("error")
             if self.last_result and self.last_result.get("message","").endswith("complete."): break
             self._stop.wait(self.interval_seconds)
-
-    def status(self):
-        with self._lock:
-            return {
-                "running":self.running(),
-                "language":self.language,
-                "current_topic":self.current_topic,
-                "stage":self.stage,
-                "error":self.error,
-                "last_result":self.last_result,
-            }
