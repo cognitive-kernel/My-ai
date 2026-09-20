@@ -58,6 +58,10 @@ LANGUAGE_ALIASES={"python":"Python","py":"Python","پایتون":"Python","c":"C
 
 LANGUAGE_SOURCES={"Python":["https://docs.python.org/3/tutorial/","https://docs.python.org/3/library/"],"C":["https://en.cppreference.com/w/c","https://www.gnu.org/software/gnu-c-manual/"],"PHP":["https://www.php.net/manual/en/","https://getcomposer.org/doc/","https://laravel.com/docs","https://developer.mozilla.org/en-US/docs/Web/HTML","https://developer.mozilla.org/en-US/docs/Web/CSS","https://developer.mozilla.org/en-US/docs/Web/JavaScript","https://api.jquery.com/"],"JavaScript":["https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide","https://developer.mozilla.org/en-US/docs/Web/API"],"SQL Server":["https://learn.microsoft.com/en-us/sql/sql-server/","https://learn.microsoft.com/en-us/sql/t-sql/"],"MySQL":["https://dev.mysql.com/doc/","https://dev.mysql.com/doc/refman/8.4/en/"],"SQLite":["https://www.sqlite.org/docs.html","https://www.sqlite.org/lang.html"],"Android":["https://developer.android.com/guide","https://developer.android.com/kotlin"],"iOS":["https://developer.apple.com/tutorials/swiftui","https://developer.apple.com/documentation/swift"],"Pentest":["https://owasp.org/www-project-web-security-testing-guide/","https://owasp.org/www-project-top-ten/","https://portswigger.net/web-security","https://nmap.org/book/"]}
 
+# Extend the existing curriculum without renaming or deleting any old topic.
+from .advanced_curriculum import extend_curricula
+extend_curricula(LANGUAGE_CURRICULA)
+
 def curriculum(language): return LANGUAGE_CURRICULA.get(canonical_language(language),[])
 def canonical_language(language):
     raw=language.strip()
