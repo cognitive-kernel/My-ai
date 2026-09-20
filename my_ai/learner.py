@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 from .curriculum import next_topic,canonical_language,source_urls,LANGUAGE_CURRICULA
+from .advanced_curriculum import seed_for
 from .db import execute,fetch_all,search_knowledge
 from .executor import run_python
 from .llm import OllamaClient
@@ -27,6 +28,10 @@ class LearningEngine:
     def _learn_sources_for_topic(self,language,topic,prerequisites):
         queries=[topic["topic"]]+[p.get("name","") for p in prerequisites[:3]]
         knowledge=[]
+        seed=seed_for(language,topic["topic"])
+        if seed:
+            remember(language,"Model knowledge seed: "+topic["topic"],seed,"model://knowledge-seed")
+            knowledge.append({"title":"Model knowledge seed","url":"model://knowledge-seed"})
         for url in source_urls(language)[:2]:
             try:
                 title,source=self.web.fetch(url)
@@ -62,9 +67,12 @@ class LearningEngine:
         if progress_callback: progress_callback("sources",t["topic"])
         sources=self._learn_sources_for_topic(language,t,prerequisites)
         if progress_callback: progress_callback("lesson",t["topic"])
+        seed=seed_for(language,t["topic"])
         lesson=self.llm.chat("Teach the topic as a complete, structured study unit. Include prerequisite lessons first, then the main topic, examples, exercises, tests, common mistakes, security considerations and a mastery checklist. "
+                             "Use the model knowledge seed only as an initial layer; reconcile it with supplied official-source knowledge and explicitly correct conflicts. "
                              "Do not claim mastery unless supported by the supplied knowledge. Return clear sections.\n"
                              f"LANGUAGE: {language}\nTOPIC: {t['topic']}\nGOAL: {t['goal']}\n"
+                             f"MODEL KNOWLEDGE SEED: {seed}\n"
                              f"DISCOVERED PREREQUISITES: {json.dumps(prerequisites,ensure_ascii=False)}\n"
                              f"LEARNED KNOWLEDGE: {json.dumps(search_knowledge(language+' '+t['topic'],12),ensure_ascii=False)}")
         remember(language,"Mastery lesson: "+t["topic"],lesson)
@@ -72,13 +80,13 @@ class LearningEngine:
         score=self.assess(t["topic"],lesson)
         execute("UPDATE learning_sessions SET status='completed',score=?,notes=? WHERE id=?",(score,lesson,s["session_id"]))
         if progress_callback: progress_callback("completed",t["topic"])
-        return {"status":"completed","session_id":s["session_id"],"language":language,"topic":t,"prerequisites":prerequisites,"score":score,"sources":sources}
+        return {"status":"completed","session_id":s["session_id"],"language":language,"topic":t,"prerequisites":prerequisites,"score":score,"sources":sources,"seeded":bool(seed)}
 
     def autonomous_step(self,language="Python"): return self.learn_next(language)
 
     def assess(self,topic,lesson):
         try:return max(0,min(100,float(self.llm.chat("Score only 0-100 for factual coverage of this topic. Topic:"+topic+"\nNOTE:"+lesson).strip())))
-        except ValueError:return 0
+        except (ValueError,TypeError): return 0
 
     def practice(self,task,language="Python"):
         return {"exercise":self.llm.chat(f"Create one {language} exercise. Return JSON keys description, starter_code, expected_behavior, hidden_tests. Task: {task}")}
@@ -142,12 +150,18 @@ class LearningEngine:
         execute("INSERT INTO experiments(language,code,output,error,passed) VALUES(?,?,?,?,?)",("Python",code,r.output,r.error,int(p)))
         return {"passed":p,"output":r.output,"error":r.error,"return_code":r.return_code,"timed_out":r.timed_out}
 
+    @staticmethod
+    def _half_percent(value):
+        return round(value*2)/2
+
     def status(self,language=None):
         rows=fetch_all("SELECT * FROM learning_sessions ORDER BY id DESC")
         out=[]
         for lang,topics in LANGUAGE_CURRICULA.items():
             total=len(topics); completed=sum(1 for r in rows if r["language"]==lang and r["status"]=="completed")
             scores=[float(r["score"]) for r in rows if r["language"]==lang and r["status"]=="completed" and r["score"] is not None]
-            out.append({"language":lang,"completed_topics":completed,"total_topics":total,"progress_percent":round(completed/total*100,1) if total else 0,"average_score":round(sum(scores)/len(scores),1) if scores else 0})
+            raw=(completed/total*100) if total else 0
+            progress=self._half_percent(raw)
+            out.append({"language":lang,"completed_topics":completed,"total_topics":total,"progress_percent":progress,"progress_step":"0.5%","average_score":round(sum(scores)/len(scores),1) if scores else 0})
         if language: out=[x for x in out if x["language"].lower()==canonical_language(language).lower()]
         return {"languages":out,"sessions":rows,"available_languages":list(LANGUAGE_CURRICULA.keys())}
