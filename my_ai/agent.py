@@ -2,11 +2,19 @@ from __future__ import annotations
 import json
 from .db import execute,fetch_all
 from .memory import recall
-from .llm import OllamaClient
+from .llm import create_llm
 from .capabilities import system_context
 from .self_update import check_for_update, apply_confirmed_update, recent_lessons
 
 SYSTEM="""You are My-AI, a local-first personal AI assistant. Prioritize correctness over confidence. Never claim code was executed unless an execution result is supplied. Use local knowledge when relevant and state when evidence is missing.
+
+Response quality rules:
+- Answer in the user's language unless they explicitly request another language.
+- For Persian, use correct Persian grammar, spelling, punctuation, نیم‌فاصله where appropriate, and natural sentence structure. Do not translate English syntax word-for-word into Persian.
+- Structure technical answers clearly with headings, bullets, code blocks and exact terminology when useful.
+- Distinguish facts, assumptions and uncertainty.
+- Do a brief internal grammar and factual consistency review before producing the final answer.
+- Never invent sources, test results, APIs, versions or capabilities.
 
 Your identity and capabilities are authoritative in the following local manifest:
 """ + system_context() + """
@@ -20,7 +28,7 @@ Self-maintenance rules:
 """
 
 class Agent:
-    def __init__(self,llm=None): self.llm=llm or OllamaClient()
+    def __init__(self,llm=None): self.llm=llm or create_llm()
 
     def _self_maintenance(self, message):
         low=message.strip().lower()
@@ -28,19 +36,14 @@ class Agent:
         confirm_words=("تایید آپدیت","تأیید آپدیت","تایید بروزرسانی","تأیید بروزرسانی","تایید به روزرسانی","تأیید به روزرسانی","confirm update","approve update","apply update")
         if any(x in low for x in confirm_words):
             result=apply_confirmed_update()
-            if result.get("status")=="up_to_date":
-                return "نسخه فعلی به‌روز است؛ تغییری اعمال نشد."
-            if result.get("status")=="blocked":
-                return "بروزرسانی اعمال نشد چون تست نسخه جدید شکست خورد.\n"+result.get("details","")
+            if result.get("status")=="up_to_date": return "نسخه فعلی به‌روز است؛ تغییری اعمال نشد."
+            if result.get("status")=="blocked": return "بروزرسانی اعمال نشد چون تست نسخه جدید شکست خورد.\n"+result.get("details","")
             return "بروزرسانی تأیید و فعال شد. watchdog سلامت نسخه جدید را بررسی می‌کند و در صورت شکست به snapshot قبلی برمی‌گردد."
         if any(x in low for x in inspect_words):
             result=check_for_update()
-            if not result.get("ok"):
-                return "بررسی خودکار کامل نشد: "+result.get("error",result.get("reason","unknown error"))
-            if result.get("blocked"):
-                return "بررسی متوقف شد چون تغییرات محلی commit نشده وجود دارد."
-            if result.get("update_available"):
-                return "نسخه جدید در origin/main موجود است. برای اجرای تست ایزوله و فعال‌سازی امن، صریحاً بگو: «تأیید آپدیت»."
+            if not result.get("ok"): return "بررسی خودکار کامل نشد: "+result.get("error",result.get("reason","unknown error"))
+            if result.get("blocked"): return "بررسی متوقف شد چون تغییرات محلی commit نشده وجود دارد."
+            if result.get("update_available"): return "نسخه جدید در origin/main موجود است. برای اجرای تست ایزوله و فعال‌سازی امن، صریحاً بگو: «تأیید آپدیت»."
             lessons=recent_lessons(5)
             suffix=f"\nآخرین درس‌های ثبت‌شده: {len(lessons)} مورد." if lessons else ""
             return "نسخه فعلی به‌روز است و تغییر جدیدی در origin/main وجود ندارد."+suffix
