@@ -152,14 +152,18 @@ class LearningEngine:
 
     @staticmethod
     def _half_percent(value):
-        return round(value*2)/2
+        # Keep progress on an explicit 0.5% grid and never allow invalid UI values.
+        return max(0.0,min(100.0,round(value*2)/2))
 
     def status(self,language=None):
         rows=fetch_all("SELECT * FROM learning_sessions ORDER BY id DESC")
         out=[]
         for lang,topics in LANGUAGE_CURRICULA.items():
-            total=len(topics); completed=sum(1 for r in rows if r["language"]==lang and r["status"]=="completed")
-            scores=[float(r["score"]) for r in rows if r["language"]==lang and r["status"]=="completed" and r["score"] is not None]
+            topic_names={str(x["topic"]) for x in topics}
+            completed_topics={str(r["topic"]) for r in rows if r["language"]==lang and r["status"]=="completed" and str(r["topic"]) in topic_names}
+            completed=len(completed_topics)
+            total=len(topics)
+            scores=[float(r["score"]) for r in rows if r["language"]==lang and r["status"]=="completed" and str(r["topic"]) in topic_names and r["score"] is not None]
             raw=(completed/total*100) if total else 0
             progress=self._half_percent(raw)
             out.append({"language":lang,"completed_topics":completed,"total_topics":total,"progress_percent":progress,"progress_step":"0.5%","average_score":round(sum(scores)/len(scores),1) if scores else 0})
