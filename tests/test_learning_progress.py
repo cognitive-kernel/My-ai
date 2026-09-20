@@ -1,4 +1,6 @@
 import sqlite3
+import threading
+import time
 
 from my_ai import db as db_module
 from my_ai import learner as learner_module
@@ -51,6 +53,33 @@ def test_half_percent_progress_grid_and_bounds():
     assert engine._half_percent(1.26) == 1.5
     assert engine._half_percent(100.0) == 100.0
     assert engine._half_percent(120.0) == 100.0
+
+
+def test_scheduler_worker_uses_its_own_stop_event(monkeypatch):
+    started = []
+    release = threading.Event()
+
+    class FakeEngine:
+        def __init__(self):
+            pass
+
+        def learn_next(self, language, progress_callback=None):
+            started.append(language)
+            release.wait(2)
+            return {"status": "completed", "topic": {"topic": "test"}}
+
+    monkeypatch.setattr("my_ai.scheduler.LearningEngine", FakeEngine)
+    scheduler = StudyScheduler(interval_seconds=60)
+    old_stop = threading.Event()
+    old_thread = threading.Thread(target=scheduler._loop, args=("Python", old_stop), daemon=True)
+    old_thread.start()
+    time.sleep(0.05)
+    old_stop.set()
+    release.set()
+    old_thread.join(timeout=1)
+    assert not old_thread.is_alive()
+    assert started == ["Python"]
+    scheduler.stop()
 
 
 def test_scheduler_switches_language_when_already_running(monkeypatch):
