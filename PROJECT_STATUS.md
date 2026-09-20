@@ -27,187 +27,154 @@ My-AI یک دستیار هوش مصنوعی محلی است که هدف آن د�
 
 سیستم یادگیری از یک curriculum ساختاریافته استفاده می‌کند و برای Python و SQL Server دانش اولیه/Seed و موضوعات پیشرفته اضافه شده‌اند.
 
-Python شامل حوزه‌هایی از مبانی تا موضوعات پیشرفته مانند:
+Python شامل حوزه‌هایی از مبانی تا موضوعات پیشرفته مانند syntax و data types، functions و modules، OOP و Data Model، decorators/descriptors/metaclasses، generators/iterators/context managers، typing، async/concurrency، networking، testing/debugging/profiling، packaging، performance، CPython internals، security و real-project debugging است.
 
-- syntax و data types
-- functions و modules
-- OOP و Data Model
-- decorators / descriptors / metaclasses
-- generators / iterators / context managers
-- typing / generics / protocols
-- async/await و asyncio
-- threading / multiprocessing / concurrency
-- networking / subprocess
-- testing / debugging / profiling
-- packaging / dependencies
-- performance / memory
-- CPython / bytecode / internals
-- security و real-project debugging
-
-SQL Server نیز به‌صورت curriculum جداگانه برای موضوعاتی مانند:
-
-- SQL و T-SQL
-- database design
-- joins / CTE / window functions
-- procedures / functions / triggers
-- transactions / isolation / locking
-- deadlocks
-- indexes / statistics
-- execution plans
-- query optimization
-- security
-- backup / restore
-- HA / DR
-- monitoring / performance
-- internals
+SQL Server نیز به‌صورت curriculum جداگانه برای SQL/T-SQL، database design، joins/CTE/window functions، procedures/functions/triggers، transactions/isolation/locking، deadlocks، indexes/statistics، execution plans، query optimization، security، backup/restore، HA/DR، monitoring/performance و internals پوشش داده می‌شود.
 
 در طراحی فعلی، مدل باید بتواند دانش اولیه را از Seed دریافت کند و سپس با منابع معتبر، تمرین، اجرای کد و آزمون آن را تکمیل و verify کند.
 
 ### Dynamic learning domains
 
-از این نسخه، learning فقط محدود به زبان‌ها و موضوعات از قبل تعریف‌شده نیست.
+یادگیری فقط محدود به زبان‌ها و موضوعات از قبل تعریف‌شده نیست.
 
 وقتی کاربر می‌گوید یک زبان یا موضوع جدید یاد گرفته شود:
 
 1. نام موضوع از درخواست استخراج می‌شود.
 2. اگر domain از قبل وجود داشته باشد، همان curriculum ادامه پیدا می‌کند.
 3. اگر جدید باشد، برای آن یک domain مستقل ساخته و در `learning_domains` ذخیره می‌شود.
-4. curriculum جدید از سطح beginner تا expert ساخته می‌شود و تا حد امکان شامل prerequisites، fundamentals، intermediate، advanced، internals، security، testing، debugging، performance، architecture، production و capstone است.
+4. curriculum جدید از beginner تا expert ساخته می‌شود و تا حد امکان prerequisites، fundamentals، intermediate، advanced، internals، security، testing، debugging، performance، architecture، production و capstone را پوشش می‌دهد.
 5. منابع رسمی در کنار curriculum ذخیره می‌شوند.
 6. domain جدید بلافاصله در لیست progress قرار می‌گیرد.
-7. progress آن مستقل از Python، SQL Server و سایر domainها محاسبه می‌شود.
-8. curriculum جدید بدون حذف یا reset کردن داده‌های قبلی اضافه می‌شود.
+7. progress آن مستقل از سایر domainها محاسبه می‌شود.
+8. داده‌های قبلی حذف یا reset نمی‌شوند.
 
-فایل‌های اصلی:
-
-- `my_ai/dynamic_learning.py`
-- `my_ai/domain_registry.py`
-- `my_ai/scheduler.py`
+فایل‌های اصلی: `my_ai/dynamic_learning.py`، `my_ai/domain_registry.py`، `my_ai/scheduler.py`.
 
 ### Weekly knowledge maintenance
 
 بعد از کامل‌شدن یک domain، سیستم برای آن برنامه‌ی بررسی هفتگی ثبت می‌کند.
 
-هر 7 روز:
+هر 7 روز domainهای موعدرسیده بررسی می‌شوند، منابع رسمی و در صورت نیاز جست‌وجوی وب خوانده می‌شوند، مدل تغییرات واقعی را تشخیص می‌دهد، مطالب جدید به curriculum اضافه می‌شوند و سپس دوباره وارد چرخه‌ی یادگیری و verification می‌شوند. اگر مطلب جدیدی نباشد، review بعدی 7 روز جلو می‌رود.
 
-1. domainهای موعدرسیده پیدا می‌شوند.
-2. فقط domainهایی که curriculum فعلی‌شان کامل شده بررسی می‌شوند.
-3. منابع رسمی ذخیره‌شده و در صورت نیاز جست‌وجوی وب بررسی می‌شوند.
-4. مدل تشخیص می‌دهد آیا واقعاً مطلب یا تغییر جدیدی وجود دارد.
-5. فقط مطالب جدید و غیرتکراری به curriculum اضافه می‌شوند.
-6. موارد جدید دوباره وارد صف یادگیری و progress همان domain می‌شوند.
-7. اگر چیز جدیدی وجود نداشته باشد، زمان بررسی بعدی 7 روز جلو می‌رود.
+### Memory deduplication
 
-این بررسی به معنی ادعای خودکارِ «یادگیری کامل» نیست؛ مطالب جدید باید همان مسیر مطالعه، تمرین و verification را طی کنند.
+حافظه‌ی دانشی اکنون content-addressed شده است تا یک مطلب یکسان چند بار ذخیره نشود.
 
-زمان‌بندی با UTC/زمان‌های timezone-aware انجام می‌شود تا محاسبات هفتگی پایدار باشند؛ مستندات رسمی Python نیز استفاده از datetimeهای aware را برای نمایش یک لحظه مشخص توصیه می‌کند. citeturn0search0
+- محتوای دانش normalize و با SHA-256 شناسه‌گذاری می‌شود.
+- اگر همان محتوا قبلاً وجود داشته باشد، رکورد جدید ساخته نمی‌شود.
+- اگر رکورد قبلی source نداشته باشد و رکورد جدید source داشته باشد، source به همان رکورد اضافه می‌شود.
+- در startup، duplicateهای قدیمی migration و حذف می‌شوند.
+- unique index روی `content_hash` از duplicateهای بعدی جلوگیری می‌کند.
+- پس از migration، FTS5 rebuild می‌شود تا جست‌وجوی حافظه سازگار بماند.
+
+فایل‌های اصلی: `my_ai/db.py` و `my_ai/memory.py`.
+
+نکته‌ی آینده: semantic similarity برای تشخیص مطالب «مشابه ولی نه کاملاً یکسان» هنوز مرحله‌ی بعدی Universal Learning & Skill Engine است.
+
+### Database learning
+
+SQLite دیتابیس فعلی خود My-AI است و به‌صورت curriculum مستقل در فهرست یادگیری وجود دارد. SQL Server و MySQL نیز curriculum مستقل دارند. هدف این است که دیتابیس‌هایی که پروژه واقعاً از آن‌ها استفاده می‌کند فقط به‌عنوان ابزار استفاده نشوند و خود My-AI مفاهیم طراحی، query، indexing، transactions، reliability و performance آن‌ها را نیز یاد بگیرد.
+
+### Response quality / LLM backend
+
+قواعد پاسخ‌گویی تقویت شده‌اند:
+
+- پاسخ در زبان کاربر تولید می‌شود.
+- برای فارسی، grammar، spelling، punctuation، نیم‌فاصله و ساختار طبیعی صریحاً رعایت می‌شوند.
+- مدل باید قبل از پاسخ یک مرور داخلی کوتاه برای grammar و factual consistency انجام دهد.
+- ادعای تست، منبع، نسخه یا قابلیت بدون evidence ممنوع است.
+
+Backend مدل قابل تنظیم است:
+
+- پیش‌فرض: Ollama محلی.
+- اختیاری: OpenAI-compatible Responses API.
+- فعال‌سازی با `LLM_PROVIDER=openai`.
+- کلید فقط از `OPENAI_API_KEY` خوانده می‌شود و نباید داخل Git ذخیره شود.
+- مدل پیش‌فرض این backend: `gpt-5.6-luna` و قابل تغییر با `OPENAI_MODEL`.
+- اتصال مستقیم به runtime همین گفت‌وگو وجود ندارد؛ اتصال از طریق API انجام می‌شود.
 
 ### Progress
 
-مشکل قبلی این بود که هنگام تغییر موضوع از Python به SQL Server، worker قبلی می‌توانست ادامه پیدا کند و تعداد topicهای تکراری نیز باعث می‌شد progress از سقف curriculum عبور کند؛ نمونه‌هایی مثل `17/16` یا `20/16` و حتی بالاتر از 100% دیده شده بود.
+مشکل قبلی این بود که هنگام تغییر موضوع از Python به SQL Server، worker قبلی می‌توانست ادامه پیدا کند و duplicate topicها progress را از سقف curriculum عبور دهند.
 
-این مشکل اصلاح شده است:
+اصلاحات:
 
-- progress بر اساس topicهای یکتا و متعلق به همان curriculum محاسبه می‌شود.
-- topicهای خارج از curriculum در progress حساب نمی‌شوند.
-- progress به 100% محدود می‌شود.
-- نمایش progress با گام 0.5% است: `0 → 0.5 → 1 → 1.5 → ... → 99.5 → 100`.
-- تغییر زبان باید وضعیت learning هر زبان را مستقل نگه دارد.
-- داده‌های قبلی نباید reset یا حذف شوند.
-- domainهای جدید نیز به همین سیستم progress اضافه می‌شوند.
-- بعد از اضافه‌شدن موضوعات جدید در بررسی هفتگی، progress همان domain دوباره بر اساس curriculum واقعی محاسبه می‌شود و هرگز از 100% عبور نمی‌کند.
+- progress بر اساس topicهای یکتا و متعلق به همان curriculum است.
+- topicهای خارج از curriculum شمرده نمی‌شوند.
+- progress هرگز بیشتر از 100% نمی‌شود.
+- گام progress دقیقاً 0.5% است.
+- تغییر زبان worker قبلی را متوقف و worker زبان جدید را شروع می‌کند.
+- domainهای جدید نیز progress مستقل دارند.
+- مطالب جدید weekly review پس از verification دوباره در progress همان domain لحاظ می‌شوند.
 
 ### Self-update / self-repair
 
-هدف معماری این بخش:
+هدف معماری:
 
 1. inspect پروژه
 2. تشخیص bug یا update
 3. پیشنهاد تغییر
-4. دریافت تأیید کاربر
-5. snapshot نسخه فعلی
-6. اجرای تغییر در محیط ایزوله/worktree
+4. تأیید کاربر
+5. snapshot
+6. worktree ایزوله
 7. compile و test
-8. فعال‌سازی نسخه جدید
+8. فعال‌سازی
 9. health check / watchdog
-10. rollback در صورت شکست
-11. نگه‌داشتن logs و failure lessons برای یادگیری بعدی
+10. rollback در شکست
+11. ثبت failure و lesson
 
 ## 4. GitHub authentication
 
-برای ورود GitHub مسیرهای OAuth/CLI و tokenهای موجود در پروژه توسعه داده شده‌اند. هدف اصلی، استفاده از جریان رسمی GitHub تا حد امکان و عدم وابستگی اجباری به PAT در UI است.
-
-جزئیات فعلی را در `my_ai/git_connector.py` و routeهای مربوط به `/git/login` و `/git/login/status` بررسی کن. هیچ credential واقعی نباید در این فایل ثبت شود.
+مسیرهای OAuth/CLI و token موجود هستند. هدف استفاده از جریان رسمی GitHub و عدم وابستگی اجباری به PAT در UI است. credential واقعی نباید در repo ذخیره شود.
 
 ## 5. مستندات کمک
 
-پوشه `docs/help/` برای موضوعات مختلف پروژه ایجاد شده است، از جمله:
+پوشه `docs/help/` شامل راهنماهای chat، learning، coding، security، github، memory، scheduler، voice، api و docker است.
 
-- chat
-- learning
-- coding
-- security
-- github
-- memory
-- scheduler
-- voice
-- api
-- docker
-
-## 6. تست و CI
-
-Workflowهای GitHub Actions برای نصب، compile و pytest فعال هستند.
-
-آخرین اصلاحات progress با commit زیر ثبت شده‌اند:
+## 6. تغییرات اخیر
 
 - `2bf30f6338ee874b2f182fd82a38b1146284a38f` — Fix learning progress bounds and deduplicate topics
 - `c50b78d8200f80ac20d3ac5a3ce2d6767461cfe9` — Add regression tests for learning progress and language switching
 - `d5a234e48dc9c5795fff6b0c5264906440842f6c` — Add dynamic learning domains and weekly knowledge review
 - `54fa3985830dc00b9dc93efe623c6f585bbf3e71` — Harden scheduler for dynamic domains and review scheduling
 - `712ea6d769172e65a37540155e31881e563d49f7` — Add regression tests for dynamic domains and weekly review scheduling
+- `90cec7b087ba475fea6b11274af21b8e7627138f` — Document dynamic learning domains and weekly review
+- `6fcf5fd5238e7a52f6dd1a772e1ad08356610be4` — Deduplicate knowledge storage and prepare database learning metadata
+- `2d6d5ffb301697f7dcc33e722cf8fa3e25a58313` — Use content-addressed memory to prevent duplicate knowledge
+- `f3b79a4d620b5891643099ea766952a1f271414e` — Add optional OpenAI-compatible model configuration
+- `6dbd3122244b188b7cb286d9ff20fe83bc3a0da7` — Add optional OpenAI Responses API backend
+- `c4d34f831369a165c6494a8afc488f5b1a1bd605` — Improve response quality and use configured LLM backend
+- `908f6d03fb6540a383d73a15fa24bc794250c67f` — Use configured LLM backend for autonomous learning
+- `725d51627e91ee23105588acec533d593256846f` — Add regression tests for memory deduplication
+- `90cec7b087ba475fea6b11274af21b8e7627138f` — Document dynamic learning domains and weekly review
 
-آخرین CI بررسی‌شده برای نسخه فعلی:
+## 7. تست و CI
 
-- tests workflow: موفق
-- CI workflow: موفق
-- compileall: موفق
-- pytest: موفق
+بعد از هر تغییر باید compile و کل test suite اجرا شود و CI بررسی شود. اگر شکست خورد، ابتدا علت اصلاح و دوباره تست می‌شود؛ فقط بعد از موفقیت کامل اعلام pull انجام می‌شود.
 
-## 7. اصل مهم برای ادامه توسعه
-
-بعد از هر تغییر:
-
-1. کد فعلی را بررسی کن.
-2. تغییر را مستقیم در repo اعمال کن.
-3. تست مرتبط اضافه/اصلاح کن.
-4. compile و کل test suite را اجرا کن.
-5. CI را بررسی کن.
-6. اگر شکست خورد، بدون منتظر ماندن برای تأیید کاربر علت را اصلاح و دوباره تست کن.
-7. فقط بعد از موفقیت کامل، وضعیت این فایل را به‌روزرسانی کن.
-8. سپس به کاربر اعلام کن که تغییرات آماده pull هستند.
+برای این مرحله تست‌های regression مربوط به deduplication اضافه شده‌اند. CIهای قبلی dynamic learning موفق بوده‌اند؛ وضعیت CI همین تغییرات باید قبل از اعلام pull بررسی شود.
 
 ## 8. کار بعدی پیشنهادی
 
-مرحله مهم بعدی، کامل‌کردن `Universal Learning & Skill Engine` است:
+Universal Learning & Skill Engine:
 
-- Knowledge Seed برای زبان‌ها و فناوری‌ها
-- curriculum مستقل برای هر domain
+- Knowledge Seed
+- curriculum مستقل
 - concept/example/error/pattern storage
 - آزمون نظری
 - coding task
 - debugging task
-- اجرای sandboxed
+- sandboxed execution
 - regression testing
 - skill score مستقل از knowledge coverage
-- evidence برای مهارت‌های verified
+- evidence برای verified skills
 - یادگیری مجدد مباحث ضعیف
 - version-aware revalidation
-- داشبورد دقیق progress برای هر domain
-- اتصال نتایج بررسی هفتگی به صف یادگیری و verification
+- semantic similarity برای duplicateهای غیر دقیق
+- provenance چندمنبعی بدون تکرار محتوا
+- داشبورد چندبعدی progress
 
 ## 9. معیار موفقیت یادگیری
-
-به‌جای یک عدد ساده مثل `Python = 100%`، وضعیت باید چندبعدی باشد:
 
 - `knowledge_coverage`
 - `concept_score`
@@ -219,14 +186,18 @@ Workflowهای GitHub Actions برای نصب، compile و pytest فعال هس�
 - `last_verified`
 - `evidence`
 
-فرمول مفهومی پروژه:
+فرمول مفهومی:
 
 `Study → Practice → Execute → Test → Fail → Analyze → Fix → Retest → Verify`
 
 ## 10. نکته برای چت‌های آینده
 
-اگر کاربر در چت جدید گفت «ادامه پروژه My-AI» یا مشابه آن، ابتدا این فایل را به‌عنوان وضعیت مرجع بخوان و سپس وضعیت واقعی `main` را با repo مقایسه کن. فرض نکن تغییرات ادعاشده در چت‌های قبلی هنوز روی branch فعلی وجود دارند؛ commitها و فایل‌های فعلی را بررسی کن.
+اگر کاربر در چت جدید گفت «ادامه پروژه My-AI»، ابتدا این فایل و سپس وضعیت واقعی `main` بررسی شود. فرض نشود تغییرات چت‌های قبلی هنوز روی branch وجود دارند.
 
-اگر کاربر گفت «این زبان/موضوع را یاد بگیر»، آن را به‌عنوان یک learning domain مستقل در نظر بگیر؛ اگر domain جدید است آن را به curriculum و progress اضافه کن، نه اینکه progress زبان دیگری را تغییر بدهی.
+اگر کاربر درخواست موضوع جدید کرد، آن موضوع domain مستقل با curriculum beginner تا expert، progress مستقل و review هفتگی داشته باشد.
+
+اگر درباره‌ی حافظه یا duplicate سؤال شد، `my_ai/db.py` و `my_ai/memory.py` بررسی شوند.
+
+اگر درباره‌ی کیفیت پاسخ یا مدل سؤال شد، `my_ai/agent.py`، `my_ai/llm.py` و `my_ai/config.py` بررسی شوند.
 
 این سند باید بعد از هر update مهم، bug fix، تغییر معماری، تغییر curriculum، تغییر وضعیت تست‌ها یا تغییر milestone به‌روزرسانی شود.
