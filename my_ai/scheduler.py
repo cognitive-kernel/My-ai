@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from .learner import LearningEngine
 from .curriculum import LANGUAGE_CURRICULA, LANGUAGE_SOURCES, canonical_language
 from .db import execute, fetch_all
+from .domain_registry import load_saved_domains
 from .dynamic_learning import REVIEW_DAYS, ensure_domain, resolve_learning_target, due_domains, weekly_review
 
 
@@ -22,6 +23,10 @@ class StudyScheduler:
         self.stage = "idle"
         self.error = None
         self._lock = threading.Lock()
+        try:
+            load_saved_domains()
+        except Exception as exc:
+            self.error = str(exc)
         self._monitor_thread = threading.Thread(target=self._review_loop, daemon=True)
         self._monitor_thread.start()
 
@@ -31,8 +36,6 @@ class StudyScheduler:
         if known in LANGUAGE_CURRICULA:
             language = known
         else:
-            # The chat endpoint stores the user's learning request before this
-            # worker starts, allowing arbitrary new subjects to become domains.
             language = resolve_learning_target(self._latest_learning_message(), language)
         language = ensure_domain(language, LearningEngine().llm) or canonical_language(language)
         if self._thread and self._thread.is_alive():
@@ -108,8 +111,6 @@ class StudyScheduler:
         return names.issubset({str(r["topic"]) for r in rows})
 
     def _review_loop(self):
-        # Keep weekly maintenance active even when no learning worker is
-        # running. It only reviews completed domains; it does not start lessons.
         while not self._stop.is_set():
             try:
                 for name in due_domains():
