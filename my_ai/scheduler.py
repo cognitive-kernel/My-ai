@@ -134,8 +134,9 @@ class StudyScheduler:
         engine = LearningEngine()
         while not self._stop.is_set():
             try:
-                language = ensure_domain(language, engine.llm) or language
-                self.language = language
+                if language not in LANGUAGE_CURRICULA:
+                    language = ensure_domain(language, getattr(engine, "llm", None)) or language
+                    self.language = language
                 self.update_progress("starting")
                 self.last_result = engine.learn_next(language, progress_callback=self.update_progress)
                 if self.last_result.get("status") == "completed":
