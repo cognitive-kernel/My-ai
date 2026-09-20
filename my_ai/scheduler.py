@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import threading
-import time
 from datetime import datetime, timedelta, timezone
 
 from .learner import LearningEngine
@@ -16,20 +15,25 @@ class StudyScheduler:
         self.interval_seconds = interval_seconds
         self._stop = threading.Event()
         self._thread = None
-        self._monitor_thread = threading.Thread(target=self._review_loop, daemon=True)
-        self._monitor_thread.start()
+        self._monitor_thread = None
         self.language = "Python"
         self.last_result = None
         self.current_topic = None
         self.stage = "idle"
         self.error = None
         self._lock = threading.Lock()
+        self._monitor_thread = threading.Thread(target=self._review_loop, daemon=True)
+        self._monitor_thread.start()
 
     def start(self, language="Python"):
         language = str(language or "Python").strip() or "Python"
-        # The chat endpoint stores the user's learning request before starting
-        # this worker. Resolve arbitrary new subjects from that request.
-        language = resolve_learning_target(self._latest_learning_message(), language)
+        known = canonical_language(language)
+        if known in LANGUAGE_CURRICULA:
+            language = known
+        else:
+            # The chat endpoint stores the user's learning request before this
+            # worker starts, allowing arbitrary new subjects to become domains.
+            language = resolve_learning_target(self._latest_learning_message(), language)
         language = ensure_domain(language, LearningEngine().llm) or canonical_language(language)
         if self._thread and self._thread.is_alive():
             if self.language == language:
@@ -104,9 +108,8 @@ class StudyScheduler:
         return names.issubset({str(r["topic"]) for r in rows})
 
     def _review_loop(self):
-        # A separate daemon keeps the weekly maintenance active even when no
-        # learning worker is currently running. It never starts a new study
-        # lesson by itself; it only reviews already-completed domains.
+        # Keep weekly maintenance active even when no learning worker is
+        # running. It only reviews completed domains; it does not start lessons.
         while not self._stop.is_set():
             try:
                 for name in due_domains():
@@ -117,7 +120,8 @@ class StudyScheduler:
                     if not self._domain_complete(name):
                         continue
                     self.update_progress("weekly_review", name)
-                    result = weekly_review(name, LearningEngine().web, LearningEngine().llm)
+                    engine = LearningEngine()
+                    result = weekly_review(name, engine.web, engine.llm)
                     if result.get("added"):
                         self.last_result = {"status": "weekly_review", "language": name, **result}
                     self.update_progress("idle")
