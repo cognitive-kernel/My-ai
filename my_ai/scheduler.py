@@ -15,6 +15,7 @@ class StudyScheduler:
     def __init__(self, interval_seconds=3600):
         self.interval_seconds = interval_seconds
         self._stop = threading.Event()
+        self._review_stop = threading.Event()
         self._thread = None
         self._monitor_thread = None
         self.language = "Python"
@@ -38,17 +39,27 @@ class StudyScheduler:
         else:
             language = resolve_learning_target(self._latest_learning_message(), language)
             language = ensure_domain(language, LearningEngine().llm) or canonical_language(language)
+
         if self._thread and self._thread.is_alive():
             if self.language == language:
                 return
-            self._stop.set()
-            self._thread.join(timeout=2.0)
+            old_stop = self._stop
+            old_stop.set()
+            self._thread.join(timeout=5.0)
+
         self.language = language
         self.last_result = None
         self.error = None
         self.stage = "starting"
-        self._stop = threading.Event()
-        self._thread = threading.Thread(target=self._loop, args=(language,), daemon=True)
+        self.current_topic = None
+        worker_stop = threading.Event()
+        self._stop = worker_stop
+        self._thread = threading.Thread(
+            target=self._loop,
+            args=(language, worker_stop),
+            daemon=True,
+            name=f"myai-learning-{language}",
+        )
         self._thread.start()
 
     def stop(self):
@@ -111,10 +122,10 @@ class StudyScheduler:
         return names.issubset({str(r["topic"]) for r in rows})
 
     def _review_loop(self):
-        while not self._stop.is_set():
+        while not self._review_stop.is_set():
             try:
                 for name in due_domains():
-                    if self._stop.is_set():
+                    if self._review_stop.is_set():
                         break
                     if not ensure_domain(name):
                         continue
@@ -128,11 +139,14 @@ class StudyScheduler:
                     self.update_progress("idle")
             except Exception as exc:
                 self.error = str(exc)
-            self._stop.wait(min(self.interval_seconds, 3600))
+            self._review_stop.wait(min(self.interval_seconds, 3600))
 
-    def _loop(self, language):
+    def _loop(self, language, stop_event=None):
+        # Bind the worker to its own immutable stop event. Replacing self._stop
+        # for a new language must never revive or redirect an older worker.
+        stop_event = stop_event or self._stop
         engine = LearningEngine()
-        while not self._stop.is_set():
+        while not stop_event.is_set():
             try:
                 if language not in LANGUAGE_CURRICULA:
                     language = ensure_domain(language, getattr(engine, "llm", None)) or language
@@ -148,10 +162,13 @@ class StudyScheduler:
                     self._schedule_review(language)
                     break
             except Exception as exc:
+                if stop_event.is_set():
+                    break
                 self.error = str(exc)
                 self.last_result = {"status": "error", "error": str(exc)}
                 self.update_progress("error")
             if self.last_result and self.last_result.get("message", "").endswith("complete."):
                 self._schedule_review(language)
                 break
-            self._stop.wait(self.interval_seconds)
+            if stop_event.wait(self.interval_seconds):
+                break
