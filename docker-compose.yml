@@ -5,12 +5,33 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - ./data:/app/data
-      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       HOST: 0.0.0.0
       PORT: 8000
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       OLLAMA_MODEL: qwen2.5:7b
+      EXECUTOR_MODE: remote
+      EXECUTOR_SERVICE_URL: http://executor:9000
+      EXECUTOR_SHARED_TOKEN: ${EXECUTOR_SHARED_TOKEN:?set EXECUTOR_SHARED_TOKEN}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      - executor
+    restart: unless-stopped
+
+  executor:
+    build: .
+    command: ["uvicorn","my_ai.executor_service:app","--host","0.0.0.0","--port","9000"]
+    expose:
+      - "9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      EXECUTOR_SHARED_TOKEN: ${EXECUTOR_SHARED_TOKEN:?set EXECUTOR_SHARED_TOKEN}
+      EXECUTOR_IMAGE: python:3.11-slim
+      EXEC_TIMEOUT: 10
+      EXEC_MEMORY: 256m
+      EXEC_CPUS: 1.0
+      EXEC_PIDS: 64
+      EXEC_OUTPUT_CHARS: 12000
     restart: unless-stopped
