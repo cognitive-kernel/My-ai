@@ -1,5 +1,6 @@
 from __future__ import annotations
 from contextlib import asynccontextmanager
+import os
 import re
 from fastapi import FastAPI,HTTPException,Request
 from fastapi.responses import HTMLResponse,JSONResponse,RedirectResponse,StreamingResponse
@@ -31,34 +32,31 @@ async def lifespan(_):
 app=FastAPI(title="My-AI",version="0.2.0",description="Local-first personal learning and coding agent.",lifespan=lifespan)
 
 _PUBLIC_PATHS = {"/", "/login", "/register", "/auth/register", "/auth/login", "/auth/logout", "/health", "/openapi.json", "/docs", "/redoc"}
+_TOOL_RULES = (("/git/","github"),("/security/","security"),("/code/run","code-execution"),("/scheduler/","scheduler"),("/learning/","learning"),("/backup/","database"),("/voice/","voice"),("/skills","skill-engine"),("/models/","models"),("/memory/search","memory"),("/web/","web"),("/projects/","projects"),("/eval/","eval"),("/self-update/","self-update"))
+_LOGIN_FAILURES = {}
+
 
 @app.middleware("http")
 async def auth_and_audit_middleware(request: Request, call_next):
-    path = request.url.path
-    user = current_user(request)
+    path=request.url.path
+    user=current_user(request)
     if path not in _PUBLIC_PATHS and not path.startswith("/docs/") and not user:
-        if request.headers.get("accept","").lower().find("application/json") >= 0:
-            return JSONResponse({"detail":"Authentication required."}, status_code=401)
-        return RedirectResponse("/login", status_code=303)
+        if "application/json" in request.headers.get("accept","").lower():
+            return JSONResponse({"detail":"Authentication required."},status_code=401)
+        return RedirectResponse("/login",status_code=303)
     if user and user["role"] != "admin":
-        tool_rules = (
-            ("/git/", "github", "write" if request.method in {"POST","PUT","PATCH","DELETE"} else "read"),
-            ("/security/", "security", "execute"),
-            ("/code/run", "code-execution", "execute"),
-            ("/scheduler/", "scheduler", "execute"),
-            ("/learning/", "learning", "execute"),
-            ("/backup/", "database", "write"),
-        )
-        for prefix, tool_name, action in tool_rules:
-            if path.startswith(prefix) or path == prefix:
-                if not tool_allowed(user, tool_name, action):
-                    return JSONResponse({"detail":f"Tool permission denied: {tool_name}:{action}"}, status_code=403)
+        for prefix,tool in _TOOL_RULES:
+            if path.startswith(prefix) or path == prefix.rstrip("/"):
+                action="read" if request.method=="GET" else "write" if request.method in {"PUT","PATCH","DELETE"} else "execute"
+                if not tool_allowed(user,tool,action) and not tool_allowed(user,tool,"execute"):
+                    return JSONResponse({"detail":f"Tool permission denied: {tool}:{action}"},status_code=403)
                 break
-    response = await call_next(request)
-    if user and path != "/auth/logout":
-        action = {"GET":"read","POST":"execute","PUT":"write","PATCH":"write","DELETE":"write"}.get(request.method, request.method.lower())
-        audit(user, path, action, str(response.status_code))
+    response=await call_next(request)
+    if user and path!="/auth/logout":
+        action={"GET":"read","POST":"execute","PUT":"write","PATCH":"write","DELETE":"write"}.get(request.method,request.method.lower())
+        audit(user,path,action,str(response.status_code))
     return response
+
 agent=Agent(); learner=LearningEngine()
 class ChatRequest(BaseModel): message:str; session_id:int|None=None
 class AuthRegisterRequest(BaseModel): username:str; password:str; display_name:str=""
@@ -95,7 +93,7 @@ def home(request: Request):
     )
 
 LOGIN_HTML="""<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>ورود | My-AI</title><style>body{font-family:Tahoma;background:#f3f4f6;margin:0}.box{max-width:420px;margin:10vh auto;background:#fff;padding:28px;border-radius:16px}input,button{width:100%;box-sizing:border-box;padding:12px;margin:7px 0;border-radius:9px;border:1px solid #ccc}button{cursor:pointer;background:#111827;color:#fff}.err{color:#b91c1c}</style><div class='box'><h1>ورود به My-AI</h1><input id='u' placeholder='نام کاربری'><input id='p' type='password' placeholder='رمز عبور'><button onclick='login()'>ورود</button><p id='e' class='err'></p><a href='/register'>ساخت اولین حساب</a></div><script>async function login(){e.textContent='';let r=await fetch('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u.value,password:p.value})});let j=await r.json();if(!r.ok){e.textContent=j.detail||'خطا';return}location.href='/'}</script>"""
-REGISTER_HTML="""<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>ساخت حساب | My-AI</title><style>body{font-family:Tahoma;background:#f3f4f6;margin:0}.box{max-width:420px;margin:10vh auto;background:#fff;padding:28px;border-radius:16px}input,button{width:100%;box-sizing:border-box;padding:12px;margin:7px 0;border-radius:9px;border:1px solid #ccc}button{cursor:pointer;background:#111827;color:#fff}.err{color:#b91c1c}.note{background:#ecfdf5;padding:10px;border-radius:8px}</style><div class='box'><h1>ساخت حساب My-AI</h1><p class='note'>اگر هنوز هیچ حسابی ساخته نشده باشد، این حساب به‌صورت خودکار <b>ادمین اصلی</b> می‌شود و به همه ابزارها دسترسی خواهد داشت.</p><input id='n' placeholder='نام نمایشی'><input id='u' placeholder='نام کاربری'><input id='p' type='password' placeholder='رمز عبور (حداقل ۱۰ کاراکتر)'><button onclick='reg()'>ساخت حساب</button><p id='e' class='err'></p><a href='/login'>بازگشت به ورود</a></div><script>async function reg(){e.textContent='';let r=await fetch('/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u.value,password:p.value,display_name:n.value})});let j=await r.json();if(!r.ok){e.textContent=j.detail||'خطا';return}document.cookie='myai_session='+encodeURIComponent(j.token)+'; Path=/; Max-Age=86400; SameSite=Strict';location.href='/'}</script>"""
+REGISTER_HTML="""<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>ساخت حساب | My-AI</title><style>body{font-family:Tahoma;background:#f3f4f6;margin:0}.box{max-width:420px;margin:10vh auto;background:#fff;padding:28px;border-radius:16px}input,button{width:100%;box-sizing:border-box;padding:12px;margin:7px 0;border-radius:9px;border:1px solid #ccc}button{cursor:pointer;background:#111827;color:#fff}.err{color:#b91c1c}.note{background:#ecfdf5;padding:10px;border-radius:8px}</style><div class='box'><h1>ساخت حساب My-AI</h1><p class='note'>اگر هنوز هیچ حسابی ساخته نشده باشد، این حساب به‌صورت خودکار <b>ادمین اصلی</b> می‌شود و به همه ابزارها دسترسی خواهد داشت.</p><input id='n' placeholder='نام نمایشی'><input id='u' placeholder='نام کاربری'><input id='p' type='password' placeholder='رمز عبور (حداقل ۱۰ کاراکتر)'><button onclick='reg()'>ساخت حساب</button><p id='e' class='err'></p><a href='/login'>بازگشت به ورود</a></div><script>async function reg(){e.textContent='';let r=await fetch('/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u.value,password:p.value,display_name:n.value})});let j=await r.json();if(!r.ok){e.textContent=j.detail||'خطا';return}location.href='/'}</script>"""
 
 KNOWLEDGE_ADMIN_HTML="""<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>مدیریت دانش | My-AI</title><style>body{font-family:Tahoma;background:#f3f4f6;margin:0}.wrap{max-width:1100px;margin:30px auto;padding:20px}.card{background:#fff;padding:18px;border-radius:12px;margin:10px 0}textarea,input{width:100%;box-sizing:border-box;padding:9px;margin:5px 0}button{padding:8px 12px;margin:3px}.u{background:#fef3c7}.v{background:#dcfce7}</style><div class='wrap'><h1>مدیریت دانش</h1><p>دانش جدید تا زمان تأیید، «تأییدنشده» است.</p><div id='list'>در حال بارگذاری...</div></div><script>
 async function load(){let r=await fetch('/memory/knowledge?limit=200'),j=await r.json();if(!r.ok){list.textContent=j.detail||'خطا';return}list.innerHTML=(j.items||[]).map(x=>'<div class="card '+(x.verification_status==='verified'?'v':'u')+'"><b>'+esc(x.title)+'</b><div>'+esc(x.topic)+' | '+esc(x.verification_status)+'</div><input id="t'+x.id+'" value="'+esc(x.title)+'"><textarea id="c'+x.id+'">'+esc(x.content)+'</textarea><input id="s'+x.id+'" value="'+esc(x.source_url||'')+'"><button onclick="save('+x.id+')">ذخیره</button><button onclick="verify('+x.id+')">تأیید</button><button onclick="del('+x.id+')">حذف</button></div>').join('')||'دانشی ثبت نشده است'}function esc(v){return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}async function save(id){let r=await fetch('/memory/knowledge/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:document.getElementById('t'+id).value,content:document.getElementById('c'+id).value,topic:'manual',source_url:document.getElementById('s'+id).value||null})});if(!r.ok)alert((await r.json()).detail||'خطا');load()}async function verify(id){let r=await fetch('/memory/knowledge/'+id+'/verify',{method:'POST'});if(!r.ok)alert((await r.json()).detail||'خطا');load()}async function del(id){if(!confirm('حذف شود؟'))return;let r=await fetch('/memory/knowledge/'+id,{method:'DELETE'});if(!r.ok)alert((await r.json()).detail||'خطا');load()}load()</script>"""
@@ -113,22 +111,38 @@ def register_page(): return HTMLResponse(REGISTER_HTML)
 
 @app.post("/auth/register")
 def auth_register(r: AuthRegisterRequest):
+    from .auth import has_users
+    if has_users(): raise HTTPException(403,"Registration is closed after the first account. An administrator must create additional users.")
     try:
         user=create_account(r.username,r.password,r.display_name)
-        return {"user":user,"token":create_session(int(user["id"]))}
     except ValueError as exc: raise HTTPException(400,str(exc))
+    response=JSONResponse({"user":user})
+    response.set_cookie("myai_session",create_session(int(user["id"])),httponly=True,samesite="strict",max_age=86400,path="/")
+    return response
 
 @app.post("/auth/login")
 def auth_login(r: AuthLoginRequest):
+    key=r.username.strip().lower()
+    import time
+    count,started=_LOGIN_FAILURES.get(key,(0,time.time()))
+    if time.time()-started>300: count,started=0,time.time()
+    if count>=5: raise HTTPException(429,"Too many failed login attempts. Try again later.")
     user=authenticate(r.username,r.password)
-    if not user: raise HTTPException(401,"نام کاربری یا رمز عبور نادرست است.")
-    return {"user":user,"token":create_session(int(user["id"]))}
+    if not user:
+        _LOGIN_FAILURES[key]=(count+1,started)
+        raise HTTPException(401,"نام کاربری یا رمز عبور نادرست است.")
+    _LOGIN_FAILURES.pop(key,None)
+    response=JSONResponse({"user":user})
+    response.set_cookie("myai_session",create_session(int(user["id"])),httponly=True,samesite="strict",max_age=86400,path="/")
+    return response
 
 @app.post("/auth/logout")
 def auth_logout(request: Request):
     token=request.cookies.get("myai_session")
     if token: revoke_session(token)
-    return {"ok":True}
+    response=JSONResponse({"ok":True})
+    response.delete_cookie("myai_session",path="/")
+    return response
 
 @app.get("/auth/me")
 def auth_me(request: Request): return {"user":require_user(request)}
