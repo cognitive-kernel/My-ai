@@ -92,7 +92,7 @@ def _normalize_search_text(value: str) -> str:
     return " ".join(str(value).replace("ي","ی").replace("ى","ی").replace("ك","ک").replace("\u200c"," ").replace("\u200d"," ").replace("\u0640","").split()).casefold()
 
 def _knowledge_hash(topic: str, content: str) -> str:
-    normalized = _normalize_search_text(content)
+    normalized = _normalize_search_text(f"{topic}\n{content}")
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 def _deduplicate_knowledge(conn: sqlite3.Connection) -> None:
@@ -135,17 +135,22 @@ def init_db() -> None:
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_content_hash ON knowledge(content_hash)")
         conn.executescript("""
         CREATE TRIGGER IF NOT EXISTS knowledge_ai AFTER INSERT ON knowledge BEGIN
-          INSERT INTO knowledge_fts(rowid,title,content,topic,source_url) VALUES(new.id,new.title,new.content,new.topic,new.source_url);
+          INSERT INTO knowledge_fts(rowid,title,content,topic,source_url) VALUES(new.id,_normalize_search_text(new.title),_normalize_search_text(new.content),_normalize_search_text(new.topic),_normalize_search_text(new.source_url));
         END;
         CREATE TRIGGER IF NOT EXISTS knowledge_ad AFTER DELETE ON knowledge BEGIN
           INSERT INTO knowledge_fts(knowledge_fts,rowid,title,content,topic,source_url) VALUES('delete',old.id,old.title,old.content,old.topic,old.source_url);
         END;
         CREATE TRIGGER IF NOT EXISTS knowledge_au AFTER UPDATE ON knowledge BEGIN
           INSERT INTO knowledge_fts(knowledge_fts,rowid,title,content,topic,source_url) VALUES('delete',old.id,old.title,old.content,old.topic,old.source_url);
-          INSERT INTO knowledge_fts(rowid,title,content,topic,source_url) VALUES(new.id,new.title,new.content,new.topic,new.source_url);
+          INSERT INTO knowledge_fts(rowid,title,content,topic,source_url) VALUES(new.id,_normalize_search_text(new.title),_normalize_search_text(new.content),_normalize_search_text(new.topic),_normalize_search_text(new.source_url));
         END;
         """)
-        conn.execute("INSERT INTO knowledge_fts(knowledge_fts) VALUES('rebuild')")
+        conn.execute("INSERT INTO knowledge_fts(knowledge_fts) VALUES('delete-all')")
+        for row in conn.execute("SELECT id,title,content,topic,source_url FROM knowledge").fetchall():
+            conn.execute(
+                "INSERT INTO knowledge_fts(rowid,title,content,topic,source_url) VALUES(?,?,?,?,?)",
+                (row["id"], _normalize_search_text(row["title"]), _normalize_search_text(row["content"]), _normalize_search_text(row["topic"]), _normalize_search_text(row["source_url"] or "")),
+            )
 
 def execute(sql: str, params: tuple[Any, ...] = ()) -> int:
     with connect() as conn:
@@ -171,7 +176,8 @@ def remember_knowledge(topic: str, title: str, content: str, source_url: str | N
         return int(cur.lastrowid or 0)
 
 def search_knowledge(query: str, limit: int = 8) -> list[dict[str, Any]]:
-    tokens = [t for t in query.replace('"', " ").split() if t.isalnum()][:12]
+    normalized_query = _normalize_search_text(query)
+    tokens = [t for t in normalized_query.replace('"', " ").split() if t][:12]
     if not tokens: return []
     match = " ".join(f'"{t}"' for t in tokens)
     return fetch_all(
