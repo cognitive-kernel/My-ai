@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os, subprocess, sys, tempfile, uuid
+import httpx
 from dataclasses import dataclass
 from pathlib import Path
 from .config import settings
@@ -26,8 +27,26 @@ def _run_container(code:str)->ExecutionResult:
         except subprocess.TimeoutExpired:
             subprocess.run(["docker","rm","-f",name],capture_output=True,text=True,timeout=5)
             return ExecutionResult("","Execution timed out; container was terminated.",True,-1,"container")
+def _run_remote(code:str)->ExecutionResult:
+    token=os.getenv("EXECUTOR_SHARED_TOKEN","")
+    if not token:
+        raise RuntimeError("EXECUTOR_SHARED_TOKEN is required for remote execution.")
+    try:
+        r=httpx.post(
+            os.getenv("EXECUTOR_SERVICE_URL","http://executor:9000/run"),
+            json={"code":code},
+            headers={"Authorization":f"Bearer {token}"},
+            timeout=settings.exec_timeout+5,
+        )
+        r.raise_for_status()
+        data=r.json()
+        return ExecutionResult(str(data.get("output","")),str(data.get("error","")),bool(data.get("timed_out",False)),int(data.get("return_code",2)),"remote-container")
+    except httpx.HTTPError as exc:
+        raise RuntimeError(f"Remote executor unavailable: {exc}") from exc
+
 def run_python(code:str)->ExecutionResult:
     if not isinstance(code,str) or not code.strip(): return ExecutionResult("","No Python code supplied.",False,2,settings.exec_mode)
+    if settings.exec_mode=="remote": return _run_remote(code)
     if settings.exec_mode=="container": return _run_container(code)
     if settings.exec_mode=="subprocess": return _run_subprocess(code)
     raise ValueError("EXECUTOR_MODE must be 'container' or 'subprocess'.")
