@@ -73,6 +73,7 @@ def authenticate(username: str, password: str) -> dict[str, Any] | None:
 
 
 def create_session(user_id: int) -> str:
+    execute("DELETE FROM auth_sessions WHERE expires_at <= ?", (datetime.now(timezone.utc).isoformat(),))
     token = secrets.token_urlsafe(48)
     expires = (datetime.now(timezone.utc) + timedelta(hours=SESSION_TTL_HOURS)).isoformat()
     execute("INSERT INTO auth_sessions(token,user_id,expires_at) VALUES(?,?,?)", (token, user_id, expires))
