@@ -171,23 +171,14 @@ class LocalDAST:
         return result
 
     def _run(self,root:Path):
-        port=self._free_port(); command,base=self._detect_command(root,port)
-        process=subprocess.Popen(command,cwd=str(root),env=os.environ.copy(),stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
-        try:
-            if not self._wait_ready(base):
-                output=""
-                try: output=process.stdout.read(4000) if process.stdout else ""
-                except Exception: pass
-                return {"status":"runtime_failed","command":command,"output":output}
-            endpoints=self._discover_endpoints(root); findings=self._checks(base,endpoints)
-            result={"status":"completed","target":base,"runtime":command,"endpoints":endpoints,"findings":findings,"summary":self._summary(findings),"fixed":False}
-            execute("INSERT INTO security_scans(project_path,status,summary,findings) VALUES(?,?,?,?)",(str(root),"dast_completed",json.dumps(result["summary"],ensure_ascii=False),json.dumps(findings,ensure_ascii=False)))
-            return result
-        finally:
-            try: process.terminate(); process.wait(timeout=3)
-            except Exception:
-                try: process.kill()
-                except Exception: pass
+        # Never execute untrusted project code on the My-AI host. Local runtime DAST
+        # requires an explicit sandbox image and Docker; the container gets no network
+        # and a minimal, sanitized environment.
+        image=os.getenv("MYAI_DAST_SANDBOX_IMAGE","").strip()
+        if not image:
+            return {"status":"sandbox_required","findings":[],"summary":self._summary([]),
+                    "message":"Local DAST execution is disabled on the host. Configure MYAI_DAST_SANDBOX_IMAGE to an approved sandbox image."}
+        raise RuntimeError("Sandbox image execution is intentionally disabled until the approved container contract is implemented.")
 
     def scan_path(self,project_path:str):
         root=Path(project_path).expanduser().resolve()
