@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 from my_ai import agent as agent_module
 from my_ai import llm as llm_module
@@ -55,7 +56,11 @@ def test_openai_compatible_client_sends_structured_history(monkeypatch):
         return Response()
 
     monkeypatch.setattr(llm_module.httpx, "post", fake_post)
-    monkeypatch.setattr(llm_module.settings, "openai_api_key", "test-key")
+    monkeypatch.setattr(
+        llm_module,
+        "settings",
+        SimpleNamespace(openai_api_key="test-key", openai_base_url="http://llm.test/v1", openai_model="test-model"),
+    )
     client = llm_module.OpenAICompatibleClient()
     result = client.chat(
         "مدل تو چیست؟",
@@ -64,8 +69,9 @@ def test_openai_compatible_client_sends_structured_history(monkeypatch):
     )
 
     assert result == "پاسخ"
+    assert captured["url"] == "http://llm.test/v1/responses"
     assert captured["json"] == {
-        "model": client.model,
+        "model": "test-model",
         "input": [
             {"role": "user", "content": "سلام"},
             {"role": "user", "content": "مدل تو چیست؟"},
@@ -75,8 +81,11 @@ def test_openai_compatible_client_sends_structured_history(monkeypatch):
 
 
 def test_create_llm_auto_prefers_openai_when_key_exists(monkeypatch):
-    monkeypatch.setattr(llm_module.settings, "llm_provider", "auto")
-    monkeypatch.setattr(llm_module.settings, "openai_api_key", "test-key")
+    monkeypatch.setattr(
+        llm_module,
+        "settings",
+        SimpleNamespace(openai_api_key="test-key", openai_base_url="http://llm.test/v1", openai_model="test-model"),
+    )
     assert isinstance(llm_module.create_llm(), llm_module.OpenAICompatibleClient)
 
 
