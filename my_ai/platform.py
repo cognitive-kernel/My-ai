@@ -45,27 +45,31 @@ def hybrid_search(query: str, limit: int = 8) -> list[dict[str, Any]]:
     tokens = [t for t in normalized.replace('"', ' ').split() if t][:12]
     match = " ".join(f'"{t}"' for t in tokens) if tokens else '""'
     lexical = fetch_all(
-        """SELECT k.*, bm25(knowledge_fts) AS fts_rank
+        """SELECT k.id, bm25(knowledge_fts) AS fts_rank
            FROM knowledge_fts JOIN knowledge k ON k.id=knowledge_fts.rowid
-           WHERE knowledge_fts MATCH ? ORDER BY fts_rank LIMIT ?""",
-        (match, max(limit * 4, 20)),
+           WHERE knowledge_fts MATCH ? ORDER BY fts_rank""",
+        (match,),
     ) if tokens else []
-    all_rows = fetch_all("SELECT * FROM knowledge ORDER BY id DESC LIMIT 200")
-    by_id = {int(row["id"]): row for row in all_rows}
-    for row in lexical:
-        by_id[int(row["id"])] = row
+    lexical_scores = {}
+    if lexical:
+        ranks = [float(r["fts_rank"]) for r in lexical]
+        best, worst = min(ranks), max(ranks)
+        span = worst - best
+        lexical_scores = {
+            int(r["id"]): (1.0 if span == 0 else (worst - float(r["fts_rank"])) / span)
+            for r in lexical
+        }
+    rows = fetch_all("SELECT * FROM knowledge ORDER BY id DESC")
     try:
         qvec = ollama_embed(normalized)
     except Exception:
         qvec = []
-    max_fts = max((abs(float(r.get("fts_rank") or 0.0)) for r in lexical), default=1.0)
-    lexical_scores = {int(r["id"]): 1.0 - min(1.0, abs(float(r.get("fts_rank") or 0.0)) / max_fts) for r in lexical}
-    for row in by_id.values():
+    for row in rows:
         semantic = 0.0
         if qvec:
             try:
                 semantic = max(0.0, min(1.0, cosine_similarity(qvec, ollama_embed(
-                    f"{row.get('title','')}\n{row.get('content','')}\n{row.get('topic','')}"
+                    f'{row.get("title","")}\\n{row.get("content","")}\\n{row.get("topic","")}'
                 ))))
             except Exception:
                 semantic = 0.0
@@ -73,9 +77,9 @@ def hybrid_search(query: str, limit: int = 8) -> list[dict[str, Any]]:
         row["semantic_score"] = round(semantic, 6)
         row["lexical_score"] = round(lexical_score, 6)
         row["hybrid_score"] = round(0.65 * semantic + 0.35 * lexical_score, 6)
-        row["confidence"] = round(0.65 * semantic + 0.35 * lexical_score, 3)
-    rows = sorted(by_id.values(), key=lambda x: x["hybrid_score"], reverse=True)
-    return rows[:limit]
+        row["relevance"] = row["hybrid_score"]
+        row["confidence"] = None
+    return sorted(rows, key=lambda x: x["hybrid_score"], reverse=True)[:limit]
 
 
 def model_health() -> dict[str, Any]:
