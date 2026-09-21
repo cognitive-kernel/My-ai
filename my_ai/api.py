@@ -25,6 +25,7 @@ scheduler=StudyScheduler()
 @asynccontextmanager
 async def lifespan(_):
     init_db()
+    scheduler.start_review_monitor()
     active=fetch_all("SELECT language FROM learning_sessions WHERE status='started' ORDER BY id DESC LIMIT 1")
     if active: scheduler.start(active[0]["language"])
     yield
