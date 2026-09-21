@@ -16,6 +16,7 @@ from .ui import page
 from .help import page as help_page, ask_help, local_help_html, apply_help_update
 from .git_connector import GitHubConnector
 from .auth import authenticate, audit, create_account, create_session, current_user, require_admin, revoke_session, require_user
+from .platform import backup_database, choose_model, eval_retrieval, export_database, hybrid_search, import_database, model_health, resource_status, self_update_apply, self_update_status, voice_status, web_fetch_policy
 
 scheduler=StudyScheduler()
 @asynccontextmanager
@@ -46,6 +47,10 @@ agent=Agent(); learner=LearningEngine()
 class ChatRequest(BaseModel): message:str; session_id:int|None=None
 class AuthRegisterRequest(BaseModel): username:str; password:str; display_name:str=""
 class AuthLoginRequest(BaseModel): username:str; password:str
+class KnowledgeUpdateRequest(BaseModel): title:str; content:str; topic:str; source_url:str|None=None
+class BackupRequest(BaseModel): path:str
+class ImportRequest(BaseModel): path:str
+class PermissionRequest(BaseModel): user_id:int; tool_name:str; action:str; allowed:bool
 class URLRequest(BaseModel): url:HttpUrl; topic:str="Python"
 class ProjectRequest(BaseModel): goal:str
 class CodeRequest(BaseModel): code:str
@@ -109,6 +114,115 @@ def admin_audit(request: Request, limit: int=200):
 def admin_tools(request: Request):
     require_admin(request)
     return {"items":fetch_all("SELECT * FROM tool_permissions ORDER BY user_id,tool_name,action")}
+
+
+@app.get("/memory/knowledge")
+def knowledge_list(request: Request, status: str | None = None, limit: int = 200):
+    require_user(request)
+    limit=max(1,min(limit,1000))
+    if status:
+        return {"items":fetch_all("SELECT * FROM knowledge WHERE verification_status=? ORDER BY id DESC LIMIT ?",(status,limit))}
+    return {"items":fetch_all("SELECT * FROM knowledge ORDER BY id DESC LIMIT ?",(limit,))}
+
+@app.put("/memory/knowledge/{knowledge_id}")
+def knowledge_update(knowledge_id:int, r:KnowledgeUpdateRequest, request:Request):
+    user=require_admin(request)
+    if not fetch_all("SELECT id FROM knowledge WHERE id=?",(knowledge_id,)): raise HTTPException(404,"Knowledge item not found.")
+    execute("UPDATE knowledge SET title=?,content=?,topic=?,source_url=?,verification_status='unverified',verified_at=NULL,verified_by=NULL WHERE id=?",(r.title,r.content,r.topic,r.source_url,knowledge_id))
+    audit(user,"knowledge","write","200",f"updated:{knowledge_id}")
+    return {"updated":knowledge_id,"verification_status":"unverified"}
+
+@app.delete("/memory/knowledge/{knowledge_id}")
+def knowledge_delete(knowledge_id:int, request:Request):
+    user=require_admin(request)
+    execute("DELETE FROM knowledge WHERE id=?",(knowledge_id,))
+    audit(user,"knowledge","delete","200",f"deleted:{knowledge_id}")
+    return {"deleted":knowledge_id}
+
+@app.post("/memory/knowledge/{knowledge_id}/verify")
+def knowledge_verify(knowledge_id:int, request:Request):
+    user=require_admin(request)
+    if not fetch_all("SELECT id FROM knowledge WHERE id=?",(knowledge_id,)): raise HTTPException(404,"Knowledge item not found.")
+    execute("UPDATE knowledge SET verification_status='verified',verified_at=CURRENT_TIMESTAMP,verified_by=? WHERE id=?",(user["id"],knowledge_id))
+    audit(user,"knowledge","verify","200",f"verified:{knowledge_id}")
+    return {"verified":knowledge_id}
+
+@app.get("/memory/search/hybrid")
+def memory_hybrid(q:str, request:Request, limit:int=8):
+    require_user(request)
+    return {"query":q,"items":hybrid_search(q,limit)}
+
+@app.get("/models/health")
+def models_health(request:Request):
+    require_user(request)
+    return model_health()
+
+@app.get("/models/select")
+def models_select(task:str, request:Request):
+    require_user(request)
+    return {"model":choose_model(task)}
+
+@app.get("/voice/status")
+def voice_status_api(request:Request):
+    require_user(request)
+    return voice_status()
+
+@app.get("/scheduler/resources")
+def scheduler_resources(request:Request):
+    require_user(request)
+    return resource_status()
+
+@app.get("/web/fetch-policy")
+def web_policy(url:str, request:Request):
+    require_user(request)
+    return web_fetch_policy(url)
+
+@app.post("/backup/database")
+def backup_db(r:BackupRequest, request:Request):
+    user=require_admin(request)
+    path=backup_database(r.path)
+    audit(user,"database","backup","200",path)
+    return {"path":path}
+
+@app.post("/backup/export")
+def backup_export(r:BackupRequest, request:Request):
+    user=require_admin(request)
+    path=export_database(r.path)
+    audit(user,"database","export","200",path)
+    return {"path":path}
+
+@app.post("/backup/import")
+def backup_import(r:ImportRequest, request:Request):
+    user=require_admin(request)
+    result=import_database(r.path)
+    audit(user,"database","import","200",r.path)
+    return {"imported":result}
+
+@app.get("/eval/retrieval")
+def eval_retrieval_api(request:Request):
+    require_admin(request)
+    return eval_retrieval()
+
+@app.get("/self-update/status")
+def self_update_status_api(request:Request):
+    require_admin(request)
+    return self_update_status()
+
+@app.post("/self-update/apply")
+def self_update_apply_api(r:ChatRequest, request:Request):
+    user=require_admin(request)
+    result=self_update_apply(r.message)
+    audit(user,"self-update","write","blocked",result.get("reason",""))
+    return result
+
+@app.put("/admin/tools")
+def set_tool_permission(r:PermissionRequest, request:Request):
+    user=require_admin(request)
+    execute("""INSERT INTO tool_permissions(user_id,tool_name,action,allowed) VALUES(?,?,?,?)
+              ON CONFLICT(user_id,tool_name,action) DO UPDATE SET allowed=excluded.allowed,updated_at=CURRENT_TIMESTAMP""",
+            (r.user_id,r.tool_name,r.action,1 if r.allowed else 0))
+    audit(user,"tool-permissions","write","200",f"{r.user_id}:{r.tool_name}:{r.action}:{r.allowed}")
+    return {"ok":True}
 
 @app.get("/help",response_class=HTMLResponse)
 def help(): return help_page()
