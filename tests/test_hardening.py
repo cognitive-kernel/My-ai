@@ -28,7 +28,7 @@ def test_registration_closes_and_login_link_disappears(client_db):
     assert first.status_code == 200
     assert first.json()["user"]["role"] == "admin"
     assert client.get("/auth/register/status").json()["open"] is False
-    assert client.get("/register").status_code == 303
+    assert client.get("/register", follow_redirects=False).status_code == 303
     login = client.get("/login")
     assert "register-link" in login.text
 
