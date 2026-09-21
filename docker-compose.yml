@@ -11,7 +11,7 @@ services:
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       OLLAMA_MODEL: qwen2.5:7b
       EXECUTOR_MODE: remote
-      EXECUTOR_SERVICE_URL: http://executor:9000
+      EXECUTOR_SERVICE_URL: http://executor:9000/run
       EXECUTOR_SHARED_TOKEN: ${EXECUTOR_SHARED_TOKEN:?set EXECUTOR_SHARED_TOKEN}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -26,6 +26,8 @@ services:
       - "9000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    group_add:
+      - "${DOCKER_GID:-999}"
     environment:
       EXECUTOR_SHARED_TOKEN: ${EXECUTOR_SHARED_TOKEN:?set EXECUTOR_SHARED_TOKEN}
       EXECUTOR_IMAGE: python:3.11-slim
