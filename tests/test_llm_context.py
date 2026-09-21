@@ -109,9 +109,10 @@ def test_agent_passes_real_history_and_retrieved_knowledge(monkeypatch):
             captured["history"] = history
             return "پاسخ درست"
 
+    # Agent queries the database newest-first, then restores chronological order.
     monkeypatch.setattr(agent_module, "fetch_all", lambda *args: [
-        {"role": "user", "content": "سلام"},
         {"role": "assistant", "content": "قبلی"},
+        {"role": "user", "content": "سلام"},
     ])
     monkeypatch.setattr(agent_module, "recall", lambda *args: [{"title": "Python", "content": "knowledge"}])
     monkeypatch.setattr(agent_module, "execute", lambda *args: None)
