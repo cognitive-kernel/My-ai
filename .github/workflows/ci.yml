@@ -21,3 +21,4 @@ jobs:
       - run: pip-audit
       - run: pytest -q
       - run: docker build -t my-ai-ci .
+      - run: EXECUTOR_SHARED_TOKEN=ci-test-token docker compose config
