@@ -17,6 +17,7 @@ from .help import page as help_page, ask_help, local_help_html, apply_help_updat
 from .git_connector import GitHubConnector
 from .auth import authenticate, audit, create_account, create_session, current_user, require_admin, revoke_session, require_user
 from .platform import backup_database, choose_model, eval_retrieval, export_database, hybrid_search, import_database, model_health, resource_status, self_update_apply, self_update_status, voice_status, web_fetch_policy
+from .skill_engine import ensure_skill, record_evidence, revalidate, snapshot
 
 scheduler=StudyScheduler()
 @asynccontextmanager
@@ -51,6 +52,8 @@ class KnowledgeUpdateRequest(BaseModel): title:str; content:str; topic:str; sour
 class BackupRequest(BaseModel): path:str
 class ImportRequest(BaseModel): path:str
 class PermissionRequest(BaseModel): user_id:int; tool_name:str; action:str; allowed:bool
+class SkillEvidenceRequest(BaseModel): skill_id:int; kind:str; passed:bool; details:dict[str,object]={}
+class SkillRevalidateRequest(BaseModel): skill_id:int; version:str
 class URLRequest(BaseModel): url:HttpUrl; topic:str="Python"
 class ProjectRequest(BaseModel): goal:str
 class CodeRequest(BaseModel): code:str
@@ -223,6 +226,31 @@ def set_tool_permission(r:PermissionRequest, request:Request):
             (r.user_id,r.tool_name,r.action,1 if r.allowed else 0))
     audit(user,"tool-permissions","write","200",f"{r.user_id}:{r.tool_name}:{r.action}:{r.allowed}")
     return {"ok":True}
+
+
+@app.get("/skills")
+def skills_list(request:Request):
+    require_user(request)
+    return {"items":snapshot()}
+
+@app.post("/skills")
+def skills_create(name:str, request:Request, version:str="current"):
+    require_user(request)
+    return {"id":ensure_skill(name,version),"name":name,"version":version}
+
+@app.post("/skills/evidence")
+def skills_evidence(r:SkillEvidenceRequest, request:Request):
+    user=require_user(request)
+    eid=record_evidence(r.skill_id,r.kind,r.passed,r.details)
+    audit(user,"skill-engine","execute","200",f"evidence:{r.skill_id}")
+    return {"evidence_id":eid}
+
+@app.post("/skills/revalidate")
+def skills_revalidate(r:SkillRevalidateRequest, request:Request):
+    user=require_user(request)
+    result=revalidate(r.skill_id,r.version)
+    audit(user,"skill-engine","execute","200",f"revalidate:{r.skill_id}")
+    return result
 
 @app.get("/help",response_class=HTMLResponse)
 def help(): return help_page()
