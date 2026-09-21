@@ -18,8 +18,8 @@ HistoryMessage = dict[str, str]
 
 class OllamaClient:
     def __init__(self) -> None:
-        self.base_url = settings.ollama_base_url.rstrip("/")
-        self.model = settings.ollama_model
+        self.base_url = getattr(settings, "ollama_base_url", "http://127.0.0.1:11434").rstrip("/")
+        self.model = getattr(settings, "ollama_model", "qwen2.5:7b")
 
     def stream_chat(
         self,
