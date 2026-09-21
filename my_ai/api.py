@@ -176,6 +176,8 @@ def auth_login(r: AuthLoginRequest, request: Request):
     key=_login_key(request,r.username)
     count,started=_LOGIN_FAILURES.get(key,(0,now))
     if now-started>_LOGIN_FAILURE_WINDOW: count,started=0,now
+    if count >= _LOGIN_FAILURE_LIMIT and now-started <= _LOGIN_FAILURE_WINDOW:
+        raise HTTPException(429,"Too many failed login attempts. Try again later.")
     user=authenticate(r.username,r.password)
     if not user:
         count += 1
@@ -491,12 +493,18 @@ def chat(r:ChatRequest, request:Request):
     try:
         msg=r.message.strip(); low=msg.lower()
         intent=classify(msg)
-        required_by_intent={"pentest_external":("security","execute"),"git_write":("github","write"),"self_update":("self-update","write"),"database_import":("database","write"),"code_execution":("code-execution","execute")}
+        required_by_intent={"pentest_external":("security","execute"),"git_write":("github","write"),"self_update":("self-update","write"),"database_import":("database","write"),"code_execution":("code-execution","execute"),"learning":("learning","execute"),"coding":("code-generation","execute")}
         if intent.name in required_by_intent:
             tool,action=required_by_intent[intent.name]
             if not tool_allowed(user,tool,action):
                 raise HTTPException(403,f"Tool permission denied: {tool}:{action}")
-        aliases={"sql server":"SQL Server","sqlserver":"SQL Server","mssql":"SQL Server","mysql":"MySQL","sqlite":"SQLite","sql lite":"SQLite","android":"Android","اندروید":"Android","ios":"iOS","آی او اس":"iOS","python":"Python","پایتون":"Python","php":"PHP","javascript":"JavaScript","js":"JavaScript","pentest":"Pentest","pen test":"Pentest","penetration testing":"Pentest","penetration test":"Pentest","پنتست":"Pentest","پن تست":"Pentest","تست نفوذ":"Pentest","امنیت":"Pentest"}; requested=next((name for key,name in sorted(aliases.items(),key=lambda x:len(x[0]),reverse=True) if key in low),None)
+        aliases={"sql server":"SQL Server","sqlserver":"SQL Server","mssql":"SQL Server","mysql":"MySQL","sqlite":"SQLite","sql lite":"SQLite","android":"Android","اندروید":"Android","ios":"iOS","آی او اس":"iOS","python":"Python","پایتون":"Python","php":"PHP","javascript":"JavaScript","js":"JavaScript","pentest":"Pentest","pen test":"Pentest","penetration testing":"Pentest","penetration test":"Pentest","پنتست":"Pentest","پن تست":"Pentest","تست نفوذ":"Pentest","امنیت":"Pentest"}
+        requested=None
+        for key,name in sorted(aliases.items(),key=lambda x:len(x[0]),reverse=True):
+            if key.isascii():
+                if re.search(r"(?<![a-z0-9])"+re.escape(key)+r"(?![a-z0-9])",low): requested=name; break
+            elif re.search(r"(?<!\w)"+re.escape(key)+r"(?!\w)",low,re.UNICODE):
+                requested=name; break
         learn_intent=("یاد بگیر" in low or "یادگیری" in low or "learn" in low or "go learn" in low or "start learning" in low); sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language,user_id) VALUES(?,?,?,?)",(msg[:60] or "گفتگوی جدید","learning" if learn_intent else "chat",requested,user["id"])); policy=parse_command(msg); security_words=policy.security; fix_requested=policy.security_action=="fix"
         if security_words:
             if not tool_allowed(user,"security","execute"):
@@ -798,7 +806,9 @@ def project_plan(r:ProjectRequest, request:Request):
     try:return {"tasks":agent.plan_project(r.goal)}
     except Exception as e: raise HTTPException(502,str(e))
 @app.get("/memory/knowledge")
-def knowledge(): return fetch_all("SELECT * FROM knowledge ORDER BY id DESC")
+def knowledge(request:Request):
+    user=require_user(request)
+    return fetch_all("SELECT * FROM knowledge WHERE verification_status IN ('verified','approved') OR verified_by=? ORDER BY id DESC",(user["id"],))
 @app.get("/memory/search")
 def memory_search(q:str,request:Request,limit:int=8):
     require_user(request)
