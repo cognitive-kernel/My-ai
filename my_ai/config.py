@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,8 +11,9 @@ load_dotenv()
 @dataclass(frozen=True)
 class Settings:
     ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
-    ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
-    llm_provider: str = os.getenv("LLM_PROVIDER", "ollama").strip().lower()
+    ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
+    # auto = use OpenAI when a key is configured, otherwise fall back to Ollama.
+    llm_provider: str = os.getenv("LLM_PROVIDER", "auto").strip().lower()
     openai_base_url: str = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
