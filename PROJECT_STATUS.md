@@ -88,6 +88,9 @@ Progress بر اساس topicهای یکتا و متعلق به همان curricul
 - `725d51627e91ee23105588acec533d593256846f` — Add regression tests for memory deduplication
 - `1fc7f688ac8b3c8dda4224e5f9c42751fdc96446` — Finalize project status after successful deduplication and LLM tests
 
+
+- Local runtime configuration verified: `.env` was created from `.env.example` and `OLLAMA_MODEL` was aligned to the installed Ollama model `qwen2.5:7b`. This is a local environment change and is not committed as project code.
+
 ## 7. تست و CI
 
 آخرین verification برای این مرحله موفق است:
