@@ -273,3 +273,23 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 - LLM mode is local-first in auto mode and Ollama context size is configurable with OLLAMA_NUM_CTX.
 - Docker image now includes runtime metadata/docs and binds to 0.0.0.0 inside the container.
 - Self-update remains deny-by-default and runtime state is ignored by Git.
+
+## Final hardening pass — 2026-09-21
+
+- Enforced exact per-tool permissions for chat/stream, code generation/execution, learning URL, help ask, and other protected routes; no execute-as-wildcard fallback.
+- Chat session ownership is checked on read/write paths; legacy unowned sessions are assigned to the first administrator instead of disappearing.
+- First-account registration closes immediately after creation; the first-account link is hidden and /register redirects once an account exists.
+- Login throttling is bounded and keyed by client plus username; successful authentication clears the failure state. Session cookies use HttpOnly/SameSite and Secure on HTTPS.
+- Self-update confirmation phrases are handled consistently and HTTPException is preserved instead of being converted to 502.
+- GitHub token mutation requires write permission; Git file paths reject traversal/absolute paths.
+- Learning target resolution no longer treats the single-letter c as a substring alias; arbitrary subjects such as learn cooking remain distinct.
+- Persian search normalization is applied to indexed/search text, including Arabic/Persian ی/ک and ZWNJ normalization.
+- Web robots policy uses bounded HTTP timeouts, validates redirect destinations, and rejects non-global resolved addresses.
+- Voice filesystem paths are constrained to data/voice.
+- Skill evidence accepts only test/benchmark/official-source evidence with an evidence reference; verification requires multiple evidence kinds.
+- Scheduler learning stop no longer disables the weekly review monitor.
+- Python execution in Compose is moved behind a dedicated executor service; the main application no longer mounts Docker socket.
+- Local DAST remains host-disabled by design and reports sandbox_required rather than claiming a dynamic test ran; external DAST remains explicit-target only.
+- Ollama model/context defaults are centralized and aligned with qwen2.5:7b / OLLAMA_NUM_CTX.
+- Added regression coverage for registration closure, chat permissions/session isolation, and curly-apostrophe command negation.
+- Final verification on the latest commit: tests workflow successful, CI successful, Ollama E2E successful; CI included compileall, Ruff, mypy, Bandit, pip-audit, pytest, Docker build, and Docker Compose configuration validation.
