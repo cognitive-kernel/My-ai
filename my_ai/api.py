@@ -33,7 +33,7 @@ app=FastAPI(title="My-AI",version="0.2.0",description="Local-first personal lear
 
 _PUBLIC_PATHS = {"/", "/login", "/register", "/auth/register", "/auth/login", "/auth/logout", "/health", "/openapi.json", "/docs", "/redoc"}
 _TOOL_RULES = (("/git/","github"),("/security/","security"),("/code/run","code-execution"),("/scheduler/","scheduler"),("/learning/","learning"),("/backup/","database"),("/voice/","voice"),("/skills","skill-engine"),("/models/","models"),("/memory/search","memory"),("/web/","web"),("/projects/","projects"),("/eval/","eval"),("/self-update/","self-update"))
-_LOGIN_FAILURES = {}
+_LOGIN_FAILURES: dict[str, tuple[int, float]] = {}
 
 
 @app.middleware("http")
