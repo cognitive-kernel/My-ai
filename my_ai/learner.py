@@ -153,10 +153,19 @@ class LearningEngine:
     def validate_code(self,code):
         r=run_python(code); p=r.return_code==0 and not r.timed_out; execute("INSERT INTO experiments(language,code,output,error,passed) VALUES(?,?,?,?,?)",("Python",code,r.output,r.error,int(p))); return {"passed":p,"output":r.output,"error":r.error,"return_code":r.return_code,"timed_out":r.timed_out}
     @staticmethod
-    def _half_percent(value): return max(0.0,min(100.0,round(value*2)/2))
+    def _half_percent(value): return max(0.0,min(100.0,round(float(value)*2)/2))
+
     def status(self,language=None):
         rows=fetch_all("SELECT * FROM learning_sessions ORDER BY id DESC"); out=[]
         for lang,topics in LANGUAGE_CURRICULA.items():
-            topic_names={str(x["topic"]) for x in topics}; completed_topics={str(r["topic"]) for r in rows if r["language"]==lang and r["status"]=="completed" and str(r["topic"]) in topic_names}; completed=len(completed_topics); total=len(topics); scores=[float(r["score"]) for r in rows if r["language"]==lang and r["status"]=="completed" and str(r["topic"]) in topic_names and r["score"] is not None]; raw=(completed/total*100) if total else 0; progress=self._half_percent(raw); out.append({"language":lang,"completed_topics":completed,"total_topics":total,"progress_percent":progress,"progress_step":"0.5%","average_score":round(sum(scores)/len(scores),1) if scores else 0})
+            topic_names={str(x["topic"]) for x in topics}
+            lang_rows=[r for r in rows if r["language"]==lang and str(r["topic"]) in topic_names]
+            completed_topics={str(r["topic"]) for r in lang_rows if r["status"]=="completed"}
+            completed=len(completed_topics); total=len(topics)
+            active_progress=max([float(r["progress_percent"] or 0) for r in lang_rows if r["status"]!="completed" and r["progress_percent"] is not None] or [0.0])
+            raw=((completed + active_progress/100.0) / total * 100.0) if total else 0.0
+            scores=[float(r["score"]) for r in lang_rows if r["status"]=="completed" and r["score"] is not None]
+            out.append({"language":lang,"completed_topics":completed,"total_topics":total,"progress_percent":self._half_percent(raw),"progress_step":"0.5%","average_score":round(sum(scores)/len(scores),1) if scores else 0})
         if language: out=[x for x in out if x["language"].lower()==canonical_language(language).lower()]
         return {"languages":out,"sessions":rows,"available_languages":list(LANGUAGE_CURRICULA.keys())}
+
