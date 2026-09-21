@@ -29,6 +29,21 @@ def ollama_embed(text: str, model: str = "bge-m3") -> list[float]:
     return [float(x) for x in embeddings[0]]
 
 
+def ollama_embed_batch(texts: list[str], model: str = "bge-m3") -> list[list[float]]:
+    if not texts:
+        return []
+    response = httpx.post(
+        f"{settings.ollama_base_url.rstrip('/')}/api/embed",
+        json={"model": model, "input": texts},
+        timeout=120,
+    )
+    response.raise_for_status()
+    embeddings = response.json().get("embeddings") or []
+    if len(embeddings) != len(texts):
+        raise RuntimeError("Ollama returned an unexpected embedding count.")
+    return [[float(x) for x in item] for item in embeddings]
+
+
 def cosine_similarity(a: list[float], b: list[float]) -> float:
     if not a or not b or len(a) != len(b):
         return 0.0
@@ -55,31 +70,52 @@ def hybrid_search(query: str, limit: int = 8) -> list[dict[str, Any]]:
         ranks = [float(r["fts_rank"]) for r in lexical]
         best, worst = min(ranks), max(ranks)
         span = worst - best
-        lexical_scores = {
-            int(r["id"]): (1.0 if span == 0 else (worst - float(r["fts_rank"])) / span)
-            for r in lexical
-        }
+        lexical_scores = {int(r["id"]):(1.0 if span == 0 else (worst-float(r["fts_rank"]))/span) for r in lexical}
     rows = fetch_all("SELECT * FROM knowledge ORDER BY id DESC")
+    cached = fetch_all("SELECT knowledge_id,content_hash,embedding FROM knowledge_embeddings WHERE model=?", ("bge-m3",))
+    cache = {int(r["knowledge_id"]): r for r in cached}
+    missing = []
+    missing_rows = []
+    for row in rows:
+        cached_row = cache.get(int(row["id"]))
+        if not cached_row or cached_row["content_hash"] != (row.get("content_hash") or ""):
+            missing_rows.append(row)
+            missing.append(f'{row.get("title","")}\n{row.get("content","")}\n{row.get("topic","")}')
+    if missing:
+        try:
+            vectors = ollama_embed_batch(missing)
+            from .db import connect
+            with connect() as conn:
+                for row, vector in zip(missing_rows, vectors):
+                    conn.execute(
+                        "INSERT INTO knowledge_embeddings(knowledge_id,content_hash,model,embedding) VALUES(?,?,?,?) "
+                        "ON CONFLICT(knowledge_id,model) DO UPDATE SET content_hash=excluded.content_hash,embedding=excluded.embedding,created_at=CURRENT_TIMESTAMP",
+                        (row["id"], row.get("content_hash") or "", "bge-m3", json.dumps(vector, separators=(",",":"))),
+                    )
+                conn.commit()
+            for row, vector in zip(missing_rows, vectors):
+                cache[int(row["id"])] = {"content_hash": row.get("content_hash") or "", "embedding": json.dumps(vector)}
+        except Exception:
+            pass
     try:
         qvec = ollama_embed(normalized)
     except Exception:
         qvec = []
     for row in rows:
         semantic = 0.0
-        if qvec:
+        cached_row = cache.get(int(row["id"]))
+        if qvec and cached_row:
             try:
-                semantic = max(0.0, min(1.0, cosine_similarity(qvec, ollama_embed(
-                    f'{row.get("title","")}\\n{row.get("content","")}\\n{row.get("topic","")}'
-                ))))
+                semantic = max(0.0, min(1.0, cosine_similarity(qvec, json.loads(cached_row["embedding"]))))
             except Exception:
                 semantic = 0.0
         lexical_score = lexical_scores.get(int(row["id"]), 0.0)
         row["semantic_score"] = round(semantic, 6)
         row["lexical_score"] = round(lexical_score, 6)
-        row["hybrid_score"] = round(0.65 * semantic + 0.35 * lexical_score, 6)
+        row["hybrid_score"] = round(0.65*semantic + 0.35*lexical_score, 6)
         row["relevance"] = row["hybrid_score"]
         row["confidence"] = None
-    return sorted(rows, key=lambda x: x["hybrid_score"], reverse=True)[:limit]
+    return sorted(rows, key=lambda x:x["hybrid_score"], reverse=True)[:limit]
 
 
 def model_health() -> dict[str, Any]:
