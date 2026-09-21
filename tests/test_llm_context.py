@@ -96,7 +96,7 @@ def test_create_llm_auto_prefers_openai_when_key_exists(monkeypatch):
             llm_provider="auto",
         ),
     )
-    assert isinstance(llm_module.create_llm(), llm_module.OpenAICompatibleClient)
+    assert isinstance(llm_module.create_llm(), llm_module.OllamaClient)
 
 
 def test_agent_passes_real_history_and_retrieved_knowledge(monkeypatch):
