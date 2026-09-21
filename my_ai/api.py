@@ -1,8 +1,8 @@
 from __future__ import annotations
 from contextlib import asynccontextmanager
 import re
-from fastapi import FastAPI,HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI,HTTPException,Request
+from fastapi.responses import HTMLResponse,JSONResponse,RedirectResponse
 from pydantic import BaseModel,HttpUrl,Field
 from .agent import Agent
 from .command_policy import parse_command
@@ -14,6 +14,7 @@ from .scheduler import StudyScheduler
 from .ui import page
 from .help import page as help_page, ask_help, local_help_html, apply_help_update
 from .git_connector import GitHubConnector
+from .auth import authenticate, audit, create_account, create_session, current_user, require_admin, revoke_session, require_user
 
 scheduler=StudyScheduler()
 @asynccontextmanager
@@ -24,8 +25,26 @@ async def lifespan(_):
     yield
     scheduler.stop()
 app=FastAPI(title="My-AI",version="0.2.0",description="Local-first personal learning and coding agent.",lifespan=lifespan)
+
+_PUBLIC_PATHS = {"/", "/login", "/register", "/auth/register", "/auth/login", "/auth/logout", "/health", "/openapi.json", "/docs", "/redoc"}
+
+@app.middleware("http")
+async def auth_and_audit_middleware(request: Request, call_next):
+    path = request.url.path
+    user = current_user(request)
+    if path not in _PUBLIC_PATHS and not path.startswith("/docs/") and not user:
+        if request.headers.get("accept","").lower().find("application/json") >= 0:
+            return JSONResponse({"detail":"Authentication required."}, status_code=401)
+        return RedirectResponse("/login", status_code=303)
+    response = await call_next(request)
+    if user and path != "/auth/logout":
+        action = {"GET":"read","POST":"execute","PUT":"write","PATCH":"write","DELETE":"write"}.get(request.method, request.method.lower())
+        audit(user, path, action, str(response.status_code))
+    return response
 agent=Agent(); learner=LearningEngine()
 class ChatRequest(BaseModel): message:str; session_id:int|None=None
+class AuthRegisterRequest(BaseModel): username:str; password:str; display_name:str=""
+class AuthLoginRequest(BaseModel): username:str; password:str
 class URLRequest(BaseModel): url:HttpUrl; topic:str="Python"
 class ProjectRequest(BaseModel): goal:str
 class CodeRequest(BaseModel): code:str
@@ -37,7 +56,9 @@ class SchedulerRequest(BaseModel): language:str="Python"; interval_seconds:int=3
 class LearnRequest(BaseModel): language:str="Python"; interval_seconds:int=3600
 
 @app.get("/",response_class=HTMLResponse)
-def home():
+def home(request: Request):
+    if not current_user(request):
+        return RedirectResponse("/login", status_code=303)
     return HTMLResponse(
         page(),
         headers={
@@ -46,6 +67,48 @@ def home():
             "Expires":"0",
         },
     )
+
+LOGIN_HTML="""<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>ورود | My-AI</title><style>body{font-family:Tahoma;background:#f3f4f6;margin:0}.box{max-width:420px;margin:10vh auto;background:#fff;padding:28px;border-radius:16px}input,button{width:100%;box-sizing:border-box;padding:12px;margin:7px 0;border-radius:9px;border:1px solid #ccc}button{cursor:pointer;background:#111827;color:#fff}.err{color:#b91c1c}</style><div class='box'><h1>ورود به My-AI</h1><input id='u' placeholder='نام کاربری'><input id='p' type='password' placeholder='رمز عبور'><button onclick='login()'>ورود</button><p id='e' class='err'></p><a href='/register'>ساخت اولین حساب</a></div><script>async function login(){e.textContent='';let r=await fetch('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u.value,password:p.value})});let j=await r.json();if(!r.ok){e.textContent=j.detail||'خطا';return}document.cookie='myai_session='+encodeURIComponent(j.token)+'; Path=/; Max-Age=86400; SameSite=Strict';location.href='/'}</script>"""
+REGISTER_HTML="""<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>ساخت حساب | My-AI</title><style>body{font-family:Tahoma;background:#f3f4f6;margin:0}.box{max-width:420px;margin:10vh auto;background:#fff;padding:28px;border-radius:16px}input,button{width:100%;box-sizing:border-box;padding:12px;margin:7px 0;border-radius:9px;border:1px solid #ccc}button{cursor:pointer;background:#111827;color:#fff}.err{color:#b91c1c}.note{background:#ecfdf5;padding:10px;border-radius:8px}</style><div class='box'><h1>ساخت حساب My-AI</h1><p class='note'>اگر هنوز هیچ حسابی ساخته نشده باشد، این حساب به‌صورت خودکار <b>ادمین اصلی</b> می‌شود و به همه ابزارها دسترسی خواهد داشت.</p><input id='n' placeholder='نام نمایشی'><input id='u' placeholder='نام کاربری'><input id='p' type='password' placeholder='رمز عبور (حداقل ۱۰ کاراکتر)'><button onclick='reg()'>ساخت حساب</button><p id='e' class='err'></p><a href='/login'>بازگشت به ورود</a></div><script>async function reg(){e.textContent='';let r=await fetch('/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u.value,password:p.value,display_name:n.value})});let j=await r.json();if(!r.ok){e.textContent=j.detail||'خطا';return}document.cookie='myai_session='+encodeURIComponent(j.token)+'; Path=/; Max-Age=86400; SameSite=Strict';location.href='/'}</script>"""
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(): return HTMLResponse(LOGIN_HTML)
+
+@app.get("/register", response_class=HTMLResponse)
+def register_page(): return HTMLResponse(REGISTER_HTML)
+
+@app.post("/auth/register")
+def auth_register(r: AuthRegisterRequest):
+    try:
+        user=create_account(r.username,r.password,r.display_name)
+        return {"user":user,"token":create_session(int(user["id"]))}
+    except ValueError as exc: raise HTTPException(400,str(exc))
+
+@app.post("/auth/login")
+def auth_login(r: AuthLoginRequest):
+    user=authenticate(r.username,r.password)
+    if not user: raise HTTPException(401,"نام کاربری یا رمز عبور نادرست است.")
+    return {"user":user,"token":create_session(int(user["id"]))}
+
+@app.post("/auth/logout")
+def auth_logout(request: Request):
+    token=request.cookies.get("myai_session")
+    if token: revoke_session(token)
+    return {"ok":True}
+
+@app.get("/auth/me")
+def auth_me(request: Request): return {"user":require_user(request)}
+
+@app.get("/admin/audit")
+def admin_audit(request: Request, limit: int=200):
+    require_admin(request)
+    return {"items":fetch_all("SELECT * FROM audit_log ORDER BY id DESC LIMIT ?",(max(1,min(limit,1000)),))}
+
+@app.get("/admin/tools")
+def admin_tools(request: Request):
+    require_admin(request)
+    return {"items":fetch_all("SELECT * FROM tool_permissions ORDER BY user_id,tool_name,action")}
+
 @app.get("/help",response_class=HTMLResponse)
 def help(): return help_page()
 @app.get("/chat/sessions")
