@@ -69,6 +69,20 @@ class StudyScheduler:
     def running(self):
         return bool(self._thread and self._thread.is_alive())
 
+    def status(self):
+        """Return a JSON-safe snapshot for the API/UI scheduler dashboard."""
+        with self._lock:
+            last_result = self.last_result
+            return {
+                "running": self.running(),
+                "language": self.language,
+                "stage": self.stage,
+                "current_topic": self.current_topic,
+                "last_result": last_result,
+                "error": self.error,
+                "interval_seconds": self.interval_seconds,
+            }
+
     def update_progress(self, stage, topic=None):
         with self._lock:
             self.stage = stage
