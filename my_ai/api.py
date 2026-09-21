@@ -500,7 +500,10 @@ def chat(r:ChatRequest, request:Request):
         code_words=("برنامه بنویس","کد بنویس","برام برنامه","write a program","write code","program","build an app","create an app"); code_intent=any(x in low for x in code_words)
         if security_words:
             if code_intent:
-                language=requested or "Python"; generated=learner.generate_program(msg,language); result=learner.security_assessment_code(generated["code"],language,fix_requested); result["generated_project"]=generated; result["mode"]="pentest_and_fix" if fix_requested else "pentest_report"; return {"type":"security","answer":"Security assessment completed." if not fix_requested else "Security assessment and remediation completed.","data":result}
+                language=requested or "Python"; generated=learner.generate_program(msg,language); result=learner.security_assessment_code(generated["code"],language,fix_requested); result["generated_project"]=generated; result["mode"]="pentest_and_fix" if fix_requested else "pentest_report"
+                dynamic_status=(result.get("dynamic") or {}).get("status")
+                answer=("Static assessment completed; local dynamic DAST requires an approved sandbox." if dynamic_status=="sandbox_required" else ("Security assessment completed." if not fix_requested else "Security assessment and remediation completed."))
+                return {"type":"security","answer":answer,"data":result}
             path=None
             for prefix in ("مسیر:","آدرس:","path:","url:","project:","پروژه:"):
                 if prefix in msg: path=msg.split(prefix,1)[1].strip().strip('"').strip("'"); break
@@ -510,7 +513,10 @@ def chat(r:ChatRequest, request:Request):
             if path:
                 if path.lower().startswith(("http://","https://")): result=learner.security_assessment_url(path,r.headers if hasattr(r,"headers") else None); result["note"]="External targets are report-only; remediation is not applied remotely."
                 else: result=learner.security_assessment_path(path,fix_requested)
-                result["mode"]="external_report" if path.lower().startswith(("http://","https://")) else ("pentest_and_fix" if fix_requested else "pentest_report"); return {"type":"security","answer":"Security test completed for the explicitly supplied target.","data":result}
+                result["mode"]="external_report" if path.lower().startswith(("http://","https://")) else ("pentest_and_fix" if fix_requested else "pentest_report")
+                dynamic_status=(result.get("dynamic") or {}).get("status")
+                answer="External DAST completed for the explicitly supplied target." if path.lower().startswith(("http://","https://")) else ("Static assessment completed; local dynamic DAST requires an approved sandbox." if dynamic_status=="sandbox_required" else "Security assessment completed for the explicitly supplied target.")
+                return {"type":"security","answer":answer,"data":result}
         if learn_intent:
             language=resolve_learning_target(msg, requested or "Python")
             language=canonical_language(language)
