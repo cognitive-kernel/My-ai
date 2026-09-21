@@ -756,7 +756,7 @@ def git_repo(repository:str):
 @app.get("/git/tree")
 def git_tree(repository:str,ref:str="HEAD"): return GitHubConnector().tree(repository,ref)
 @app.get("/git/file")
-def git_file(repository:str,path:str,ref:str|None=None,request:Request=None):
+def git_file(request:Request,repository:str,path:str,ref:str|None=None):
     user=require_user(request)
     normalized=path.replace("\\","/")
     if normalized.startswith("/") or normalized.startswith("../") or "/../" in normalized or any(part==".." for part in normalized.split("/")):
