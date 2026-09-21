@@ -165,16 +165,39 @@ def import_database(source: str) -> dict[str, Any]:
     return inserted
 
 
-def web_fetch_policy(url: str) -> dict[str, Any]:
+def _assert_public_http_url(url: str) -> urllib.parse.ParseResult:
     parsed = urllib.parse.urlparse(url)
-    robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
-    parser = urllib.robotparser.RobotFileParser(robots_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("URL must use http:// or https:// and include a hostname.")
+    import ipaddress
+    import socket
     try:
-        parser.read()
-        allowed = parser.can_fetch("My-AI", url)
-    except Exception:
-        allowed = False
-    return {"url": url, "robots_url": robots_url, "allowed": allowed}
+        addresses = {ipaddress.ip_address(item[4][0]) for item in socket.getaddrinfo(parsed.hostname, None, type=socket.SOCK_STREAM)}
+    except socket.gaierror as exc:
+        raise ValueError("Hostname could not be resolved.") from exc
+    if not addresses or not all(ip.is_global and not ip.is_multicast for ip in addresses):
+        raise ValueError("Target must resolve only to globally routable addresses.")
+    return parsed
+
+
+def web_fetch_policy(url: str) -> dict[str, Any]:
+    parsed = _assert_public_http_url(url)
+    robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
+    try:
+        with httpx.Client(timeout=httpx.Timeout(5.0, connect=2.0), follow_redirects=False) as client:
+            response = client.get(robots_url, headers={"User-Agent": "My-AI"})
+            if 300 <= response.status_code < 400 and response.headers.get("location"):
+                redirect = urllib.parse.urljoin(robots_url, response.headers["location"])
+                _assert_public_http_url(redirect)
+                response = client.get(redirect, headers={"User-Agent": "My-AI"})
+            if response.status_code >= 400:
+                return {"url": url, "robots_url": robots_url, "allowed": False, "reason": f"robots HTTP {response.status_code}"}
+            parser = urllib.robotparser.RobotFileParser()
+            parser.set_url(robots_url)
+            parser.parse(response.text.splitlines())
+            return {"url": url, "robots_url": robots_url, "allowed": parser.can_fetch("My-AI", url)}
+    except Exception as exc:
+        return {"url": url, "robots_url": robots_url, "allowed": False, "reason": str(exc)}
 
 
 def resource_status() -> dict[str, Any]:
