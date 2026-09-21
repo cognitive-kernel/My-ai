@@ -136,7 +136,12 @@ def admin_knowledge_page(request: Request):
     return HTMLResponse(KNOWLEDGE_ADMIN_HTML)
 
 @app.get("/login", response_class=HTMLResponse)
-def login_page(): return HTMLResponse(LOGIN_HTML)
+def login_page():
+    from .auth import has_users
+    html=LOGIN_HTML
+    if has_users():
+        html=html.replace("<a id='register-link' href='/register'>ساخت اولین حساب</a>","")
+    return HTMLResponse(html)
 
 @app.get("/register", response_class=HTMLResponse)
 def register_page():
