@@ -18,6 +18,7 @@ from .git_connector import GitHubConnector
 from .auth import authenticate, audit, create_account, create_session, current_user, require_admin, revoke_session, require_user, tool_allowed
 from .platform import backup_database, choose_model, eval_retrieval, export_database, hybrid_search, import_database, model_health, resource_status, self_update_apply, self_update_status, voice_status, web_fetch_policy
 from .skill_engine import ensure_skill, record_evidence, revalidate, snapshot
+from .voice import status as voice_engine_status, transcribe, synthesize
 from .llm import create_llm
 
 scheduler=StudyScheduler()
@@ -69,6 +70,8 @@ class ImportRequest(BaseModel): path:str
 class PermissionRequest(BaseModel): user_id:int; tool_name:str; action:str; allowed:bool
 class SkillEvidenceRequest(BaseModel): skill_id:int; kind:str; passed:bool; details:dict[str,object]={}
 class SkillRevalidateRequest(BaseModel): skill_id:int; version:str
+class VoiceTranscribeRequest(BaseModel): audio_path:str; model_path:str; language:str="fa"
+class VoiceSynthesizeRequest(BaseModel): text:str; model_path:str; output_path:str
 class URLRequest(BaseModel): url:HttpUrl; topic:str="Python"
 class ProjectRequest(BaseModel): goal:str
 class CodeRequest(BaseModel): code:str
@@ -203,10 +206,25 @@ def models_select(task:str, request:Request):
     require_user(request)
     return {"model":choose_model(task)}
 
+
+@app.post("/voice/transcribe")
+def voice_transcribe(r:VoiceTranscribeRequest, request:Request):
+    user=require_user(request)
+    result=transcribe(r.audio_path,r.model_path,r.language)
+    audit(user,"voice","execute","200")
+    return {"text":result}
+
+@app.post("/voice/synthesize")
+def voice_synthesize(r:VoiceSynthesizeRequest, request:Request):
+    user=require_user(request)
+    result=synthesize(r.text,r.model_path,r.output_path)
+    audit(user,"voice","execute","200")
+    return {"path":result}
+
 @app.get("/voice/status")
 def voice_status_api(request:Request):
     require_user(request)
-    return voice_status()
+    return {**voice_status(), "engine": voice_engine_status()}
 
 @app.get("/scheduler/resources")
 def scheduler_resources(request:Request):
