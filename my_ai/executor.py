@@ -29,11 +29,11 @@ def _run_container(code:str)->ExecutionResult:
             return ExecutionResult("","Execution timed out; container was terminated.",True,-1,"container")
 def _run_remote(code:str)->ExecutionResult:
     token=os.getenv("EXECUTOR_SHARED_TOKEN","")
-    if not token:
-        raise RuntimeError("EXECUTOR_SHARED_TOKEN is required for remote execution.")
+    if not token or token == "replace-with-a-long-random-secret":
+        raise RuntimeError("EXECUTOR_SHARED_TOKEN must be a real secret for remote execution.")
     try:
         r=httpx.post(
-            os.getenv("EXECUTOR_SERVICE_URL","http://executor:9000/run"),
+            (os.getenv("EXECUTOR_SERVICE_URL","http://executor:9000/run").rstrip("/") + ("" if os.getenv("EXECUTOR_SERVICE_URL","http://executor:9000/run").rstrip("/").endswith("/run") else "/run")),
             json={"code":code},
             headers={"Authorization":f"Bearer {token}"},
             timeout=settings.exec_timeout+5,
