@@ -89,7 +89,7 @@ def connect() -> sqlite3.Connection:
     return conn
 
 def _normalize_search_text(value: str) -> str:
-    return str(value).replace("ي","ی").replace("ى","ی").replace("ك","ک").replace("\u200c"," ").replace("\u200d"," ").replace("\u0640","").casefold()
+    return " ".join(str(value).replace("ي","ی").replace("ى","ی").replace("ك","ک").replace("\u200c"," ").replace("\u200d"," ").replace("\u0640","").split()).casefold()
 
 def _knowledge_hash(topic: str, content: str) -> str:
     normalized = _normalize_search_text(content)
