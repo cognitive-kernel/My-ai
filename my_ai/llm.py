@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Sequence
+
 import httpx
 
 from .config import settings
@@ -9,12 +11,20 @@ class LLMError(RuntimeError):
     pass
 
 
+HistoryMessage = dict[str, str]
+
+
 class OllamaClient:
     def __init__(self) -> None:
         self.base_url = settings.ollama_base_url.rstrip("/")
         self.model = settings.ollama_model
 
-    def chat(self, message: str, system: str | None = None) -> str:
+    def chat(
+        self,
+        message: str,
+        system: str | None = None,
+        history: Sequence[HistoryMessage] | None = None,
+    ) -> str:
         payload: dict[str, object] = {
             "model": self.model,
             "stream": False,
@@ -24,6 +34,11 @@ class OllamaClient:
         assert isinstance(messages, list)
         if system:
             messages.append({"role": "system", "content": system})
+        for item in history or ():
+            role = item.get("role")
+            content = item.get("content")
+            if role in {"user", "assistant"} and isinstance(content, str) and content.strip():
+                messages.append({"role": role, "content": content})
         messages.append({"role": "user", "content": message})
 
         try:
@@ -44,7 +59,7 @@ class OllamaClient:
 
 
 class OpenAICompatibleClient:
-    """Optional Responses-API backend; disabled unless LLM_PROVIDER=openai."""
+    """OpenAI Responses API backend, also usable with compatible gateways."""
 
     def __init__(self) -> None:
         self.base_url = settings.openai_base_url
@@ -53,14 +68,33 @@ class OpenAICompatibleClient:
         if not self.api_key:
             raise LLMError("OPENAI_API_KEY is required when LLM_PROVIDER=openai")
 
-    def chat(self, message: str, system: str | None = None) -> str:
-        payload: dict[str, object] = {"model": self.model, "input": message}
+    def chat(
+        self,
+        message: str,
+        system: str | None = None,
+        history: Sequence[HistoryMessage] | None = None,
+    ) -> str:
+        input_items: list[dict[str, object]] = []
+        for item in history or ():
+            role = item.get("role")
+            content = item.get("content")
+            if role in {"user", "assistant"} and isinstance(content, str) and content.strip():
+                input_items.append({"role": role, "content": content})
+        input_items.append({"role": "user", "content": message})
+
+        payload: dict[str, object] = {
+            "model": self.model,
+            "input": input_items,
+        }
         if system:
             payload["instructions"] = system
         try:
             response = httpx.post(
                 f"{self.base_url}/responses",
-                headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
                 json=payload,
                 timeout=300,
             )
@@ -82,6 +116,9 @@ class OpenAICompatibleClient:
 
 
 def create_llm():
-    if settings.llm_provider in {"openai", "openai-compatible", "openai_compatible"}:
+    provider = settings.llm_provider
+    if provider in {"openai", "openai-compatible", "openai_compatible"}:
+        return OpenAICompatibleClient()
+    if provider == "auto" and settings.openai_api_key:
         return OpenAICompatibleClient()
     return OllamaClient()
