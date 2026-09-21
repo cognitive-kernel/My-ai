@@ -11,6 +11,7 @@ from .llm import OllamaClient
 
 TEXT_EXTENSIONS={".py",".php",".js",".ts",".jsx",".tsx",".html",".htm",".css",".sql",".json",".yml",".yaml",".env",".ini",".conf",".toml"}
 SKIP_DIRS={".git",".venv","venv","node_modules","__pycache__","dist","build",".pytest_cache",".mypy_cache"}
+_SECRET_VALUE=re.compile(r"(?i)(api[_-]?key|secret|password|passwd|token)\\s*([:=])\\s*(['\"])([^'\"]+)(\\3)")
 
 @dataclass
 class Finding:
@@ -95,6 +96,10 @@ class SecurityEngine:
         return [Finding("low","No dependency manifest detected","dependency-manifest",0,
                          "No common dependency manifest was found.",
                          "Declare dependencies explicitly and keep them reviewed and updated.","dependency-manifest")]
+
+    @staticmethod
+    def _redact_evidence(line:str) -> str:
+        return _SECRET_VALUE.sub(lambda m: f"{m.group(1)}{m.group(2)}{m.group(3)}[REDACTED]{m.group(5)}", line)
 
     def _summary(self,findings):
         return {level:sum(1 for f in findings if f.severity==level) for level in ("critical","high","medium","low")}
