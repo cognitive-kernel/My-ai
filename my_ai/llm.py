@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Sequence
+from typing import Iterator, Sequence
+import json
 
 import httpx
 
@@ -18,6 +19,34 @@ class OllamaClient:
     def __init__(self) -> None:
         self.base_url = settings.ollama_base_url.rstrip("/")
         self.model = settings.ollama_model
+
+    def stream_chat(
+        self,
+        message: str,
+        system: str | None = None,
+        history: Sequence[HistoryMessage] | None = None,
+    ) -> Iterator[str]:
+        payload: dict[str, object] = {"model": self.model, "stream": True, "messages": []}
+        messages = payload["messages"]
+        assert isinstance(messages, list)
+        if system:
+            messages.append({"role": "system", "content": system})
+        for item in history or ():
+            if item.get("role") in {"user","assistant"} and isinstance(item.get("content"), str):
+                messages.append({"role": item["role"], "content": item["content"]})
+        messages.append({"role": "user", "content": message})
+        try:
+            with httpx.stream("POST", f"{self.base_url}/api/chat", json=payload, timeout=300) as response:
+                response.raise_for_status()
+                for line in response.iter_lines():
+                    if not line:
+                        continue
+                    data=json.loads(line)
+                    chunk=data.get("message",{}).get("content")
+                    if chunk:
+                        yield str(chunk)
+        except (httpx.HTTPError, json.JSONDecodeError) as exc:
+            raise LLMError(f"Ollama streaming request failed: {exc}") from exc
 
     def chat(
         self,
