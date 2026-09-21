@@ -767,7 +767,7 @@ def git_repo(repository:str):
 def git_tree(repository:str,ref:str="HEAD"): return GitHubConnector().tree(repository,ref)
 @app.get("/git/file")
 def git_file(request:Request,repository:str,path:str,ref:str|None=None):
-    user=require_user(request)
+    require_user(request)
     normalized=path.replace("\\","/")
     if normalized.startswith("/") or normalized.startswith("../") or "/../" in normalized or any(part==".." for part in normalized.split("/")):
         raise HTTPException(400,"Invalid repository path.")
