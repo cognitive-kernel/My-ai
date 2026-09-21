@@ -58,6 +58,24 @@ CREATE TABLE IF NOT EXISTS audit_log (
  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_audit_created_at ON audit_log(created_at);
+CREATE TABLE IF NOT EXISTS skills (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ name TEXT NOT NULL,
+ version TEXT NOT NULL,
+ score REAL NOT NULL DEFAULT 0,
+ verified INTEGER NOT NULL DEFAULT 0,
+ last_verified TEXT,
+ UNIQUE(name,version)
+);
+CREATE TABLE IF NOT EXISTS skill_evidence (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ skill_id INTEGER NOT NULL,
+ kind TEXT NOT NULL,
+ passed INTEGER NOT NULL DEFAULT 0,
+ evidence TEXT NOT NULL,
+ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY(skill_id) REFERENCES skills(id) ON DELETE CASCADE
+);
 """
 
 def connect() -> sqlite3.Connection:
