@@ -43,6 +43,17 @@ class LearningEngine:
             except Exception as exc: knowledge.append({"url":url,"error":str(exc)})
         return knowledge
 
+    def study_url(self,url,topic="Python"):
+        title,source=self.web.fetch(url)
+        note=self.llm.chat(
+            "Study the supplied source and produce a concise, accurate learning note. "
+            "Use only information supported by the source; identify uncertainty instead of inventing facts. "
+            f"\nTOPIC: {topic}\nSOURCE TITLE: {title}\nSOURCE URL: {url}\nSOURCE:\n{source}",
+            system="You are a rigorous programming teacher."
+        )
+        remember(topic,title,note,url)
+        return {"title":title,"url":url,"topic":topic,"content":note}
+
     def start(self,language="Python"):
         language=canonical_language(language)
         active=fetch_all("SELECT * FROM learning_sessions WHERE language=? AND status='started' ORDER BY id DESC LIMIT 1",(language,))
