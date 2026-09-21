@@ -1,6 +1,7 @@
 from __future__ import annotations
 from contextlib import asynccontextmanager
 import re
+from pathlib import Path
 from fastapi import FastAPI,HTTPException,Request
 from fastapi.responses import HTMLResponse,JSONResponse,RedirectResponse,StreamingResponse
 from pydantic import BaseModel,HttpUrl,Field
@@ -79,6 +80,13 @@ async def auth_and_audit_middleware(request: Request, call_next):
     return response
 
 agent=Agent(); learner=LearningEngine()
+VOICE_ROOT=Path("data/voice").resolve()
+def _voice_path(value:str, must_exist:bool=False) -> str:
+    path=Path(value).expanduser().resolve()
+    try: path.relative_to(VOICE_ROOT)
+    except ValueError: raise HTTPException(400,"Voice paths must stay under data/voice.")
+    if must_exist and not path.is_file(): raise HTTPException(404,"Voice input/model file not found.")
+    return str(path)
 class ChatRequest(BaseModel): message:str; session_id:int|None=None
 class AuthRegisterRequest(BaseModel): username:str; password:str; display_name:str=""
 class AuthLoginRequest(BaseModel): username:str; password:str
@@ -283,14 +291,15 @@ def models_select(task:str, request:Request):
 @app.post("/voice/transcribe")
 def voice_transcribe(r:VoiceTranscribeRequest, request:Request):
     user=require_user(request)
-    result=transcribe(r.audio_path,r.model_path,r.language)
+    result=transcribe(_voice_path(r.audio_path,True),_voice_path(r.model_path,True),r.language)
     audit(user,"voice","execute","200")
     return {"text":result}
 
 @app.post("/voice/synthesize")
 def voice_synthesize(r:VoiceSynthesizeRequest, request:Request):
     user=require_user(request)
-    result=synthesize(r.text,r.model_path,r.output_path)
+    VOICE_ROOT.mkdir(parents=True,exist_ok=True)
+    result=synthesize(r.text,_voice_path(r.model_path,True),_voice_path(r.output_path,False))
     audit(user,"voice","execute","200")
     return {"path":result}
 
