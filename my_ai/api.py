@@ -161,6 +161,8 @@ def auth_register(r: AuthRegisterRequest, request: Request):
     if has_users(): raise HTTPException(403,"Registration is closed after the first account. An administrator must create additional users.")
     try:
         user=create_account(r.username,r.password,r.display_name)
+        if user["role"]=="admin":
+            execute("UPDATE chat_sessions SET user_id=? WHERE user_id IS NULL",(user["id"],))
     except ValueError as exc: raise HTTPException(400,str(exc))
     response=JSONResponse({"user":user})
     response.set_cookie("myai_session",create_session(int(user["id"])),httponly=True,samesite="strict",secure=request.url.scheme=="https",max_age=86400,path="/")
