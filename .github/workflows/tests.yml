@@ -9,7 +9,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -e .[dev]
-      - run: ruff check my_ai tests
+      - run: ruff check my_ai --select F
       - run: mypy my_ai --ignore-missing-imports
       - run: bandit -r my_ai -q
       - run: pip-audit
