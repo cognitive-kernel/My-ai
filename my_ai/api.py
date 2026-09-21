@@ -380,14 +380,18 @@ def skills_create(name:str, request:Request, version:str="current"):
 
 @app.post("/skills/evidence")
 def skills_evidence(r:SkillEvidenceRequest, request:Request):
-    user=require_user(request)
+    user=require_admin(request)
+    if r.kind not in {"test","benchmark","official_source"}:
+        raise HTTPException(400,"Skill evidence must come from an executed test, benchmark, or official source.")
+    if not r.details or not any(k in r.details for k in ("command","source_url","test_id","artifact")):
+        raise HTTPException(400,"Evidence requires a command, source_url, test_id, or artifact reference.")
     eid=record_evidence(r.skill_id,r.kind,r.passed,r.details)
     audit(user,"skill-engine","execute","200",f"evidence:{r.skill_id}")
     return {"evidence_id":eid}
 
 @app.post("/skills/revalidate")
 def skills_revalidate(r:SkillRevalidateRequest, request:Request):
-    user=require_user(request)
+    user=require_admin(request)
     result=revalidate(r.skill_id,r.version)
     audit(user,"skill-engine","execute","200",f"revalidate:{r.skill_id}")
     return result
