@@ -13,11 +13,15 @@ def ensure_skill(name: str, version: str = "current") -> int:
 
 
 def record_evidence(skill_id: int, kind: str, passed: bool, details: dict[str,Any] | None = None) -> int:
-    evidence=json.dumps(details or {},ensure_ascii=False)
+    if kind not in {"test","benchmark","official_source"}:
+        raise ValueError("Evidence must be an executed test, benchmark, or official source.")
+    if not details or not any(key in details for key in ("command","source_url","test_id","artifact")):
+        raise ValueError("Evidence requires a command, source_url, test_id, or artifact reference.")
+    evidence=json.dumps(details,ensure_ascii=False)
     eid=execute("INSERT INTO skill_evidence(skill_id,kind,passed,evidence) VALUES(?,?,?,?)",(skill_id,kind,1 if passed else 0,evidence))
-    rows=fetch_all("SELECT AVG(passed)*100 AS score,COUNT(*) AS n FROM skill_evidence WHERE skill_id=?",(skill_id,))
+    rows=fetch_all("SELECT AVG(passed)*100 AS score,COUNT(*) AS n,COUNT(DISTINCT kind) AS kinds FROM skill_evidence WHERE skill_id=?",(skill_id,))
     score=float(rows[0]["score"] or 0)
-    verified=score >= 80 and int(rows[0]["n"] or 0) >= 2
+    verified=score >= 80 and int(rows[0]["n"] or 0) >= 2 and int(rows[0]["kinds"] or 0) >= 2
     execute("UPDATE skills SET score=?,verified=?,last_verified=CURRENT_TIMESTAMP WHERE id=?",(score,1 if verified else 0,skill_id))
     return eid
 
