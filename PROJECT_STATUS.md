@@ -73,6 +73,12 @@ Progress بر اساس topicهای یکتا و متعلق به همان curricul
 
 ## 6. تغییرات این مرحله
 
+- `4719215` — Fix scheduler status API endpoint and add scheduler status regression coverage
+- Root cause: `my_ai/api.py` called `scheduler.status()`, while the refactored `StudyScheduler` no longer exposed that method.
+- Fix: restored a JSON-safe `StudyScheduler.status()` snapshot including `running`, `language`, `stage`, `current_topic`, `last_result`, `error` and `interval_seconds`.
+- Regression test: `tests/test_learning_progress.py` verifies scheduler status behavior.
+
+
 - `6fcf5fd5238e7a52f6dd1a772e1ad08356610be4` — Deduplicate knowledge storage and prepare database learning metadata
 - `2d6d5ffb301697f7dcc33e722cf8fa3e25a58313` — Use content-addressed memory to prevent duplicate knowledge
 - `f3b79a4d620b5891643099ea766952a1f271414e` — Add optional OpenAI-compatible model configuration
@@ -86,6 +92,7 @@ Progress بر اساس topicهای یکتا و متعلق به همان curricul
 
 آخرین verification برای این مرحله موفق است:
 
+- `python -m pytest tests/test_learning_progress.py -q`: **6 passed in 0.13s**
 - `pytest -q`: **31 passed, 2 warnings**
 - `python -m compileall -q my_ai tests`: **موفق**
 - CI workflow: **موفق**
