@@ -110,21 +110,42 @@ def test_agent_passes_real_history_and_retrieved_knowledge(monkeypatch):
             return "پاسخ درست"
 
     monkeypatch.setattr(agent_module, "fetch_all", lambda *args: [
-        {"role": "assistant", "content": "قبلی"},
         {"role": "user", "content": "سلام"},
+        {"role": "assistant", "content": "قبلی"},
     ])
     monkeypatch.setattr(agent_module, "recall", lambda *args: [{"title": "Python", "content": "knowledge"}])
     monkeypatch.setattr(agent_module, "execute", lambda *args: None)
     agent = agent_module.Agent(FakeLLM())
 
-    result = agent.chat("درباره خودت بگو", session_id=7)
+    result = agent.chat("پایتون چیست؟", session_id=7)
 
     assert result == "پاسخ درست"
-    assert captured["message"] == "درباره خودت بگو"
+    assert captured["message"] == "پایتون چیست؟"
     assert captured["history"] == [
-        {"role": "assistant", "content": "قبلی"},
         {"role": "user", "content": "سلام"},
+        {"role": "assistant", "content": "قبلی"},
     ]
     assert "RELEVANT LOCAL KNOWLEDGE" in captured["system"]
     assert json.dumps({"title": "Python", "content": "knowledge"}, ensure_ascii=False) in captured["system"]
     assert "IDENTITY AND REFERENCE RULES" in captured["system"]
+
+
+def test_agent_answers_identity_about_itself_not_user(monkeypatch):
+    captured = {}
+
+    class FakeLLM:
+        model = "test-model"
+
+        def chat(self, *args, **kwargs):
+            captured["called"] = True
+            return "نباید استفاده شود"
+
+    monkeypatch.setattr(agent_module, "execute", lambda *args: None)
+    agent = agent_module.Agent(FakeLLM())
+
+    result = agent.chat("درباره خودت بگو", session_id=7)
+
+    assert "My-AI" in result
+    assert "test-model" in result
+    assert "نباید استفاده شود" not in result
+    assert "called" not in captured
