@@ -32,8 +32,29 @@ async def lifespan(_):
 app=FastAPI(title="My-AI",version="0.2.0",description="Local-first personal learning and coding agent.",lifespan=lifespan)
 
 _PUBLIC_PATHS = {"/", "/login", "/register", "/auth/register", "/auth/login", "/auth/logout", "/health", "/openapi.json", "/docs", "/redoc"}
-_TOOL_RULES = (("/git/","github"),("/security/","security"),("/code/run","code-execution"),("/scheduler/","scheduler"),("/learning/","learning"),("/backup/","database"),("/voice/","voice"),("/skills","skill-engine"),("/models/","models"),("/memory/search","memory"),("/web/","web"),("/projects/","projects"),("/eval/","eval"),("/self-update/","self-update"))
+_TOOL_RULES = (
+    ("/git/","github"),("/security/","security"),("/code/run","code-execution"),
+    ("/code/generate","code-generation"),("/chat","chat"),("/learn/url","learning"),
+    ("/learning/","learning"),("/scheduler/","scheduler"),("/backup/","database"),
+    ("/voice/","voice"),("/skills","skill-engine"),("/models/","models"),
+    ("/memory/search","memory"),("/web/","web"),("/projects/","projects"),
+    ("/eval/","eval"),("/self-update/","self-update"),("/help/ask","help"),
+)
 _LOGIN_FAILURES: dict[str, tuple[int, float]] = {}
+_LOGIN_FAILURE_LIMIT = 5
+_LOGIN_FAILURE_WINDOW = 300.0
+
+def _login_key(request: Request, username: str) -> str:
+    host = request.client.host if request.client else "unknown"
+    return f"{host}:{username.strip().lower()}"
+
+def _cleanup_login_failures(now: float) -> None:
+    stale = [k for k, (_, started) in _LOGIN_FAILURES.items() if now - started > _LOGIN_FAILURE_WINDOW]
+    for key in stale:
+        _LOGIN_FAILURES.pop(key, None)
+    if len(_LOGIN_FAILURES) > 10000:
+        for key in list(_LOGIN_FAILURES)[:5000]:
+            _LOGIN_FAILURES.pop(key, None)
 
 
 @app.middleware("http")
@@ -48,7 +69,7 @@ async def auth_and_audit_middleware(request: Request, call_next):
         for prefix,tool in _TOOL_RULES:
             if path.startswith(prefix) or path == prefix.rstrip("/"):
                 action="read" if request.method=="GET" else "write" if request.method in {"PUT","PATCH","DELETE"} else "execute"
-                if not tool_allowed(user,tool,action) and not tool_allowed(user,tool,"execute"):
+                if not tool_allowed(user,tool,action):
                     return JSONResponse({"detail":f"Tool permission denied: {tool}:{action}"},status_code=403)
                 break
     response=await call_next(request)
@@ -93,7 +114,7 @@ def home(request: Request):
         },
     )
 
-LOGIN_HTML="""<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>ورود | My-AI</title><style>body{font-family:Tahoma;background:#f3f4f6;margin:0}.box{max-width:420px;margin:10vh auto;background:#fff;padding:28px;border-radius:16px}input,button{width:100%;box-sizing:border-box;padding:12px;margin:7px 0;border-radius:9px;border:1px solid #ccc}button{cursor:pointer;background:#111827;color:#fff}.err{color:#b91c1c}</style><div class='box'><h1>ورود به My-AI</h1><input id='u' placeholder='نام کاربری'><input id='p' type='password' placeholder='رمز عبور'><button onclick='login()'>ورود</button><p id='e' class='err'></p><a href='/register'>ساخت اولین حساب</a></div><script>async function login(){e.textContent='';let r=await fetch('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u.value,password:p.value})});let j=await r.json();if(!r.ok){e.textContent=j.detail||'خطا';return}location.href='/'}</script>"""
+LOGIN_HTML="""<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>ورود | My-AI</title><style>body{font-family:Tahoma;background:#f3f4f6;margin:0}.box{max-width:420px;margin:10vh auto;background:#fff;padding:28px;border-radius:16px}input,button{width:100%;box-sizing:border-box;padding:12px;margin:7px 0;border-radius:9px;border:1px solid #ccc}button{cursor:pointer;background:#111827;color:#fff}.err{color:#b91c1c}</style><div class='box'><h1>ورود به My-AI</h1><input id='u' placeholder='نام کاربری'><input id='p' type='password' placeholder='رمز عبور'><button onclick='login()'>ورود</button><p id='e' class='err'></p><a id='register-link' href='/register'>ساخت اولین حساب</a></div><script>fetch('/auth/register/status').then(r=>r.json()).then(x=>{if(x.open===false)document.getElementById('register-link').remove()}).catch(()=>{});async function login(){e.textContent='';let r=await fetch('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u.value,password:p.value})});let j=await r.json();if(!r.ok){e.textContent=j.detail||'خطا';return}location.href='/'}</script>"""
 REGISTER_HTML="""<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>ساخت حساب | My-AI</title><style>body{font-family:Tahoma;background:#f3f4f6;margin:0}.box{max-width:420px;margin:10vh auto;background:#fff;padding:28px;border-radius:16px}input,button{width:100%;box-sizing:border-box;padding:12px;margin:7px 0;border-radius:9px;border:1px solid #ccc}button{cursor:pointer;background:#111827;color:#fff}.err{color:#b91c1c}.note{background:#ecfdf5;padding:10px;border-radius:8px}</style><div class='box'><h1>ساخت حساب My-AI</h1><p class='note'>اگر هنوز هیچ حسابی ساخته نشده باشد، این حساب به‌صورت خودکار <b>ادمین اصلی</b> می‌شود و به همه ابزارها دسترسی خواهد داشت.</p><input id='n' placeholder='نام نمایشی'><input id='u' placeholder='نام کاربری'><input id='p' type='password' placeholder='رمز عبور (حداقل ۱۰ کاراکتر)'><button onclick='reg()'>ساخت حساب</button><p id='e' class='err'></p><a href='/login'>بازگشت به ورود</a></div><script>async function reg(){e.textContent='';let r=await fetch('/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u.value,password:p.value,display_name:n.value})});let j=await r.json();if(!r.ok){e.textContent=j.detail||'خطا';return}location.href='/'}</script>"""
 
 KNOWLEDGE_ADMIN_HTML="""<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>مدیریت دانش | My-AI</title><style>body{font-family:Tahoma;background:#f3f4f6;margin:0}.wrap{max-width:1100px;margin:30px auto;padding:20px}.card{background:#fff;padding:18px;border-radius:12px;margin:10px 0}textarea,input{width:100%;box-sizing:border-box;padding:9px;margin:5px 0}button{padding:8px 12px;margin:3px}.u{background:#fef3c7}.v{background:#dcfce7}</style><div class='wrap'><h1>مدیریت دانش</h1><p>دانش جدید تا زمان تأیید، «تأییدنشده» است.</p><div id='list'>در حال بارگذاری...</div></div><script>
@@ -108,33 +129,45 @@ def admin_knowledge_page(request: Request):
 def login_page(): return HTMLResponse(LOGIN_HTML)
 
 @app.get("/register", response_class=HTMLResponse)
-def register_page(): return HTMLResponse(REGISTER_HTML)
+def register_page():
+    from .auth import has_users
+    if has_users():
+        return RedirectResponse("/login", status_code=303)
+    return HTMLResponse(REGISTER_HTML)
+
+@app.get("/auth/register/status")
+def register_status():
+    from .auth import has_users
+    return {"open": not has_users()}
 
 @app.post("/auth/register")
-def auth_register(r: AuthRegisterRequest):
+def auth_register(r: AuthRegisterRequest, request: Request):
     from .auth import has_users
     if has_users(): raise HTTPException(403,"Registration is closed after the first account. An administrator must create additional users.")
     try:
         user=create_account(r.username,r.password,r.display_name)
     except ValueError as exc: raise HTTPException(400,str(exc))
     response=JSONResponse({"user":user})
-    response.set_cookie("myai_session",create_session(int(user["id"])),httponly=True,samesite="strict",max_age=86400,path="/")
+    response.set_cookie("myai_session",create_session(int(user["id"])),httponly=True,samesite="strict",secure=request.url.scheme=="https",max_age=86400,path="/")
     return response
 
 @app.post("/auth/login")
-def auth_login(r: AuthLoginRequest):
-    key=r.username.strip().lower()
+def auth_login(r: AuthLoginRequest, request: Request):
     import time
-    count,started=_LOGIN_FAILURES.get(key,(0,time.time()))
-    if time.time()-started>300: count,started=0,time.time()
-    if count>=5: raise HTTPException(429,"Too many failed login attempts. Try again later.")
+    now=time.time(); _cleanup_login_failures(now)
+    key=_login_key(request,r.username)
+    count,started=_LOGIN_FAILURES.get(key,(0,now))
+    if now-started>_LOGIN_FAILURE_WINDOW: count,started=0,now
     user=authenticate(r.username,r.password)
     if not user:
-        _LOGIN_FAILURES[key]=(count+1,started)
+        count += 1
+        _LOGIN_FAILURES[key]=(count,started)
+        if count >= _LOGIN_FAILURE_LIMIT:
+            raise HTTPException(429,"Too many failed login attempts. Try again later.")
         raise HTTPException(401,"نام کاربری یا رمز عبور نادرست است.")
     _LOGIN_FAILURES.pop(key,None)
     response=JSONResponse({"user":user})
-    response.set_cookie("myai_session",create_session(int(user["id"])),httponly=True,samesite="strict",max_age=86400,path="/")
+    response.set_cookie("myai_session",create_session(int(user["id"])),httponly=True,samesite="strict",secure=request.url.scheme=="https",max_age=86400,path="/")
     return response
 
 @app.post("/auth/logout")
@@ -187,6 +220,8 @@ def admin_tools(request: Request):
 @app.post("/chat/stream")
 def chat_stream(r:ChatRequest, request:Request):
     user=require_user(request)
+    if r.session_id is not None and not fetch_all("SELECT id FROM chat_sessions WHERE id=? AND user_id=?",(r.session_id,user["id"])):
+        raise HTTPException(404,"Chat session not found.")
     llm=create_llm()
     def generate():
         stream=getattr(llm,"stream_chat",None)
@@ -394,7 +429,8 @@ def chat_history(request:Request,limit:int=100,session_id:int|None=None):
 @app.get("/help/updates")
 def help_updates(status:str="pending"): return fetch_all("SELECT * FROM help_updates WHERE status=? ORDER BY id DESC",(status,))
 @app.post("/help/ask")
-def help_ask(r:ChatRequest):
+def help_ask(r:ChatRequest, request:Request):
+    require_user(request)
     try:
         low=r.message.lower(); component="git" if any(x in low for x in ("git","github","گیت","گیت‌هاب")) else ("security" if any(x in low for x in ("امنیت","پن‌تست","pentest")) else ("docker" if "docker" in low else ("python" if "python" in low or "پایتون" in low else "general")))
         return ask_help(r.message,component,agent.llm,learner.web)
@@ -425,6 +461,8 @@ def health(): return {"status":"ok","model":settings.ollama_model,"executor_mode
 @app.post("/chat")
 def chat(r:ChatRequest, request:Request):
     user=require_user(request)
+    if r.session_id is not None and not fetch_all("SELECT id FROM chat_sessions WHERE id=? AND user_id=?",(r.session_id,user["id"])):
+        raise HTTPException(404,"Chat session not found.")
     try:
         msg=r.message.strip(); low=msg.lower()
         aliases={"sql server":"SQL Server","sqlserver":"SQL Server","mssql":"SQL Server","mysql":"MySQL","sqlite":"SQLite","sql lite":"SQLite","android":"Android","اندروید":"Android","ios":"iOS","آی او اس":"iOS","python":"Python","پایتون":"Python","php":"PHP","c":"C","javascript":"JavaScript","js":"JavaScript","pentest":"Pentest","pen test":"Pentest","penetration testing":"Pentest","penetration test":"Pentest","پنتست":"Pentest","پن تست":"Pentest","تست نفوذ":"Pentest","امنیت":"Pentest"}; requested=next((name for key,name in sorted(aliases.items(),key=lambda x:len(x[0]),reverse=True) if key in low),None)
@@ -436,7 +474,7 @@ def chat(r:ChatRequest, request:Request):
         code_words=("برنامه بنویس","کد بنویس","برام برنامه","write a program","write code","program","build an app","create an app"); code_intent=any(x in low for x in code_words)
         if security_words:
             if code_intent:
-                language=requested or "Python"; generated=learner.generate_program(msg,language); result=learner.security_assessment_code(generated["code"],language,fix_requested); result["generated_project"]=generated; result["mode"]="pentest_and_fix" if fix_requested else "pentest_report"; return {"type":"security","answer":"Security test completed." if not fix_requested else "Security test, remediation and retest completed.","data":result}
+                language=requested or "Python"; generated=learner.generate_program(msg,language); result=learner.security_assessment_code(generated["code"],language,fix_requested); result["generated_project"]=generated; result["mode"]="pentest_and_fix" if fix_requested else "pentest_report"; return {"type":"security","answer":"Security assessment completed." if not fix_requested else "Security assessment and remediation completed.","data":result}
             path=None
             for prefix in ("مسیر:","آدرس:","path:","url:","project:","پروژه:"):
                 if prefix in msg: path=msg.split(prefix,1)[1].strip().strip('"').strip("'"); break
@@ -459,31 +497,41 @@ def chat(r:ChatRequest, request:Request):
         if code_intent:
             language=requested or "Python"
             return {"type":"code","answer":"Generated program:","data":learner.generate_program(msg,language)}
-        if any(x in low for x in ("تأیید آپدیت","تایید آپدیت","confirm update","approve update","apply update")) and user["role"] != "admin":
-            raise HTTPException(403,"Self-update requires administrator approval.")
+        if any(x in low for x in ("تایید آپدیت","تأیید آپدیت","تایید بروزرسانی","تأیید بروزرسانی","تایید به روزرسانی","تأیید به روزرسانی","confirm update","approve update","apply update")):
+            if user["role"] != "admin":
+                raise HTTPException(403,"Self-update requires administrator approval.")
         return {"type":"chat","answer":agent.chat(msg,sid),"session_id":sid}
+    except HTTPException:
+        raise
     except Exception as e: raise HTTPException(502,str(e))
 
 @app.post("/learn/url")
-def learn_url(r:URLRequest):
+def learn_url(r:URLRequest, request:Request):
+    require_user(request)
     try:return learner.study_url(str(r.url),r.topic)
     except Exception as e: raise HTTPException(400,str(e))
 @app.post("/learning/start")
-def learning_start(r:LanguageRequest): return learner.start(r.language)
+def learning_start(r:LanguageRequest, request:Request):
+    require_user(request) return learner.start(r.language)
 @app.post("/learning/step")
-def learning_step(r:LanguageRequest):
+def learning_step(r:LanguageRequest, request:Request):
+    require_user(request)
     try:return learner.learn_next(r.language)
     except Exception as e: raise HTTPException(502,str(e))
 @app.get("/learning/status")
-def learning_status(language:str|None=None): return learner.status(language)
+def learning_status(request:Request, language:str|None=None):
+    require_user(request) return learner.status(language)
 @app.post("/learning/practice")
-def practice(r:ChatRequest):
+def practice(r:ChatRequest, request:Request):
+    require_user(request)
     try:return learner.practice(r.message)
     except Exception as e: raise HTTPException(502,str(e))
 @app.post("/code/run")
-def code_run(r:CodeRequest): return learner.validate_code(r.code)
+def code_run(r:CodeRequest, request:Request):
+    require_user(request) return learner.validate_code(r.code)
 @app.post("/code/generate")
-def code_generate(r:ProgramRequest):
+def code_generate(r:ProgramRequest, request:Request):
+    require_user(request)
     try:return learner.generate_program(r.request,r.language)
     except Exception as e: raise HTTPException(502,str(e))
 @app.post("/security/scan")
@@ -676,7 +724,12 @@ def git_repo(repository:str):
 @app.get("/git/tree")
 def git_tree(repository:str,ref:str="HEAD"): return GitHubConnector().tree(repository,ref)
 @app.get("/git/file")
-def git_file(repository:str,path:str,ref:str|None=None): return GitHubConnector().file(repository,path,ref)
+def git_file(repository:str,path:str,ref:str|None=None,request:Request=None):
+    user=require_user(request)
+    normalized=path.replace("\\","/")
+    if normalized.startswith("/") or normalized.startswith("../") or "/../" in normalized or any(part==".." for part in normalized.split("/")):
+        raise HTTPException(400,"Invalid repository path.")
+    return GitHubConnector().file(repository,normalized,ref)
 @app.get("/git/issues")
 def git_issues(repository:str,state:str="open"): return GitHubConnector().issues(repository,state)
 @app.get("/git/pulls")
@@ -695,25 +748,34 @@ def git_update_file(r:GitRequest, request:Request):
 @app.get("/languages")
 def languages(): return {"languages":list(LANGUAGE_CURRICULA.keys())}
 @app.post("/projects/plan")
-def project_plan(r:ProjectRequest):
+def project_plan(r:ProjectRequest, request:Request):
+    require_user(request)
     try:return {"tasks":agent.plan_project(r.goal)}
     except Exception as e: raise HTTPException(502,str(e))
 @app.get("/memory/knowledge")
 def knowledge(): return fetch_all("SELECT * FROM knowledge ORDER BY id DESC")
 @app.get("/memory/search")
-def memory_search(q:str,limit:int=8):
+def memory_search(q:str,request:Request,limit:int=8):
+    require_user(request)
     from .memory import recall; return recall(q,limit)
 @app.get("/projects/tasks")
-def project_tasks(): return fetch_all("SELECT * FROM project_tasks ORDER BY id")
+def project_tasks(request:Request):
+    require_user(request) return fetch_all("SELECT * FROM project_tasks ORDER BY id")
 @app.post("/scheduler/start")
-def scheduler_start(r:SchedulerRequest):
+def scheduler_start(r:SchedulerRequest, request:Request):
+    require_user(request)
     if not 60<=r.interval_seconds<=86400: raise HTTPException(400,"interval_seconds must be 60..86400")
     scheduler.interval_seconds=r.interval_seconds; scheduler.start(r.language); return {"status":"started","language":r.language,"interval_seconds":r.interval_seconds}
 @app.get("/scheduler/status")
-def scheduler_status(): return scheduler.status()
+def scheduler_status(request:Request):
+    require_user(request) return scheduler.status()
 @app.post("/learning/learn")
-def learning_learn(r:LearnRequest):
+def learning_learn(r:LearnRequest, request:Request):
+    require_user(request)
     if not 60<=r.interval_seconds<=86400: raise HTTPException(400,"interval_seconds must be 60..86400")
     scheduler.interval_seconds=r.interval_seconds; scheduler.start(r.language); return {"status":"started","language":r.language,"interval_seconds":r.interval_seconds}
 @app.post("/scheduler/stop")
-def scheduler_stop(): scheduler.stop(); return {"status":"stopped"}
+def scheduler_stop(request:Request):
+    require_user(request)
+    scheduler.stop_learning()
+    return {"status":"stopped"}
