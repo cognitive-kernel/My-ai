@@ -551,7 +551,8 @@ def learn_url(r:URLRequest, request:Request):
     except Exception as e: raise HTTPException(400,str(e))
 @app.post("/learning/start")
 def learning_start(r:LanguageRequest, request:Request):
-    require_user(request) return learner.start(r.language)
+    require_user(request)
+    return learner.start(r.language)
 @app.post("/learning/step")
 def learning_step(r:LanguageRequest, request:Request):
     require_user(request)
@@ -559,7 +560,8 @@ def learning_step(r:LanguageRequest, request:Request):
     except Exception as e: raise HTTPException(502,str(e))
 @app.get("/learning/status")
 def learning_status(request:Request, language:str|None=None):
-    require_user(request) return learner.status(language)
+    require_user(request)
+    return learner.status(language)
 @app.post("/learning/practice")
 def practice(r:ChatRequest, request:Request):
     require_user(request)
@@ -567,7 +569,8 @@ def practice(r:ChatRequest, request:Request):
     except Exception as e: raise HTTPException(502,str(e))
 @app.post("/code/run")
 def code_run(r:CodeRequest, request:Request):
-    require_user(request) return learner.validate_code(r.code)
+    require_user(request)
+    return learner.validate_code(r.code)
 @app.post("/code/generate")
 def code_generate(r:ProgramRequest, request:Request):
     require_user(request)
@@ -799,7 +802,8 @@ def memory_search(q:str,request:Request,limit:int=8):
     from .memory import recall; return recall(q,limit)
 @app.get("/projects/tasks")
 def project_tasks(request:Request):
-    require_user(request) return fetch_all("SELECT * FROM project_tasks ORDER BY id")
+    require_user(request)
+    return fetch_all("SELECT * FROM project_tasks ORDER BY id")
 @app.post("/scheduler/start")
 def scheduler_start(r:SchedulerRequest, request:Request):
     require_user(request)
@@ -807,7 +811,8 @@ def scheduler_start(r:SchedulerRequest, request:Request):
     scheduler.interval_seconds=r.interval_seconds; scheduler.start(r.language); return {"status":"started","language":r.language,"interval_seconds":r.interval_seconds}
 @app.get("/scheduler/status")
 def scheduler_status(request:Request):
-    require_user(request) return scheduler.status()
+    require_user(request)
+    return scheduler.status()
 @app.post("/learning/learn")
 def learning_learn(r:LearnRequest, request:Request):
     require_user(request)
