@@ -16,7 +16,7 @@ jobs:
       - run: python -m compileall -q my_ai tests
       - run: ruff check my_ai --select F
       - run: mypy my_ai --ignore-missing-imports
-      - run: bandit -r my_ai -q
+      - run: bandit -r my_ai -q -lll
       - run: pip-audit
       - run: pytest -q
       - run: docker build -t my-ai-ci .
