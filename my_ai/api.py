@@ -1,6 +1,5 @@
 from __future__ import annotations
 from contextlib import asynccontextmanager
-import os
 import re
 from fastapi import FastAPI,HTTPException,Request
 from fastapi.responses import HTMLResponse,JSONResponse,RedirectResponse,StreamingResponse
@@ -686,11 +685,11 @@ def git_pulls(repository:str,state:str="open"): return GitHubConnector().pull_re
 def git_branches(repository:str): return GitHubConnector().branches(repository)
 @app.post("/git/branch")
 def git_branch(r:GitRequest, request:Request):
-    user=require_admin(request)
+    require_admin(request)
     return GitHubConnector().create_branch(r.repository,r.branch or "",r.ref or "main",True)
 @app.put("/git/file")
 def git_update_file(r:GitRequest, request:Request):
-    user=require_admin(request)
+    require_admin(request)
     if not r.path or r.content is None or not r.message: raise HTTPException(400,"path, content and message are required")
     return GitHubConnector().update_file(r.repository,r.path,r.content,r.message,r.branch or "main",True)
 @app.get("/languages")
