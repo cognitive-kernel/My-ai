@@ -325,34 +325,41 @@ def skills_revalidate(r:SkillRevalidateRequest, request:Request):
 @app.get("/help",response_class=HTMLResponse)
 def help(): return help_page()
 @app.get("/chat/sessions")
-def chat_sessions(): return {"sessions":fetch_all("SELECT id,title,kind,language,pinned,created_at,updated_at FROM chat_sessions ORDER BY pinned DESC,updated_at DESC,id DESC")}
+def chat_sessions(request:Request):
+    user=require_user(request)
+    return {"sessions":fetch_all("SELECT id,title,kind,language,pinned,created_at,updated_at FROM chat_sessions WHERE user_id=? ORDER BY pinned DESC,updated_at DESC,id DESC",(user["id"],))}
 @app.patch("/chat/sessions/{session_id}")
-def update_chat_session(session_id:int,r:ChatRequest):
-    rows=fetch_all("SELECT id FROM chat_sessions WHERE id=?",(session_id,))
+def update_chat_session(session_id:int,r:ChatRequest,request:Request):
+    user=require_user(request)
+    rows=fetch_all("SELECT id FROM chat_sessions WHERE id=? AND user_id=?",(session_id,user["id"]))
     if not rows: raise HTTPException(404,"Chat session not found")
     payload=r.message.strip()
     if payload:
         execute("UPDATE chat_sessions SET title=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",(payload[:80],session_id))
     return {"status":"updated","id":session_id}
 @app.post("/chat/sessions/{session_id}/pin")
-def pin_chat_session(session_id:int):
-    rows=fetch_all("SELECT id,pinned FROM chat_sessions WHERE id=?",(session_id,))
+def pin_chat_session(session_id:int,request:Request):
+    user=require_user(request)
+    rows=fetch_all("SELECT id,pinned FROM chat_sessions WHERE id=? AND user_id=?",(session_id,user["id"]))
     if not rows: raise HTTPException(404,"Chat session not found")
     new_value=0 if rows[0]["pinned"] else 1
     execute("UPDATE chat_sessions SET pinned=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",(new_value,session_id))
     return {"id":session_id,"pinned":bool(new_value)}
 @app.delete("/chat/sessions/{session_id}")
-def delete_chat_session(session_id:int):
-    rows=fetch_all("SELECT id FROM chat_sessions WHERE id=?",(session_id,))
+def delete_chat_session(session_id:int,request:Request):
+    user=require_user(request)
+    rows=fetch_all("SELECT id FROM chat_sessions WHERE id=? AND user_id=?",(session_id,user["id"]))
     if not rows: raise HTTPException(404,"Chat session not found")
     execute("DELETE FROM conversations WHERE session_id=?",(session_id,))
     execute("DELETE FROM chat_sessions WHERE id=?",(session_id,))
     return {"status":"deleted","id":session_id}
 @app.post("/chat/sessions")
-def create_chat_session(r:ChatRequest):
-    sid=execute("INSERT INTO chat_sessions(title) VALUES(?)",((r.message or "گفتگوی جدید").strip()[:60],)); return {"id":sid}
+def create_chat_session(r:ChatRequest,request:Request):
+    user=require_user(request)
+    sid=execute("INSERT INTO chat_sessions(title,user_id) VALUES(?,?)",((r.message or "گفتگوی جدید").strip()[:60],user["id"])); return {"id":sid}
 @app.get("/chat/history")
-def chat_history(limit:int=100,session_id:int|None=None):
+def chat_history(limit:int=100,session_id:int|None=None,request:Request=None):
+    user=require_user(request)
     limit=max(1,min(limit,500))
     if session_id is None: rows=fetch_all("SELECT role,content,created_at FROM conversations ORDER BY id DESC LIMIT ?",(limit,))
     else: rows=fetch_all("SELECT role,content,created_at FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT ?",(session_id,limit))
