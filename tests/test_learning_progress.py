@@ -101,6 +101,30 @@ def test_scheduler_switches_language_when_already_running(monkeypatch):
     scheduler.stop()
 
 
+def test_scheduler_status_returns_json_safe_snapshot():
+    scheduler = StudyScheduler.__new__(StudyScheduler)
+    scheduler.interval_seconds = 3600
+    scheduler._thread = None
+    scheduler.language = "SQL Server"
+    scheduler.last_result = {"status": "completed", "score": 91}
+    scheduler.current_topic = "T-SQL"
+    scheduler.stage = "completed"
+    scheduler.error = None
+    scheduler._lock = threading.Lock()
+
+    result = scheduler.status()
+
+    assert result == {
+        "running": False,
+        "language": "SQL Server",
+        "stage": "completed",
+        "current_topic": "T-SQL",
+        "last_result": {"status": "completed", "score": 91},
+        "error": None,
+        "interval_seconds": 3600,
+    }
+
+
 def test_knowledge_memory_deduplicates_normalized_content(monkeypatch):
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
