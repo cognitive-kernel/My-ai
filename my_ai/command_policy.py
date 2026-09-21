@@ -24,7 +24,7 @@ def parse_command(text: str) -> CommandPolicy:
     low=re.sub(r"\s+"," ",text.lower()).strip()
     security=_contains(low,SEC_WORDS) or _contains(low,TEST_WORDS)
     report=_contains(low,REPORT_WORDS)
-    explicit_negated_fix=bool(re.search(r"(do not|don't|without|never|not)\s+(fix|remediate|repair)|نباید\s+.*(رفع|اصلاح|درست)",low))
+    explicit_negated_fix=bool(re.search(r"(do not|don't|don’t|without|never|not)\s+(fix|remediate|repair)|نباید\s+.*(رفع|اصلاح|درست)",low))
     fix=_contains(low,FIX_WORDS) and not explicit_negated_fix
     if report:
         action="report"
