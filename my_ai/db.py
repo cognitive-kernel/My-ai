@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS chat_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT,t
 CREATE TABLE IF NOT EXISTS conversations (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS knowledge (id INTEGER PRIMARY KEY AUTOINCREMENT, topic TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL, source_url TEXT, content_hash TEXT, verification_status TEXT NOT NULL DEFAULT 'unverified', verified_at TEXT, verified_by INTEGER, confidence REAL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS knowledge_embeddings (knowledge_id INTEGER NOT NULL, content_hash TEXT NOT NULL, model TEXT NOT NULL, embedding TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(knowledge_id,model), FOREIGN KEY(knowledge_id) REFERENCES knowledge(id) ON DELETE CASCADE);
-CREATE TABLE IF NOT EXISTS learning_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, language TEXT NOT NULL, topic TEXT NOT NULL, status TEXT NOT NULL, score REAL, notes TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS learning_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, language TEXT NOT NULL, topic TEXT NOT NULL, status TEXT NOT NULL, score REAL, notes TEXT, progress_percent REAL NOT NULL DEFAULT 0, phase TEXT NOT NULL DEFAULT 'starting', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS experiments (id INTEGER PRIMARY KEY AUTOINCREMENT, language TEXT NOT NULL, code TEXT NOT NULL, output TEXT, error TEXT, passed INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS project_tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, project TEXT NOT NULL, title TEXT NOT NULL, description TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(title, content, topic, source_url, content='knowledge', content_rowid='id');
@@ -124,6 +124,9 @@ def init_db() -> None:
         cols_sessions=[r[1] for r in conn.execute("PRAGMA table_info(chat_sessions)").fetchall()]
         if "pinned" not in cols_sessions: conn.execute("ALTER TABLE chat_sessions ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
         if "user_id" not in cols_sessions: conn.execute("ALTER TABLE chat_sessions ADD COLUMN user_id INTEGER")
+        cols_learning=[r[1] for r in conn.execute("PRAGMA table_info(learning_sessions)").fetchall()]
+        if "progress_percent" not in cols_learning: conn.execute("ALTER TABLE learning_sessions ADD COLUMN progress_percent REAL NOT NULL DEFAULT 0")
+        if "phase" not in cols_learning: conn.execute("ALTER TABLE learning_sessions ADD COLUMN phase TEXT NOT NULL DEFAULT 'starting'")
         cols_knowledge=[r[1] for r in conn.execute("PRAGMA table_info(knowledge)").fetchall()]
         if "content_hash" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN content_hash TEXT")
         if "verification_status" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN verification_status TEXT NOT NULL DEFAULT 'unverified'")
