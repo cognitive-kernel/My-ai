@@ -59,7 +59,12 @@ def test_openai_compatible_client_sends_structured_history(monkeypatch):
     monkeypatch.setattr(
         llm_module,
         "settings",
-        SimpleNamespace(openai_api_key="test-key", openai_base_url="http://llm.test/v1", openai_model="test-model"),
+        SimpleNamespace(
+            openai_api_key="test-key",
+            openai_base_url="http://llm.test/v1",
+            openai_model="test-model",
+            llm_provider="openai",
+        ),
     )
     client = llm_module.OpenAICompatibleClient()
     result = client.chat(
@@ -84,7 +89,12 @@ def test_create_llm_auto_prefers_openai_when_key_exists(monkeypatch):
     monkeypatch.setattr(
         llm_module,
         "settings",
-        SimpleNamespace(openai_api_key="test-key", openai_base_url="http://llm.test/v1", openai_model="test-model"),
+        SimpleNamespace(
+            openai_api_key="test-key",
+            openai_base_url="http://llm.test/v1",
+            openai_model="test-model",
+            llm_provider="auto",
+        ),
     )
     assert isinstance(llm_module.create_llm(), llm_module.OpenAICompatibleClient)
 
