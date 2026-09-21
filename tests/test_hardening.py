@@ -30,7 +30,7 @@ def test_registration_closes_and_login_link_disappears(client_db):
     assert client.get("/auth/register/status").json()["open"] is False
     assert client.get("/register", follow_redirects=False).status_code == 303
     login = client.get("/login")
-    assert "register-link" in login.text
+    assert "href='/register'" not in login.text
 
 
 def test_non_admin_chat_requires_chat_permission(client_db):
@@ -58,3 +58,45 @@ def test_curly_apostrophe_does_not_request_fix():
     assert policy.security_action != "fix"
     policy = parse_command("don’t fix this")
     assert policy.security_action != "fix"
+
+def test_knowledge_triggers_survive_reinit_and_update(client_db):
+    db.remember_knowledge("Python", "عنوان", "محتوا")
+    db.init_db()
+    row_id=db.execute("UPDATE knowledge SET title=? WHERE id=?", ("عنوان جدید", 1))
+    assert row_id == 1
+    db.execute("UPDATE knowledge SET verification_status=? WHERE id=?", ("verified", 1))
+    assert db.fetch_all("SELECT title FROM knowledge_fts WHERE rowid=1")[0]["title"] == "عنوان جدید"
+
+
+def test_login_rate_limit_blocks_correct_password_after_failures(client_db):
+    client=client_db
+    auth.create_account("owner","a-secure-password")
+    for _ in range(5):
+        response=client.post("/auth/login",json={"username":"owner","password":"wrong-password"})
+        assert response.status_code in (401,429)
+    response=client.post("/auth/login",json={"username":"owner","password":"a-secure-password"})
+    assert response.status_code == 429
+
+
+def test_learning_target_does_not_match_c_inside_words():
+    from my_ai.curriculum import resolve_learning_target
+    assert resolve_learning_target("learn cooking") == "cooking"
+    assert resolve_learning_target("how do machines learn") == "how do machines learn"
+    assert resolve_learning_target("learn C") == "C"
+    assert resolve_learning_target("learn Python") == "Python"
+
+
+def test_remote_executor_normalizes_run_url(monkeypatch):
+    import my_ai.executor as executor
+    calls=[]
+    class Response:
+        def raise_for_status(self): pass
+        def json(self): return {"output":"ok","error":"","timed_out":False,"return_code":0}
+    def fake_post(url,**kwargs):
+        calls.append(url)
+        return Response()
+    monkeypatch.setattr(executor.httpx,"post",fake_post)
+    monkeypatch.setenv("EXECUTOR_SHARED_TOKEN","real-test-token")
+    monkeypatch.setenv("EXECUTOR_SERVICE_URL","http://executor:9000")
+    executor._run_remote("print(1)")
+    assert calls == ["http://executor:9000/run"]
