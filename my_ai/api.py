@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 import re
 import json
 from fastapi import FastAPI,HTTPException,Request
-from fastapi.responses import HTMLResponse,JSONResponse,RedirectResponse,Response
+from fastapi.responses import HTMLResponse,JSONResponse,RedirectResponse,Response,StreamingResponse
 from pydantic import BaseModel,HttpUrl,Field
 from .agent import Agent
 from .command_policy import parse_command
@@ -18,6 +18,7 @@ from .git_connector import GitHubConnector
 from .auth import authenticate, audit, create_account, create_session, current_user, require_admin, revoke_session, require_user, tool_allowed
 from .platform import backup_database, choose_model, eval_retrieval, export_database, hybrid_search, import_database, model_health, resource_status, self_update_apply, self_update_status, voice_status, web_fetch_policy
 from .skill_engine import ensure_skill, record_evidence, revalidate, snapshot
+from .llm import create_llm
 
 scheduler=StudyScheduler()
 @asynccontextmanager
@@ -132,6 +133,21 @@ def admin_tools(request: Request):
     require_admin(request)
     return {"items":fetch_all("SELECT * FROM tool_permissions ORDER BY user_id,tool_name,action")}
 
+
+
+@app.post("/chat/stream")
+def chat_stream(r:ChatRequest, request:Request):
+    user=require_user(request)
+    llm=create_llm()
+    def generate():
+        stream=getattr(llm,"stream_chat",None)
+        if stream is None:
+            yield agent.chat(r.message,r.session_id)
+            return
+        for chunk in stream(r.message):
+            yield chunk
+    audit(user,"chat","stream","200")
+    return StreamingResponse(generate(),media_type="text/plain; charset=utf-8")
 
 @app.get("/memory/knowledge")
 def knowledge_list(request: Request, status: str | None = None, limit: int = 200):
