@@ -379,7 +379,7 @@ docker compose up --build
 python -m venv .venv
 .\\.venv\\Scripts\\Activate.ps1
 pip install -r requirements.txt
-ollama pull qwen2.5-coder:7b
+ollama pull qwen2.5:7b
 python -m my_ai
 ```
 
@@ -404,7 +404,7 @@ http://127.0.0.1:8000
 | Variable | Default | Purpose |
 |---|---|---|
 | OLLAMA_BASE_URL | http://127.0.0.1:11434 | آدرس Ollama |
-| OLLAMA_MODEL | qwen2.5-coder:7b | مدل محلی |
+| OLLAMA_MODEL | qwen2.5:7b | مدل محلی |
 | DB_PATH | data/myai.db | پایگاه‌داده پایدار |
 | MAX_WEB_CHARS | 30000 | حداکثر متن استخراج‌شده از وب |
 | EXEC_TIMEOUT | 10 | timeout اجرای Python |
@@ -510,7 +510,7 @@ CI تست‌های خودکار را روی push و pull request اجرا می�
 - تأیید و رد به‌روزرسانی‌های راهنما
 - API با mutable defaultهای اصلاح‌شده
 - GitHub Actions برای compile و pytest
-- Static Security Analysis و DAST
+- Static Security Analysis و DAST خارجی؛ DAST محلی فقط در sandbox تأییدشده
 - curriculum، حافظه پایدار و Scheduler
 - Voice، Git/GitHub و رابط وب
 
