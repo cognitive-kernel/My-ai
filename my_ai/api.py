@@ -1,9 +1,8 @@
 from __future__ import annotations
 from contextlib import asynccontextmanager
 import re
-import json
 from fastapi import FastAPI,HTTPException,Request
-from fastapi.responses import HTMLResponse,JSONResponse,RedirectResponse,Response,StreamingResponse
+from fastapi.responses import HTMLResponse,JSONResponse,RedirectResponse,StreamingResponse
 from pydantic import BaseModel,HttpUrl,Field
 from .agent import Agent
 from .command_policy import parse_command
@@ -13,7 +12,7 @@ from .db import fetch_all,init_db,execute
 from .learner import LearningEngine
 from .scheduler import StudyScheduler
 from .ui import page
-from .help import page as help_page, ask_help, local_help_html, apply_help_update
+from .help import page as help_page, ask_help, local_help_html
 from .git_connector import GitHubConnector
 from .auth import authenticate, audit, create_account, create_session, current_user, require_admin, revoke_session, require_user, tool_allowed
 from .platform import backup_database, choose_model, eval_retrieval, export_database, hybrid_search, import_database, model_health, resource_status, self_update_apply, self_update_status, voice_status, web_fetch_policy
