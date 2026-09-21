@@ -123,9 +123,14 @@ def init_db() -> None:
         if "verified_at" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN verified_at TEXT")
         if "verified_by" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN verified_by INTEGER")
         if "confidence" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN confidence REAL")
-        if conn.execute("SELECT COUNT(*) FROM chat_sessions").fetchone()[0]==0:
-            cur=conn.execute("INSERT INTO chat_sessions(title) VALUES(?)",("گفتگوی قبلی",))
+        admin_row = conn.execute("SELECT id FROM users WHERE role='admin' ORDER BY id LIMIT 1").fetchone()
+        if conn.execute("SELECT COUNT(*) FROM chat_sessions").fetchone()[0]==0 and conn.execute("SELECT COUNT(*) FROM conversations WHERE session_id IS NULL").fetchone()[0]:
+            cur=conn.execute("INSERT INTO chat_sessions(title,user_id) VALUES(?,?)",("گفتگوی قبلی", admin_row[0] if admin_row else None))
             conn.execute("UPDATE conversations SET session_id=? WHERE session_id IS NULL",(cur.lastrowid,))
+        elif admin_row:
+            conn.execute("UPDATE chat_sessions SET user_id=? WHERE user_id IS NULL",(admin_row[0],))
+        if admin_row:
+            conn.execute("UPDATE conversations SET session_id=(SELECT id FROM chat_sessions WHERE user_id=? ORDER BY id LIMIT 1) WHERE session_id IS NULL",(admin_row[0],))
         _deduplicate_knowledge(conn)
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_content_hash ON knowledge(content_hash)")
         conn.executescript("""
