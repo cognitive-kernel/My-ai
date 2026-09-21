@@ -219,11 +219,30 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 
 هشدارها مربوط به deprecationهای dependencyهای FastAPI/Starlette و GitHub Actions هستند و شکست تست نیستند.
 
-## 9. کار بعدی
+## 9. وضعیت پیاده‌سازی Roadmap
 
-بر اساس اولویت جدید، شروع implementation باید از **اولویت 1: احراز هویت و سیستم دسترسی ابزارها** باشد؛ سپس مراحل 2 تا 12 به‌ترتیب اجرا شوند.
+- اولویت 1: احراز هویت محلی، login/register، first-account-as-admin، session cookie، per-tool allow/deny و audit log پیاده‌سازی شد.
+- صفحه ساخت حساب و صفحه ورود اضافه شد. اولین حسابی که در دیتابیس ساخته شود role=admin می‌گیرد و به همه ابزارها دسترسی دارد؛ حساب‌های بعدی user هستند و دسترسی ابزارها به‌صورت جداگانه کنترل می‌شود.
+- صفحه مدیریت دانش در `/admin/knowledge` اضافه شد؛ دانش جدید unverified است و admin می‌تواند آن را ویرایش، حذف و verify کند.
+- Hybrid retrieval foundation با FTS5 + embedding از Ollama و confidence/provenance اضافه شد؛ مدل embedding پیش‌فرض `bge-m3`.
+- Skill Engine foundation با evidence، score، verified و version-aware revalidation اضافه شد.
+- streaming chat endpoint، backup/export/import دیتابیس و model health/routing foundation اضافه شد.
+- voice adapters برای whisper.cpp و Piper و endpointهای local voice اضافه شد.
+- scheduler در بار بالای CPU/RAM pause می‌شود و robots.txt policy برای web fetching در API اضافه شد.
+- CI توسعه یافت: `ruff`، `mypy`، `bandit`، `pip-audit`، Docker build و workflow مستقل Ollama E2E.
+- dependency source در `pyproject.toml` متمرکز شد و `requirements.txt` به `.[dev]` متصل شد.
+- self-update اکنون به‌صورت صریح deny-by-default است و برای activation علاوه بر approval gate به `MYAI_SELF_UPDATE_ENABLED=true` نیاز دارد.
+- structured intent router foundation اضافه شد؛ اقدامات پرخطر برای مسیرهای write حساس همچنان باید از policy/permission عبور کنند.
 
-## 10. معیار موفقیت یادگیری
+### وضعیت verification
+
+آخرین commitهای پیاده‌سازی روی `main` قرار گرفته‌اند. GitHub Actions برای commit فعلی در حال اجراست و نتیجه نهایی CI هنوز تأیید نشده است؛ بنابراین قبل از اعلام pull، نتیجه workflowها باید سبز شود.
+
+## 10. کار بعدی
+
+پس از سبز شدن CI، مرحله‌ی بعدی تست محیط واقعی روی سیستم محلی است: ساخت اولین account، بررسی admin access، login/logout، Ollama، hybrid retrieval با `bge-m3` و تست مسیرهای backup/voice. self-update تا زمان policy review و approval صریح فعال نخواهد شد.
+
+## 11. معیار موفقیت یادگیری
 
 `knowledge_coverage`، `concept_score`، `implementation_score`، `debugging_score`، `testing_score`، `real_project_score`، `verified`، `last_verified` و `evidence` باید مستقل نگهداری شوند.
 
@@ -231,7 +250,7 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 
 `Study → Practice → Execute → Test → Fail → Analyze → Fix → Retest → Verify`
 
-## 11. نکته برای چت‌های آینده
+## 12. نکته برای چت‌های آینده
 
 در چت جدید، ابتدا این فایل و سپس وضعیت واقعی `main` بررسی شود و فرض نشود تغییرات چت قبلی هنوز روی branch هستند.
 
