@@ -43,6 +43,7 @@ _TOOL_RULES = (
     ("/memory/search","memory"),("/web/","web"),("/projects/","projects"),
     ("/eval/","eval"),("/self-update/","self-update"),("/help/ask","help"),
 )
+_PATH_ACTIONS = {"/git/token": "write", "/git/logout": "write"}
 _LOGIN_FAILURES: dict[str, tuple[int, float]] = {}
 _LOGIN_FAILURE_LIMIT = 5
 _LOGIN_FAILURE_WINDOW = 300.0
@@ -71,7 +72,7 @@ async def auth_and_audit_middleware(request: Request, call_next):
     if user and user["role"] != "admin":
         for prefix,tool in _TOOL_RULES:
             if path.startswith(prefix) or path == prefix.rstrip("/"):
-                action="read" if request.method=="GET" else "write" if request.method in {"PUT","PATCH","DELETE"} else "execute"
+                action=_PATH_ACTIONS.get(path, "read" if request.method=="GET" else "write" if request.method in {"PUT","PATCH","DELETE"} else "execute")
                 if not tool_allowed(user,tool,action):
                     return JSONResponse({"detail":f"Tool permission denied: {tool}:{action}"},status_code=403)
                 break
