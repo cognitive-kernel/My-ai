@@ -1,21 +1,18 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 import os
 import shutil
-import subprocess
-import time
 import urllib.parse
 import urllib.robotparser
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import httpx
 
 from .config import settings
-from .db import connect, execute, fetch_all
+from .db import connect, fetch_all
 
 
 def ollama_embed(text: str, model: str = "bge-m3") -> list[float]:
