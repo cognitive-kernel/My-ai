@@ -27,7 +27,7 @@ class OllamaClient:
         system: str | None = None,
         history: Sequence[HistoryMessage] | None = None,
     ) -> Iterator[str]:
-        payload: dict[str, object] = {"model": self.model, "stream": True, "options": {"num_ctx": int(os.getenv("OLLAMA_NUM_CTX", "8192"))}, "messages": []}
+        payload: dict[str, object] = {"model": self.model, "stream": True, "options": {"num_ctx": settings.ollama_num_ctx}, "messages": []}
         messages = payload["messages"]
         assert isinstance(messages, list)
         if system:
