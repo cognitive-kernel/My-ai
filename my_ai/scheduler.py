@@ -5,6 +5,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 
 from .learner import LearningEngine
+from .platform import resource_status
 from .curriculum import LANGUAGE_CURRICULA, LANGUAGE_SOURCES, canonical_language
 from .db import execute, fetch_all
 from .domain_registry import load_saved_domains
@@ -165,6 +166,14 @@ class StudyScheduler:
                 if language not in LANGUAGE_CURRICULA:
                     language = ensure_domain(language, getattr(engine, "llm", None)) or language
                     self.language = language
+                limits_cpu = float(__import__("os").getenv("SCHEDULER_MAX_CPU_PERCENT", "90"))
+                limits_ram = float(__import__("os").getenv("SCHEDULER_MAX_RAM_PERCENT", "90"))
+                resources = resource_status()
+                if resources.get("cpu_percent") is not None and (resources["cpu_percent"] > limits_cpu or resources["ram_percent"] > limits_ram):
+                    self.update_progress("paused", "system load high")
+                    self.last_result = {"status":"paused","reason":"system load high","resources":resources}
+                    stop_event.wait(min(self.interval_seconds, 60))
+                    continue
                 self.update_progress("starting")
                 self.last_result = engine.learn_next(language, progress_callback=self.update_progress)
                 if self.last_result.get("status") == "completed":
