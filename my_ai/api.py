@@ -309,7 +309,9 @@ def voice_transcribe(r:VoiceTranscribeRequest, request:Request):
 def voice_synthesize(r:VoiceSynthesizeRequest, request:Request):
     user=require_user(request)
     VOICE_ROOT.mkdir(parents=True,exist_ok=True)
-    result=synthesize(r.text,_voice_path(r.model_path,True),_voice_path(r.output_path,False))
+    output_path=_voice_path(r.output_path,False)
+    Path(output_path).parent.mkdir(parents=True,exist_ok=True)
+    result=synthesize(r.text,_voice_path(r.model_path,True),output_path)
     audit(user,"voice","execute","200")
     return {"path":result}
 
