@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from .db import execute, fetch_all
 from .memory import recall
@@ -46,6 +47,36 @@ Self-maintenance rules:
 class Agent:
     def __init__(self, llm=None):
         self.llm = llm or create_llm()
+
+    @staticmethod
+    def _is_identity_question(message: str) -> bool:
+        text = re.sub(r"\s+", " ", message.strip().lower())
+        patterns = (
+            r"\bwho are you\b",
+            r"\bwhat are you\b",
+            r"\bwhat is your name\b",
+            r"\bwhat model are you\b",
+            r"\bwhat llm are you\b",
+            r"\babout yourself\b",
+            r"\bdescribe yourself\b",
+            r"درباره\s+خودت",
+            r"در مورد\s+خودت",
+            r"خودت\s+(چی|چه|کی)\s+(هستی|ای|کسی)",
+            r"اسم\s+تو\s+(چیه|چیست)",
+            r"مدل\s+تو\s+(چیه|چیست)",
+            r"چه\s+مدلی\s+هستی",
+            r"تو\s+چه\s+مدلی\s+هستی",
+        )
+        return any(re.search(pattern, text) for pattern in patterns)
+
+    def _identity_response(self) -> str:
+        provider = "OpenAI-compatible" if self.llm.__class__.__name__ == "OpenAICompatibleClient" else "Ollama"
+        model = getattr(self.llm, "model", "نامشخص")
+        return (
+            f"من My-AI هستم؛ دستیار هوش مصنوعی این پروژه. "
+            f"مدل زبانی فعال من {model} است و backend فعلی من {provider} است. "
+            "من را با کاربر اشتباه نمی‌گیرم: «من» در این پاسخ به خودِ دستیار اشاره دارد."
+        )
 
     def _self_maintenance(self, message):
         low = message.strip().lower()
@@ -105,6 +136,19 @@ class Agent:
             )
             execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
             return maintenance
+
+        if self._is_identity_question(message):
+            answer = self._identity_response()
+            execute(
+                "INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",
+                (session_id, "user", message),
+            )
+            execute(
+                "INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",
+                (session_id, "assistant", answer),
+            )
+            execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
+            return answer
 
         history = fetch_all(
             "SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 20",
