@@ -69,7 +69,7 @@ def page():
     updates = fetch_all("SELECT * FROM help_updates WHERE status='approved' ORDER BY id DESC LIMIT 30")
     extra = "".join(
         f"<section class='card'><h2>به‌روزرسانی راهنما: {u['component']}</h2>"
-        f"<p>{u['proposed_update'] or u['answer']}</p><p><small>منابع: {u['sources']}</small></p></section>"
+        f"<p>{escape(u['proposed_update'] or u['answer'])}</p><p><small>منابع: {escape(u['sources'] or '')}</small></p></section>"
         for u in updates
     )
     return HTML.replace("</main></body></html>", extra + "</main></body></html>")
