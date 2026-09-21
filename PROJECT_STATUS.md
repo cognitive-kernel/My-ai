@@ -261,3 +261,15 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 برای پاسخ و مدل: `my_ai/agent.py`، `my_ai/llm.py` و `my_ai/config.py`.
 
 این سند باید بعد از هر update مهم، bug fix، تغییر معماری، تغییر curriculum، تغییر وضعیت تست‌ها یا milestone به‌روزرسانی شود.
+
+
+### Security hardening verification
+- First-account registration is now closed after the first account; administrator user management and per-tool enforcement are present.
+- Session cookies are HttpOnly/SameSite and login failure rate limiting is enabled.
+- Chat sessions/history are scoped to the authenticated user.
+- GitHub writes and security remediation require administrator approval.
+- Host-side local DAST execution is blocked; local execution now requires an approved sandbox path. External DAST rejects non-global resolved addresses.
+- SQLite enables WAL and foreign-key enforcement; Persian normalization is used for knowledge search/deduplication.
+- LLM mode is local-first in auto mode and Ollama context size is configurable with OLLAMA_NUM_CTX.
+- Docker image now includes runtime metadata/docs and binds to 0.0.0.0 inside the container.
+- Self-update remains deny-by-default and runtime state is ignored by Git.
