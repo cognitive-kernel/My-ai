@@ -83,10 +83,16 @@ def connect() -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, timeout=30)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
+def _normalize_search_text(value: str) -> str:
+    return str(value).replace("ي","ی").replace("ى","ی").replace("ك","ک").replace("\u200c"," ").replace("\u200d"," ").replace("\u0640","").casefold()
+
 def _knowledge_hash(topic: str, content: str) -> str:
-    normalized = " ".join(str(content).split()).strip().casefold()
+    normalized = _normalize_search_text(content)
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 def _deduplicate_knowledge(conn: sqlite3.Connection) -> None:
