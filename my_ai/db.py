@@ -113,6 +113,11 @@ def _deduplicate_knowledge(conn: sqlite3.Connection) -> None:
 def init_db() -> None:
     with connect() as conn:
         conn.executescript(SCHEMA)
+        conn.executescript("""
+        DROP TRIGGER IF EXISTS knowledge_ai;
+        DROP TRIGGER IF EXISTS knowledge_ad;
+        DROP TRIGGER IF EXISTS knowledge_au;
+        """)
         cols=[r[1] for r in conn.execute("PRAGMA table_info(conversations)").fetchall()]
         if "session_id" not in cols: conn.execute("ALTER TABLE conversations ADD COLUMN session_id INTEGER")
         cols_sessions=[r[1] for r in conn.execute("PRAGMA table_info(chat_sessions)").fetchall()]
@@ -135,15 +140,15 @@ def init_db() -> None:
         _deduplicate_knowledge(conn)
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_content_hash ON knowledge(content_hash)")
         conn.executescript("""
-        CREATE TRIGGER IF NOT EXISTS knowledge_ai AFTER INSERT ON knowledge BEGIN
+        CREATE TRIGGER knowledge_ai AFTER INSERT ON knowledge BEGIN
           INSERT INTO knowledge_fts(rowid,title,content,topic,source_url) VALUES(new.id,normalize_search(new.title),normalize_search(new.content),normalize_search(new.topic),normalize_search(new.source_url));
         END;
-        CREATE TRIGGER IF NOT EXISTS knowledge_ad AFTER DELETE ON knowledge BEGIN
-          INSERT INTO knowledge_fts(knowledge_fts,rowid,title,content,topic,source_url) VALUES('delete',old.id,old.title,old.content,old.topic,old.source_url);
+        CREATE TRIGGER knowledge_ad AFTER DELETE ON knowledge BEGIN
+          INSERT INTO knowledge_fts(knowledge_fts,rowid,title,content,topic,source_url) VALUES('delete',old.id,normalize_search(old.title),normalize_search(old.content),normalize_search(old.topic),normalize_search(old.source_url));
         END;
-        CREATE TRIGGER IF NOT EXISTS knowledge_au AFTER UPDATE ON knowledge BEGIN
+        CREATE TRIGGER knowledge_au AFTER UPDATE ON knowledge BEGIN
           INSERT INTO knowledge_fts(knowledge_fts,rowid,title,content,topic,source_url) VALUES('delete',old.id,old.title,old.content,old.topic,old.source_url);
-          INSERT INTO knowledge_fts(rowid,title,content,topic,source_url) VALUES(new.id,_normalize_search_text(new.title),_normalize_search_text(new.content),_normalize_search_text(new.topic),_normalize_search_text(new.source_url));
+          INSERT INTO knowledge_fts(rowid,title,content,topic,source_url) VALUES(new.id,normalize_search(new.title),normalize_search(new.content),normalize_search(new.topic),normalize_search(new.source_url));
         END;
         """)
         conn.execute("INSERT INTO knowledge_fts(knowledge_fts) VALUES('delete-all')")
