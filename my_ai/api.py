@@ -12,6 +12,7 @@ from .curriculum import canonical_language,LANGUAGE_CURRICULA
 from .db import fetch_all,init_db,execute
 from .learner import LearningEngine
 from .dynamic_learning import resolve_learning_target
+from .router import classify
 from .scheduler import StudyScheduler
 from .ui import page
 from .help import page as help_page, ask_help, local_help_html
@@ -475,6 +476,12 @@ def chat(r:ChatRequest, request:Request):
         raise HTTPException(404,"Chat session not found.")
     try:
         msg=r.message.strip(); low=msg.lower()
+        intent=classify(msg)
+        required_by_intent={"pentest_external":("security","execute"),"git_write":("github","write"),"self_update":("self-update","write"),"database_import":("database","write"),"code_execution":("code-execution","execute")}
+        if intent.name in required_by_intent:
+            tool,action=required_by_intent[intent.name]
+            if not tool_allowed(user,tool,action):
+                raise HTTPException(403,f"Tool permission denied: {tool}:{action}")
         aliases={"sql server":"SQL Server","sqlserver":"SQL Server","mssql":"SQL Server","mysql":"MySQL","sqlite":"SQLite","sql lite":"SQLite","android":"Android","اندروید":"Android","ios":"iOS","آی او اس":"iOS","python":"Python","پایتون":"Python","php":"PHP","javascript":"JavaScript","js":"JavaScript","pentest":"Pentest","pen test":"Pentest","penetration testing":"Pentest","penetration test":"Pentest","پنتست":"Pentest","پن تست":"Pentest","تست نفوذ":"Pentest","امنیت":"Pentest"}; requested=next((name for key,name in sorted(aliases.items(),key=lambda x:len(x[0]),reverse=True) if key in low),None)
         learn_intent=("یاد بگیر" in low or "یادگیری" in low or "learn" in low or "go learn" in low or "start learning" in low); sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language,user_id) VALUES(?,?,?,?)",(msg[:60] or "گفتگوی جدید","learning" if learn_intent else "chat",requested,user["id"])); policy=parse_command(msg); security_words=policy.security; fix_requested=policy.security_action=="fix"
         help_intent=("راهنما" in low or "چطور وصل" in low or "چطور استفاده" in low or "how do i" in low or "how to" in low or "setup" in low)
