@@ -13,3 +13,5 @@ data/*.sqlite3
 .vscode/
 .idea/
 data/.github_token
+
+data/self_update/
