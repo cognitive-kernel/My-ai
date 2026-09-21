@@ -29,7 +29,12 @@ class StudyScheduler:
             load_saved_domains()
         except Exception as exc:
             self.error = str(exc)
-        self._monitor_thread = threading.Thread(target=self._review_loop, daemon=True)
+        self._monitor_thread = None
+
+    def start_review_monitor(self):
+        if self._monitor_thread and self._monitor_thread.is_alive(): return
+        self._review_stop.clear()
+        self._monitor_thread = threading.Thread(target=self._review_loop, daemon=True, name="myai-weekly-review")
         self._monitor_thread.start()
 
     def start(self, language="Python"):
@@ -64,7 +69,7 @@ class StudyScheduler:
         self._thread.start()
 
     def stop(self):
-        self._stop.set()
+        self._stop.set(); self._review_stop.set()
         self.stage = "stopping"
 
     def running(self):
