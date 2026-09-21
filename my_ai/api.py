@@ -66,6 +66,7 @@ class KnowledgeUpdateRequest(BaseModel): title:str; content:str; topic:str; sour
 class BackupRequest(BaseModel): path:str
 class ImportRequest(BaseModel): path:str
 class PermissionRequest(BaseModel): user_id:int; tool_name:str; action:str; allowed:bool
+class AdminUserRequest(BaseModel): username:str; password:str; display_name:str=""; active:bool=True
 class SkillEvidenceRequest(BaseModel): skill_id:int; kind:str; passed:bool; details:dict[str,object]={}
 class SkillRevalidateRequest(BaseModel): skill_id:int; version:str
 class VoiceTranscribeRequest(BaseModel): audio_path:str; model_path:str; language:str="fa"
@@ -152,6 +153,30 @@ def auth_me(request: Request): return {"user":require_user(request)}
 def admin_audit(request: Request, limit: int=200):
     require_admin(request)
     return {"items":fetch_all("SELECT * FROM audit_log ORDER BY id DESC LIMIT ?",(max(1,min(limit,1000)),))}
+
+@app.get("/admin/users")
+def admin_users(request:Request):
+    require_admin(request)
+    return {"items":fetch_all("SELECT id,username,display_name,role,active,created_at FROM users ORDER BY id")}
+
+@app.post("/admin/users")
+def admin_create_user(r:AdminUserRequest,request:Request):
+    admin=require_admin(request)
+    try: user=create_account(r.username,r.password,r.display_name)
+    except ValueError as exc: raise HTTPException(400,str(exc))
+    if user["role"]=="admin":
+        execute("UPDATE users SET role='user' WHERE id=?",(user["id"],))
+        user["role"]="user"
+    audit(admin,"users","write","200",f"created:{user['username']}")
+    return {"user":user}
+
+@app.patch("/admin/users/{user_id}/active")
+def admin_set_user_active(user_id:int,active:bool,request:Request):
+    admin=require_admin(request)
+    if user_id==admin["id"] and not active: raise HTTPException(400,"The active administrator cannot disable itself.")
+    execute("UPDATE users SET active=? WHERE id=?",(1 if active else 0,user_id))
+    audit(admin,"users","write","200",f"active:{user_id}:{active}")
+    return {"ok":True}
 
 @app.get("/admin/tools")
 def admin_tools(request: Request):
