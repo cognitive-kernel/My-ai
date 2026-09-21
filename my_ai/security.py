@@ -46,7 +46,7 @@ class SecurityEngine:
             raise ValueError("project_path must be an existing directory")
         files=[]
         for p in root.rglob("*"):
-            if not p.is_file() or p.suffix.lower() not in TEXT_EXTENSIONS:
+            if not p.is_file() or p.name.lower() == ".env" or p.suffix.lower() not in TEXT_EXTENSIONS:
                 continue
             if any(part in SKIP_DIRS for part in p.relative_to(root).parts):
                 continue
@@ -68,7 +68,7 @@ class SecurityEngine:
             for severity,title,rule_id,pattern,remediation in RULES:
                 for no,line in enumerate(lines,1):
                     if re.search(pattern,line):
-                        findings.append(Finding(severity,title,rel,no,line.strip()[:300],remediation,rule_id))
+                        findings.append(Finding(severity,title,rel,no,self._redact_evidence(line.strip()[:300]),remediation,rule_id))
         findings.extend(self._structural_checks(files))
         result={"project_path":str(root),"findings":[f.__dict__ for f in findings],"summary":self._summary(findings),"fixed":False}
         scan_id=execute("INSERT INTO security_scans(project_path,status,summary,findings) VALUES(?,?,?,?)",
@@ -83,7 +83,7 @@ class SecurityEngine:
         for severity,title,rule_id,pattern,remediation in RULES:
             for no,line in enumerate(code.splitlines(),1):
                 if re.search(pattern,line):
-                    findings.append(Finding(severity,title,"<generated>",no,line.strip()[:300],remediation,rule_id))
+                    findings.append(Finding(severity,title,"<generated>",no,self._redact_evidence(line.strip()[:300]),remediation,rule_id))
         result={"language":language,"findings":[f.__dict__ for f in findings],"summary":self._summary(findings),"fixed":False,"code":code}
         if fix and findings:
             result.update(self._fix_code(code,language,findings))
