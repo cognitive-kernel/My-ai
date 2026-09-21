@@ -488,7 +488,9 @@ def code_generate(r:ProgramRequest):
     try:return learner.generate_program(r.request,r.language)
     except Exception as e: raise HTTPException(502,str(e))
 @app.post("/security/scan")
-def security_scan(r:SecurityRequest):
+def security_scan(r:SecurityRequest,request:Request):
+    user=require_user(request)
+    if r.fix and user["role"]!="admin": raise HTTPException(403,"Security remediation requires administrator approval.")
     try:
         if r.target_url:return learner.security_assessment_url(r.target_url,r.headers)
         if r.project_path:
@@ -498,7 +500,9 @@ def security_scan(r:SecurityRequest):
         return learner.security_scan_latest_generated(r.fix)
     except Exception as e: raise HTTPException(400,str(e))
 @app.get("/security/history")
-def security_history(limit:int=20): return learner.security.history(limit)
+def security_history(limit:int=20,request:Request=None):
+    require_user(request)
+    return learner.security.history(max(1,min(limit,200)))
 @app.post("/git/login")
 def git_login():
     try:
