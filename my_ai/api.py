@@ -388,11 +388,12 @@ def help_reject(update_id:int):
 def health(): return {"status":"ok","model":settings.ollama_model,"executor_mode":settings.exec_mode}
 
 @app.post("/chat")
-def chat(r:ChatRequest):
+def chat(r:ChatRequest, request:Request):
+    user=require_user(request)
     try:
         msg=r.message.strip(); low=msg.lower()
         aliases={"sql server":"SQL Server","sqlserver":"SQL Server","mssql":"SQL Server","mysql":"MySQL","sqlite":"SQLite","sql lite":"SQLite","android":"Android","اندروید":"Android","ios":"iOS","آی او اس":"iOS","python":"Python","پایتون":"Python","php":"PHP","c":"C","javascript":"JavaScript","js":"JavaScript","pentest":"Pentest","pen test":"Pentest","penetration testing":"Pentest","penetration test":"Pentest","پنتست":"Pentest","پن تست":"Pentest","تست نفوذ":"Pentest","امنیت":"Pentest"}; requested=next((name for key,name in sorted(aliases.items(),key=lambda x:len(x[0]),reverse=True) if key in low),None)
-        learn_intent=("یاد بگیر" in low or "یادگیری" in low or "learn" in low or "go learn" in low or "start learning" in low); sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language) VALUES(?,?,?)",(msg[:60] or "گفتگوی جدید","learning" if learn_intent else "chat",requested)); policy=parse_command(msg); security_words=policy.security; fix_requested=policy.security_action=="fix"
+        learn_intent=("یاد بگیر" in low or "یادگیری" in low or "learn" in low or "go learn" in low or "start learning" in low); sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language,user_id) VALUES(?,?,?,?)",(msg[:60] or "گفتگوی جدید","learning" if learn_intent else "chat",requested,user["id"])) policy=parse_command(msg); security_words=policy.security; fix_requested=policy.security_action=="fix"
         help_intent=("راهنما" in low or "چطور وصل" in low or "چطور استفاده" in low or "how do i" in low or "how to" in low or "setup" in low)
         if help_intent:
             component="git" if any(x in low for x in ("git","github","گیت","گیت‌هاب")) else ("security" if any(x in low for x in ("امنیت","پن‌تست","pentest")) else ("docker" if "docker" in low else ("python" if "python" in low or "پایتون" in low else "general")))
@@ -420,7 +421,11 @@ def chat(r:ChatRequest):
             answer=f"یادگیری {language} در پس‌زمینه شروع شد."
             execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"assistant",answer)); execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(sid,))
             return {"type":"learning","answer":answer,"data":{"status":"started","language":language,"interval_seconds":3600,"session_id":sid},"session_id":sid}
-        if code_intent: language=requested or "Python"; return {"type":"code","answer":"Generated program:","data":learner.generate_program(msg,language)}
+        if code_intent:
+            language=requested or "Python"
+            return {"type":"code","answer":"Generated program:","data":learner.generate_program(msg,language)}
+        if any(x in low for x in ("تأیید آپدیت","تایید آپدیت","confirm update","approve update","apply update")) and user["role"] != "admin":
+            raise HTTPException(403,"Self-update requires administrator approval.")
         return {"type":"chat","answer":agent.chat(msg,sid),"session_id":sid}
     except Exception as e: raise HTTPException(502,str(e))
 
