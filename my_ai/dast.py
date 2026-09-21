@@ -21,10 +21,11 @@ class LocalDAST:
             raise ValueError("Target URL must be http:// or https://.")
         try:
             import ipaddress
-            ip=ipaddress.ip_address(socket.gethostbyname(p.hostname))
-            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
-                raise ValueError("Public DAST target must resolve to a public address.")
-        except socket.gaierror as e:
+            addresses={ipaddress.ip_address(x[4][0]) for x in socket.getaddrinfo(p.hostname,None,type=socket.SOCK_STREAM)}
+            if not addresses or not all(ip.is_global and not ip.is_multicast for ip in addresses):
+                raise ValueError("Public DAST target must resolve only to globally routable addresses.")
+        except (socket.gaierror,ValueError) as e:
+            if isinstance(e,ValueError): raise
             raise ValueError("Target hostname could not be resolved.") from e
         return p
 
