@@ -361,8 +361,10 @@ def create_chat_session(r:ChatRequest,request:Request):
 def chat_history(limit:int=100,session_id:int|None=None,request:Request=None):
     user=require_user(request)
     limit=max(1,min(limit,500))
-    if session_id is None: rows=fetch_all("SELECT role,content,created_at FROM conversations ORDER BY id DESC LIMIT ?",(limit,))
-    else: rows=fetch_all("SELECT role,content,created_at FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT ?",(session_id,limit))
+    if session_id is None:
+        rows=fetch_all("SELECT c.role,c.content,c.created_at FROM conversations c JOIN chat_sessions s ON s.id=c.session_id WHERE s.user_id=? ORDER BY c.id DESC LIMIT ?",(user["id"],limit))
+    else:
+        rows=fetch_all("SELECT c.role,c.content,c.created_at FROM conversations c JOIN chat_sessions s ON s.id=c.session_id WHERE c.session_id=? AND s.user_id=? ORDER BY c.id DESC LIMIT ?",(session_id,user["id"],limit))
     rows.reverse(); return {"messages":rows}
 
 @app.get("/help/updates")
@@ -378,7 +380,8 @@ def help_local(component:str="chat"):
     return HTMLResponse("<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><title>My-AI — راهنمای محلی</title><style>body{font-family:Tahoma;max-width:900px;margin:30px auto;padding:20px;line-height:2;background:#f3f4f6}main{background:#fff;padding:25px;border-radius:14px}</style><main>"+local_help_html(component)+"</main></html>")
 
 @app.post("/help/approve/{update_id}")
-def help_approve(update_id:int):
+def help_approve(update_id:int,request:Request):
+    require_admin(request)
     rows=fetch_all("SELECT * FROM help_updates WHERE id=? AND status='pending'",(update_id,))
     if not rows: raise HTTPException(404,"Pending help update not found.")
     proposal=rows[0].get("proposed_update") or ""
@@ -387,7 +390,8 @@ def help_approve(update_id:int):
     execute("UPDATE help_updates SET status='approved' WHERE id=?",(update_id,))
     return {"status":"approved","update_id":update_id,"message":"The approved help update is now visible in /help."}
 @app.post("/help/reject/{update_id}")
-def help_reject(update_id:int):
+def help_reject(update_id:int,request:Request):
+    require_admin(request)
     rows=fetch_all("SELECT * FROM help_updates WHERE id=? AND status='pending'",(update_id,))
     if not rows: raise HTTPException(404,"Pending help update not found.")
     execute("UPDATE help_updates SET status='rejected' WHERE id=?",(update_id,)); return {"status":"rejected","update_id":update_id}
