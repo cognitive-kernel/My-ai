@@ -162,7 +162,7 @@ class LearningEngine:
             lang_rows=[r for r in rows if r["language"]==lang and str(r["topic"]) in topic_names]
             completed_topics={str(r["topic"]) for r in lang_rows if r["status"]=="completed"}
             completed=len(completed_topics); total=len(topics)
-            active_progress=max([float(r["progress_percent"] or 0) for r in lang_rows if r["status"]!="completed" and r["progress_percent"] is not None] or [0.0])
+            active_progress=max([float(r["progress_percent"] or 0) if "progress_percent" in r.keys() and r["progress_percent"] is not None else 0.0 for r in lang_rows if r["status"]!="completed"] or [0.0])
             raw=((completed + active_progress/100.0) / total * 100.0) if total else 0.0
             scores=[float(r["score"]) for r in lang_rows if r["status"]=="completed" and r["score"] is not None]
             out.append({"language":lang,"completed_topics":completed,"total_topics":total,"progress_percent":self._half_percent(raw),"progress_step":"0.5%","average_score":round(sum(scores)/len(scores),1) if scores else 0})
