@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+import hmac
 import os
 import subprocess
-import tempfile
 import uuid
-from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
@@ -34,27 +33,25 @@ def health():
 
 @app.post("/run")
 def run(req: RunRequest, authorization: str | None = Header(default=None)):
-    if not TOKEN or authorization != f"Bearer {TOKEN}":
+    expected=f"Bearer {TOKEN}"
+    if not TOKEN or TOKEN == "replace-with-a-long-random-secret" or not authorization or not hmac.compare_digest(authorization, expected):
         raise HTTPException(401, "Unauthorized")
     if not req.code.strip() or len(req.code) > 200_000:
         raise HTTPException(400, "Invalid code payload.")
     name = f"myai-exec-{uuid.uuid4().hex[:16]}"
-    with tempfile.TemporaryDirectory(prefix="myai-exec-") as tmp:
-        path = Path(tmp) / "main.py"
-        path.write_text(req.code, encoding="utf-8")
-        os.chmod(path, 0o644)
-        cmd = [
+    cmd = [
             "docker","run","--rm","--name",name,"--network","none","--read-only",
             "--cap-drop","ALL","--security-opt","no-new-privileges",
             "--pids-limit",str(PIDS),"--memory",MEMORY,"--cpus",CPUS,
             "--user","65532:65532","--tmpfs","/tmp:rw,noexec,nosuid,size=64m",
-            "--mount",f"type=bind,src={tmp},dst=/work,readonly",
-            IMAGE,"python","-I","/work/main.py",
+            IMAGE,"python","-I","-",
         ]
         try:
-            result=subprocess.run(cmd,capture_output=True,text=True,timeout=TIMEOUT+2)
+            result=subprocess.run(cmd,input=req.code,capture_output=True,text=True,timeout=TIMEOUT+2)
             return {"output":trunc(result.stdout),"error":trunc(result.stderr),
                     "timed_out":False,"return_code":result.returncode}
+        except FileNotFoundError as exc:
+            raise HTTPException(503,"Docker daemon is unavailable.") from exc
         except subprocess.TimeoutExpired:
             subprocess.run(["docker","rm","-f",name],capture_output=True,timeout=5)
             return {"output":"","error":"Execution timed out; container was terminated.",
