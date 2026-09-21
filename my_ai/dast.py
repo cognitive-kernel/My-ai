@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json, os, re, socket, subprocess, tempfile, time
+import json, os, re, socket, tempfile, time
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 import httpx
