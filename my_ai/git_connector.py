@@ -219,8 +219,14 @@ class GitHubConnector:
     def update_file(self,repository,path,content,message,branch="main",allow_write=False):
         if not allow_write:raise PermissionError("GitHub writes require allow_write=True.")
         owner,name=self.parse_repo(repository)
-        try:current=self.file(repository,path,branch)
-        except ValueError:current={}
+        if not path or path.startswith("/") or ".." in Path(path).parts:
+            raise ValueError("Invalid repository path.")
+        try:
+            current=self.file(repository,path,branch)
+        except GitHubAPIError as exc:
+            if exc.status_code != 404: raise
+            current={}
         payload={"message":message,"content":base64.b64encode(content.encode()).decode(),"branch":branch}
         if current.get("sha"):payload["sha"]=current["sha"]
-        return self._request("PUT",f"/repos/{owner}/{name}/contents/{path.lstrip('/')}",json=payload)
+        safe_path="/".join(__import__("urllib.parse",fromlist=["quote"]).quote(part,safe="") for part in path.split("/"))
+        return self._request("PUT",f"/repos/{owner}/{name}/contents/{safe_path}",json=payload)
