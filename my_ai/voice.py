@@ -35,8 +35,7 @@ def synthesize(text: str, model_path: str, output_path: str) -> str:
     binary = _piper_binary()
     if not binary:
         raise RuntimeError("Piper executable was not found.")
-    with open(output_path, "wb") as out:
-        result = subprocess.run([binary, "--model", model_path, "--output_file", output_path], input=text, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120, check=False)
+    result = subprocess.run([binary, "--model", model_path, "--output_file", output_path], input=text, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120, check=False)
     if result.returncode:
         raise RuntimeError(result.stderr.strip() or "Piper failed")
     return output_path
