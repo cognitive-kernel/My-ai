@@ -40,33 +40,41 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
 
 def hybrid_search(query: str, limit: int = 8) -> list[dict[str, Any]]:
     limit = max(1, min(limit, 50))
-    rows = fetch_all(
+    from .db import _normalize_search_text
+    normalized = _normalize_search_text(query)
+    tokens = [t for t in normalized.replace('"', ' ').split() if t][:12]
+    match = " ".join(f'"{t}"' for t in tokens) if tokens else '""'
+    lexical = fetch_all(
         """SELECT k.*, bm25(knowledge_fts) AS fts_rank
            FROM knowledge_fts JOIN knowledge k ON k.id=knowledge_fts.rowid
-           WHERE knowledge_fts MATCH ?
-           ORDER BY fts_rank LIMIT ?""",
-        (' '.join(f'"{t}"' for t in query.replace('"',' ').split()[:12]), limit * 3),
-    )
+           WHERE knowledge_fts MATCH ? ORDER BY fts_rank LIMIT ?""",
+        (match, max(limit * 4, 20)),
+    ) if tokens else []
+    all_rows = fetch_all("SELECT * FROM knowledge ORDER BY id DESC LIMIT 200")
+    by_id = {int(row["id"]): row for row in all_rows}
+    for row in lexical:
+        by_id[int(row["id"])] = row
     try:
-        qvec = ollama_embed(query)
+        qvec = ollama_embed(normalized)
     except Exception:
         qvec = []
-    if qvec:
-        for row in rows:
-            text = f"{row.get('title','')}\n{row.get('content','')}\n{row.get('topic','')}"
+    max_fts = max((abs(float(r.get("fts_rank") or 0.0)) for r in lexical), default=1.0)
+    lexical_scores = {int(r["id"]): 1.0 - min(1.0, abs(float(r.get("fts_rank") or 0.0)) / max_fts) for r in lexical}
+    for row in by_id.values():
+        semantic = 0.0
+        if qvec:
             try:
-                row["semantic_score"] = cosine_similarity(qvec, ollama_embed(text))
+                semantic = max(0.0, min(1.0, cosine_similarity(qvec, ollama_embed(
+                    f"{row.get('title','')}\n{row.get('content','')}\n{row.get('topic','')}"
+                ))))
             except Exception:
-                row["semantic_score"] = 0.0
-    else:
-        for row in rows:
-            row["semantic_score"] = 0.0
-    for row in rows:
-        fts = 1.0 / (1.0 + max(float(row.get("fts_rank") or 0.0), 0.0))
-        semantic = float(row.get("semantic_score") or 0.0)
-        row["hybrid_score"] = round(0.65 * semantic + 0.35 * fts, 6)
-        row["confidence"] = round(max(0.0, min(1.0, row["hybrid_score"])), 3)
-    rows.sort(key=lambda x: x["hybrid_score"], reverse=True)
+                semantic = 0.0
+        lexical_score = lexical_scores.get(int(row["id"]), 0.0)
+        row["semantic_score"] = round(semantic, 6)
+        row["lexical_score"] = round(lexical_score, 6)
+        row["hybrid_score"] = round(0.65 * semantic + 0.35 * lexical_score, 6)
+        row["confidence"] = round(0.65 * semantic + 0.35 * lexical_score, 3)
+    rows = sorted(by_id.values(), key=lambda x: x["hybrid_score"], reverse=True)
     return rows[:limit]
 
 
