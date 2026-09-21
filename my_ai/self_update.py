@@ -78,6 +78,10 @@ def apply_confirmed_update(health_url=None, health_timeout=45):
     """
     if _git("status", "--porcelain"):
         raise RuntimeError("Self-update متوقف شد: ابتدا تغییرات محلی را commit کنید یا در جای امن نگه دارید.")
+    if os.getenv("MYAI_SELF_UPDATE_ENABLED", "false").strip().lower() != "true":
+        raise RuntimeError("Self-update is deny-by-default. Set MYAI_SELF_UPDATE_ENABLED=true only after explicit user approval and policy review.")
+    if os.getenv("MYAI_SELF_UPDATE_APPROVED", "false").strip().lower() != "true":
+        raise RuntimeError("Self-update requires an explicit approval gate.")
 
 
     _git("fetch", "origin", "main", timeout=120)
