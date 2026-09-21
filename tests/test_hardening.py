@@ -45,6 +45,7 @@ def test_chat_session_isolation(client_db):
     client = client_db
     owner = auth.create_account("owner", "a-secure-password")
     member = auth.create_account("member", "another-secure-password")
+    db.execute("INSERT INTO tool_permissions(user_id,tool_name,action,allowed) VALUES(?,?,?,1)", (member["id"], "chat", "read"))
     owner_sid = client.post("/chat/sessions", json={"message": "owner"}, cookies=login_cookie(owner)).json()["id"]
     response = client.get(f"/chat/history?session_id={owner_sid}", cookies=login_cookie(member))
     assert response.status_code == 200
