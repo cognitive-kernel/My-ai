@@ -15,3 +15,6 @@ data/*.sqlite3
 data/.github_token
 
 data/self_update/
+
+data/*.db-wal
+data/*.db-shm
