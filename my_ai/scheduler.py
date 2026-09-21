@@ -68,9 +68,16 @@ class StudyScheduler:
         )
         self._thread.start()
 
-    def stop(self):
-        self._stop.set(); self._review_stop.set()
+    def stop_learning(self):
+        self._stop.set()
         self.stage = "stopping"
+
+    def stop(self):
+        self.stop_learning()
+        self.stop_review_monitor()
+
+    def stop_review_monitor(self):
+        self._review_stop.set()
 
     def running(self):
         return bool(self._thread and self._thread.is_alive())
