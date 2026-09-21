@@ -1,0 +1,29 @@
+name: ollama-e2e
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  ollama:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Ollama
+        run: curl -fsSL https://ollama.com/install.sh | sh
+      - name: Start Ollama
+        run: |
+          nohup ollama serve > /tmp/ollama.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:11434/api/tags && break || sleep 2; done
+      - name: Pull small E2E model
+        run: ollama pull qwen2.5:0.5b
+      - name: Install project
+        run: pip install -e .[dev]
+      - name: Run Ollama smoke test
+        env:
+          OLLAMA_MODEL: qwen2.5:0.5b
+        run: python -c "from my_ai.llm import OllamaClient; r=OllamaClient().chat('Reply with exactly OK'); print(r); assert 'OK' in r.upper()"
