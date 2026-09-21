@@ -382,7 +382,7 @@ def create_chat_session(r:ChatRequest,request:Request):
     user=require_user(request)
     sid=execute("INSERT INTO chat_sessions(title,user_id) VALUES(?,?)",((r.message or "گفتگوی جدید").strip()[:60],user["id"])); return {"id":sid}
 @app.get("/chat/history")
-def chat_history(limit:int=100,session_id:int|None=None,request:Request=None):
+def chat_history(request:Request,limit:int=100,session_id:int|None=None):
     user=require_user(request)
     limit=max(1,min(limit,500))
     if session_id is None:
@@ -499,7 +499,7 @@ def security_scan(r:SecurityRequest,request:Request):
         return learner.security_scan_latest_generated(r.fix)
     except Exception as e: raise HTTPException(400,str(e))
 @app.get("/security/history")
-def security_history(limit:int=20,request:Request=None):
+def security_history(request:Request,limit:int=20):
     require_user(request)
     return learner.security.history(max(1,min(limit,200)))
 @app.post("/git/login")
