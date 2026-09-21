@@ -142,3 +142,38 @@ def test_knowledge_memory_deduplicates_normalized_content(monkeypatch):
     source = conn.execute("SELECT source_url FROM knowledge WHERE id=?", (first,)).fetchone()[0]
     assert source == "https://example.test/source"
     conn.close()
+
+
+def test_status_includes_active_topic_progress():
+    original = learner_module.LANGUAGE_CURRICULA
+    try:
+        learner_module.LANGUAGE_CURRICULA = {
+            "Python": [
+                {"order": 1, "topic": "A", "goal": ""},
+                {"order": 2, "topic": "B", "goal": ""},
+            ]
+        }
+        learner_module.fetch_all = lambda *_args, **_kwargs: [
+            {"language": "Python", "topic": "A", "status": "completed", "score": 80, "progress_percent": 100},
+            {"language": "Python", "topic": "B", "status": "started", "score": None, "progress_percent": 25},
+        ]
+        result = LearningEngine.__new__(LearningEngine).status()
+        python = result["languages"][0]
+        assert python["progress_percent"] == 62.5
+        assert python["average_score"] == 80.0
+    finally:
+        learner_module.LANGUAGE_CURRICULA = original
+
+
+def test_assess_parses_score_and_returns_none_for_invalid_output():
+    class FakeLLM:
+        def __init__(self, value):
+            self.value = value
+        def chat(self, *_args, **_kwargs):
+            return self.value
+
+    engine = LearningEngine.__new__(LearningEngine)
+    engine.llm = FakeLLM("Score: 82/100")
+    assert engine.assess("Python", "lesson") == 82.0
+    engine.llm = FakeLLM("unable to score")
+    assert engine.assess("Python", "lesson") is None
