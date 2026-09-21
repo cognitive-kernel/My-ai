@@ -15,7 +15,7 @@ from .scheduler import StudyScheduler
 from .ui import page
 from .help import page as help_page, ask_help, local_help_html, apply_help_update
 from .git_connector import GitHubConnector
-from .auth import authenticate, audit, create_account, create_session, current_user, require_admin, revoke_session, require_user
+from .auth import authenticate, audit, create_account, create_session, current_user, require_admin, revoke_session, require_user, tool_allowed
 from .platform import backup_database, choose_model, eval_retrieval, export_database, hybrid_search, import_database, model_health, resource_status, self_update_apply, self_update_status, voice_status, web_fetch_policy
 from .skill_engine import ensure_skill, record_evidence, revalidate, snapshot
 
@@ -39,6 +39,20 @@ async def auth_and_audit_middleware(request: Request, call_next):
         if request.headers.get("accept","").lower().find("application/json") >= 0:
             return JSONResponse({"detail":"Authentication required."}, status_code=401)
         return RedirectResponse("/login", status_code=303)
+    if user and user["role"] != "admin":
+        tool_rules = (
+            ("/git/", "github", "write" if request.method in {"POST","PUT","PATCH","DELETE"} else "read"),
+            ("/security/", "security", "execute"),
+            ("/code/run", "code-execution", "execute"),
+            ("/scheduler/", "scheduler", "execute"),
+            ("/learning/", "learning", "execute"),
+            ("/backup/", "database", "write"),
+        )
+        for prefix, tool_name, action in tool_rules:
+            if path.startswith(prefix) or path == prefix:
+                if not tool_allowed(user, tool_name, action):
+                    return JSONResponse({"detail":f"Tool permission denied: {tool_name}:{action}"}, status_code=403)
+                break
     response = await call_next(request)
     if user and path != "/auth/logout":
         action = {"GET":"read","POST":"execute","PUT":"write","PATCH":"write","DELETE":"write"}.get(request.method, request.method.lower())
