@@ -66,17 +66,20 @@ class LearningEngine:
         rows=fetch_all("SELECT topic FROM learning_sessions WHERE language=? AND status='completed'",(language,))
         topic=next_topic(language,{str(r["topic"]) for r in rows})
         if not topic:return {"status":"completed","message":f"{language} curriculum is complete."}
-        sid=execute("INSERT INTO learning_sessions(language,topic,status,notes) VALUES(?,?,?,?)",(language,str(topic["topic"]),"started",json.dumps(topic,ensure_ascii=False)))
+        sid=execute("INSERT INTO learning_sessions(language,topic,status,notes,progress_percent,phase) VALUES(?,?,?,?,?,?)",(language,str(topic["topic"]),"started",json.dumps(topic,ensure_ascii=False),0.0,"starting"))
         return {"status":"started","session_id":sid,"topic":topic}
 
     def learn_next(self,language="Python",progress_callback=None):
         language=canonical_language(language); s=self.start(language)
         if s["status"]=="completed": return s
         t=s["topic"]
+        self._set_progress(s["session_id"], 0.5, "prerequisites")
         if progress_callback: progress_callback("prerequisites",t["topic"])
         prerequisites=self._discover_prerequisites(language,t)
+        self._set_progress(s["session_id"], 25.0, "sources")
         if progress_callback: progress_callback("sources",t["topic"])
         sources=self._learn_sources_for_topic(language,t,prerequisites)
+        self._set_progress(s["session_id"], 50.0, "lesson")
         if progress_callback: progress_callback("lesson",t["topic"])
         seed=seed_for(language,t["topic"])
         lesson=self.llm.chat("Teach the topic as a complete, structured study unit. Include prerequisite lessons first, then the main topic, examples, exercises, tests, common mistakes, security considerations and a mastery checklist. "
@@ -87,17 +90,29 @@ class LearningEngine:
                              f"DISCOVERED PREREQUISITES: {json.dumps(prerequisites,ensure_ascii=False)}\n"
                              f"LEARNED KNOWLEDGE: {json.dumps(search_knowledge(language+' '+t['topic'],12),ensure_ascii=False)}")
         remember(language,"Mastery lesson: "+t["topic"],lesson)
+        self._set_progress(s["session_id"], 75.0, "assessment")
         if progress_callback: progress_callback("assessment",t["topic"])
         score=self.assess(t["topic"],lesson)
-        execute("UPDATE learning_sessions SET status='completed',score=?,notes=? WHERE id=?",(score,lesson,s["session_id"]))
+        execute("UPDATE learning_sessions SET status='completed',score=?,notes=?,progress_percent=100.0,phase='completed' WHERE id=?",(score,lesson,s["session_id"]))
         if progress_callback: progress_callback("completed",t["topic"])
         return {"status":"completed","session_id":s["session_id"],"language":language,"topic":t,"prerequisites":prerequisites,"score":score,"sources":sources,"seeded":bool(seed)}
 
     def autonomous_step(self,language="Python"): return self.learn_next(language)
 
     def assess(self,topic,lesson):
-        try:return max(0,min(100,float(self.llm.chat("Score only 0-100 for factual coverage of this topic. Topic:"+topic+"\nNOTE:"+lesson).strip())))
-        except (ValueError,TypeError): return 0
+        import re
+        try:
+            raw=self.llm.chat("Return a numeric score from 0 to 100 for factual coverage. Topic:"+topic+"\nNOTE:"+lesson).strip()
+            match=re.search(r"(?<!\d)(100(?:\.0+)?|(?:\d{1,2})(?:\.\d+)?)(?!\d)",raw)
+            if not match:
+                return None
+            return max(0.0,min(100.0,float(match.group(1))))
+        except (ValueError,TypeError):
+            return None
+
+    @staticmethod
+    def _set_progress(session_id, progress, phase):
+        execute("UPDATE learning_sessions SET progress_percent=?, phase=? WHERE id=?",(max(0.0,min(100.0,float(progress))),phase,session_id))
 
     def practice(self,task,language="Python"):
         return {"exercise":self.llm.chat(f"Create one {language} exercise. Return JSON keys description, starter_code, expected_behavior, hidden_tests. Task: {task}")}
