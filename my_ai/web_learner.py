@@ -24,10 +24,19 @@ class WebLearner:
         if not cls._safe_host(p.hostname): raise ValueError("Local/private/reserved network targets are blocked.")
         return p
     def _robots_allowed(self,url):
-        p=urlparse(url); robots=robotparser.RobotFileParser(f"{p.scheme}://{p.netloc}/robots.txt")
+        p=urlparse(url); robots_url=f"{p.scheme}://{p.netloc}/robots.txt"
         try:
-            robots.read()
-            return robots.can_fetch("My-AI",url)
+            with httpx.Client(timeout=httpx.Timeout(5.0,connect=2.0),follow_redirects=False,headers={"User-Agent":"My-AI"}) as client:
+                response=client.get(robots_url)
+                if 300 <= response.status_code < 400 and response.headers.get("location"):
+                    target=str(httpx.URL(robots_url).join(response.headers["location"]))
+                    self._validate_url(target)
+                    response=client.get(target)
+                if response.status_code == 404: return True
+                if response.status_code >= 400: return False
+                parser=robotparser.RobotFileParser()
+                parser.parse(response.text.splitlines())
+                return parser.can_fetch("My-AI",url)
         except Exception:
             return False
 
