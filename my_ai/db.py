@@ -116,6 +116,7 @@ def init_db() -> None:
         if "session_id" not in cols: conn.execute("ALTER TABLE conversations ADD COLUMN session_id INTEGER")
         cols_sessions=[r[1] for r in conn.execute("PRAGMA table_info(chat_sessions)").fetchall()]
         if "pinned" not in cols_sessions: conn.execute("ALTER TABLE chat_sessions ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
+        if "user_id" not in cols_sessions: conn.execute("ALTER TABLE chat_sessions ADD COLUMN user_id INTEGER")
         cols_knowledge=[r[1] for r in conn.execute("PRAGMA table_info(knowledge)").fetchall()]
         if "content_hash" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN content_hash TEXT")
         if "verification_status" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN verification_status TEXT NOT NULL DEFAULT 'unverified'")
