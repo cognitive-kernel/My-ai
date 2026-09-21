@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Iterator, Sequence
 import json
+import os
 
 import httpx
 
@@ -26,7 +27,7 @@ class OllamaClient:
         system: str | None = None,
         history: Sequence[HistoryMessage] | None = None,
     ) -> Iterator[str]:
-        payload: dict[str, object] = {"model": self.model, "stream": True, "messages": []}
+        payload: dict[str, object] = {"model": self.model, "stream": True, "options": {"num_ctx": int(os.getenv("OLLAMA_NUM_CTX", "8192"))}, "messages": []}
         messages = payload["messages"]
         assert isinstance(messages, list)
         if system:
@@ -57,6 +58,7 @@ class OllamaClient:
         payload: dict[str, object] = {
             "model": self.model,
             "stream": False,
+            "options": {"num_ctx": int(os.getenv("OLLAMA_NUM_CTX", "8192"))},
             "messages": [],
         }
         messages = payload["messages"]
@@ -148,6 +150,6 @@ def create_llm():
     provider = settings.llm_provider
     if provider in {"openai", "openai-compatible", "openai_compatible"}:
         return OpenAICompatibleClient()
-    if provider == "auto" and settings.openai_api_key:
-        return OpenAICompatibleClient()
+    if provider == "auto":
+        return OllamaClient()
     return OllamaClient()
