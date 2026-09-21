@@ -1,6 +1,7 @@
 from __future__ import annotations
 import ipaddress,re,socket
 from urllib.parse import urlparse, quote_plus
+from urllib import robotparser
 import httpx
 from bs4 import BeautifulSoup
 from .config import settings
@@ -22,14 +23,25 @@ class WebLearner:
         if p.scheme not in {"http","https"} or not p.hostname: raise ValueError("Only public HTTP/HTTPS URLs are allowed.")
         if not cls._safe_host(p.hostname): raise ValueError("Local/private/reserved network targets are blocked.")
         return p
+    def _robots_allowed(self,url):
+        p=urlparse(url); robots=robotparser.RobotFileParser(f"{p.scheme}://{p.netloc}/robots.txt")
+        try:
+            robots.read()
+            return robots.can_fetch("My-AI",url)
+        except Exception:
+            return False
+
     def fetch(self,url):
         self._validate_url(url)
+        if not self._robots_allowed(url):
+            raise ValueError("robots.txt disallows this URL or could not be verified.")
         for _ in range(6):
             r=httpx.get(url,timeout=20,follow_redirects=False,headers={"User-Agent":"My-AI/0.2"})
             if r.status_code not in {301,302,303,307,308}: break
             location=r.headers.get("location")
             if not location: break
             url=str(httpx.URL(url).join(location)); self._validate_url(url)
+            if not self._robots_allowed(url): raise ValueError("robots.txt disallows redirect target.")
         r.raise_for_status()
         if "text/html" not in r.headers.get("content-type","") and "text/plain" not in r.headers.get("content-type",""): raise ValueError("URL does not contain HTML/text.")
         soup=BeautifulSoup(r.text,"html.parser")
