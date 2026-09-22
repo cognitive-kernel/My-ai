@@ -1,5 +1,6 @@
 from __future__ import annotations
 from contextlib import asynccontextmanager
+import subprocess
 import re
 from urllib.parse import urlparse
 from pathlib import Path
