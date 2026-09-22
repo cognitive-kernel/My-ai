@@ -6,6 +6,8 @@ import os
 import shutil
 import urllib.parse
 import urllib.robotparser
+import time
+import copy
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +17,8 @@ from .config import settings
 from .db import connect, fetch_all
 
 
-def ollama_embed(text: str, model: str = "bge-m3") -> list[float]:
+def ollama_embed(text: str, model: str | None = None) -> list[float]:
+    model = model or settings.embedding_model
     response = httpx.post(
         f"{settings.ollama_base_url.rstrip('/')}/api/embed",
         json={"model": model, "input": text},
@@ -29,7 +32,7 @@ def ollama_embed(text: str, model: str = "bge-m3") -> list[float]:
     return [float(x) for x in embeddings[0]]
 
 
-def ollama_embed_batch(texts: list[str], model: str = "bge-m3") -> list[list[float]]:
+def ollama_embed_batch(texts: list[str], model: str | None = None) -> list[list[float]]:
     if not texts:
         return []
     response = httpx.post(
