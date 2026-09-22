@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Iterator, Sequence
 import json
-import os
 
 import httpx
 
