@@ -13,6 +13,8 @@ import httpx
 
 from .config import settings
 from .db import connect, fetch_all
+from functools import lru_cache
+import time
 
 
 def ollama_embed(text: str, model: str | None = None) -> list[float]:
@@ -55,7 +57,8 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     return dot / (na * nb) if na and nb else 0.0
 
 
-def hybrid_search(query: str, limit: int = 8) -> list[dict[str, Any]]:
+@lru_cache(maxsize=128)
+def _hybrid_search_cached(query: str, limit: int, bucket: int) -> list[dict[str, Any]]:
     limit = max(1, min(limit, 50))
     from .db import _normalize_search_text
     normalized = _normalize_search_text(query)
@@ -118,6 +121,12 @@ def hybrid_search(query: str, limit: int = 8) -> list[dict[str, Any]]:
         row["relevance"] = row["hybrid_score"]
         row["confidence"] = None
     return sorted(rows, key=lambda x:x["hybrid_score"], reverse=True)[:limit]
+
+
+def hybrid_search(query: str, limit: int = 8) -> list[dict[str, Any]]:
+    limit=max(1,min(limit,50))
+    bucket=int(time.monotonic() // max(1,settings.cache_ttl_seconds))
+    return _hybrid_search_cached(query.strip(),limit,bucket)
 
 
 def model_health() -> dict[str, Any]:
