@@ -2,11 +2,8 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-
 from dotenv import load_dotenv
-
 load_dotenv()
-
 
 @dataclass(frozen=True)
 class Settings:
@@ -21,7 +18,6 @@ class Settings:
     fallback_model: str = os.getenv("FALLBACK_MODEL", "qwen2.5:3b")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
     cache_ttl_seconds: int = int(os.getenv("MYAI_CACHE_TTL", "60"))
-    # auto = use OpenAI when a key is configured, otherwise fall back to Ollama.
     llm_provider: str = os.getenv("LLM_PROVIDER", "auto").strip().lower()
     openai_base_url: str = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
@@ -37,6 +33,7 @@ class Settings:
     exec_image: str = os.getenv("EXECUTOR_IMAGE", "python:3.11-slim")
     host: str = os.getenv("HOST", "127.0.0.1")
     port: int = int(os.getenv("PORT", "8000"))
-
+    offline_strict: bool = os.getenv("MYAI_OFFLINE_STRICT", "false").strip().lower() == "true"
+    decision_log: bool = os.getenv("MYAI_DECISION_LOG", "false").strip().lower() == "true"
 
 settings = Settings()
