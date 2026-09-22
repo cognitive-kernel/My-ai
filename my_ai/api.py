@@ -207,6 +207,11 @@ def auth_logout(request: Request):
 @app.get("/auth/me")
 def auth_me(request: Request): return {"user":require_user(request)}
 
+@app.get("/admin/decision-log")
+def admin_decision_log(request: Request, limit: int = 200):
+    require_admin(request)
+    return {"items": fetch_all("SELECT * FROM decision_log ORDER BY id DESC LIMIT ?", (max(1, min(limit, 1000)),))}
+
 @app.get("/admin/audit")
 def admin_audit(request: Request, limit: int=200):
     require_admin(request)
