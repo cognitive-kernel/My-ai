@@ -311,9 +311,9 @@ def resource_status() -> dict[str, Any]:
 
 def voice_status() -> dict[str, Any]:
     return {
-        "whisper_cpp": shutil.which("whisper-cli") or shutil.which("main"),
+        "whisper_cpp": os.getenv("WHISPER_CPP_BIN") or shutil.which("whisper-cli"),
         "piper": shutil.which("piper"),
-        "offline": bool((shutil.which("whisper-cli") or shutil.which("main")) and shutil.which("piper")),
+        "offline": bool((os.getenv("WHISPER_CPP_BIN") or shutil.which("whisper-cli")) and shutil.which("piper")),
     }
 
 
