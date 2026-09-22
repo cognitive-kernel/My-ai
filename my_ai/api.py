@@ -97,6 +97,7 @@ def _voice_path(value:str, must_exist:bool=False) -> str:
     if must_exist and not path.is_file(): raise HTTPException(404,"Voice input/model file not found.")
     return str(path)
 class ChatRequest(BaseModel): message:str; session_id:int|None=None
+class SelfUpdateRequest(BaseModel): health_url: HttpUrl | None = None
 class RepairRequest(BaseModel): issue:str=""; proposal_id:str|None=None; approved:bool=False
 class AuthRegisterRequest(BaseModel): username:str; password:str; display_name:str=""
 class AuthLoginRequest(BaseModel): username:str; password:str
@@ -437,9 +438,10 @@ def self_repair_apply_api(r:RepairRequest, request:Request):
     return result
 
 @app.post("/self-update/apply")
-def self_update_apply_api(r:ChatRequest, request:Request):
+def self_update_apply_api(r:SelfUpdateRequest, request:Request):
     user=require_admin(request)
-    result=self_update_apply(r.message)
+    health_url = str(r.health_url) if r.health_url else None
+    result=self_update_apply(health_url=health_url)
     audit(user,"self-update","write",str(result.get("status") or ("activated" if result.get("applied") else "blocked")),result.get("reason","") or result.get("details",""))
     return result
 
