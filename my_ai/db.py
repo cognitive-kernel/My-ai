@@ -150,7 +150,7 @@ def init_db() -> None:
           INSERT INTO knowledge_fts(knowledge_fts,rowid,title,content,topic,source_url) VALUES('delete',old.id,normalize_search(old.title),normalize_search(old.content),normalize_search(old.topic),normalize_search(old.source_url));
         END;
         CREATE TRIGGER IF NOT EXISTS knowledge_au AFTER UPDATE ON knowledge BEGIN
-          INSERT INTO knowledge_fts(knowledge_fts,rowid,title,content,topic,source_url) VALUES('delete',old.id,old.title,old.content,old.topic,old.source_url);
+          INSERT INTO knowledge_fts(knowledge_fts,rowid,title,content,topic,source_url) VALUES('delete',old.id,normalize_search(old.title),normalize_search(old.content),normalize_search(old.topic),normalize_search(old.source_url));
           INSERT INTO knowledge_fts(rowid,title,content,topic,source_url) VALUES(new.id,normalize_search(new.title),normalize_search(new.content),normalize_search(new.topic),normalize_search(new.source_url));
         END;
         """)
