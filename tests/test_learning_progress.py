@@ -215,7 +215,7 @@ def test_learning_retry_can_be_explicitly_stopped():
 
     engine = LearningEngine.__new__(LearningEngine)
     try:
-        engine._retry_forever(operation, "test", stop_event=stop_event)
+        engine._retry_with_limit(operation, "test", stop_event=stop_event)
     except InterruptedError:
         pass
     else:
