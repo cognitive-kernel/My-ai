@@ -45,6 +45,7 @@ class WebLearner:
         if not self._robots_allowed(url):
             raise ValueError("robots.txt disallows this URL or could not be verified.")
         for _ in range(6):
+            self._validate_url(url)
             r=httpx.get(url,timeout=20,follow_redirects=False,headers={"User-Agent":"My-AI/0.2"})
             if r.status_code not in {301,302,303,307,308}: break
             location=r.headers.get("location")
