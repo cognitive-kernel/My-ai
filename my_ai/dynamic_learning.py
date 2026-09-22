@@ -37,6 +37,19 @@ def _normalize_topics(items):
     return topics
 
 
+def _merge_topics(base, additions):
+    merged = _normalize_topics(base)
+    seen = {str(x["topic"]).lower() for x in merged}
+    for item in _normalize_topics(additions):
+        key = str(item["topic"]).lower()
+        if key in seen:
+            continue
+        item["order"] = len(merged) + 1
+        merged.append(item)
+        seen.add(key)
+    return merged
+
+
 def _load_saved(name):
     _ensure_storage()
     rows = fetch_all("SELECT topics_json,sources_json FROM learning_domains WHERE name=?", (name,))
@@ -91,11 +104,16 @@ def ensure_domain(name, llm=None):
     if not name:
         return None
     canonical = canonical_language(name)
+    static_topics = list(LANGUAGE_CURRICULA.get(canonical, []))
     if canonical in LANGUAGE_CURRICULA and llm is None:
         return canonical
     saved = _load_saved(name)
     if saved:
-        return name
+        if static_topics:
+            merged = _merge_topics(static_topics, saved)
+            LANGUAGE_CURRICULA[canonical] = merged
+            _persist(canonical, merged, LANGUAGE_SOURCES.get(canonical, []))
+        return canonical if canonical in LANGUAGE_CURRICULA else name
 
     topics = []
     sources = []
@@ -115,12 +133,19 @@ def ensure_domain(name, llm=None):
             sources = [str(x) for x in (data.get("sources", []) if isinstance(data, dict) else []) if str(x).startswith(("http://", "https://"))]
         except (TypeError, ValueError, json.JSONDecodeError):
             topics = []
-    if not topics:
-        topics = _fallback_curriculum(name)
-    _persist(name, topics, sources, (datetime.now(timezone.utc) + timedelta(days=REVIEW_DAYS)).isoformat())
-    LANGUAGE_CURRICULA[name] = topics
-    LANGUAGE_SOURCES[name] = sources
-    return name
+    if static_topics:
+        topics = _merge_topics(static_topics, topics)
+        if not sources:
+            sources = list(LANGUAGE_SOURCES.get(canonical, []))
+        key = canonical
+    else:
+        if not topics:
+            topics = _fallback_curriculum(name)
+        key = name
+    _persist(key, topics, sources, (datetime.now(timezone.utc) + timedelta(days=REVIEW_DAYS)).isoformat())
+    LANGUAGE_CURRICULA[key] = topics
+    LANGUAGE_SOURCES[key] = sources
+    return key
 
 
 def resolve_learning_target(message, fallback="Python"):
