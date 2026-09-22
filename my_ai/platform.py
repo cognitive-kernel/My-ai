@@ -35,6 +35,7 @@ def ollama_embed(text: str, model: str | None = None) -> list[float]:
 def ollama_embed_batch(texts: list[str], model: str | None = None) -> list[list[float]]:
     if not texts:
         return []
+    model = model or settings.embedding_model
     response = httpx.post(
         f"{settings.ollama_base_url.rstrip('/')}/api/embed",
         json={"model": model, "input": texts},
