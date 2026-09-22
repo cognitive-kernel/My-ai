@@ -59,13 +59,14 @@ def test_curly_apostrophe_does_not_request_fix():
     policy = parse_command("don’t fix this")
     assert policy.security_action != "fix"
 
+
 def test_knowledge_triggers_survive_reinit_and_update(client_db):
-    db.remember_knowledge("Python", "عنوان", "محتوا")
+    knowledge_id = db.remember_knowledge("Python", "عنوان", "محتوا")
     db.init_db()
-    row_id=db.execute("UPDATE knowledge SET title=? WHERE id=?", ("عنوان جدید", 1))
-    assert row_id == 1
-    db.execute("UPDATE knowledge SET verification_status=? WHERE id=?", ("verified", 1))
-    assert db.fetch_all("SELECT title FROM knowledge_fts WHERE rowid=1")[0]["title"] == "عنوان جدید"
+    db.execute("UPDATE knowledge SET title=? WHERE id=?", ("عنوان جدید", knowledge_id))
+    assert db.fetch_all("SELECT title FROM knowledge WHERE id=?", (knowledge_id,))[0]["title"] == "عنوان جدید"
+    db.execute("UPDATE knowledge SET verification_status=? WHERE id=?", ("verified", knowledge_id))
+    assert db.fetch_all("SELECT title FROM knowledge_fts WHERE rowid=?", (knowledge_id,))[0]["title"] == "عنوان جدید"
 
 
 def test_login_rate_limit_blocks_correct_password_after_failures(client_db):
