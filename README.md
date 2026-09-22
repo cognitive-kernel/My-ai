@@ -43,6 +43,7 @@ iOS یاد بگیر
 درصد پیشرفت بر اساس موضوع‌های تکمیل‌شده محاسبه می‌شود و نمره ارزیابی جداگانه نگه‌داری می‌شود؛ بنابراین تکمیل curriculum به‌معنی ادعای «تسلط ۱۰۰٪» نیست.
 
 ### مسیرهای یادگیری فعلی
+- Rust — از صفر تا expert، شامل ownership، lifetimes، async، unsafe، FFI، performance، security، production و capstone؛ هر سطح باید با تمرین و شواهد اجرایی/تستی تأیید شود.
 - Python
 - C
 - PHP
@@ -81,6 +82,23 @@ iOS یاد بگیر
 - کد تولید کند.
 - برای Python یک اعتبارسنجی/اجرای محدود انجام دهد.
 - پروژه تولیدشده را در حافظه پروژه ثبت کند.
+
+### Toolهای توسعه و اتصال
+My-AI برای Python، C، PHP، JavaScript، Rust، Kotlin، Swift و مسیرهای Android/iOS ابزارهای تشخیص toolchain، build، lint و test دارد. ابزارها بدون shell آزاد اجرا می‌شوند و فقط در workspace پروژه (`MYAI_PROJECT_ROOT`) قابل اجرا هستند. برای Python اجرای snippet همچنان از sandbox فعلی استفاده می‌کند.
+
+برای SQL Server ابزارهای schema و query فقط‌خواندنی و برای SQLite اتصال read-only وجود دارد. SQL Server از درایور رسمی Microsoft `mssql-python` پشتیبانی می‌کند و connection string در `MYAI_SQLSERVER_CONNECTION_STRING` تنظیم می‌شود. مستندات رسمی Rust شامل Rust Book، Reference و Cargo Book به curriculum اضافه شده‌اند.
+
+Endpointهای ابزار:
+```text
+GET  /tools/catalog
+GET  /tools/doctor
+POST /tools/project
+POST /tools/python
+GET  /tools/sqlserver/schema
+POST /tools/sqlserver/query
+GET  /tools/sqlite/schema
+POST /tools/sqlite/query
+```
 
 ### اجرای کد Python
 

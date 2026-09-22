@@ -27,6 +27,7 @@ from .metrics import snapshot as metrics_snapshot
 from .platform import import_encrypted_database, restore_encrypted_backup
 from .self_repair import list_proposals, proposal_diff
 from .llm import create_llm
+from .tooling import catalog as tool_catalog, doctor as tool_doctor, run_project_tool, run_python_snippet, sqlserver_query, sqlserver_schema, sqlite_query, sqlite_schema
 
 scheduler=StudyScheduler()
 @asynccontextmanager
@@ -46,7 +47,7 @@ _TOOL_RULES = (
     ("/learning/","learning"),("/scheduler/","scheduler"),("/backup/","database"),
     ("/voice/","voice"),("/skills","skill-engine"),("/models/","models"),
     ("/memory/search","memory"),("/web/","web"),("/projects/","projects"),
-    ("/eval/","eval"),("/self-update/","self-update"),("/self-repair/","self-repair"),("/help/ask","help"),
+    ("/eval/","eval"),("/self-update/","self-update"),("/self-repair/","self-repair"),("/help/ask","help"),("/tools/","tools"),
 )
 _PATH_ACTIONS = {"/git/token": "write", "/git/logout": "write"}
 _LOGIN_FAILURES: dict[str, tuple[int, float]] = {}
@@ -117,6 +118,10 @@ class SecurityRequest(BaseModel): project_path:str|None=None; target_url:str|Non
 class GitRequest(BaseModel): repository:str; path:str|None=None; ref:str|None=None; branch:str|None=None; content:str|None=None; message:str|None=None; allow_write:bool=False
 class SchedulerRequest(BaseModel): language:str="Python"; interval_seconds:int=3600
 class LearnRequest(BaseModel): language:str="Python"; interval_seconds:int=3600
+class ToolRequest(BaseModel): language:str="Python"; operation:str="test"; cwd:str|None=None; timeout:int=120
+class PythonToolRequest(BaseModel): code:str
+class SQLQueryRequest(BaseModel): sql:str; limit:int=1000
+class SQLiteQueryRequest(BaseModel): path:str; sql:str; limit:int=1000
 
 @app.get("/",response_class=HTMLResponse)
 def home(request: Request):
@@ -641,6 +646,39 @@ def learning_step(r:LanguageRequest, request:Request):
     require_user(request)
     try:return learner.learn_next(r.language)
     except Exception as e: raise HTTPException(502,str(e))
+@app.get("/tools/catalog")
+def tools_catalog(request:Request):
+    require_user(request)
+    return tool_catalog()
+@app.get("/tools/doctor")
+def tools_doctor(request:Request,language:str|None=None):
+    require_user(request)
+    return tool_doctor(language)
+@app.post("/tools/project")
+def tools_project(r:ToolRequest,request:Request):
+    require_user(request)
+    return run_project_tool(r.language,r.operation,r.cwd,r.timeout)
+@app.post("/tools/python")
+def tools_python(r:PythonToolRequest,request:Request):
+    require_user(request)
+    return run_python_snippet(r.code)
+@app.get("/tools/sqlserver/schema")
+def tools_sqlserver_schema(request:Request,limit:int=500):
+    require_user(request)
+    return sqlserver_schema(limit)
+@app.post("/tools/sqlserver/query")
+def tools_sqlserver_query(r:SQLQueryRequest,request:Request):
+    require_user(request)
+    return sqlserver_query(r.sql,r.limit)
+@app.get("/tools/sqlite/schema")
+def tools_sqlite_schema(request:Request,path:str):
+    require_user(request)
+    return sqlite_schema(path)
+@app.post("/tools/sqlite/query")
+def tools_sqlite_query(r:SQLiteQueryRequest,request:Request):
+    require_user(request)
+    return sqlite_query(r.path,r.sql,r.limit)
+
 @app.get("/learning/status")
 def learning_status(request:Request, language:str|None=None):
     require_user(request)

@@ -60,7 +60,26 @@ def _extend(target, additions):
             target.append({"order": order, "topic": topic, "goal": goal})
 
 
+UNIVERSAL_EXPERT_GATES=[
+(90,"Advanced architecture and design","Decompose complex systems, choose trade-offs, document invariants and maintainability decisions"),
+(91,"Advanced debugging and root-cause analysis","Reproduce failures, isolate root causes, inspect evidence and verify fixes"),
+(92,"Security engineering","Threat modeling, secure defaults, input boundaries, secrets, dependency and supply-chain risks"),
+(93,"Testing and verification","Unit, integration, regression, negative, property or end-to-end tests with measurable evidence"),
+(94,"Performance engineering","Benchmark, profile, identify bottlenecks, optimize and verify regressions"),
+(95,"Production operations","Deployment, configuration, observability, reliability, rollback and incident diagnosis"),
+(96,"Real-project engineering","Read an unfamiliar repository, implement a feature, review changes and preserve existing behavior"),
+(97,"Expert capstone and proficiency gate","Complete a substantial project from requirements through tests, security review, performance evidence and final technical review"),
+]
+
+def _extend_universal(target):
+    existing={str(x["topic"]) for x in target}
+    for order,topic,goal in UNIVERSAL_EXPERT_GATES:
+        if topic not in existing:
+            target.append({"order":order,"topic":topic,"goal":goal})
+
 def extend_curricula(curricula):
+    for _target in curricula.values():
+        _extend_universal(_target)
     if "Python" in curricula:
         _extend(curricula["Python"], PYTHON_ADVANCED)
     if "SQL Server" in curricula:

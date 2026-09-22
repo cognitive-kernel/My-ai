@@ -27,6 +27,9 @@ dev = [
   "pip-audit>=2.7,<3",
 ]
 
+[project.optional-dependencies.sqlserver]
+dependencies = ["mssql-python>=1.14,<2"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
