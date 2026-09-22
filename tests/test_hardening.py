@@ -101,3 +101,50 @@ def test_remote_executor_normalizes_run_url(monkeypatch):
     monkeypatch.setenv("EXECUTOR_SERVICE_URL","http://executor:9000")
     executor._run_remote("print(1)")
     assert calls == ["http://executor:9000/run"]
+
+
+
+def test_encrypted_backup_roundtrip_and_wrong_password():
+    from my_ai.backup_crypto import decrypt_bytes, encrypt_bytes
+    blob = encrypt_bytes(b"my-ai-backup", "a-strong-password")
+    assert decrypt_bytes(blob, "a-strong-password") == b"my-ai-backup"
+    with pytest.raises(Exception):
+        decrypt_bytes(blob, "wrong-password")
+
+
+def test_inference_metrics_record():
+    from my_ai.metrics import record_inference, snapshot
+    before = snapshot()["inference"].get("ollama:test-model", {}).get("requests", 0)
+    record_inference("ollama", "test-model", 0.25, prompt_tokens=10, output_tokens=5)
+    after = snapshot()["inference"]["ollama:test-model"]
+    assert after["requests"] == before + 1
+    assert after["prompt_tokens"] >= 10
+    assert after["output_tokens"] >= 5
+
+
+def test_repair_invalid_diff_retries(monkeypatch, tmp_path):
+    from my_ai import self_repair
+    monkeypatch.setattr(self_repair, "diagnose_local", lambda: {"head": "abc", "clean": True, "tests_passed": True, "tests": "ok", "lessons": []})
+    monkeypatch.setattr(self_repair, "_test_patch", lambda patch, base: (True, "ok"))
+    monkeypatch.setattr(self_repair.PROPOSALS, "mkdir", lambda *a, **k: None)
+    class FakeLLM:
+        def __init__(self): self.calls = 0
+        def chat(self, prompt, system=None):
+            self.calls += 1
+            if self.calls < 3: return "not a patch"
+            return "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n"
+    fake = FakeLLM()
+    monkeypatch.setattr(self_repair, "create_llm", lambda task: fake)
+    monkeypatch.setattr(self_repair, "execute", lambda *a, **k: None)
+    monkeypatch.setattr(self_repair.PROPOSALS, "__truediv__", lambda name: tmp_path / name)
+    result = self_repair.propose_repair("bad output")
+    assert fake.calls == 3
+    assert result["isolated_tests_passed"] is True
+
+
+def test_offline_strict_blocks_public_web(monkeypatch):
+    from my_ai import platform
+    monkeypatch.setattr(platform.settings, "offline_strict", True)
+    result = platform.web_fetch_policy("https://example.com")
+    assert result["allowed"] is False
+    assert "offline strict" in result["reason"]
