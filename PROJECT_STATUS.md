@@ -78,7 +78,7 @@ Progress بر اساس topicهای یکتا و متعلق به همان curricul
 
 ### اولویت 2 — بازیابی معنایی و Hybrid Search
 
-- embedding محلی با Ollama؛ گزینه‌ی اولیه برای بررسی: `bge-m3` با توجه به پشتیبانی چندزبانه و فارسی.
+- embedding محلی با Ollama؛ مدل پیش‌فرض پروژه `nomic-embed-text` است تا با تنظیمات runtime هم‌راستا باشد.
 - ترکیب semantic similarity با FTS5 در یک hybrid retrieval pipeline.
 - نگهداری provenance و منبع برای نتایج بازیابی.
 - نمایش ارجاع به منبع در پاسخ‌ها.
@@ -224,7 +224,7 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 - اولویت 1: احراز هویت محلی، login/register، first-account-as-admin، session cookie، per-tool allow/deny و audit log پیاده‌سازی شد.
 - صفحه ساخت حساب و صفحه ورود اضافه شد. اولین حسابی که در دیتابیس ساخته شود role=admin می‌گیرد و به همه ابزارها دسترسی دارد؛ حساب‌های بعدی user هستند و دسترسی ابزارها به‌صورت جداگانه کنترل می‌شود.
 - صفحه مدیریت دانش در `/admin/knowledge` اضافه شد؛ دانش جدید unverified است و admin می‌تواند آن را ویرایش، حذف و verify کند.
-- Hybrid retrieval foundation با FTS5 + embedding از Ollama و confidence/provenance اضافه شد؛ مدل embedding پیش‌فرض `bge-m3`.
+- Hybrid retrieval foundation با FTS5 + embedding از Ollama و confidence/provenance اضافه شد؛ مدل embedding پیش‌فرض `nomic-embed-text`.
 - Skill Engine foundation با evidence، score، verified و version-aware revalidation اضافه شد.
 - streaming chat endpoint، backup/export/import دیتابیس و model health/routing foundation اضافه شد.
 - voice adapters برای whisper.cpp و Piper و endpointهای local voice اضافه شد.
@@ -240,7 +240,7 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 
 ## 10. کار بعدی
 
-پس از سبز شدن CI، مرحله‌ی بعدی تست محیط واقعی روی سیستم محلی است: ساخت اولین account، بررسی admin access، login/logout، Ollama، hybrid retrieval با `bge-m3` و تست مسیرهای backup/voice. self-update تا زمان policy review و approval صریح فعال نخواهد شد.
+پس از سبز شدن CI، مرحله‌ی بعدی تست محیط واقعی روی سیستم محلی است: ساخت اولین account، بررسی admin access، login/logout، Ollama، hybrid retrieval با `nomic-embed-text` و تست مسیرهای backup/voice. self-update تا زمان policy review و approval صریح فعال نخواهد شد.
 
 ## 11. معیار موفقیت یادگیری
 
@@ -270,7 +270,7 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 - GitHub writes and security remediation require administrator approval.
 - Host-side local DAST execution is blocked; local execution now requires an approved sandbox path. External DAST rejects non-global resolved addresses.
 - SQLite enables WAL and foreign-key enforcement; Persian normalization is used for knowledge search/deduplication.
-- LLM mode is local-first in auto mode and Ollama context size is configurable with OLLAMA_NUM_CTX.
+- LLM mode is local-first in auto mode and Ollama context size is configurable with OLLAMA_NUM_CTX; the CPU profile defaults to 2048.
 - Docker image now includes runtime metadata/docs and binds to 0.0.0.0 inside the container.
 - Self-update remains deny-by-default and runtime state is ignored by Git.
 
