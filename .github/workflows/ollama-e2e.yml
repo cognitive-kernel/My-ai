@@ -35,6 +35,7 @@ jobs:
           FALLBACK_MODEL: qwen2.5:0.5b
         run: |
           nohup uvicorn my_ai.api:app --host 127.0.0.1 --port 8000 > /tmp/my-ai.log 2>&1 &
+          echo $! > /tmp/my-ai.pid
           for i in $(seq 1 60); do curl -fsS http://127.0.0.1:8000/health && break || sleep 2; done
       - name: Run authenticated API and UI smoke tests
         run: |
@@ -55,7 +56,15 @@ jobs:
           CODING_MODEL: qwen2.5:0.5b
           FALLBACK_MODEL: qwen2.5:0.5b
         run: |
+          if test -f /tmp/my-ai.pid; then
+            kill "$(cat /tmp/my-ai.pid)" 2>/dev/null || true
+            for i in $(seq 1 10); do
+              if ! kill -0 "$(cat /tmp/my-ai.pid)" 2>/dev/null; then break; fi
+              sleep 1
+            done
+          fi
+          docker compose down -v --remove-orphans 2>/dev/null || true
+          trap 'docker compose down -v --remove-orphans 2>/dev/null || true' EXIT
           docker compose up -d --build
           for i in $(seq 1 90); do curl -fsS http://127.0.0.1:8000/health && break || sleep 2; done
           curl -fsS http://127.0.0.1:8000/health | grep -q '"status":"ok"'
-          docker compose down -v
