@@ -65,6 +65,8 @@ jobs:
           fi
           docker compose down -v --remove-orphans 2>/dev/null || true
           trap 'docker compose down -v --remove-orphans 2>/dev/null || true' EXIT
+          mkdir -p data
+          sudo chown -R 10001:10001 data
           docker compose up -d --build
           for i in $(seq 1 90); do curl -fsS http://127.0.0.1:8000/health && break || sleep 2; done
           curl -fsS http://127.0.0.1:8000/health | grep -q '"status":"ok"'
