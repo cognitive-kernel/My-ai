@@ -49,7 +49,7 @@ class LearningEngine:
                  '{"prerequisites":[{"name":"...","reason":"...","recommended_order":1}]}. '
                  "Do not duplicate the main topic. Only include concrete skills needed to build real projects. "
                  f"MAIN SUBJECT: {language}\nCURRENT TOPIC: {topic['topic']}\nGOAL: {topic['goal']}")
-        return self._retry_forever(
+        return self._retry_with_limit(
             lambda: self._parse_prerequisites(routing_llm.chat(prompt,system="Return valid JSON only. Prefer official ecosystem prerequisites.")),
             "prerequisites",progress_callback,topic["topic"],stop_event,
         )
