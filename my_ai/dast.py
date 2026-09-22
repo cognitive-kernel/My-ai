@@ -4,6 +4,7 @@ from pathlib import Path
 from urllib.parse import urljoin, urlparse
 import httpx
 from .db import execute
+from .network import pinned_client, resolve_public_ip
 
 class LocalDAST:
     """Local-only, non-destructive dynamic web testing for owned/generated projects."""
@@ -20,13 +21,9 @@ class LocalDAST:
         if p.scheme not in {"http","https"} or not p.hostname:
             raise ValueError("Target URL must be http:// or https://.")
         try:
-            import ipaddress
-            addresses={ipaddress.ip_address(x[4][0]) for x in socket.getaddrinfo(p.hostname,None,type=socket.SOCK_STREAM)}
-            if not addresses or not all(ip.is_global and not ip.is_multicast for ip in addresses):
-                raise ValueError("Public DAST target must resolve only to globally routable addresses.")
-        except (socket.gaierror,ValueError) as e:
-            if isinstance(e,ValueError): raise
-            raise ValueError("Target hostname could not be resolved.") from e
+            resolve_public_ip(p.hostname)
+        except ValueError as e:
+            raise ValueError(str(e)) from e
         return p
 
     def _free_port(self):
@@ -80,7 +77,7 @@ class LocalDAST:
 
     def _checks(self,base,endpoints,headers=None):
         findings=[]; seen=set(); forms=[]
-        with httpx.Client(timeout=self.timeout,follow_redirects=False,headers=headers or {}) as client:
+        with pinned_client(timeout=self.timeout,follow_redirects=False,headers=headers or {}) as client:
             for ep in endpoints:
                 url=urljoin(base.rstrip("/")+"/",ep.lstrip("/"))
                 try: r=client.get(url)
@@ -139,7 +136,8 @@ class LocalDAST:
     def _openapi_endpoints(self,base):
         for path in ("/openapi.json","/swagger.json","/api/openapi.json"):
             try:
-                r=httpx.get(urljoin(base,path.lstrip("/")),timeout=self.timeout,follow_redirects=False)
+                with pinned_client(timeout=self.timeout,follow_redirects=False) as client:
+                    r=client.get(urljoin(base,path.lstrip("/")))
                 if r.status_code==200 and "json" in r.headers.get("content-type","").lower():
                     data=r.json(); paths=data.get("paths",{}) if isinstance(data,dict) else {}
                     return sorted(str(x) for x in paths.keys())[:100]
@@ -148,7 +146,7 @@ class LocalDAST:
 
     def _crawl_public(self,base,limit=30):
         basep=urlparse(base); seen={base}; queue=[base]
-        with httpx.Client(timeout=self.timeout,follow_redirects=False) as client:
+        with pinned_client(timeout=self.timeout,follow_redirects=False) as client:
             while queue and len(seen)<limit:
                 cur=queue.pop(0)
                 try:r=client.get(cur)
@@ -172,9 +170,6 @@ class LocalDAST:
         return result
 
     def _run(self,root:Path):
-        # Never execute untrusted project code on the My-AI host. Local runtime DAST
-        # requires an explicit sandbox image and Docker; the container gets no network
-        # and a minimal, sanitized environment.
         image=os.getenv("MYAI_DAST_SANDBOX_IMAGE","").strip()
         if not image:
             return {"status":"sandbox_required","findings":[],"summary":self._summary([]),
