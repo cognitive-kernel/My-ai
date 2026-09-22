@@ -77,7 +77,7 @@ def _hybrid_search_cached(query: str, limit: int, bucket: int) -> list[dict[str,
         span = worst - best
         lexical_scores = {int(r["id"]):(1.0 if span == 0 else (worst-float(r["fts_rank"]))/span) for r in lexical}
     rows = fetch_all("SELECT * FROM knowledge ORDER BY id DESC")
-    cached = fetch_all("SELECT knowledge_id,content_hash,embedding FROM knowledge_embeddings WHERE model=?", ("bge-m3",))
+    cached = fetch_all("SELECT knowledge_id,content_hash,embedding FROM knowledge_embeddings WHERE model=?", (settings.embedding_model,)
     cache = {int(r["knowledge_id"]): r for r in cached}
     missing = []
     missing_rows = []
@@ -95,7 +95,7 @@ def _hybrid_search_cached(query: str, limit: int, bucket: int) -> list[dict[str,
                     conn.execute(
                         "INSERT INTO knowledge_embeddings(knowledge_id,content_hash,model,embedding) VALUES(?,?,?,?) "
                         "ON CONFLICT(knowledge_id,model) DO UPDATE SET content_hash=excluded.content_hash,embedding=excluded.embedding,created_at=CURRENT_TIMESTAMP",
-                        (row["id"], row.get("content_hash") or "", "bge-m3", json.dumps(vector, separators=(",",":"))),
+                        (row["id"], row.get("content_hash") or "", settings.embedding_model, json.dumps(vector, separators=(",",":"))),
                     )
                 conn.commit()
             for row, vector in zip(missing_rows, vectors):
