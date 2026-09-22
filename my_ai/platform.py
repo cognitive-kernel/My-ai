@@ -137,6 +137,10 @@ def _hybrid_search_cached(query: str, limit: int, bucket: int) -> list[dict[str,
     return sorted(rows, key=lambda x:x["hybrid_score"], reverse=True)[:limit]
 
 
+def invalidate_hybrid_search_cache() -> None:
+    _hybrid_search_cached.cache_clear()
+
+
 def hybrid_search(query: str, limit: int = 8) -> list[dict[str, Any]]:
     limit=max(1,min(limit,50))
     bucket=int(time.monotonic() // max(1,settings.cache_ttl_seconds))
