@@ -30,7 +30,7 @@ def canonical_language(name:str)->str:
     return ALIASES.get(raw.lower(),raw)
 
 def catalog()->dict[str,Any]:
-    return {"languages":LANGUAGE_TOOLS,"databases":{"SQL Server":["schema","tables","columns","readonly_query"],"SQLite":["schema","tables","readonly_query"],"MySQL":["schema","tables","readonly_query"]}}
+    return {"languages":LANGUAGE_TOOLS,"databases":{"SQL Server":["schema","tables","columns","readonly_query"],"MySQL":["schema","tables","columns","readonly_query"],"SQLite":["schema","tables","readonly_query"]}}
 
 def _safe_root(cwd:str|None)->Path:
     root=Path(os.getenv("MYAI_PROJECT_ROOT","projects")).resolve()
@@ -130,6 +130,32 @@ def sqlite_schema(path:str)->dict[str,Any]:
         rows=conn.execute("SELECT name,type FROM sqlite_master WHERE type IN ('table','view') ORDER BY name").fetchall()
         return {"rows":[{"name":r[0],"type":r[1]} for r in rows]}
     finally: conn.close()
+
+def _mysql_connection():
+    try:
+        import mysql.connector
+    except ImportError as exc:
+        raise RuntimeError("Install mysql-connector-python to enable MySQL tools.") from exc
+    cfg=os.getenv("MYAI_MYSQL_CONFIG","").strip()
+    if not cfg:
+        raise RuntimeError("MYAI_MYSQL_CONFIG must contain a JSON connection object.")
+    import json
+    return mysql.connector.connect(**json.loads(cfg))
+
+def mysql_query(sql:str,limit:int=1000)->dict[str,Any]:
+    query=_validate_readonly_sql(sql)
+    conn=_mysql_connection()
+    try:
+        cur=conn.cursor()
+        cur.execute(query)
+        columns=[str(x[0]) for x in cur.description or []]
+        rows=[dict(zip(columns,row)) for row in cur.fetchmany(max(1,min(int(limit),5000)))]
+        return {"columns":columns,"rows":rows,"row_count":len(rows)}
+    finally:
+        conn.close()
+
+def mysql_schema(limit:int=500)->dict[str,Any]:
+    return mysql_query("SELECT TABLE_SCHEMA,TABLE_NAME,COLUMN_NAME,DATA_TYPE,ORDINAL_POSITION FROM INFORMATION_SCHEMA.COLUMNS ORDER BY TABLE_SCHEMA,TABLE_NAME,ORDINAL_POSITION",limit)
 
 def sqlite_query(path:str,sql:str,limit:int=1000)->dict[str,Any]:
     query=_validate_readonly_sql(sql)

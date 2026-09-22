@@ -27,7 +27,7 @@ from .metrics import snapshot as metrics_snapshot
 from .platform import import_encrypted_database, restore_encrypted_backup
 from .self_repair import list_proposals, proposal_diff
 from .llm import create_llm
-from .tooling import catalog as tool_catalog, doctor as tool_doctor, run_project_tool, run_python_snippet, sqlserver_query, sqlserver_schema, sqlite_query, sqlite_schema
+from .tooling import catalog as tool_catalog, doctor as tool_doctor, run_project_tool, run_python_snippet, sqlserver_query, sqlserver_schema, mysql_query, mysql_schema, sqlite_query, sqlite_schema
 
 scheduler=StudyScheduler()
 @asynccontextmanager
@@ -670,6 +670,15 @@ def tools_sqlserver_schema(request:Request,limit:int=500):
 def tools_sqlserver_query(r:SQLQueryRequest,request:Request):
     require_user(request)
     return sqlserver_query(r.sql,r.limit)
+@app.get("/tools/mysql/schema")
+def tools_mysql_schema(request:Request,limit:int=500):
+    require_user(request)
+    return mysql_schema(limit)
+@app.post("/tools/mysql/query")
+def tools_mysql_query(r:SQLQueryRequest,request:Request):
+    require_user(request)
+    return mysql_query(r.sql,r.limit)
+
 @app.get("/tools/sqlite/schema")
 def tools_sqlite_schema(request:Request,path:str):
     require_user(request)
