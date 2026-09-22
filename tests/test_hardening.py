@@ -126,7 +126,7 @@ def test_repair_invalid_diff_retries(monkeypatch, tmp_path):
     from my_ai import self_repair
     monkeypatch.setattr(self_repair, "diagnose_local", lambda: {"head": "abc", "clean": True, "tests_passed": True, "tests": "ok", "lessons": []})
     monkeypatch.setattr(self_repair, "_test_patch", lambda patch, base: (True, "ok"))
-    monkeypatch.setattr(self_repair.PROPOSALS, "mkdir", lambda *a, **k: None)
+    monkeypatch.setattr(self_repair, "PROPOSALS", tmp_path)
     class FakeLLM:
         def __init__(self): self.calls = 0
         def chat(self, prompt, system=None):
@@ -136,7 +136,6 @@ def test_repair_invalid_diff_retries(monkeypatch, tmp_path):
     fake = FakeLLM()
     monkeypatch.setattr(self_repair, "create_llm", lambda task: fake)
     monkeypatch.setattr(self_repair, "execute", lambda *a, **k: None)
-    monkeypatch.setattr(self_repair.PROPOSALS, "__truediv__", lambda name: tmp_path / name)
     result = self_repair.propose_repair("bad output")
     assert fake.calls == 3
     assert result["isolated_tests_passed"] is True
