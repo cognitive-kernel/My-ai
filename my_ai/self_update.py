@@ -8,6 +8,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from .db import execute
+from .decision_log import record as record_decision
+from .notifications import notify
 
 ROOT = Path(__file__).resolve().parent.parent
 STATE_DIR = ROOT / "self-repair"
@@ -76,6 +78,22 @@ def check_for_update():
         return {"ok": False, "update_available": False, "error": str(exc)}
 
 
+
+def preview_update() -> dict[str, object]:
+    if _git("status", "--porcelain"):
+        return {"status": "blocked", "reason": "working tree is not clean"}
+    if os.getenv("MYAI_OFFLINE_STRICT", "false").strip().lower() == "true":
+        return {"status": "blocked", "reason": "offline strict mode enabled"}
+    _git("fetch", "origin", "main", timeout=120)
+    current = _git("rev-parse", "HEAD")
+    remote = _git("rev-parse", "origin/main")
+    if current == remote:
+        return {"status": "up_to_date", "current": current, "remote": remote, "files": "", "diff": ""}
+    stat = _git("diff", "--stat", f"{current}..{remote}")
+    patch = _git("diff", "--no-ext-diff", f"{current}..{remote}", timeout=120)
+    record_decision("self_update_preview", "preview", {"current": current, "remote": remote})
+    return {"status": "update_available", "current": current, "remote": remote, "files": stat, "diff": patch}
+
 def apply_confirmed_update(health_url=None, health_timeout=45):
     """Test origin/main in isolation, snapshot current code, fast-forward, then supervise restart."""
     if _git("status", "--porcelain"):
@@ -107,6 +125,8 @@ def apply_confirmed_update(health_url=None, health_timeout=45):
         candidate = None
         _git("merge", "--ff-only", "origin/main", timeout=120)
         _record_lesson("update_activated", previous=current, new=remote, backup=backup)
+        record_decision("self_update", "activate", {"previous": current, "new": remote, "backup": backup})
+        notify("self_update_activated", {"previous": current, "new": remote, "backup": backup})
 
         command = os.getenv("MYAI_RESTART_COMMAND", "").strip()
         if not command:
