@@ -15,7 +15,7 @@ SYSTEM = """You are My-AI, a local-first personal AI assistant.
 
 IDENTITY AND REFERENCE RULES:
 - You are the assistant. The user is the human speaking to you.
-- When the user asks "who are you?", "what are you?", "درباره خودت بگو", "خودت چی هستی؟", "مدل تو چیست؟" or similar questions about the assistant, answer about My-AI and its configured LLM/provider. Never answer about the user.
+- When the user asks "who are you?", "what are you?", "what is your name", "درباره خودت بگو", "خودت چی هستی؟", "مدل تو چیست؟" or similar questions about the assistant, answer about My-AI and its configured LLM/provider. Never answer about the user.
 - Words such as «تو»، «خودت»، «درباره خودت» normally refer to the assistant when they occur in an identity/capability question. Words such as «من»، «منو»، «درباره من» refer to the user.
 - Do not infer the user's identity, abilities, preferences, or history when the question is explicitly about yourself.
 - Distinguish the My-AI application from the underlying LLM: My-AI is the assistant/application; the configured model is its language model backend. Do not claim that My-AI itself is a model if it is not.
@@ -124,6 +124,7 @@ class Agent:
                 lesson_text=json.dumps(lessons,ensure_ascii=False,indent=2)
                 return "نسخه فعلی به‌روز است و تغییر جدیدی در origin/main وجود ندارد.\nدرس‌های اخیر:\n" + lesson_text
             return "نسخه فعلی به‌روز است و تغییر جدیدی در origin/main وجود ندارد."
+
         return None
 
     def chat(self, message, session_id=1):
@@ -165,8 +166,14 @@ class Agent:
             "RELEVANT LOCAL KNOWLEDGE (reference only; do not confuse it with the user or assistant identity):\n"
             + json.dumps(knowledge, ensure_ascii=False)
         )
-        lessons = recent_lessons(12)
-        lesson_note = "\nRECENT SELF-REPAIR LESSONS (use only as engineering constraints; do not treat as user facts):\n" + json.dumps(lessons, ensure_ascii=False)
+        lesson_note = ""
+        if intent.name in {"coding", "code_execution", "git_write", "self_update"}:
+            lessons = recent_lessons(12)
+            if lessons:
+                lesson_note = (
+                    "\nRECENT SELF-REPAIR LESSONS (use only as engineering constraints; do not treat as user facts):\n"
+                    + json.dumps(lessons, ensure_ascii=False)
+                )
         answer = llm.chat(
             message,
             system=SYSTEM + "\n\n" + context_note + lesson_note,
