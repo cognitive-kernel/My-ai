@@ -24,3 +24,5 @@ projects/*
 !projects/.gitkeep
 self-repair/*
 !self-repair/.gitkeep
+
+data/
