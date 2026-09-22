@@ -174,6 +174,7 @@ class StudyScheduler:
         # for a new language must never revive or redirect an older worker.
         stop_event = stop_event or self._stop
         engine = LearningEngine()
+        consecutive_errors=0
         while not stop_event.is_set():
             try:
                 if language not in LANGUAGE_CURRICULA:
@@ -189,6 +190,7 @@ class StudyScheduler:
                     continue
                 self.update_progress("starting")
                 self.last_result = engine.learn_next(language, progress_callback=self.update_progress, stop_event=stop_event)
+                consecutive_errors=0
                 if self.last_result.get("status") == "completed":
                     self.update_progress("completed", self.last_result.get("topic", {}).get("topic"))
                     if self._domain_complete(language):
@@ -203,10 +205,13 @@ class StudyScheduler:
                 if stop_event.is_set():
                     break
                 self.error = str(exc)
-                self.last_result = {"status": "error", "error": str(exc)}
+                consecutive_errors += 1
+                self.last_result = {"status": "error", "error": str(exc), "consecutive_errors": consecutive_errors}
+                if consecutive_errors >= max(1,int(settings.learning_max_retries)):
+                    self.update_progress("paused", "retry limit reached")
+                    break
                 self.update_progress("retrying")
-                # Unexpected errors outside the engine's retry boundary are also retried.
-                stop_event.wait(1.0)
+                stop_event.wait(min(60.0, 2.0 ** min(consecutive_errors, 5)))
                 continue
             if self.last_result and self.last_result.get("message", "").endswith("complete."):
                 self._schedule_review(language)
