@@ -17,7 +17,7 @@ jobs:
         run: curl -fsSL https://ollama.com/install.sh | sh
       - name: Start Ollama
         run: |
-          nohup ollama serve > /tmp/ollama.log 2>&1 &
+          OLLAMA_HOST=0.0.0.0:11434 nohup ollama serve > /tmp/ollama.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:11434/api/tags && break || sleep 2; done
       - name: Pull small E2E model
         run: ollama pull qwen2.5:0.5b
@@ -68,3 +68,6 @@ jobs:
           docker compose up -d --build
           for i in $(seq 1 90); do curl -fsS http://127.0.0.1:8000/health && break || sleep 2; done
           curl -fsS http://127.0.0.1:8000/health | grep -q '"status":"ok"'
+          test "$(curl -s -o /tmp/compose-register.json -w '%{http_code}' -c /tmp/compose-cookies.txt -H 'Content-Type: application/json' -d '{"username":"compose-admin","password":"compose-password-123","display_name":"Compose CI"}' http://127.0.0.1:8000/auth/register)" = "200"
+          test "$(curl -s -o /tmp/compose-chat.json -w '%{http_code}' -b /tmp/compose-cookies.txt -H 'Content-Type: application/json' -d '{"message":"Reply with exactly OK"}' http://127.0.0.1:8000/chat)" = "200"
+          grep -qi 'OK' /tmp/compose-chat.json
