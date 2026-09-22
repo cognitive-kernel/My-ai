@@ -9,13 +9,13 @@ load_dotenv()
 class Settings:
     ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
     ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
-    ollama_num_ctx: int = int(os.getenv("OLLAMA_NUM_CTX", "4096"))
-    ollama_num_thread: int = int(os.getenv("OLLAMA_NUM_THREAD", "6"))
+    ollama_num_ctx: int = int(os.getenv("OLLAMA_NUM_CTX", "2048"))
+    ollama_num_thread: int = int(os.getenv("OLLAMA_NUM_THREAD", "8"))
     ollama_num_gpu: int = int(os.getenv("OLLAMA_NUM_GPU", "0"))
-    ollama_keep_alive: str = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
-    routing_model: str = os.getenv("ROUTER_MODEL", "qwen2.5:1.5b")
+    ollama_keep_alive: str = os.getenv("OLLAMA_KEEP_ALIVE", "10m")
+    routing_model: str = os.getenv("ROUTER_MODEL", "qwen2.5:7b")
     coding_model: str = os.getenv("CODING_MODEL", "qwen2.5:7b")
-    fallback_model: str = os.getenv("FALLBACK_MODEL", "qwen2.5:3b")
+    fallback_model: str = os.getenv("FALLBACK_MODEL", "qwen2.5:7b")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
     cache_ttl_seconds: int = int(os.getenv("MYAI_CACHE_TTL", "60"))
     llm_provider: str = os.getenv("LLM_PROVIDER", "auto").strip().lower()
@@ -35,5 +35,10 @@ class Settings:
     port: int = int(os.getenv("PORT", "8000"))
     offline_strict: bool = os.getenv("MYAI_OFFLINE_STRICT", "false").strip().lower() == "true"
     decision_log: bool = os.getenv("MYAI_DECISION_LOG", "false").strip().lower() == "true"
+    scheduler_interval_seconds: int = int(os.getenv("SCHEDULER_INTERVAL_SECONDS", "3600"))
+    scheduler_max_cpu_percent: float = float(os.getenv("SCHEDULER_MAX_CPU_PERCENT", "70"))
+    scheduler_max_ram_percent: float = float(os.getenv("SCHEDULER_MAX_RAM_PERCENT", "80"))
+    scheduler_auto_resume: bool = os.getenv("SCHEDULER_AUTO_RESUME", "false").strip().lower() == "true"
+    learning_max_retries: int = int(os.getenv("LEARNING_MAX_RETRIES", "5"))
 
 settings = Settings()
