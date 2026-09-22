@@ -15,7 +15,7 @@ dependencies = [
   "pydantic>=2.8,<3",
   "python-dotenv>=1.0,<2",
   "psutil>=6,<8",
-  "cryptography>=43,<46",
+  "cryptography>=50,<51",
 ]
 
 [project.optional-dependencies]
