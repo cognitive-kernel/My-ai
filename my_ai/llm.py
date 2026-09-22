@@ -22,7 +22,7 @@ HistoryMessage = dict[str, str]
 class OllamaClient:
     def __init__(self, task: str | None = None) -> None:
         self.base_url = getattr(settings, "ollama_base_url", "http://127.0.0.1:11434").rstrip("/")
-        if settings.offline_strict:
+        if getattr(settings, "offline_strict", False):
             host = urllib.parse.urlparse(self.base_url).hostname
             try:
                 if not host or not ipaddress.ip_address(host).is_loopback:
