@@ -3,6 +3,7 @@ import base64, os, shutil, subprocess, threading, time, webbrowser
 from pathlib import Path
 from urllib.parse import urlparse
 import httpx
+from .config import settings
 
 class GitHubAPIError(ValueError):
     def __init__(self, status_code, message, *, headers=None, body=None):
@@ -91,6 +92,8 @@ class GitHubConnector:
     def oauth_available(cls):return bool(cls.oauth_client_id() or cls._saved_token() or cls._gcm_token() or os.getenv("GITHUB_TOKEN") or cls.gcm_available())
     @classmethod
     def oauth_start(cls):
+        if settings.offline_strict:
+            raise RuntimeError("GitHub is disabled in offline strict mode.")
         client_id=cls.oauth_client_id()
         if not client_id:
             if cls.gcm_available():return cls.gcm_login()
@@ -112,6 +115,8 @@ class GitHubConnector:
         return result
     @classmethod
     def oauth_poll(cls):
+        if settings.offline_strict:
+            return {"status":"disabled","reason":"offline strict mode enabled"}
         if not cls._oauth_pending:return cls.gcm_status() if cls.gcm_available() else {"status":"none"}
         with cls._oauth_lock:
             pending=cls._oauth_pending; now=time.time()
@@ -190,6 +195,8 @@ class GitHubConnector:
         if len(parts)!=2 or not all(parts):raise ValueError("Repository must be owner/name or a GitHub repository URL.")
         return parts[0],parts[1]
     def _request(self,method,path,**kwargs):
+        if settings.offline_strict:
+            raise RuntimeError("GitHub network access is disabled in offline strict mode.")
         with httpx.Client(timeout=self.timeout,follow_redirects=False) as c:r=c.request(method,self.api_url+path,headers=self._headers(),**kwargs)
         if r.status_code>=400:
             try:body=r.json()
