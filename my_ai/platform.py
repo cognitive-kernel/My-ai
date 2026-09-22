@@ -14,6 +14,7 @@ import httpx
 from .config import settings
 from .db import connect, fetch_all
 from .network import assert_public_hostname, pinned_client
+from .backup_crypto import encrypt_file
 from functools import lru_cache
 import time
 
@@ -154,9 +155,18 @@ def choose_model(task: str) -> str:
     return os.getenv("CODING_MODEL", settings.ollama_model) if coding else os.getenv("ROUTER_MODEL", settings.ollama_model)
 
 
-def backup_database(destination: str) -> str:
+def backup_database(destination: str, password: str | None = None) -> str:
     src = Path(settings.db_path)
     dst = Path(destination).expanduser().resolve()
+    if password:
+        temp = dst.with_name(dst.name + ".plain.tmp")
+        temp.parent.mkdir(parents=True, exist_ok=True)
+        with connect() as conn, sqlite3_backup(conn, temp) as _:
+            pass
+        try:
+            return encrypt_file(temp, dst, password)
+        finally:
+            temp.unlink(missing_ok=True)
     dst.parent.mkdir(parents=True, exist_ok=True)
     if not src.exists():
         raise FileNotFoundError(src)
@@ -181,7 +191,7 @@ class sqlite3_backup:
         self.destination_conn.close()
 
 
-def export_database(destination: str) -> str:
+def export_database(destination: str, password: str | None = None) -> str:
     dst = Path(destination).expanduser().resolve()
     dst.parent.mkdir(parents=True, exist_ok=True)
     with connect() as conn:
@@ -226,6 +236,8 @@ def _assert_public_http_url(url: str) -> urllib.parse.ParseResult:
 
 
 def web_fetch_policy(url: str) -> dict[str, Any]:
+    if settings.offline_strict:
+        return {"url": url, "allowed": False, "reason": "offline strict mode enabled"}
     parsed = _assert_public_http_url(url)
     robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
     try:
