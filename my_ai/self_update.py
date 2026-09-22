@@ -68,6 +68,8 @@ def status():
 
 def check_for_update():
     try:
+        if os.getenv("MYAI_OFFLINE_STRICT", "false").strip().lower() == "true":
+            return {"ok": False, "update_available": False, "blocked": True, "reason": "offline strict mode enabled"}
         if _git("status", "--porcelain"):
             return {"ok": False, "update_available": False, "blocked": True, "reason": "working tree is not clean"}
         _git("fetch", "origin", "main", timeout=120)
@@ -102,6 +104,8 @@ def apply_confirmed_update(health_url=None, health_timeout=45):
         raise RuntimeError("Self-update is deny-by-default. Set MYAI_SELF_UPDATE_ENABLED=true only after explicit user approval and policy review.")
     if os.getenv("MYAI_SELF_UPDATE_APPROVED", "false").strip().lower() != "true":
         raise RuntimeError("Self-update requires an explicit approval gate.")
+    if os.getenv("MYAI_OFFLINE_STRICT", "false").strip().lower() == "true":
+        raise RuntimeError("Self-update is disabled in offline strict mode.")
 
     _git("fetch", "origin", "main", timeout=120)
     current = _git("rev-parse", "HEAD")
