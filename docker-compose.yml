@@ -31,7 +31,9 @@ services:
     restart: unless-stopped
 
   executor:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.executor
     command: ["uvicorn","my_ai.executor_service:app","--host","0.0.0.0","--port","9000"]
     expose:
       - "9000"
