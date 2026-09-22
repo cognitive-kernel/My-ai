@@ -134,14 +134,18 @@ class LocalDAST:
         return findings
 
     def _openapi_endpoints(self,base):
-        for path in ("/openapi.json","/swagger.json","/api/openapi.json"):
-            try:
-                with pinned_client(timeout=self.timeout,follow_redirects=False) as client:
-                    r=client.get(urljoin(base,path.lstrip("/")))
-                if r.status_code==200 and "json" in r.headers.get("content-type","").lower():
-                    data=r.json(); paths=data.get("paths",{}) if isinstance(data,dict) else {}
-                    return sorted(str(x) for x in paths.keys())[:100]
-            except Exception: pass
+        try:
+            with pinned_client(timeout=self.timeout,follow_redirects=False) as client:
+                for path in ("/openapi.json","/swagger.json","/api/openapi.json"):
+                    try:
+                        r=client.get(urljoin(base,path.lstrip("/")))
+                        if r.status_code==200 and "json" in r.headers.get("content-type","").lower():
+                            data=r.json(); paths=data.get("paths",{}) if isinstance(data,dict) else {}
+                            return sorted(str(x) for x in paths.keys())[:100]
+                    except Exception:
+                        pass
+        except Exception:
+            pass
         return []
 
     def _crawl_public(self,base,limit=30):
