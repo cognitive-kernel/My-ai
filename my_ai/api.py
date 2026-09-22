@@ -816,10 +816,6 @@ def project_plan(r:ProjectRequest, request:Request):
     require_user(request)
     try:return {"tasks":agent.plan_project(r.goal)}
     except Exception as e: raise HTTPException(502,str(e))
-@app.get("/memory/knowledge")
-def knowledge(request:Request):
-    user=require_user(request)
-    return fetch_all("SELECT * FROM knowledge WHERE verification_status IN ('verified','approved') OR verified_by=? ORDER BY id DESC",(user["id"],))
 @app.get("/memory/search")
 def memory_search(q:str,request:Request,limit:int=8):
     require_user(request)
