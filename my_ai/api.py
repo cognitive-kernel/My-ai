@@ -23,6 +23,9 @@ from .self_update import status as self_update_status, apply_confirmed_update as
 from .self_repair import diagnose_local, propose_repair, apply_repair, proposal_status
 from .skill_engine import ensure_skill, record_evidence, revalidate, snapshot
 from .voice import status as voice_engine_status, transcribe, synthesize
+from .metrics import snapshot as metrics_snapshot
+from .platform import import_encrypted_database
+from .self_repair import list_proposals, proposal_diff
 from .llm import create_llm
 
 scheduler=StudyScheduler()
@@ -97,8 +100,8 @@ class RepairRequest(BaseModel): issue:str=""; proposal_id:str|None=None; approve
 class AuthRegisterRequest(BaseModel): username:str; password:str; display_name:str=""
 class AuthLoginRequest(BaseModel): username:str; password:str
 class KnowledgeUpdateRequest(BaseModel): title:str; content:str; topic:str; source_url:str|None=None
-class BackupRequest(BaseModel): path:str
-class ImportRequest(BaseModel): path:str
+class BackupRequest(BaseModel): path:str; password:str|None=None
+class ImportRequest(BaseModel): path:str; password:str|None=None
 class PermissionRequest(BaseModel): user_id:int; tool_name:str; action:str; allowed:bool
 class AdminUserRequest(BaseModel): username:str; password:str; display_name:str=""; active:bool=True
 class SkillEvidenceRequest(BaseModel): skill_id:int; kind:str; passed:bool; details:dict[str,object]={}
@@ -345,21 +348,21 @@ def web_policy(url:str, request:Request):
 @app.post("/backup/database")
 def backup_db(r:BackupRequest, request:Request):
     user=require_admin(request)
-    path=backup_database(r.path)
+    path=backup_database(r.path,r.password)
     audit(user,"database","backup","200",path)
     return {"path":path}
 
 @app.post("/backup/export")
 def backup_export(r:BackupRequest, request:Request):
     user=require_admin(request)
-    path=export_database(r.path)
+    path=export_database(r.path,r.password)
     audit(user,"database","export","200",path)
     return {"path":path}
 
 @app.post("/backup/import")
 def backup_import(r:ImportRequest, request:Request):
     user=require_admin(request)
-    result=import_database(r.path)
+    result=import_encrypted_database(r.path,r.password) if r.password else import_database(r.path)
     audit(user,"database","import","200",r.path)
     return {"imported":result}
 
@@ -384,6 +387,16 @@ def self_repair_propose_api(r:RepairRequest, request:Request):
     result=propose_repair(r.issue)
     audit(user,"self-repair","write","200",f"proposal:{result['id']}")
     return result
+
+@app.get("/self-repair/proposals")
+def self_repair_proposals_api(request:Request):
+    require_admin(request)
+    return {"items": list_proposals()}
+
+@app.get("/self-repair/proposals/{proposal_id}/diff")
+def self_repair_diff_api(proposal_id:str, request:Request):
+    require_admin(request)
+    return proposal_diff(proposal_id)
 
 @app.get("/self-repair/proposals/{proposal_id}")
 def self_repair_proposal_api(proposal_id:str, request:Request):
@@ -519,7 +532,11 @@ def help_reject(update_id:int,request:Request):
     if not rows: raise HTTPException(404,"Pending help update not found.")
     execute("UPDATE help_updates SET status='rejected' WHERE id=?",(update_id,)); return {"status":"rejected","update_id":update_id}
 @app.get("/health")
-def health(): return {"status":"ok","model":settings.ollama_model,"executor_mode":settings.exec_mode}
+def health(): return {"status":"ok","model":settings.ollama_model,"executor_mode":settings.exec_mode,"offline_strict":settings.offline_strict}
+
+@app.get("/health/metrics")
+def health_metrics():
+    return {"status":"ok","offline_strict":settings.offline_strict,"inference":metrics_snapshot()["inference"]}
 
 @app.post("/chat")
 def chat(r:ChatRequest, request:Request):
