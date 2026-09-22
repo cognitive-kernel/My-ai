@@ -246,7 +246,7 @@ def chat_stream(r:ChatRequest, request:Request):
     if r.session_id is not None and not fetch_all("SELECT id FROM chat_sessions WHERE id=? AND user_id=?",(r.session_id,user["id"])):
         raise HTTPException(404,"Chat session not found.")
     intent=classify(r.message)
-    task="coding" if intent.name=="coding" else "routing" if intent.name in {"learning","chat"} else "general"
+    task="coding" if intent.name=="coding" else "general"
     llm=create_llm(task)
     def generate():
         stream=getattr(llm,"stream_chat",None)
