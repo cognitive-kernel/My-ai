@@ -13,6 +13,7 @@ import httpx
 
 from .config import settings
 from .db import connect, fetch_all
+from .network import assert_public_hostname, pinned_client
 from functools import lru_cache
 import time
 
@@ -220,14 +221,7 @@ def _assert_public_http_url(url: str) -> urllib.parse.ParseResult:
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise ValueError("URL must use http:// or https:// and include a hostname.")
-    import ipaddress
-    import socket
-    try:
-        addresses = {ipaddress.ip_address(item[4][0]) for item in socket.getaddrinfo(parsed.hostname, None, type=socket.SOCK_STREAM)}
-    except socket.gaierror as exc:
-        raise ValueError("Hostname could not be resolved.") from exc
-    if not addresses or not all(ip.is_global and not ip.is_multicast for ip in addresses):
-        raise ValueError("Target must resolve only to globally routable addresses.")
+    assert_public_hostname(parsed.hostname)
     return parsed
 
 
@@ -235,7 +229,7 @@ def web_fetch_policy(url: str) -> dict[str, Any]:
     parsed = _assert_public_http_url(url)
     robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
     try:
-        with httpx.Client(timeout=httpx.Timeout(5.0, connect=2.0), follow_redirects=False) as client:
+        with pinned_client(timeout=httpx.Timeout(5.0, connect=2.0), follow_redirects=False) as client:
             response = client.get(robots_url, headers={"User-Agent": "My-AI"})
             if 300 <= response.status_code < 400 and response.headers.get("location"):
                 redirect = urllib.parse.urljoin(robots_url, response.headers["location"])
@@ -283,16 +277,3 @@ def eval_retrieval() -> dict[str, Any]:
     return {"cases": results, "passed": sum(1 for x in results if x["hit"]), "total": len(results)}
 
 
-def self_update_status() -> dict[str, Any]:
-    return {
-        "enabled": os.getenv("MYAI_SELF_UPDATE_ENABLED", "false").lower() == "true",
-        "default_policy": "deny",
-        "snapshot_required": True,
-        "approval_required": True,
-        "rollback_required": True,
-    }
-
-
-def self_update_apply(_proposal: str) -> dict[str, Any]:
-    # Deliberately no-op until an explicit future implementation passes all policy gates.
-    return {"applied": False, "reason": "Self-update is deny-by-default and is not enabled."}

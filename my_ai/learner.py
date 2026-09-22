@@ -7,6 +7,7 @@ from .advanced_curriculum import seed_for
 from .db import execute,fetch_all,search_knowledge
 from .executor import run_python
 from .llm import create_llm
+from .self_update import recent_lessons
 from .memory import remember
 from .web_learner import WebLearner
 from .security import SecurityEngine
@@ -15,7 +16,7 @@ from .project_workspace import create_project_workspace, write_project_files
 
 class LearningEngine:
     def __init__(self,llm=None):
-        self.llm=llm or create_llm(); self.web=WebLearner()
+        self.llm=llm or create_llm("general"); self.web=WebLearner()
         self.security=SecurityEngine(self.llm); self.dast=LocalDAST()
 
     def _retry_forever(self, operation, label, progress_callback=None, topic=None, stop_event=None):
@@ -39,12 +40,13 @@ class LearningEngine:
                 delay=min(delay*2.0,60.0)
 
     def _discover_prerequisites(self,language,topic,progress_callback=None,stop_event=None):
+        routing_llm=create_llm("routing")
         prompt=("You are a curriculum architect. Analyze the requested programming subject and identify prerequisite subjects that must be learned before or alongside it. "
                  '{"prerequisites":[{"name":"...","reason":"...","recommended_order":1}]}. '
                  "Do not duplicate the main topic. Only include concrete skills needed to build real projects. "
                  f"MAIN SUBJECT: {language}\nCURRENT TOPIC: {topic['topic']}\nGOAL: {topic['goal']}")
         return self._retry_forever(
-            lambda: self._parse_prerequisites(self.llm.chat(prompt,system="Return valid JSON only. Prefer official ecosystem prerequisites.")),
+            lambda: self._parse_prerequisites(routing_llm.chat(prompt,system="Return valid JSON only. Prefer official ecosystem prerequisites.")),
             "prerequisites",progress_callback,topic["topic"],stop_event,
         )
 
@@ -149,13 +151,16 @@ class LearningEngine:
         execute("UPDATE learning_sessions SET progress_percent=?, phase=? WHERE id=?",(max(0.0,min(100.0,float(progress))),phase,session_id))
 
     def practice(self,task,language="Python"):
-        return {"exercise":self.llm.chat(f"Create one {language} exercise. Return JSON keys description, starter_code, expected_behavior, hidden_tests. Task: {task}")}
+        llm=create_llm("coding")
+        return {"exercise":llm.chat(f"Create one {language} exercise. Return JSON keys description, starter_code, expected_behavior, hidden_tests. Task: {task}")}
 
     def generate_program(self,request,language="Python"):
         language=canonical_language(language); context=search_knowledge(language+" programming",20)
-        code=self.llm.chat("Write a complete runnable "+language+" program for the user request. Use accumulated learning knowledge. "
+        coding_llm=create_llm("coding")
+        lessons=recent_lessons(12)
+        code=coding_llm.chat("Write a complete runnable "+language+" program for the user request. Use accumulated learning knowledge. "
                             "Apply secure coding practices, validate inputs, avoid unsafe defaults, include appropriate error handling and tests where practical. "
-                            "Return ONLY source code.\nREQUEST: "+request+"\nKNOWLEDGE: "+json.dumps(context,ensure_ascii=False),
+                            "Return ONLY source code.\nREQUEST: "+request+"\nKNOWLEDGE: "+json.dumps(context,ensure_ascii=False)+"\nRECENT SELF-REPAIR LESSONS: "+json.dumps(lessons,ensure_ascii=False),
                             system="You are a senior secure software engineer. Never claim execution unless a result is supplied.").strip()
         fence=chr(96)*3
         if code.startswith(fence):
