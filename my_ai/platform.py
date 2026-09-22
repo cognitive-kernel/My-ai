@@ -14,7 +14,7 @@ import httpx
 from .config import settings
 from .db import connect, fetch_all
 from .network import assert_public_hostname, pinned_client
-from .backup_crypto import encrypt_file
+from .backup_crypto import encrypt_file, decrypt_file
 from functools import lru_cache
 import time
 
