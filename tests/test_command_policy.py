@@ -17,3 +17,13 @@ def test_plain_test_command_is_security_report():
     p=parse_command("تست بگیر")
     assert p.security is True
     assert p.security_action == "report"
+
+
+def test_language_is_detected():
+    assert parse_command("write a Python program").language == "Python"
+
+def test_generic_write_request_is_not_build_command():
+    assert parse_command("please write a summary").build is False
+
+def test_project_build_request_is_build_command():
+    assert parse_command("build project").build is True
