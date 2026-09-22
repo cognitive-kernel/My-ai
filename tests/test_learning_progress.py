@@ -89,7 +89,7 @@ def test_scheduler_switches_language_when_already_running(monkeypatch):
         def __init__(self):
             pass
 
-        def learn_next(self, language, progress_callback=None):
+        def learn_next(self, language, progress_callback=None, stop_event=None):
             started.append(language)
             return {"status": "completed", "topic": {"topic": "test"}}
 
@@ -177,3 +177,52 @@ def test_assess_parses_score_and_returns_none_for_invalid_output():
     assert engine.assess("Python", "lesson") == 82.0
     engine.llm = FakeLLM("unable to score")
     assert engine.assess("Python", "lesson") is None
+
+
+def test_learning_retries_until_llm_recovers(monkeypatch):
+    attempts = []
+    sleeps = []
+
+    class FakeLLM:
+        def chat(self, *_args, **_kwargs):
+            attempts.append(len(attempts) + 1)
+            if len(attempts) < 3:
+                raise RuntimeError("Ollama request failed: timed out")
+            return '{"prerequisites": []}'
+
+    engine = LearningEngine.__new__(LearningEngine)
+    engine.llm = FakeLLM()
+    monkeypatch.setattr(learner_module.time, "sleep", lambda delay: sleeps.append(delay))
+
+    result = engine._discover_prerequisites(
+        "Python",
+        {"topic": "Functions", "goal": "functions"},
+    )
+
+    assert result == []
+    assert len(attempts) == 3
+    assert sleeps == [1.0, 2.0]
+
+
+def test_learning_retry_can_be_explicitly_stopped(monkeypatch):
+    stop_event = threading.Event()
+    calls = []
+
+    def operation():
+        calls.append(1)
+        raise RuntimeError("temporary failure")
+
+    def stop_after_first(_delay):
+        stop_event.set()
+
+    monkeypatch.setattr(learner_module.time, "sleep", stop_after_first)
+    engine = LearningEngine.__new__(LearningEngine)
+
+    try:
+        engine._retry_forever(operation, "test", stop_event=stop_event)
+    except InterruptedError:
+        pass
+    else:
+        raise AssertionError("retry loop must stop when explicitly requested")
+
+    assert calls == [1]
