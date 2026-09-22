@@ -255,11 +255,16 @@ def chat_stream(r:ChatRequest, request:Request):
 
 @app.get("/memory/knowledge")
 def knowledge_list(request: Request, status: str | None = None, limit: int = 200):
-    require_user(request)
+    user=require_user(request)
     limit=max(1,min(limit,1000))
-    if status:
-        return {"items":fetch_all("SELECT * FROM knowledge WHERE verification_status=? ORDER BY id DESC LIMIT ?",(status,limit))}
-    return {"items":fetch_all("SELECT * FROM knowledge ORDER BY id DESC LIMIT ?",(limit,))}
+    if user["role"] == "admin":
+        if status:
+            return {"items":fetch_all("SELECT * FROM knowledge WHERE verification_status=? ORDER BY id DESC LIMIT ?",(status,limit))}
+        return {"items":fetch_all("SELECT * FROM knowledge ORDER BY id DESC LIMIT ?",(limit,))}
+    return {"items":fetch_all(
+        "SELECT * FROM knowledge WHERE verification_status IN ('verified','approved') ORDER BY id DESC LIMIT ?",
+        (limit,),
+    )}
 
 @app.put("/memory/knowledge/{knowledge_id}")
 def knowledge_update(knowledge_id:int, r:KnowledgeUpdateRequest, request:Request):
@@ -367,7 +372,7 @@ def self_update_status_api(request:Request):
 def self_update_apply_api(r:ChatRequest, request:Request):
     user=require_admin(request)
     result=self_update_apply(r.message)
-    audit(user,"self-update","write","blocked",result.get("reason",""))
+    audit(user,"self-update","write",str(result.get("status","unknown")),result.get("reason","") or result.get("details",""))
     return result
 
 @app.put("/admin/tools")
@@ -656,10 +661,10 @@ def git_logout():
 @app.get("/git/connection")
 def git_connection():
     try:
-        data=GitHubConnector().repo("cognitive-kernel/My-ai")
-        return {"connected":True,"authenticated":GitHubConnector.token_status(),"repository":data.get("full_name"),"private":data.get("private",False)}
+        identity=GitHubConnector().whoami()
+        return {"connected":True,"authenticated":True,"login":identity.get("login"),"name":identity.get("name"),"token_source":GitHubConnector.token_source()}
     except Exception as e:
-        return {"connected":False,"authenticated":bool(__import__("os").getenv("GITHUB_TOKEN")),"error":str(e)}
+        return {"connected":False,"authenticated":GitHubConnector.token_status(),"error":str(e)}
 @app.post("/git/token")
 def git_token(r:ChatRequest):
     token=r.message.strip()
@@ -671,8 +676,7 @@ def git_token(r:ChatRequest):
         GitHubConnector.save_token(token)
         c=GitHubConnector(token=token)
         try:
-            repo_data=c.repo("cognitive-kernel/My-ai")
-            identity=repo_data.get("owner") or {}
+            identity=c.whoami()
         except Exception as e:
             if isinstance(e, __import__("my_ai.git_connector", fromlist=["GitHubAPIError"]).GitHubAPIError):
                 if e.status_code == 401:
@@ -709,8 +713,7 @@ def git_whoami():
         token_source=GitHubConnector.token_source()
         if token_source == "none":
             raise HTTPException(401,"GitHub Token تنظیم نشده است.")
-        data=c.repo("cognitive-kernel/My-ai")
-        identity=data.get("owner") or {}
+        identity=c.whoami()
         return {"authenticated":True,"login":identity.get("login"),"name":identity.get("name"),"token_source":token_source}
     except HTTPException: raise
     except Exception as e:
@@ -728,11 +731,19 @@ def git_token_diagnostics():
         raise HTTPException(500,f"GitHub token diagnostics error: {e}")
 
 @app.get("/git/check")
-def git_check(repository:str="cognitive-kernel/My-ai"):
+def git_check(repository:str|None=None):
     c=GitHubConnector()
     token_source=GitHubConnector.token_source()
     if token_source == "none":
         return {"authenticated":False,"repository":repository,"status":"no_token","message":"GitHub Token تنظیم نشده است."}
+    if not repository:
+        try:
+            identity=c.whoami()
+            return {"authenticated":True,"status":"ok","login":identity.get("login"),"token_source":token_source,"message":"GitHub Token معتبر است."}
+        except Exception as e:
+            if isinstance(e, __import__("my_ai.git_connector", fromlist=["GitHubAPIError"]).GitHubAPIError):
+                return {"authenticated":False,"status":"github_auth_error","http_status":e.status_code,"token_source":token_source,"github_message":e.message}
+            return {"authenticated":False,"status":"network_error","token_source":token_source,"message":str(e)}
     try:
         data=c.repo(repository)
         identity=data.get("owner") or {}
