@@ -213,13 +213,16 @@ def export_database(destination: str, password: str | None = None) -> str:
                 data[table] = [dict(x) for x in conn.execute(f"SELECT * FROM {table}").fetchall()]
             except Exception:
                 data[table] = []
-    dst.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    raw = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+    if password:
+        from .backup_crypto import encrypt_bytes
+        dst.write_bytes(encrypt_bytes(raw, password))
+    else:
+        dst.write_bytes(raw)
     return str(dst)
 
 
-def import_database(source: str) -> dict[str, Any]:
-    path = Path(source).expanduser().resolve()
-    data = json.loads(path.read_text(encoding="utf-8"))
+def _import_data(data: dict[str, Any]) -> dict[str, Any]:
     allowed = {"knowledge","chat_sessions","conversations","learning_sessions","agent_runs","generated_projects","security_scans"}
     inserted = {}
     with connect() as conn:
@@ -229,14 +232,29 @@ def import_database(source: str) -> dict[str, Any]:
                 continue
             columns = [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
             for row in rows:
-                cols = [c for c in columns if c in row and c != "id"]
+                cols = [col for col in columns if col in row and col != "id"]
                 if not cols:
                     continue
                 marks = ",".join("?" for _ in cols)
-                conn.execute(f"INSERT OR IGNORE INTO {table} ({','.join(cols)}) VALUES ({marks})", tuple(row[c] for c in cols))
+                conn.execute(f"INSERT OR IGNORE INTO {table} ({','.join(cols)}) VALUES ({marks})", tuple(row[col] for col in cols))
             inserted[table] = len(rows)
         conn.commit()
     return inserted
+
+
+def import_database(source: str) -> dict[str, Any]:
+    path = Path(source).expanduser().resolve()
+    return _import_data(json.loads(path.read_text(encoding="utf-8")))
+
+
+def import_encrypted_database(source: str, password: str) -> dict[str, Any]:
+    from .backup_crypto import decrypt_bytes
+    data = json.loads(decrypt_bytes(Path(source).read_bytes(), password).decode("utf-8"))
+    return _import_data(data)
+
+
+def restore_encrypted_backup(source: str, destination: str, password: str) -> str:
+    return decrypt_file(source, destination, password)
 
 
 def _assert_public_http_url(url: str) -> urllib.parse.ParseResult:
