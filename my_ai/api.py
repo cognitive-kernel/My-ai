@@ -775,7 +775,7 @@ def git_logout():
         exe=GitHubConnector._gh_executable()
         if exe:
             import subprocess
-            r=subprocess.run([exe,"auth","logout","--hostname","github.com","--yes"],capture_output=True,text=True,timeout=30,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
+            r=subprocess.run([exe,"auth","logout","--hostname","github.com"],input="y\n",capture_output=True,text=True,timeout=30,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
             if r.returncode != 0:
                 raise RuntimeError((r.stderr or r.stdout or "GitHub logout failed").strip())
         return {"authenticated":False,"message":"از GitHub خارج شدی."}
