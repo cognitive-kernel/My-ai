@@ -143,7 +143,7 @@ def test_repair_invalid_diff_retries(monkeypatch, tmp_path):
 
 def test_offline_strict_blocks_public_web(monkeypatch):
     from my_ai import platform
-    monkeypatch.setattr(platform.settings, "offline_strict", True)
+    object.__setattr__(platform.settings, "offline_strict", True)
     result = platform.web_fetch_policy("https://example.com")
     assert result["allowed"] is False
     assert "offline strict" in result["reason"]
