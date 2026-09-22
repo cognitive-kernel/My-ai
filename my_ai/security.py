@@ -36,6 +36,8 @@ RULES=[
     ("medium","Plaintext password storage","plaintext-password",r"(?i)(password|passwd)\s*[:=]\s*[^#\n]*(str|text|varchar|TEXT|VARCHAR)","Store password hashes, never plaintext passwords."),
 ]
 
+_COMPILED_RULES=[(severity,title,rule_id,re.compile(pattern),remediation) for severity,title,rule_id,pattern,remediation in RULES]
+
 class SecurityEngine:
     def __init__(self,llm=None):
         self.llm=llm or OllamaClient()
@@ -65,9 +67,9 @@ class SecurityEngine:
             except OSError: continue
             lines=text.splitlines()
             rel=str(path.relative_to(root))
-            for severity,title,rule_id,pattern,remediation in RULES:
+            for severity,title,rule_id,pattern,remediation in _COMPILED_RULES:
                 for no,line in enumerate(lines,1):
-                    if re.search(pattern,line):
+                    if pattern.search(line):
                         findings.append(Finding(severity,title,rel,no,self._redact_evidence(line.strip()[:300]),remediation,rule_id))
         findings.extend(self._structural_checks(files))
         result={"project_path":str(root),"findings":[f.__dict__ for f in findings],"summary":self._summary(findings),"fixed":False}
@@ -80,9 +82,9 @@ class SecurityEngine:
 
     def scan_code(self,code:str,language:str="Python",fix:bool=False):
         findings=[]
-        for severity,title,rule_id,pattern,remediation in RULES:
+        for severity,title,rule_id,pattern,remediation in _COMPILED_RULES:
             for no,line in enumerate(code.splitlines(),1):
-                if re.search(pattern,line):
+                if pattern.search(line):
                     findings.append(Finding(severity,title,"<generated>",no,self._redact_evidence(line.strip()[:300]),remediation,rule_id))
         result={"language":language,"findings":[f.__dict__ for f in findings],"summary":self._summary(findings),"fixed":False,"code":code}
         if fix and findings:
