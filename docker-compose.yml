@@ -5,6 +5,8 @@ services:
       - "127.0.0.1:${MYAI_HOST_PORT:-8000}:8000"
     volumes:
       - ./data:/app/data
+      - ./projects:/app/projects
+      - ./self-repair:/app/self-repair
     environment:
       HOST: 0.0.0.0
       PORT: 8000
