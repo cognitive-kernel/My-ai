@@ -43,7 +43,7 @@ _TOOL_RULES = (
     ("/learning/","learning"),("/scheduler/","scheduler"),("/backup/","database"),
     ("/voice/","voice"),("/skills","skill-engine"),("/models/","models"),
     ("/memory/search","memory"),("/web/","web"),("/projects/","projects"),
-    ("/eval/","eval"),("/self-update/","self-update"),("/help/ask","help"),
+    ("/eval/","eval"),("/self-update/","self-update"),("/self-repair/","self-repair"),("/help/ask","help"),
 )
 _PATH_ACTIONS = {"/git/token": "write", "/git/logout": "write"}
 _LOGIN_FAILURES: dict[str, tuple[int, float]] = {}
