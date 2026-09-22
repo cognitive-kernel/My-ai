@@ -154,7 +154,7 @@ class Agent:
             return answer
 
         intent = classify(message)
-        task = "coding" if intent.name == "coding" else "routing" if intent.name in {"learning", "chat"} else "general"
+        task = "coding" if intent.name == "coding" else "general"
         llm = self.llm if task == "general" else create_llm(task)
         history = fetch_all(
             "SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 20",
