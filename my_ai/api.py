@@ -35,7 +35,7 @@ async def lifespan(_):
     init_db()
     scheduler.start_review_monitor()
     active=fetch_all("SELECT language FROM learning_sessions WHERE status='started' ORDER BY id DESC LIMIT 1")
-    if active: scheduler.start(active[0]["language"])
+    if active and settings.scheduler_auto_resume: scheduler.start(active[0]["language"])
     yield
     scheduler.stop()
 app=FastAPI(title="My-AI",version="0.2.0",description="Local-first personal learning and coding agent.",lifespan=lifespan)
@@ -117,8 +117,8 @@ class ProgramRequest(BaseModel): request:str; language:str="Python"
 class LanguageRequest(BaseModel): language:str="Python"
 class SecurityRequest(BaseModel): project_path:str|None=None; target_url:str|None=None; code:str|None=None; language:str="Python"; fix:bool=False; headers:dict[str,str]=Field(default_factory=dict)
 class GitRequest(BaseModel): repository:str; path:str|None=None; ref:str|None=None; branch:str|None=None; content:str|None=None; message:str|None=None; allow_write:bool=False
-class SchedulerRequest(BaseModel): language:str="Python"; interval_seconds:int=3600
-class LearnRequest(BaseModel): language:str="Python"; interval_seconds:int=3600
+class SchedulerRequest(BaseModel): language:str="Python"; interval_seconds:int=settings.scheduler_interval_seconds
+class LearnRequest(BaseModel): language:str="Python"; interval_seconds:int=settings.scheduler_interval_seconds
 class ToolRequest(BaseModel): language:str="Python"; operation:str="test"; cwd:str|None=None; timeout:int=120
 class PythonToolRequest(BaseModel): code:str
 class SQLQueryRequest(BaseModel): sql:str; limit:int=1000
@@ -621,7 +621,7 @@ def chat(r:ChatRequest, request:Request):
             language=resolve_learning_target(msg, requested or "Python")
             language=canonical_language(language)
             execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"user",msg))
-            scheduler.interval_seconds=3600
+            scheduler.interval_seconds=settings.scheduler_interval_seconds
             scheduler.start(language)
             answer=f"یادگیری {language} در پس‌زمینه شروع شد."
             execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"assistant",answer)); execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(sid,))
