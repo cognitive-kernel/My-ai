@@ -18,7 +18,8 @@ from .ui import page
 from .help import page as help_page, ask_help, local_help_html
 from .git_connector import GitHubConnector
 from .auth import authenticate, audit, create_account, create_session, current_user, require_admin, revoke_session, require_user, tool_allowed
-from .platform import backup_database, choose_model, eval_retrieval, export_database, hybrid_search, import_database, model_health, resource_status, self_update_apply, self_update_status, voice_status, web_fetch_policy
+from .platform import backup_database, choose_model, eval_retrieval, export_database, hybrid_search, import_database, model_health, resource_status, voice_status, web_fetch_policy
+from .self_update import self_update_status, self_update_apply
 from .skill_engine import ensure_skill, record_evidence, revalidate, snapshot
 from .voice import status as voice_engine_status, transcribe, synthesize
 from .llm import create_llm
@@ -242,7 +243,9 @@ def chat_stream(r:ChatRequest, request:Request):
     user=require_user(request)
     if r.session_id is not None and not fetch_all("SELECT id FROM chat_sessions WHERE id=? AND user_id=?",(r.session_id,user["id"])):
         raise HTTPException(404,"Chat session not found.")
-    llm=create_llm()
+    intent=classify(r.message)
+    task="coding" if intent.name=="coding" else "routing" if intent.name in {"learning","chat"} else "general"
+    llm=create_llm(task)
     def generate():
         stream=getattr(llm,"stream_chat",None)
         if stream is None:
