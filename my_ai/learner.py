@@ -11,6 +11,7 @@ from .memory import remember
 from .web_learner import WebLearner
 from .security import SecurityEngine
 from .dast import LocalDAST
+from .project_workspace import create_project_workspace, write_project_files
 
 class LearningEngine:
     def __init__(self,llm=None):
@@ -161,8 +162,12 @@ class LearningEngine:
             lines=code.splitlines()[1:]
             if lines and lines[-1].strip()==fence: lines=lines[:-1]
             code="\n".join(lines).strip()
+        workspace=create_project_workspace(request)
+        written_files=write_project_files(workspace,language,request,code)
         pid=execute("INSERT INTO generated_projects(language,request,code) VALUES(?,?,?)",(language,request,code))
-        result={"language":language,"request":request,"code":code,"project_id":pid}
+        result={"language":language,"request":request,"code":code,"project_id":pid,
+                "project_name":workspace.name,"project_path":str(workspace.relative_to(workspace.parents[1])),
+                "files":written_files}
         if language.lower()=="python": result["validation"]=self.validate_code(code)
         return result
 
