@@ -7,6 +7,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from .db import execute
 
 ROOT = Path(__file__).resolve().parent.parent
 STATE_DIR = ROOT / "data" / "self_update"
@@ -33,6 +34,11 @@ def _record_lesson(event, **data):
     item = {"time": datetime.now(timezone.utc).isoformat(), "event": event, **data}
     with LESSONS.open("a", encoding="utf-8") as f:
         f.write(json.dumps(item, ensure_ascii=False) + "\n")
+    try:
+        execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",
+                (event, data.get("candidate") or data.get("attempted"), data.get("details") or data.get("error"), 1 if event == "update_activated" else 0))
+    except Exception:
+        pass
 
 
 def _tests(cwd):
