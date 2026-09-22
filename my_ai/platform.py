@@ -19,10 +19,22 @@ from functools import lru_cache
 import time
 
 
-def ollama_embed(text: str, model: str | None = None) -> list[float]:
+def _ollama_url(path: str) -> str:
+    base = settings.ollama_base_url.rstrip("/")
+    if settings.offline_strict:
+        host = urllib.parse.urlparse(base).hostname
+        import ipaddress
+        try:
+            if not host or not ipaddress.ip_address(host).is_loopback:
+                raise ValueError
+        except ValueError as exc:
+            raise RuntimeError("Offline strict mode permits only loopback Ollama endpoints.") from exc
+    return base + path
+
+def ollama_embed(text: str, model: str | None = None):
     model = model or settings.embedding_model
     response = httpx.post(
-        f"{settings.ollama_base_url.rstrip('/')}/api/embed",
+        _ollama_url("/api/embed"),
         json={"model": model, "input": text},
         timeout=120,
     )
@@ -134,7 +146,7 @@ def hybrid_search(query: str, limit: int = 8) -> list[dict[str, Any]]:
 def model_health() -> dict[str, Any]:
     models = []
     try:
-        r = httpx.get(f"{settings.ollama_base_url.rstrip('/')}/api/tags", timeout=10)
+        r = httpx.get(_ollama_url("/api/tags"), timeout=10)
         r.raise_for_status()
         models = [m.get("name") for m in r.json().get("models", [])]
     except Exception as exc:
