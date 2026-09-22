@@ -27,3 +27,35 @@ jobs:
         env:
           OLLAMA_MODEL: qwen2.5:0.5b
         run: python -c "from my_ai.llm import OllamaClient; r=OllamaClient().chat('Reply with exactly OK'); print(r); assert 'OK' in r.upper()"
+      - name: Start application
+        env:
+          OLLAMA_MODEL: qwen2.5:0.5b
+          ROUTER_MODEL: qwen2.5:0.5b
+          CODING_MODEL: qwen2.5:0.5b
+          FALLBACK_MODEL: qwen2.5:0.5b
+        run: |
+          nohup uvicorn my_ai.api:app --host 127.0.0.1 --port 8000 > /tmp/my-ai.log 2>&1 &
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:8000/health && break || sleep 2; done
+      - name: Run authenticated API and UI smoke tests
+        run: |
+          test "$(curl -s -o /tmp/login.html -w '%{http_code}' http://127.0.0.1:8000/login)" = "200"
+          test "$(curl -s -o /tmp/register.json -w '%{http_code}' -c /tmp/cookies.txt -H 'Content-Type: application/json' -d '{"username":"ci-admin","password":"ci-password-123","display_name":"CI"}' http://127.0.0.1:8000/auth/register)" = "200"
+          test "$(curl -s -o /tmp/home.html -w '%{http_code}' -b /tmp/cookies.txt http://127.0.0.1:8000/)" = "200"
+          grep -q 'Self-Update' /tmp/home.html
+          grep -q 'Self-Repair' /tmp/home.html
+          grep -q 'SpeechRecognition' /tmp/home.html
+          test "$(curl -s -o /tmp/metrics.json -w '%{http_code}' -b /tmp/cookies.txt http://127.0.0.1:8000/health/metrics)" = "200"
+          test "$(curl -s -o /tmp/chat.json -w '%{http_code}' -b /tmp/cookies.txt -H 'Content-Type: application/json' -d '{"message":"Reply with exactly OK"}' http://127.0.0.1:8000/chat)" = "200"
+          grep -qi 'OK' /tmp/chat.json
+      - name: Run Docker compose E2E smoke
+        env:
+          EXECUTOR_SHARED_TOKEN: ci-test-token
+          OLLAMA_MODEL: qwen2.5:0.5b
+          ROUTER_MODEL: qwen2.5:0.5b
+          CODING_MODEL: qwen2.5:0.5b
+          FALLBACK_MODEL: qwen2.5:0.5b
+        run: |
+          docker compose up -d --build
+          for i in $(seq 1 90); do curl -fsS http://127.0.0.1:8000/health && break || sleep 2; done
+          curl -fsS http://127.0.0.1:8000/health | grep -q '"status":"ok"'
+          docker compose down -v
