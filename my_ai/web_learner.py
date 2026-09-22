@@ -1,10 +1,11 @@
 from __future__ import annotations
-import ipaddress,re,socket
+import re
 from urllib.parse import urlparse, quote_plus
 from urllib import robotparser
 import httpx
 from bs4 import BeautifulSoup
 from .config import settings
+from .network import assert_public_hostname, pinned_client
 class WebLearner:
     def search(self,query,domains=None,limit=6):
         q=query+((" site:"+" OR site:".join(domains)) if domains else "")
@@ -14,9 +15,10 @@ class WebLearner:
     @staticmethod
     def _safe_host(host):
         try:
-            infos=socket.getaddrinfo(host,None,type=socket.SOCK_STREAM)
-            return bool(infos) and all(ipaddress.ip_address(x[4][0]).is_global for x in infos)
-        except (OSError,ValueError): return False
+            assert_public_hostname(host)
+            return True
+        except ValueError:
+            return False
     @classmethod
     def _validate_url(cls,url):
         p=urlparse(url)
@@ -26,7 +28,7 @@ class WebLearner:
     def _robots_allowed(self,url):
         p=urlparse(url); robots_url=f"{p.scheme}://{p.netloc}/robots.txt"
         try:
-            with httpx.Client(timeout=httpx.Timeout(5.0,connect=2.0),follow_redirects=False,headers={"User-Agent":"My-AI"}) as client:
+            with pinned_client(timeout=httpx.Timeout(5.0,connect=2.0),follow_redirects=False,headers={"User-Agent":"My-AI"}) as client:
                 response=client.get(robots_url)
                 if 300 <= response.status_code < 400 and response.headers.get("location"):
                     target=str(httpx.URL(robots_url).join(response.headers["location"]))
@@ -44,14 +46,15 @@ class WebLearner:
         self._validate_url(url)
         if not self._robots_allowed(url):
             raise ValueError("robots.txt disallows this URL or could not be verified.")
-        for _ in range(6):
-            self._validate_url(url)
-            r=httpx.get(url,timeout=20,follow_redirects=False,headers={"User-Agent":"My-AI/0.2"})
-            if r.status_code not in {301,302,303,307,308}: break
-            location=r.headers.get("location")
-            if not location: break
-            url=str(httpx.URL(url).join(location)); self._validate_url(url)
-            if not self._robots_allowed(url): raise ValueError("robots.txt disallows redirect target.")
+        with pinned_client(timeout=20,follow_redirects=False,headers={"User-Agent":"My-AI/0.2"}) as client:
+            for _ in range(6):
+                self._validate_url(url)
+                r=client.get(url)
+                if r.status_code not in {301,302,303,307,308}: break
+                location=r.headers.get("location")
+                if not location: break
+                url=str(httpx.URL(url).join(location)); self._validate_url(url)
+                if not self._robots_allowed(url): raise ValueError("robots.txt disallows redirect target.")
         r.raise_for_status()
         if "text/html" not in r.headers.get("content-type","") and "text/plain" not in r.headers.get("content-type",""): raise ValueError("URL does not contain HTML/text.")
         soup=BeautifulSoup(r.text,"html.parser")
