@@ -54,5 +54,5 @@ def write_project_files(workspace: Path, language: str, request: str, code: str)
         target.relative_to(workspace)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
-        written.append(str(target.relative_to(workspace.parents[1])).replace("\\\\", "/"))
+        written.append(str(target.relative_to(workspace.parents[1])).replace("\\", "/"))
     return written
