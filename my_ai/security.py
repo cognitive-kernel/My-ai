@@ -11,7 +11,7 @@ from .llm import OllamaClient
 
 TEXT_EXTENSIONS={".py",".php",".js",".ts",".jsx",".tsx",".html",".htm",".css",".sql",".json",".yml",".yaml",".env",".ini",".conf",".toml"}
 SKIP_DIRS={".git",".venv","venv","node_modules","__pycache__","dist","build",".pytest_cache",".mypy_cache"}
-_SECRET_VALUE=re.compile(r"(?i)(api[_-]?key|secret|password|passwd|token)\\s*([:=])\\s*(['\"])([^'\"]+)(\\3)")
+_SECRET_VALUE=re.compile(r"(?i)(api[_-]?key|secret|password|passwd|token)[ \t]*([:=])[ \t]*(['"])([^'"]+)(?:['"])")
 
 @dataclass
 class Finding:
