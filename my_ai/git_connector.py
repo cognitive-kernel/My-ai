@@ -165,15 +165,15 @@ class GitHubConnector:
     def token_source(cls):
         if cls.gh_logged_in():return "github_cli_oauth"
         if cls._saved_token():return "saved"
-        if cls._gcm_token():return "git_credential_manager"
         if os.getenv("GITHUB_TOKEN"):return "environment"
+        if cls._gcm_token():return "git_credential_manager"
         return "none"
     @classmethod
     def token_status(cls):return cls.token_source()!="none"
     def _effective_token(self):
         explicit=getattr(self,"_explicit_token",None)
         if explicit is not None:return explicit
-        return self.gh_token() or self._saved_token() or self._gcm_token() or os.getenv("GITHUB_TOKEN")
+        return self.gh_token() or self._saved_token() or os.getenv("GITHUB_TOKEN") or self._gcm_token()
     def _headers(self):
         h={"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28","User-Agent":"My-AI-GitHub-Connector"}; token=self._effective_token()
         if token:h["Authorization"]="Bearer "+token
