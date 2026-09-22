@@ -195,6 +195,6 @@ def search_knowledge(query: str, limit: int = 8) -> list[dict[str, Any]]:
         """SELECT k.id,k.topic,k.title,k.content,k.source_url,k.verification_status,k.confidence,k.created_at,
                   bm25(knowledge_fts) AS rank
            FROM knowledge_fts JOIN knowledge k ON k.id=knowledge_fts.rowid
-           WHERE knowledge_fts MATCH ? ORDER BY rank LIMIT ?""",
+           WHERE knowledge_fts MATCH ? ORDER BY rank, k.id DESC LIMIT ?""",
         (match, limit),
     )
