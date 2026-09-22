@@ -1,5 +1,7 @@
 from __future__ import annotations
 import json
+import time
+
 from .curriculum import next_topic,canonical_language,source_urls,LANGUAGE_CURRICULA
 from .advanced_curriculum import seed_for
 from .db import execute,fetch_all,search_knowledge
@@ -15,17 +17,39 @@ class LearningEngine:
         self.llm=llm or create_llm(); self.web=WebLearner()
         self.security=SecurityEngine(self.llm); self.dast=LocalDAST()
 
-    def _discover_prerequisites(self,language,topic):
+    def _retry_forever(self, operation, label, progress_callback=None, topic=None, stop_event=None):
+        """Retry a learning operation indefinitely until it succeeds or learning is explicitly stopped."""
+        delay=1.0
+        while True:
+            if stop_event is not None and stop_event.is_set():
+                raise InterruptedError("learning stopped")
+            try:
+                return operation()
+            except Exception as exc:
+                if stop_event is not None and stop_event.is_set():
+                    raise InterruptedError("learning stopped") from exc
+                if progress_callback:
+                    progress_callback("retrying", topic or label)
+                # Keep retrying forever, but back off so an unavailable Ollama/API does not get hammered.
+                time.sleep(delay)
+                delay=min(delay*2.0,60.0)
+
+    def _discover_prerequisites(self,language,topic,progress_callback=None,stop_event=None):
         prompt=("You are a curriculum architect. Analyze the requested programming subject and identify prerequisite subjects that must be learned before or alongside it. "
                  '{"prerequisites":[{"name":"...","reason":"...","recommended_order":1}]}. '
                  "Do not duplicate the main topic. Only include concrete skills needed to build real projects. "
                  f"MAIN SUBJECT: {language}\nCURRENT TOPIC: {topic['topic']}\nGOAL: {topic['goal']}")
-        try:
-            data=json.loads(self.llm.chat(prompt,system="Return valid JSON only. Prefer official ecosystem prerequisites."))
-            return data.get("prerequisites",[]) if isinstance(data,dict) else []
-        except Exception: return []
+        return self._retry_forever(
+            lambda: self._parse_prerequisites(self.llm.chat(prompt,system="Return valid JSON only. Prefer official ecosystem prerequisites.")),
+            "prerequisites",progress_callback,topic["topic"],stop_event,
+        )
 
-    def _learn_sources_for_topic(self,language,topic,prerequisites):
+    @staticmethod
+    def _parse_prerequisites(raw):
+        data=json.loads(raw)
+        return data.get("prerequisites",[]) if isinstance(data,dict) else []
+
+    def _learn_sources_for_topic(self,language,topic,prerequisites,progress_callback=None,stop_event=None):
         queries=[topic["topic"]]+[p.get("name","") for p in prerequisites[:3]]
         knowledge=[]
         seed=seed_for(language,topic["topic"])
@@ -33,14 +57,15 @@ class LearningEngine:
             remember(language,"Model knowledge seed: "+topic["topic"],seed,"model://knowledge-seed")
             knowledge.append({"title":"Model knowledge seed","url":"model://knowledge-seed"})
         for url in source_urls(language)[:2]:
-            try:
+            def fetch_and_extract(url=url):
                 title,source=self.web.fetch(url)
                 note=self.llm.chat("Extract only accurate knowledge relevant to these study targets from the supplied source. "
                                     "Separate the targets and state prerequisites explicitly. Never invent facts.\n"
                                     f"LANGUAGE: {language}\nTARGETS: {json.dumps(queries,ensure_ascii=False)}\nSOURCE:\n{source}",
                                     system="You are a rigorous programming teacher.")
-                remember(language,title,note,url); knowledge.append({"title":title,"url":url})
-            except Exception as exc: knowledge.append({"url":url,"error":str(exc)})
+                return title,note
+            title,note=self._retry_forever(fetch_and_extract,"source",progress_callback,topic["topic"],stop_event)
+            remember(language,title,note,url); knowledge.append({"title":title,"url":url})
         return knowledge
 
     def study_url(self,url,topic="Python"):
@@ -69,45 +94,50 @@ class LearningEngine:
         sid=execute("INSERT INTO learning_sessions(language,topic,status,notes,progress_percent,phase) VALUES(?,?,?,?,?,?)",(language,str(topic["topic"]),"started",json.dumps(topic,ensure_ascii=False),0.0,"starting"))
         return {"status":"started","session_id":sid,"topic":topic}
 
-    def learn_next(self,language="Python",progress_callback=None):
+    def learn_next(self,language="Python",progress_callback=None,stop_event=None):
         language=canonical_language(language); s=self.start(language)
         if s["status"]=="completed": return s
         t=s["topic"]
         self._set_progress(s["session_id"], 0.5, "prerequisites")
         if progress_callback: progress_callback("prerequisites",t["topic"])
-        prerequisites=self._discover_prerequisites(language,t)
+        prerequisites=self._discover_prerequisites(language,t,progress_callback,stop_event)
         self._set_progress(s["session_id"], 25.0, "sources")
         if progress_callback: progress_callback("sources",t["topic"])
-        sources=self._learn_sources_for_topic(language,t,prerequisites)
+        sources=self._learn_sources_for_topic(language,t,prerequisites,progress_callback,stop_event)
         self._set_progress(s["session_id"], 50.0, "lesson")
         if progress_callback: progress_callback("lesson",t["topic"])
         seed=seed_for(language,t["topic"])
-        lesson=self.llm.chat("Teach the topic as a complete, structured study unit. Include prerequisite lessons first, then the main topic, examples, exercises, tests, common mistakes, security considerations and a mastery checklist. "
+        lesson=self._retry_forever(
+            lambda: self.llm.chat("Teach the topic as a complete, structured study unit. Include prerequisite lessons first, then the main topic, examples, exercises, tests, common mistakes, security considerations and a mastery checklist. "
                              "Use the model knowledge seed only as an initial layer; reconcile it with supplied official-source knowledge and explicitly correct conflicts. "
                              "Do not claim mastery unless supported by the supplied knowledge. Return clear sections.\n"
                              f"LANGUAGE: {language}\nTOPIC: {t['topic']}\nGOAL: {t['goal']}\n"
                              f"MODEL KNOWLEDGE SEED: {seed}\n"
                              f"DISCOVERED PREREQUISITES: {json.dumps(prerequisites,ensure_ascii=False)}\n"
-                             f"LEARNED KNOWLEDGE: {json.dumps(search_knowledge(language+' '+t['topic'],12),ensure_ascii=False)}")
+                             f"LEARNED KNOWLEDGE: {json.dumps(search_knowledge(language+' '+t['topic'],12),ensure_ascii=False)}"),
+            "lesson",progress_callback,t["topic"],stop_event,
+        )
         remember(language,"Mastery lesson: "+t["topic"],lesson)
         self._set_progress(s["session_id"], 75.0, "assessment")
         if progress_callback: progress_callback("assessment",t["topic"])
-        score=self.assess(t["topic"],lesson)
+        score=self._retry_forever(lambda: self.assess(t["topic"],lesson,allow_retry=False),"assessment",progress_callback,t["topic"],stop_event)
         execute("UPDATE learning_sessions SET status='completed',score=?,notes=?,progress_percent=100.0,phase='completed' WHERE id=?",(score,lesson,s["session_id"]))
         if progress_callback: progress_callback("completed",t["topic"])
         return {"status":"completed","session_id":s["session_id"],"language":language,"topic":t,"prerequisites":prerequisites,"score":score,"sources":sources,"seeded":bool(seed)}
 
     def autonomous_step(self,language="Python"): return self.learn_next(language)
 
-    def assess(self,topic,lesson):
+    def assess(self,topic,lesson,allow_retry=True):
         import re
         try:
             raw=self.llm.chat("Return a numeric score from 0 to 100 for factual coverage. Topic:"+topic+"\nNOTE:"+lesson).strip()
             match=re.search(r"(?<!\d)(100(?:\.0+)?|(?:\d{1,2})(?:\.\d+)?)(?!\d)",raw)
             if not match:
-                return None
+                raise ValueError("LLM returned no numeric assessment score")
             return max(0.0,min(100.0,float(match.group(1))))
         except (ValueError,TypeError):
+            if not allow_retry:
+                raise
             return None
 
     @staticmethod
@@ -168,4 +198,3 @@ class LearningEngine:
             out.append({"language":lang,"completed_topics":completed,"total_topics":total,"progress_percent":self._half_percent(raw),"progress_step":"0.5%","average_score":round(sum(scores)/len(scores),1) if scores else 0})
         if language: out=[x for x in out if x["language"].lower()==canonical_language(language).lower()]
         return {"languages":out,"sessions":rows,"available_languages":list(LANGUAGE_CURRICULA.keys())}
-
