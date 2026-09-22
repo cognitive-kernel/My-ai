@@ -1,0 +1,44 @@
+from __future__ import annotations
+
+import threading
+import time
+from collections import defaultdict
+from typing import Any
+
+_lock = threading.Lock()
+_counts = defaultdict(int)
+_totals = defaultdict(float)
+
+def record_inference(provider: str, model: str, duration: float, *, prompt_tokens: int | None = None, output_tokens: int | None = None) -> None:
+    key = f"{provider}:{model}"
+    with _lock:
+        _counts[f"inference:{key}"] += 1
+        _totals[f"duration:{key}"] += max(0.0, duration)
+        if prompt_tokens is not None:
+            _totals[f"prompt_tokens:{key}"] += max(0, prompt_tokens)
+        if output_tokens is not None:
+            _totals[f"output_tokens:{key}"] += max(0, output_tokens)
+
+def record_error(provider: str, model: str) -> None:
+    with _lock:
+        _counts[f"errors:{provider}:{model}"] += 1
+
+def snapshot() -> dict[str, Any]:
+    with _lock:
+        inference = {}
+        for key, count in _counts.items():
+            if not key.startswith("inference:"):
+                continue
+            name = key.split(":", 1)[1]
+            inference[name] = {
+                "requests": count,
+                "errors": _counts.get(f"errors:{name}", 0),
+                "total_seconds": round(_totals.get(f"duration:{name}", 0.0), 3),
+                "avg_seconds": round(_totals.get(f"duration:{name}", 0.0) / count, 3) if count else 0.0,
+                "prompt_tokens": int(_totals.get(f"prompt_tokens:{name}", 0)),
+                "output_tokens": int(_totals.get(f"output_tokens:{name}", 0)),
+            }
+        return {"inference": inference}
+
+def timer():
+    return time.perf_counter()
