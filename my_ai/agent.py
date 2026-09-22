@@ -41,7 +41,7 @@ Self-maintenance rules:
 - A self-update requires an explicit user confirmation after a diagnostic/proposal.
 - Updates are tested in an isolated git worktree before activation.
 - The previous revision is tagged before activation; failed activation is preserved as a separate git tag and rolled back automatically by the watchdog.
-- Failure details are recorded as lessons in data/self_update/lessons.jsonl so they can be reviewed and used to avoid repeating the same failure.
+- Failure details are recorded as lessons in self-repair/lessons.jsonl and are fed back into code-generation and self-repair prompts to avoid repeating the same failure.
 """
 
 
