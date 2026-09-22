@@ -48,6 +48,7 @@ class OllamaClient:
             if item.get("role") in {"user","assistant"} and isinstance(item.get("content"), str):
                 messages.append({"role": item["role"], "content": item["content"]})
         messages.append({"role": "user", "content": message})
+        yielded = False
         try:
             with httpx.stream("POST", f"{self.base_url}/api/chat", json=payload, timeout=300) as response:
                 response.raise_for_status()
@@ -57,9 +58,10 @@ class OllamaClient:
                     data=json.loads(line)
                     chunk=data.get("message",{}).get("content")
                     if chunk:
+                        yielded = True
                         yield str(chunk)
         except (httpx.HTTPError, json.JSONDecodeError) as exc:
-            if self.model != self.fallback_model:
+            if not yielded and self.model != self.fallback_model:
                 fallback_payload = dict(payload)
                 fallback_payload["model"] = self.fallback_model
                 try:
