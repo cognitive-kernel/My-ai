@@ -31,7 +31,7 @@ def _ollama_url(path: str) -> str:
             raise RuntimeError("Offline strict mode permits only loopback Ollama endpoints.") from exc
     return base + path
 
-def ollama_embed(text: str, model: str | None = None):
+def ollama_embed(text: str, model: str | None = None) -> list[float]:
     model = model or settings.embedding_model
     response = httpx.post(
         _ollama_url("/api/embed"),
