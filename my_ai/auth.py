@@ -60,6 +60,8 @@ def create_account(username: str, password: str, display_name: str = "") -> dict
                 "INSERT INTO users(username,password_salt,password_hash,display_name,role) VALUES(?,?,?,?,?)",
                 (username,salt,digest,display_name,role),
             )
+            if cur.lastrowid is None:
+                raise RuntimeError("User insert did not return an id.")
             user_id=int(cur.lastrowid)
             conn.commit()
     except ValueError:
