@@ -91,7 +91,7 @@ def ensure_domain(name, llm=None):
     if not name:
         return None
     canonical = canonical_language(name)
-    if canonical in LANGUAGE_CURRICULA:
+    if canonical in LANGUAGE_CURRICULA and llm is None:
         return canonical
     saved = _load_saved(name)
     if saved:
