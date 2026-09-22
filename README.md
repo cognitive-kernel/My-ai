@@ -371,8 +371,8 @@ PUT  /git/file
 دو مسیر جدا وجود دارد:
 
 - **Self-update**: وضعیت واقعی Git را می‌خواند؛ update در worktree جداگانه تست می‌شود؛ قبل از activation snapshot ساخته می‌شود و watchdog در صورت شکست rollback می‌کند.
-- **Self-repair**: ابتدا diagnose محلی اجرا می‌شود، سپس مدل coding با lessons قبلی یک unified patch تولید می‌کند. patch در worktree ایزوله با \`compileall + pytest\` تست می‌شود و فقط پس از تأیید صریح کاربر روی working tree اعمال می‌شود. اگر تست پس از اعمال شکست بخورد، patch به commit پایه rollback می‌شود.
-- \`self-repair/lessons.jsonl\` و جدول \`fix_attempts\` برای بستن حلقه یادگیری استفاده می‌شوند و lessons اخیر در promptهای تولید کد و patch قرار می‌گیرند.
+- **Self-repair**: ابتدا diagnose محلی اجرا می‌شود، سپس مدل coding با lessons قبلی یک unified patch تولید می‌کند. patch در worktree ایزوله با `compileall + pytest` تست می‌شود و فقط پس از تأیید صریح کاربر روی working tree اعمال می‌شود. اگر تست پس از اعمال شکست بخورد، patch به commit پایه rollback می‌شود.
+- `self-repair/lessons.jsonl` و جدول `fix_attempts` برای بستن حلقه یادگیری استفاده می‌شوند و lessons اخیر در promptهای تولید کد و patch قرار می‌گیرند.
 - درخواست‌های HTTP به مقصدهای خارجی با DNS pinning انجام می‌شوند: IP عمومی در زمان request انتخاب و همان IP برای اتصال TCP استفاده می‌شود، در حالی که hostname برای Host/SNI حفظ می‌شود.
 
 ## Docker
