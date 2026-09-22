@@ -31,9 +31,12 @@ def _run_remote(code:str)->ExecutionResult:
     token=os.getenv("EXECUTOR_SHARED_TOKEN","")
     if not token or token == "replace-with-a-long-random-secret":
         raise RuntimeError("EXECUTOR_SHARED_TOKEN must be a real secret for remote execution.")
+    url=os.getenv("EXECUTOR_SERVICE_URL","http://executor:9000/run").rstrip("/")
+    if not url.endswith("/run"):
+        url += "/run"
     try:
         r=httpx.post(
-            (os.getenv("EXECUTOR_SERVICE_URL","http://executor:9000/run").rstrip("/") + ("" if os.getenv("EXECUTOR_SERVICE_URL","http://executor:9000/run").rstrip("/").endswith("/run") else "/run")),
+            url,
             json={"code":code},
             headers={"Authorization":f"Bearer {token}"},
             timeout=settings.exec_timeout+5,
@@ -42,7 +45,7 @@ def _run_remote(code:str)->ExecutionResult:
         data=r.json()
         return ExecutionResult(str(data.get("output","")),str(data.get("error","")),bool(data.get("timed_out",False)),int(data.get("return_code",2)),"remote-container")
     except httpx.HTTPError as exc:
-        raise RuntimeError(f"Remote executor unavailable: {exc}") from exc
+        raise RuntimeError(f"Remote executor unavailable at {url}: {exc}") from exc
 
 def run_python(code:str)->ExecutionResult:
     if not isinstance(code,str) or not code.strip(): return ExecutionResult("","No Python code supplied.",False,2,settings.exec_mode)
