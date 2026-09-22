@@ -283,16 +283,3 @@ def eval_retrieval() -> dict[str, Any]:
     return {"cases": results, "passed": sum(1 for x in results if x["hit"]), "total": len(results)}
 
 
-def self_update_status() -> dict[str, Any]:
-    return {
-        "enabled": os.getenv("MYAI_SELF_UPDATE_ENABLED", "false").lower() == "true",
-        "default_policy": "deny",
-        "snapshot_required": True,
-        "approval_required": True,
-        "rollback_required": True,
-    }
-
-
-def self_update_apply(_proposal: str) -> dict[str, Any]:
-    # Deliberately no-op until an explicit future implementation passes all policy gates.
-    return {"applied": False, "reason": "Self-update is deny-by-default and is not enabled."}
