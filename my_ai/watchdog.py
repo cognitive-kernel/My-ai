@@ -8,6 +8,7 @@ import time
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from .db import execute
 
 import httpx
 
@@ -19,6 +20,11 @@ def _record_lesson(event, **data):
     item={"time":datetime.now(timezone.utc).isoformat(),"event":event,**data}
     with LESSONS.open("a",encoding="utf-8") as f:
         f.write(json.dumps(item,ensure_ascii=False)+"\n")
+    try:
+        execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",
+                (event, data.get("failed_tag") or data.get("rollback"), data.get("error") or data.get("health_url"), 0))
+    except Exception:
+        pass
 
 
 def _git(*args):
