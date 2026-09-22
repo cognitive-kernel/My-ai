@@ -257,19 +257,19 @@ def admin_tools(request: Request):
 @app.post("/chat/stream")
 def chat_stream(r:ChatRequest, request:Request):
     user=require_user(request)
-    if r.session_id is not None and not fetch_all("SELECT id FROM chat_sessions WHERE id=? AND user_id=?",(r.session_id,user["id"])):
-        raise HTTPException(404,"Chat session not found.")
-    intent=classify(r.message)
-    task="coding" if intent.name=="coding" else "general"
-    llm=create_llm(task)
+    if r.session_id is not None:
+        if not fetch_all("SELECT id FROM chat_sessions WHERE id=? AND user_id=?",(r.session_id,user["id"])):
+            raise HTTPException(404,"Chat session not found.")
+        sid=r.session_id
+    else:
+        sid=execute("INSERT INTO chat_sessions(title,kind,user_id) VALUES(?,?,?)",((r.message or "گفتگوی جدید").strip()[:60],"chat",user["id"]))
     def generate():
-        stream=getattr(llm,"stream_chat",None)
-        if stream is None:
-            yield agent.chat(r.message,r.session_id)
-            return
-        for chunk in stream(r.message):
-            yield chunk
-    audit(user,"chat","stream","200")
+        try:
+            yield from agent.stream_chat(r.message,sid)
+            audit(user,"chat","stream","200")
+        except Exception as exc:
+            audit(user,"chat","stream","502",str(exc))
+            raise
     return StreamingResponse(generate(),media_type="text/plain; charset=utf-8")
 
 @app.get("/memory/knowledge")
