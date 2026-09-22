@@ -81,7 +81,7 @@ jobs:
             docker compose logs --no-color --tail=200 my-ai executor
             exit 1
           fi
-health_json="$(curl -fsS http://127.0.0.1:8000/health)"
+          health_json="$(curl -fsS http://127.0.0.1:8000/health)"
           echo "$health_json"
           echo "$health_json" | grep -q '"status":"ok"'
           register_code="$(curl -s -o /tmp/compose-register.json -w '%{http_code}' -c /tmp/compose-cookies.txt -H 'Content-Type: application/json' -d '{"username":"compose-admin","password":"compose-password-123","display_name":"Compose CI"}' http://127.0.0.1:8000/auth/register)"
