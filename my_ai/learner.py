@@ -20,7 +20,7 @@ class LearningEngine:
         self.llm=llm or create_llm("general"); self.web=WebLearner()
         self.security=SecurityEngine(self.llm); self.dast=LocalDAST()
 
-    def _retry_forever(self, operation, label, progress_callback=None, topic=None, stop_event=None):
+    def _retry_with_limit(self, operation, label, progress_callback=None, topic=None, stop_event=None):
         """Retry a learning operation indefinitely until it succeeds or learning is explicitly stopped."""
         delay=1.0
         max_attempts=max(1,int(settings.learning_max_retries))
