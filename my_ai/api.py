@@ -1,6 +1,7 @@
 from __future__ import annotations
 from contextlib import asynccontextmanager
 import re
+from urllib.parse import urlparse
 from pathlib import Path
 from fastapi import FastAPI,HTTPException,Request
 from fastapi.responses import HTMLResponse,JSONResponse,RedirectResponse,StreamingResponse
@@ -441,6 +442,10 @@ def self_repair_apply_api(r:RepairRequest, request:Request):
 def self_update_apply_api(r:SelfUpdateRequest, request:Request):
     user=require_admin(request)
     health_url = str(r.health_url) if r.health_url else None
+    if health_url:
+        host=urlparse(health_url).hostname
+        if host not in {"127.0.0.1","localhost","::1"}:
+            raise HTTPException(400,"Self-update health URL must target the local host.")
     result=self_update_apply(health_url=health_url)
     audit(user,"self-update","write",str(result.get("status") or ("activated" if result.get("applied") else "blocked")),result.get("reason","") or result.get("details",""))
     return result
