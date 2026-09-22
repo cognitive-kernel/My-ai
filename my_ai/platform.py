@@ -13,9 +13,12 @@ import httpx
 
 from .config import settings
 from .db import connect, fetch_all
+from functools import lru_cache
+import time
 
 
-def ollama_embed(text: str, model: str = "bge-m3") -> list[float]:
+def ollama_embed(text: str, model: str | None = None) -> list[float]:
+    model = model or settings.embedding_model
     response = httpx.post(
         f"{settings.ollama_base_url.rstrip('/')}/api/embed",
         json={"model": model, "input": text},
@@ -29,9 +32,10 @@ def ollama_embed(text: str, model: str = "bge-m3") -> list[float]:
     return [float(x) for x in embeddings[0]]
 
 
-def ollama_embed_batch(texts: list[str], model: str = "bge-m3") -> list[list[float]]:
+def ollama_embed_batch(texts: list[str], model: str | None = None) -> list[list[float]]:
     if not texts:
         return []
+    model = model or settings.embedding_model
     response = httpx.post(
         f"{settings.ollama_base_url.rstrip('/')}/api/embed",
         json={"model": model, "input": texts},
@@ -53,7 +57,8 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     return dot / (na * nb) if na and nb else 0.0
 
 
-def hybrid_search(query: str, limit: int = 8) -> list[dict[str, Any]]:
+@lru_cache(maxsize=128)
+def _hybrid_search_cached(query: str, limit: int, bucket: int) -> list[dict[str, Any]]:
     limit = max(1, min(limit, 50))
     from .db import _normalize_search_text
     normalized = _normalize_search_text(query)
@@ -72,7 +77,7 @@ def hybrid_search(query: str, limit: int = 8) -> list[dict[str, Any]]:
         span = worst - best
         lexical_scores = {int(r["id"]):(1.0 if span == 0 else (worst-float(r["fts_rank"]))/span) for r in lexical}
     rows = fetch_all("SELECT * FROM knowledge ORDER BY id DESC")
-    cached = fetch_all("SELECT knowledge_id,content_hash,embedding FROM knowledge_embeddings WHERE model=?", ("bge-m3",))
+    cached = fetch_all("SELECT knowledge_id,content_hash,embedding FROM knowledge_embeddings WHERE model=?", (settings.embedding_model,))
     cache = {int(r["knowledge_id"]): r for r in cached}
     missing = []
     missing_rows = []
@@ -90,7 +95,7 @@ def hybrid_search(query: str, limit: int = 8) -> list[dict[str, Any]]:
                     conn.execute(
                         "INSERT INTO knowledge_embeddings(knowledge_id,content_hash,model,embedding) VALUES(?,?,?,?) "
                         "ON CONFLICT(knowledge_id,model) DO UPDATE SET content_hash=excluded.content_hash,embedding=excluded.embedding,created_at=CURRENT_TIMESTAMP",
-                        (row["id"], row.get("content_hash") or "", "bge-m3", json.dumps(vector, separators=(",",":"))),
+                        (row["id"], row.get("content_hash") or "", settings.embedding_model, json.dumps(vector, separators=(",",":"))),
                     )
                 conn.commit()
             for row, vector in zip(missing_rows, vectors):
@@ -116,6 +121,12 @@ def hybrid_search(query: str, limit: int = 8) -> list[dict[str, Any]]:
         row["relevance"] = row["hybrid_score"]
         row["confidence"] = None
     return sorted(rows, key=lambda x:x["hybrid_score"], reverse=True)[:limit]
+
+
+def hybrid_search(query: str, limit: int = 8) -> list[dict[str, Any]]:
+    limit=max(1,min(limit,50))
+    bucket=int(time.monotonic() // max(1,settings.cache_ttl_seconds))
+    return _hybrid_search_cached(query.strip(),limit,bucket)
 
 
 def model_health() -> dict[str, Any]:

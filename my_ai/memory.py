@@ -1,12 +1,24 @@
 from __future__ import annotations
 
+import time
+from functools import lru_cache
+
+from .config import settings
 from .db import remember_knowledge, search_knowledge
 
 
+@lru_cache(maxsize=128)
+def _recall_cached(query: str, limit: int, bucket: int):
+    return search_knowledge(query, limit)
+
+
 def remember(topic, title, content, source_url=None):
-    """Store knowledge once by normalized content and return the canonical row id."""
-    return remember_knowledge(topic, title, content, source_url)
+    result = remember_knowledge(topic, title, content, source_url)
+    _recall_cached.cache_clear()
+    return result
 
 
 def recall(query, limit=8):
-    return search_knowledge(query, max(1, min(limit, 50)))
+    limit = max(1, min(limit, 50))
+    bucket = int(time.monotonic() // max(1, settings.cache_ttl_seconds))
+    return _recall_cached(str(query).strip(), limit, bucket)

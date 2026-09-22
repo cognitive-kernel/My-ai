@@ -10,6 +10,15 @@ services:
       PORT: 8000
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       OLLAMA_MODEL: qwen2.5:7b
+      ROUTER_MODEL: qwen2.5:1.5b
+      CODING_MODEL: qwen2.5:7b
+      FALLBACK_MODEL: qwen2.5:3b
+      EMBEDDING_MODEL: nomic-embed-text
+      OLLAMA_NUM_THREAD: 6
+      OLLAMA_NUM_GPU: 0
+      OLLAMA_KEEP_ALIVE: 30m
+      OLLAMA_NUM_CTX: 4096
+      MYAI_CACHE_TTL: 60
       EXECUTOR_MODE: remote
       EXECUTOR_SERVICE_URL: http://executor:9000/run
       EXECUTOR_SHARED_TOKEN: ${EXECUTOR_SHARED_TOKEN:?set EXECUTOR_SHARED_TOKEN}

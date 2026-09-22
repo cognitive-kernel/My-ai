@@ -5,11 +5,26 @@ import os
 import shlex
 import subprocess
 import time
+import json
+from datetime import datetime, timezone
 from pathlib import Path
+from .db import execute
 
 import httpx
 
 ROOT = Path(__file__).resolve().parent.parent
+LESSONS = ROOT / "data" / "self_update" / "lessons.jsonl"
+
+def _record_lesson(event, **data):
+    LESSONS.parent.mkdir(parents=True, exist_ok=True)
+    item={"time":datetime.now(timezone.utc).isoformat(),"event":event,**data}
+    with LESSONS.open("a",encoding="utf-8") as f:
+        f.write(json.dumps(item,ensure_ascii=False)+"\n")
+    try:
+        execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",
+                (event, data.get("failed_tag") or data.get("rollback"), data.get("error") or data.get("health_url"), 0))
+    except Exception:
+        pass
 
 
 def _git(*args):
@@ -70,7 +85,9 @@ def main():
     _git("tag", "-a", failed_tag, "-m", "My-AI failed activation snapshot")
     rollback = _git("reset", "--hard", args.rollback)
     if rollback.returncode:
+        _record_lesson("activation_rollback_failed", rollback=args.rollback, error=rollback.stderr or rollback.stdout)
         return 2
+    _record_lesson("activation_failed", rollback=args.rollback, failed_tag=failed_tag, health_url=args.url)
 
     subprocess.Popen(command, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, start_new_session=True)
     return 1

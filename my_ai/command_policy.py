@@ -15,10 +15,30 @@ FIX_WORDS=("رفع کن","رفعش کن","برطرف کن","اصلاح کن","د
 SEC_WORDS=("پن تست","پنتست","تست نفوذ","تست امنیت","pentest","pen test","penetration test","security test")
 TEST_WORDS=("تست بگیر","بررسی امنیتی","امنیتش را بررسی","security check","security scan")
 LEARN_WORDS=("یاد بگیر","یادگیری","یاد بگیر که","learn","study","go learn")
-BUILD_WORDS=("بساز","بنویس","برنامه بنویس","پروژه بساز","ایجاد کن","create","build","write","make")
+BUILD_WORDS=("بساز","برنامه بنویس","پروژه بساز","پروژه ایجاد کن","ایجاد پروژه","create project","build project","write a program","write code","make a project")
 
 def _contains(text, words):
     return any((re.search(r"(?<![A-Za-z])"+re.escape(x)+r"(?![A-Za-z])",text) if x.isascii() else x in text) for x in words)
+
+
+
+LANGUAGE_ALIASES={
+    "python":"Python","py":"Python","پایتون":"Python",
+    "javascript":"JavaScript","js":"JavaScript","جاوااسکریپت":"JavaScript",
+    "typescript":"TypeScript","ts":"TypeScript",
+    "java":"Java","go":"Go","golang":"Go","rust":"Rust",
+    "c++":"C++","cpp":"C++","c#":"C#","csharp":"C#",
+    "php":"PHP","ruby":"Ruby","sql":"SQL","bash":"Bash","shell":"Bash",
+}
+
+def _detect_language(text):
+    for alias,canonical in sorted(LANGUAGE_ALIASES.items(), key=lambda item: len(item[0]), reverse=True):
+        if alias.isascii():
+            if re.search(r"(?<![A-Za-z0-9_+#])"+re.escape(alias)+r"(?![A-Za-z0-9_+#])", text, re.IGNORECASE):
+                return canonical
+        elif alias in text:
+            return canonical
+    return None
 
 def parse_command(text: str) -> CommandPolicy:
     low=re.sub(r"\s+"," ",text.lower()).strip()
@@ -34,4 +54,4 @@ def parse_command(text: str) -> CommandPolicy:
         action="report"
     else:
         action="default"
-    return CommandPolicy(security=security,security_action=action,learn=_contains(low,LEARN_WORDS),build=_contains(low,BUILD_WORDS))
+    return CommandPolicy(language=_detect_language(low),security=security,security_action=action,learn=_contains(low,LEARN_WORDS),build=_contains(low,BUILD_WORDS))

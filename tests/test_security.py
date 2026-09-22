@@ -22,3 +22,10 @@ def test_security_scan_can_fix_code():
     result = SecurityEngine(FakeLLM()).scan_code('eval(user_input)', fix=True)
     assert result["fixed"] is True
     assert result["fixed_code"] == "fixed = True"
+
+
+def test_security_secret_evidence_is_redacted():
+    result = SecurityEngine(FakeLLM()).scan_code('password = "super-secret-value"')
+    finding = next(x for x in result["findings"] if x["rule_id"] == "secret")
+    assert "[REDACTED]" in finding["evidence"]
+    assert "super-secret-value" not in finding["evidence"]

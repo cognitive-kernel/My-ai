@@ -11,7 +11,7 @@ from .llm import OllamaClient
 
 TEXT_EXTENSIONS={".py",".php",".js",".ts",".jsx",".tsx",".html",".htm",".css",".sql",".json",".yml",".yaml",".env",".ini",".conf",".toml"}
 SKIP_DIRS={".git",".venv","venv","node_modules","__pycache__","dist","build",".pytest_cache",".mypy_cache"}
-_SECRET_VALUE=re.compile(r"(?i)(api[_-]?key|secret|password|passwd|token)\\s*([:=])\\s*(['\"])([^'\"]+)(\\3)")
+_SECRET_VALUE=re.compile(r"""(?i)(api[_-]?key|secret|password|passwd|token)[ ]*([:=])[ ]*("([^"]+)"|'([^']+)')""")
 
 @dataclass
 class Finding:
@@ -35,6 +35,8 @@ RULES=[
     ("medium","Path traversal risk","path-traversal",r"(?i)(open|read_text|write_text|send_file|FileResponse)\s*\([^\n]*(request|query|params|filename|path)","Validate and constrain user-supplied paths to an intended directory."),
     ("medium","Plaintext password storage","plaintext-password",r"(?i)(password|passwd)\s*[:=]\s*[^#\n]*(str|text|varchar|TEXT|VARCHAR)","Store password hashes, never plaintext passwords."),
 ]
+
+_COMPILED_RULES=[(severity,title,rule_id,re.compile(pattern),remediation) for severity,title,rule_id,pattern,remediation in RULES]
 
 class SecurityEngine:
     def __init__(self,llm=None):
@@ -65,9 +67,9 @@ class SecurityEngine:
             except OSError: continue
             lines=text.splitlines()
             rel=str(path.relative_to(root))
-            for severity,title,rule_id,pattern,remediation in RULES:
+            for severity,title,rule_id,pattern,remediation in _COMPILED_RULES:
                 for no,line in enumerate(lines,1):
-                    if re.search(pattern,line):
+                    if pattern.search(line):
                         findings.append(Finding(severity,title,rel,no,self._redact_evidence(line.strip()[:300]),remediation,rule_id))
         findings.extend(self._structural_checks(files))
         result={"project_path":str(root),"findings":[f.__dict__ for f in findings],"summary":self._summary(findings),"fixed":False}
@@ -80,9 +82,9 @@ class SecurityEngine:
 
     def scan_code(self,code:str,language:str="Python",fix:bool=False):
         findings=[]
-        for severity,title,rule_id,pattern,remediation in RULES:
+        for severity,title,rule_id,pattern,remediation in _COMPILED_RULES:
             for no,line in enumerate(code.splitlines(),1):
-                if re.search(pattern,line):
+                if pattern.search(line):
                     findings.append(Finding(severity,title,"<generated>",no,self._redact_evidence(line.strip()[:300]),remediation,rule_id))
         result={"language":language,"findings":[f.__dict__ for f in findings],"summary":self._summary(findings),"fixed":False,"code":code}
         if fix and findings:
@@ -99,7 +101,7 @@ class SecurityEngine:
 
     @staticmethod
     def _redact_evidence(line:str) -> str:
-        return _SECRET_VALUE.sub(lambda m: f"{m.group(1)}{m.group(2)}{m.group(3)}[REDACTED]{m.group(5)}", line)
+        return _SECRET_VALUE.sub(lambda m: f"{m.group(1)}{m.group(2)}[REDACTED]", line)
 
     def _summary(self,findings):
         return {level:sum(1 for f in findings if f.severity==level) for level in ("critical","high","medium","low")}
