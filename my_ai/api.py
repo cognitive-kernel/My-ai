@@ -19,7 +19,7 @@ from .help import page as help_page, ask_help, local_help_html
 from .git_connector import GitHubConnector
 from .auth import authenticate, audit, create_account, create_session, current_user, require_admin, revoke_session, require_user, tool_allowed
 from .platform import backup_database, choose_model, eval_retrieval, export_database, hybrid_search, import_database, model_health, resource_status, voice_status, web_fetch_policy
-from .self_update import self_update_status, self_update_apply
+from .self_update import status as self_update_status, apply_confirmed_update as self_update_apply
 from .self_repair import diagnose_local, propose_repair, apply_repair, proposal_status
 from .skill_engine import ensure_skill, record_evidence, revalidate, snapshot
 from .voice import status as voice_engine_status, transcribe, synthesize
