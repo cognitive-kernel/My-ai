@@ -10,7 +10,7 @@ from pathlib import Path
 from .db import execute
 
 ROOT = Path(__file__).resolve().parent.parent
-STATE_DIR = ROOT / "data" / "self_update"
+STATE_DIR = ROOT / "self-repair"
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 LESSONS = STATE_DIR / "lessons.jsonl"
 
