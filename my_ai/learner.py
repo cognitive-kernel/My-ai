@@ -40,7 +40,7 @@ class LearningEngine:
                 delay=min(delay*2.0,60.0)
 
     def _discover_prerequisites(self,language,topic,progress_callback=None,stop_event=None):
-        routing_llm=create_llm("routing")
+        routing_llm=self.llm if self.llm is not None else create_llm("routing")
         prompt=("You are a curriculum architect. Analyze the requested programming subject and identify prerequisite subjects that must be learned before or alongside it. "
                  '{"prerequisites":[{"name":"...","reason":"...","recommended_order":1}]}. '
                  "Do not duplicate the main topic. Only include concrete skills needed to build real projects. "
