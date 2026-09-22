@@ -148,3 +148,8 @@ def test_offline_strict_blocks_public_web(monkeypatch):
     result = platform.web_fetch_policy("https://example.com")
     assert result["allowed"] is False
     assert "offline strict" in result["reason"]
+
+
+def test_encrypted_blob_has_authenticated_header():
+    from my_ai.backup_crypto import encrypt_bytes
+    assert encrypt_bytes(b"x", "123456789012")[:11] == b"MYAI-ENC-1\n"
