@@ -13,7 +13,7 @@ from .db import execute
 import httpx
 
 ROOT = Path(__file__).resolve().parent.parent
-LESSONS = ROOT / "data" / "self_update" / "lessons.jsonl"
+LESSONS = ROOT / "self-repair" / "lessons.jsonl"
 
 def _record_lesson(event, **data):
     LESSONS.parent.mkdir(parents=True, exist_ok=True)
