@@ -17,9 +17,15 @@ HistoryMessage = dict[str, str]
 
 
 class OllamaClient:
-    def __init__(self) -> None:
+    def __init__(self, task: str | None = None) -> None:
         self.base_url = getattr(settings, "ollama_base_url", "http://127.0.0.1:11434").rstrip("/")
         self.model = getattr(settings, "ollama_model", "qwen2.5:7b")
+        if task:
+            low=task.lower()
+            if any(x in low for x in ("code","python","sql","debug","کد","برنامه","پروژه")):
+                self.model=getattr(settings,"coding_model",self.model)
+            elif any(x in low for x in ("route","classify","intent","simple","ساده","دسته")):
+                self.model=getattr(settings,"routing_model",self.model)
 
     def stream_chat(
         self,
@@ -27,7 +33,8 @@ class OllamaClient:
         system: str | None = None,
         history: Sequence[HistoryMessage] | None = None,
     ) -> Iterator[str]:
-        payload: dict[str, object] = {"model": self.model, "stream": True, "options": {"num_ctx": settings.ollama_num_ctx}, "messages": []}
+        payload: dict[str, object] = {"model": self.model, "stream": True, "options": {"num_ctx": settings.ollama_num_ctx, "num_thread": settings.ollama_num_thread, "num_gpu": settings.ollama_num_gpu},
+            "keep_alive": settings.ollama_keep_alive, "messages": []}
         messages = payload["messages"]
         assert isinstance(messages, list)
         if system:
@@ -58,7 +65,8 @@ class OllamaClient:
         payload: dict[str, object] = {
             "model": self.model,
             "stream": False,
-            "options": {"num_ctx": int(os.getenv("OLLAMA_NUM_CTX", "8192"))},
+            "options": {"num_ctx": settings.ollama_num_ctx, "num_thread": settings.ollama_num_thread, "num_gpu": settings.ollama_num_gpu},
+            "keep_alive": settings.ollama_keep_alive,
             "messages": [],
         }
         messages = payload["messages"]
@@ -146,10 +154,10 @@ class OpenAICompatibleClient:
         raise LLMError(f"Unexpected OpenAI response: {data}")
 
 
-def create_llm():
+def create_llm(task: str | None = None):
     provider = settings.llm_provider
     if provider in {"openai", "openai-compatible", "openai_compatible"}:
         return OpenAICompatibleClient()
     if provider == "auto":
-        return OllamaClient()
+        return OllamaClient(task=task)
     return OllamaClient()
