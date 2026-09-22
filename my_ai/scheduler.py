@@ -10,11 +10,12 @@ from .curriculum import LANGUAGE_CURRICULA, LANGUAGE_SOURCES, canonical_language
 from .db import execute, fetch_all
 from .domain_registry import load_saved_domains
 from .dynamic_learning import REVIEW_DAYS, ensure_domain, resolve_learning_target, due_domains, weekly_review
+from .config import settings
 
 
 class StudyScheduler:
-    def __init__(self, interval_seconds=3600):
-        self.interval_seconds = interval_seconds
+    def __init__(self, interval_seconds=None):
+        self.interval_seconds = int(interval_seconds or settings.scheduler_interval_seconds)
         self._stop = threading.Event()
         self._review_stop = threading.Event()
         self._thread = None
@@ -178,8 +179,8 @@ class StudyScheduler:
                 if language not in LANGUAGE_CURRICULA:
                     language = ensure_domain(language, getattr(engine, "llm", None)) or language
                     self.language = language
-                limits_cpu = float(__import__("os").getenv("SCHEDULER_MAX_CPU_PERCENT", "90"))
-                limits_ram = float(__import__("os").getenv("SCHEDULER_MAX_RAM_PERCENT", "90"))
+                limits_cpu = float(settings.scheduler_max_cpu_percent)
+                limits_ram = float(settings.scheduler_max_ram_percent)
                 resources = resource_status()
                 if resources.get("cpu_percent") is not None and (resources["cpu_percent"] > limits_cpu or resources["ram_percent"] > limits_ram):
                     self.update_progress("paused", "system load high")
