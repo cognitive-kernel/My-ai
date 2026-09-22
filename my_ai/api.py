@@ -24,7 +24,7 @@ from .self_repair import diagnose_local, propose_repair, apply_repair, proposal_
 from .skill_engine import ensure_skill, record_evidence, revalidate, snapshot
 from .voice import status as voice_engine_status, transcribe, synthesize
 from .metrics import snapshot as metrics_snapshot
-from .platform import import_encrypted_database
+from .platform import import_encrypted_database, restore_encrypted_backup
 from .self_repair import list_proposals, proposal_diff
 from .llm import create_llm
 
@@ -101,7 +101,7 @@ class AuthRegisterRequest(BaseModel): username:str; password:str; display_name:s
 class AuthLoginRequest(BaseModel): username:str; password:str
 class KnowledgeUpdateRequest(BaseModel): title:str; content:str; topic:str; source_url:str|None=None
 class BackupRequest(BaseModel): path:str; password:str|None=None
-class ImportRequest(BaseModel): path:str; password:str|None=None
+class ImportRequest(BaseModel): path:str; password:str|None=None; destination:str|None=None
 class PermissionRequest(BaseModel): user_id:int; tool_name:str; action:str; allowed:bool
 class AdminUserRequest(BaseModel): username:str; password:str; display_name:str=""; active:bool=True
 class SkillEvidenceRequest(BaseModel): skill_id:int; kind:str; passed:bool; details:dict[str,object]={}
@@ -362,6 +362,15 @@ def backup_export(r:BackupRequest, request:Request):
     user=require_admin(request)
     path=export_database(r.path,r.password)
     audit(user,"database","export","200",path)
+    return {"path":path}
+
+@app.post("/backup/restore-database")
+def backup_restore_database(r:ImportRequest, request:Request):
+    user=require_admin(request)
+    if not r.password or not r.destination:
+        raise HTTPException(400,"password and destination are required.")
+    path=restore_encrypted_backup(r.path,r.destination,r.password)
+    audit(user,"database","restore","200",path)
     return {"path":path}
 
 @app.post("/backup/import")
