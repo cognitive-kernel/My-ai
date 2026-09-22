@@ -11,7 +11,7 @@ from .llm import OllamaClient
 
 TEXT_EXTENSIONS={".py",".php",".js",".ts",".jsx",".tsx",".html",".htm",".css",".sql",".json",".yml",".yaml",".env",".ini",".conf",".toml"}
 SKIP_DIRS={".git",".venv","venv","node_modules","__pycache__","dist","build",".pytest_cache",".mypy_cache"}
-_SECRET_VALUE=re.compile(r"(?i)(api[_-]?key|secret|password|passwd|token)[ \t]*([:=])[ \t]*(['"])([^'"]+)(?:['"])")
+_SECRET_VALUE=re.compile(r"""(?i)(api[_-]?key|secret|password|passwd|token)[ ]*([:=])[ ]*("([^"]+)"|'([^']+)')""")
 
 @dataclass
 class Finding:
@@ -101,7 +101,7 @@ class SecurityEngine:
 
     @staticmethod
     def _redact_evidence(line:str) -> str:
-        return _SECRET_VALUE.sub(lambda m: f"{m.group(1)}{m.group(2)}{m.group(3)}[REDACTED]{m.group(3)}", line)
+        return _SECRET_VALUE.sub(lambda m: f"{m.group(1)}{m.group(2)}[REDACTED]", line)
 
     def _summary(self,findings):
         return {level:sum(1 for f in findings if f.severity==level) for level in ("critical","high","medium","low")}
