@@ -159,6 +159,50 @@ class OpenAICompatibleClient:
         if not self.api_key:
             raise LLMError("OPENAI_API_KEY is required when LLM_PROVIDER=openai")
 
+    def stream_chat(
+        self,
+        message: str,
+        system: str | None = None,
+        history: Sequence[HistoryMessage] | None = None,
+    ) -> Iterator[str]:
+        input_items: list[dict[str, object]] = []
+        for item in history or ():
+            role=item.get("role")
+            content=item.get("content")
+            if role in {"user","assistant"} and isinstance(content,str) and content.strip():
+                input_items.append({"role":role,"content":content})
+        input_items.append({"role":"user","content":message})
+        payload: dict[str, object] = {"model":self.model,"input":input_items,"stream":True}
+        if system:
+            payload["instructions"]=system
+        started=time.perf_counter()
+        try:
+            with httpx.stream(
+                "POST",
+                f"{self.base_url}/responses",
+                headers={"Authorization":f"Bearer {self.api_key}","Content-Type":"application/json"},
+                json=payload,
+                timeout=300,
+            ) as response:
+                response.raise_for_status()
+                for line in response.iter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue
+                    raw=line[5:].strip()
+                    if raw=="[DONE]":
+                        continue
+                    data=json.loads(raw)
+                    if data.get("type")=="response.output_text.delta":
+                        delta=data.get("delta")
+                        if isinstance(delta,str) and delta:
+                            yield delta
+                    elif data.get("type")=="response.completed":
+                        usage=((data.get("response") or {}).get("usage") or {})
+                        record_inference("openai",self.model,time.perf_counter()-started,prompt_tokens=usage.get("input_tokens"),output_tokens=usage.get("output_tokens"))
+        except (httpx.HTTPError,json.JSONDecodeError) as exc:
+            record_error("openai",self.model)
+            raise LLMError(f"OpenAI-compatible streaming request failed: {exc}") from exc
+
     def chat(
         self,
         message: str,
@@ -215,5 +259,7 @@ def create_llm(task: str | None = None):
     if provider in {"openai", "openai-compatible", "openai_compatible"}:
         return OpenAICompatibleClient()
     if provider == "auto":
+        if settings.openai_api_key and not getattr(settings, "offline_strict", False):
+            return OpenAICompatibleClient()
         return OllamaClient(task=task)
     return OllamaClient(task=task)
