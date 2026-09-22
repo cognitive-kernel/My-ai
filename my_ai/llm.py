@@ -59,6 +59,23 @@ class OllamaClient:
                     if chunk:
                         yield str(chunk)
         except (httpx.HTTPError, json.JSONDecodeError) as exc:
+            if self.model != self.fallback_model:
+                fallback_payload = dict(payload)
+                fallback_payload["model"] = self.fallback_model
+                try:
+                    with httpx.stream("POST", f"{self.base_url}/api/chat", json=fallback_payload, timeout=300) as response:
+                        response.raise_for_status()
+                        self.model = self.fallback_model
+                        for line in response.iter_lines():
+                            if not line:
+                                continue
+                            data=json.loads(line)
+                            chunk=data.get("message",{}).get("content")
+                            if chunk:
+                                yield str(chunk)
+                        return
+                except (httpx.HTTPError, json.JSONDecodeError) as fallback_exc:
+                    raise LLMError(f"Ollama streaming request failed for primary and fallback models: {exc}; {fallback_exc}") from fallback_exc
             raise LLMError(f"Ollama streaming request failed: {exc}") from exc
 
     def chat(
