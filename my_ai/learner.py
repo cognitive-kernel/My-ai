@@ -160,7 +160,7 @@ class LearningEngine:
         lessons=recent_lessons(12)
         code=coding_llm.chat("Write a complete runnable "+language+" program for the user request. Use accumulated learning knowledge. "
                             "Apply secure coding practices, validate inputs, avoid unsafe defaults, include appropriate error handling and tests where practical. "
-                            "Return ONLY source code.\nREQUEST: "+request+"\nKNOWLEDGE: "+json.dumps(context,ensure_ascii=False),
+                            "Return ONLY source code.\nREQUEST: "+request+"\nKNOWLEDGE: "+json.dumps(context,ensure_ascii=False)+"\nRECENT SELF-REPAIR LESSONS: "+json.dumps(lessons,ensure_ascii=False),
                             system="You are a senior secure software engineer. Never claim execution unless a result is supplied.").strip()
         fence=chr(96)*3
         if code.startswith(fence):
