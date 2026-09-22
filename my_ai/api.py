@@ -15,7 +15,7 @@ from .dynamic_learning import resolve_learning_target
 from .router import classify
 from .scheduler import StudyScheduler
 from .ui import page
-from .help import page as help_page, ask_help, local_help_html
+from .help import page as help_page, ask_help, local_help_html, apply_help_update
 from .git_connector import GitHubConnector
 from .auth import authenticate, audit, create_account, create_session, current_user, require_admin, revoke_session, require_user, tool_allowed
 from .platform import backup_database, choose_model, eval_retrieval, export_database, hybrid_search, import_database, model_health, resource_status, voice_status, web_fetch_policy
@@ -549,8 +549,11 @@ def help_approve(update_id:int,request:Request):
     proposal=rows[0].get("proposed_update") or ""
     if proposal.strip()=="NO_CHANGE":
         execute("UPDATE help_updates SET status='rejected' WHERE id=?",(update_id,)); return {"status":"rejected","update_id":update_id,"message":"No documentation change was proposed."}
+    component=rows[0]["component"]
+    if not apply_help_update(component, proposal):
+        raise HTTPException(400,"The help component is not supported.")
     execute("UPDATE help_updates SET status='approved' WHERE id=?",(update_id,))
-    return {"status":"approved","update_id":update_id,"message":"The approved help update is now visible in /help."}
+    return {"status":"approved","update_id":update_id,"message":"The approved help update was applied to the local help file."}
 @app.post("/help/reject/{update_id}")
 def help_reject(update_id:int,request:Request):
     require_admin(request)
