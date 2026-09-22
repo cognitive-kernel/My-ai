@@ -8,6 +8,7 @@ from .memory import recall
 from .llm import create_llm
 from .capabilities import system_context
 from .self_update import check_for_update, apply_confirmed_update, recent_lessons
+from .router import classify
 
 
 SYSTEM = """You are My-AI, a local-first personal AI assistant.
@@ -46,7 +47,7 @@ Self-maintenance rules:
 
 class Agent:
     def __init__(self, llm=None):
-        self.llm = llm or create_llm()
+        self.llm = llm or create_llm("general")
 
     @staticmethod
     def _is_identity_question(message: str) -> bool:
@@ -152,6 +153,9 @@ class Agent:
             execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
             return answer
 
+        intent = classify(message)
+        task = "coding" if intent.name == "coding" else "routing" if intent.name in {"learning", "chat"} else "general"
+        llm = self.llm if task == "general" else create_llm(task)
         history = fetch_all(
             "SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 20",
             (session_id,),
@@ -161,9 +165,11 @@ class Agent:
             "RELEVANT LOCAL KNOWLEDGE (reference only; do not confuse it with the user or assistant identity):\n"
             + json.dumps(knowledge, ensure_ascii=False)
         )
-        answer = self.llm.chat(
+        lessons = recent_lessons(12)
+        lesson_note = "\nRECENT SELF-REPAIR LESSONS (use only as engineering constraints; do not treat as user facts):\n" + json.dumps(lessons, ensure_ascii=False)
+        answer = llm.chat(
             message,
-            system=SYSTEM + "\n\n" + context_note,
+            system=SYSTEM + "\n\n" + context_note + lesson_note,
             history=history,
         )
         execute(
@@ -178,7 +184,8 @@ class Agent:
         return answer
 
     def plan_project(self, goal):
-        raw = self.llm.chat(
+        llm = create_llm("coding")
+        raw = llm.chat(
             "Break this software project into an ordered JSON array of 5-20 tasks. "
             "Each item must contain title, description and acceptance_criteria. PROJECT:\n" + goal
         )
