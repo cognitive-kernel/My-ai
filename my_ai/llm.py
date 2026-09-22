@@ -60,6 +60,7 @@ class OllamaClient:
                 messages.append({"role": item["role"], "content": item["content"]})
         messages.append({"role": "user", "content": message})
         yielded = False
+        started = time.perf_counter()
         try:
             with httpx.stream("POST", f"{self.base_url}/api/chat", json=payload, timeout=300) as response:
                 response.raise_for_status()
@@ -71,7 +72,10 @@ class OllamaClient:
                     if chunk:
                         yielded = True
                         yield str(chunk)
+                    if data.get("done"):
+                        record_inference("ollama", self.model, time.perf_counter() - started, prompt_tokens=data.get("prompt_eval_count"), output_tokens=data.get("eval_count"))
         except (httpx.HTTPError, json.JSONDecodeError) as exc:
+            record_error("ollama", self.model)
             if not yielded and self.model != self.fallback_model:
                 fallback_payload = dict(payload)
                 fallback_payload["model"] = self.fallback_model
@@ -86,6 +90,8 @@ class OllamaClient:
                             chunk=data.get("message",{}).get("content")
                             if chunk:
                                 yield str(chunk)
+                            if data.get("done"):
+                                record_inference("ollama", self.model, time.perf_counter() - started, prompt_tokens=data.get("prompt_eval_count"), output_tokens=data.get("eval_count"))
                         return
                 except (httpx.HTTPError, json.JSONDecodeError) as fallback_exc:
                     raise LLMError(f"Ollama streaming request failed for primary and fallback models: {exc}; {fallback_exc}") from fallback_exc
