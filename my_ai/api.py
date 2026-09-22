@@ -39,7 +39,7 @@ async def lifespan(_):
     scheduler.stop()
 app=FastAPI(title="My-AI",version="0.2.0",description="Local-first personal learning and coding agent.",lifespan=lifespan)
 
-_PUBLIC_PATHS = {"/", "/login", "/register", "/auth/register", "/auth/login", "/auth/logout", "/auth/register/status", "/health", "/openapi.json", "/docs", "/redoc"}
+_PUBLIC_PATHS = {"/", "/login", "/register", "/auth/register", "/auth/login", "/auth/logout", "/auth/register/status", "/health", "/health/metrics", "/openapi.json", "/docs", "/redoc"}
 _TOOL_RULES = (
     ("/git/","github"),("/security/","security"),("/code/run","code-execution"),
     ("/code/generate","code-generation"),("/chat","chat"),("/learn/url","learning"),
