@@ -147,3 +147,10 @@ def test_offline_strict_blocks_public_web(monkeypatch):
     result = platform.web_fetch_policy("https://example.com")
     assert result["allowed"] is False
     assert "offline strict" in result["reason"]
+
+
+def test_health_metrics_is_public(client_db):
+    client = client_db
+    response = client.get("/health/metrics")
+    assert response.status_code == 200
+    assert "inference" in response.json()
