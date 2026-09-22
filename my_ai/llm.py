@@ -18,13 +18,19 @@ HistoryMessage = dict[str, str]
 class OllamaClient:
     def __init__(self, task: str | None = None) -> None:
         self.base_url = getattr(settings, "ollama_base_url", "http://127.0.0.1:11434").rstrip("/")
-        self.model = getattr(settings, "ollama_model", "qwen2.5:7b")
-        if task:
-            low=task.lower()
-            if any(x in low for x in ("code","python","sql","debug","کد","برنامه","پروژه")):
-                self.model=getattr(settings,"coding_model",self.model)
-            elif any(x in low for x in ("route","classify","intent","simple","ساده","دسته")):
-                self.model=getattr(settings,"routing_model",self.model)
+        self.default_model = getattr(settings, "ollama_model", "qwen2.5:7b")
+        self.fallback_model = getattr(settings, "fallback_model", self.default_model)
+        self.model = self._select_model(task)
+
+    def _select_model(self, task: str | None) -> str:
+        if not task:
+            return self.default_model
+        low = task.lower()
+        if any(x in low for x in ("code","python","sql","debug","coding","patch","کد","برنامه","پروژه","رفع باگ")):
+            return getattr(settings, "coding_model", self.default_model)
+        if any(x in low for x in ("route","routing","classify","intent","simple","ساده","دسته")):
+            return getattr(settings, "routing_model", self.default_model)
+        return self.default_model
 
     def stream_chat(
         self,
@@ -80,14 +86,20 @@ class OllamaClient:
         messages.append({"role": "user", "content": message})
 
         try:
-            response = httpx.post(
-                f"{self.base_url}/api/chat",
-                json=payload,
-                timeout=300,
-            )
+            response = httpx.post(f"{self.base_url}/api/chat", json=payload, timeout=300)
             response.raise_for_status()
         except httpx.HTTPError as exc:
-            raise LLMError(f"Ollama request failed: {exc}") from exc
+            if self.model != self.fallback_model:
+                fallback_payload = dict(payload)
+                fallback_payload["model"] = self.fallback_model
+                try:
+                    response = httpx.post(f"{self.base_url}/api/chat", json=fallback_payload, timeout=300)
+                    response.raise_for_status()
+                    self.model = self.fallback_model
+                except httpx.HTTPError as fallback_exc:
+                    raise LLMError(f"Ollama request failed for primary and fallback models: {exc}; {fallback_exc}") from fallback_exc
+            else:
+                raise LLMError(f"Ollama request failed: {exc}") from exc
 
         data = response.json()
         try:
