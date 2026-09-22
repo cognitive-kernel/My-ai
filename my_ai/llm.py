@@ -151,7 +151,7 @@ class OpenAICompatibleClient:
     """OpenAI Responses API backend, also usable with compatible gateways."""
 
     def __init__(self) -> None:
-        if settings.offline_strict:
+        if getattr(settings, "offline_strict", False):
             raise LLMError("OpenAI is disabled in offline strict mode.")
         self.base_url = settings.openai_base_url
         self.model = settings.openai_model
