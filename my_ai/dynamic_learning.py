@@ -103,7 +103,7 @@ def ensure_domain(name, llm=None):
         prompt = (
             "Build a comprehensive curriculum for the requested subject from absolute beginner to expert/advanced level. "
             "Cover prerequisites, fundamentals, intermediate concepts, advanced concepts, internals, security, testing, "
-            "debugging, performance, architecture, production practices, ecosystem/tooling, and a capstone project where applicable. "
+            "debugging, performance, architecture, production practices, ecosystem/tooling, and a capstone project where applicable. Every domain must progress from absolute beginner to expert and each advanced claim must be paired with exercises, executable verification, tests or benchmarks where applicable, security review, and a final project/capstone. "
             "Return JSON only with keys topics and sources. topics must be an array of objects with topic and goal. "
             "Prefer 24-60 concrete, non-duplicate topics. sources must contain official documentation URLs when known.\n"
             f"SUBJECT: {name}"
