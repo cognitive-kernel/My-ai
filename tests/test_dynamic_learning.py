@@ -28,7 +28,9 @@ def test_ensure_domain_persists_and_registers_new_subject(monkeypatch):
 
     name = dynamic_learning.ensure_domain("Rust", FakeLLM())
     assert name == "Rust"
-    assert len(dynamic_learning.LANGUAGE_CURRICULA["Rust"]) == 2
+    topics = dynamic_learning.LANGUAGE_CURRICULA["Rust"]
+    assert len(topics) >= 44
+    assert {item["topic"] for item in topics} >= {"Rust fundamentals", "Ownership", "Expert Rust capstone"}
     assert saved["name"] == "Rust"
     assert saved["topics"][0]["order"] == 1
     assert saved["sources"] == ["https://www.rust-lang.org/learn"]
