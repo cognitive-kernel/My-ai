@@ -20,6 +20,7 @@ from .git_connector import GitHubConnector
 from .auth import authenticate, audit, create_account, create_session, current_user, require_admin, revoke_session, require_user, tool_allowed
 from .platform import backup_database, choose_model, eval_retrieval, export_database, hybrid_search, import_database, model_health, resource_status, voice_status, web_fetch_policy
 from .self_update import self_update_status, self_update_apply
+from .self_repair import diagnose_local, propose_repair, apply_repair, proposal_status
 from .skill_engine import ensure_skill, record_evidence, revalidate, snapshot
 from .voice import status as voice_engine_status, transcribe, synthesize
 from .llm import create_llm
@@ -92,6 +93,7 @@ def _voice_path(value:str, must_exist:bool=False) -> str:
     if must_exist and not path.is_file(): raise HTTPException(404,"Voice input/model file not found.")
     return str(path)
 class ChatRequest(BaseModel): message:str; session_id:int|None=None
+class RepairRequest(BaseModel): issue:str=""; proposal_id:str|None=None; approved:bool=False
 class AuthRegisterRequest(BaseModel): username:str; password:str; display_name:str=""
 class AuthLoginRequest(BaseModel): username:str; password:str
 class KnowledgeUpdateRequest(BaseModel): title:str; content:str; topic:str; source_url:str|None=None
@@ -370,6 +372,32 @@ def eval_retrieval_api(request:Request):
 def self_update_status_api(request:Request):
     require_admin(request)
     return self_update_status()
+
+@app.get("/self-repair/status")
+def self_repair_status_api(request:Request):
+    require_admin(request)
+    return diagnose_local()
+
+@app.post("/self-repair/propose")
+def self_repair_propose_api(r:RepairRequest, request:Request):
+    user=require_admin(request)
+    result=propose_repair(r.issue)
+    audit(user,"self-repair","write","200",f"proposal:{result['id']}")
+    return result
+
+@app.get("/self-repair/proposals/{proposal_id}")
+def self_repair_proposal_api(proposal_id:str, request:Request):
+    require_admin(request)
+    return proposal_status(proposal_id)
+
+@app.post("/self-repair/apply")
+def self_repair_apply_api(r:RepairRequest, request:Request):
+    user=require_admin(request)
+    if not r.proposal_id:
+        raise HTTPException(400,"proposal_id is required.")
+    result=apply_repair(r.proposal_id,r.approved)
+    audit(user,"self-repair","write","200",f"applied:{r.proposal_id}")
+    return result
 
 @app.post("/self-update/apply")
 def self_update_apply_api(r:ChatRequest, request:Request):
