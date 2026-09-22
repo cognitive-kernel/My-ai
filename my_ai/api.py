@@ -372,7 +372,7 @@ def self_update_status_api(request:Request):
 def self_update_apply_api(r:ChatRequest, request:Request):
     user=require_admin(request)
     result=self_update_apply(r.message)
-    audit(user,"self-update","write",str(result.get("status","unknown")),result.get("reason","") or result.get("details",""))
+    audit(user,"self-update","write",str(result.get("status") or ("activated" if result.get("applied") else "blocked")),result.get("reason","") or result.get("details",""))
     return result
 
 @app.put("/admin/tools")
