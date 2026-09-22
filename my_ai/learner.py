@@ -30,8 +30,11 @@ class LearningEngine:
                     raise InterruptedError("learning stopped") from exc
                 if progress_callback:
                     progress_callback("retrying", topic or label)
-                # Keep retrying forever, but back off so an unavailable Ollama/API does not get hammered.
-                time.sleep(delay)
+                # Back off to avoid hammering an unavailable Ollama/API while still retrying forever.
+                if stop_event is not None:
+                    stop_event.wait(delay)
+                else:
+                    time.sleep(delay)
                 delay=min(delay*2.0,60.0)
 
     def _discover_prerequisites(self,language,topic,progress_callback=None,stop_event=None):
