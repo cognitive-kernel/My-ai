@@ -160,4 +160,4 @@ def create_llm(task: str | None = None):
         return OpenAICompatibleClient()
     if provider == "auto":
         return OllamaClient(task=task)
-    return OllamaClient()
+    return OllamaClient(task=task)
