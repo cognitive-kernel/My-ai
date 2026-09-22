@@ -4,6 +4,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -75,7 +76,8 @@ def _normalize_patch(raw: str) -> str:
 
 
 def _test_patch(patch: str, base: str) -> tuple[bool, str]:
-    candidate = Path(tempfile.mkdtemp(prefix="myai-repair-"))
+    parent = Path(tempfile.mkdtemp(prefix="myai-repair-"))
+    candidate = parent / "worktree"
     try:
         add = _git("worktree", "add", "--detach", str(candidate), base, timeout=120)
         if add.returncode:
@@ -91,6 +93,7 @@ def _test_patch(patch: str, base: str) -> tuple[bool, str]:
         return _tests(candidate)
     finally:
         _git("worktree", "remove", "--force", str(candidate), timeout=120)
+        shutil.rmtree(parent, ignore_errors=True)
 
 
 def propose_repair(issue: str) -> dict[str, object]:
