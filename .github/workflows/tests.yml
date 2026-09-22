@@ -8,62 +8,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Prepare diagnostics
-        run: mkdir -p ci-logs
-      - name: Upgrade setuptools
-        id: setuptools
-        continue-on-error: true
-        run: python -m pip install --upgrade "setuptools>=83" 2>&1 | tee ci-logs/setuptools.log
-      - name: Install dev package
-        id: install
-        continue-on-error: true
-        run: pip install -e .[dev] 2>&1 | tee ci-logs/install.log
-      - name: Compile
-        id: compile
-        continue-on-error: true
-        run: python -m compileall -q my_ai tests 2>&1 | tee ci-logs/compile.log
-      - name: Ruff
-        id: ruff
-        continue-on-error: true
-        run: ruff check my_ai tests --select E9,F 2>&1 | tee ci-logs/ruff.log
-      - name: Mypy
-        id: mypy
-        continue-on-error: true
-        run: mypy my_ai --ignore-missing-imports 2>&1 | tee ci-logs/mypy.log
-      - name: Bandit
-        id: bandit
-        continue-on-error: true
-        run: bandit -r my_ai -q -lll 2>&1 | tee ci-logs/bandit.log
-      - name: Pip audit
-        id: pip_audit
-        continue-on-error: true
-        run: pip-audit 2>&1 | tee ci-logs/pip-audit.log
-      - name: Pytest
-        id: pytest
-        continue-on-error: true
-        run: pytest -q 2>&1 | tee ci-logs/pytest.log
-      - name: Docker app image
-        id: docker_app
-        continue-on-error: true
-        run: docker build -t my-ai-ci . 2>&1 | tee ci-logs/docker-app.log
-      - name: Docker executor image
-        id: docker_executor
-        continue-on-error: true
-        run: docker build -f Dockerfile.executor -t my-ai-executor-ci . 2>&1 | tee ci-logs/docker-executor.log
-      - name: Upload CI diagnostics
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ci-diagnostics
-          path: ci-logs
-      - name: Enforce test results
-        if: ${{ always() }}
-        run: |
-          failed=0
-          for outcome in             "${{ steps.setuptools.outcome }}" \
-            "${{ steps.install.outcome }}" \
-            "${{ steps.compile.outcome }}"             "${{ steps.ruff.outcome }}"             "${{ steps.mypy.outcome }}"             "${{ steps.bandit.outcome }}"             "${{ steps.pip_audit.outcome }}"             "${{ steps.pytest.outcome }}"             "${{ steps.docker_app.outcome }}"             "${{ steps.docker_executor.outcome }}"
-          do
-            if [ "$outcome" != "success" ]; then failed=1; fi
-          done
-          exit "$failed"
+      - run: python -m pip install --upgrade "setuptools>=83"
+      - run: pip install -e .[dev]
+      - run: python -m compileall -q my_ai tests
+      - run: ruff check my_ai tests --select E9,F
+      - run: mypy my_ai --ignore-missing-imports
+      - run: bandit -r my_ai -q -lll
+      - run: pip-audit
+      - run: pytest -q
+      - run: docker build -t my-ai-ci .
+      - run: docker build -f Dockerfile.executor -t my-ai-executor-ci .
