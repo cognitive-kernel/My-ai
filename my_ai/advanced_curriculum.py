@@ -60,6 +60,29 @@ def _extend(target, additions):
             target.append({"order": order, "topic": topic, "goal": goal})
 
 
+RUST_ADVANCED=[
+(31,"Rust compiler diagnostics and MIR","Compiler errors, HIR/MIR concepts, diagnostics and implementation-aware debugging"),
+(32,"Advanced trait system","Trait coherence, orphan rules, blanket implementations, associated types and advanced bounds"),
+(33,"Higher-ranked lifetimes","for<'a> bounds, lifetime abstraction and callback APIs"),
+(34,"Generic associated types","GAT design, lending-style APIs and advanced iterator abstractions"),
+(35,"Async runtime internals","Executors, wakers, polling, task scheduling and cancellation semantics"),
+(36,"Unsafe code auditing","Safety invariants, aliasing models, provenance concepts and reviewing unsafe blocks"),
+(37,"FFI safety engineering","ABI contracts, ownership transfer, callbacks, error translation and panic boundaries"),
+(38,"Zero-copy and serialization","Borrowed deserialization, lifetimes, memory layout and allocation-aware data formats"),
+(39,"Distributed systems in Rust","Retries, idempotency, timeouts, backpressure, consistency and service boundaries"),
+(40,"Production observability","Tracing, metrics, structured logs, health checks and incident diagnostics"),
+(41,"Rust performance lab","Benchmarking, flamegraphs, allocation profiling and regression detection"),
+(42,"Rust security lab","Dependency auditing, supply-chain controls, fuzzing concepts and hardened input boundaries"),
+(43,"Advanced build systems","Cargo workspaces, feature matrices, cross compilation, reproducible builds and CI"),
+(44,"Expert Rust capstone","Design, implement, test, benchmark, secure and operate a multi-component Rust system"),
+]
+
+def _extend_rust(target):
+    existing={str(x["topic"]) for x in target}
+    for order,topic,goal in RUST_ADVANCED:
+        if topic not in existing:
+            target.append({"order":order,"topic":topic,"goal":goal})
+
 UNIVERSAL_EXPERT_GATES=[
 (90,"Advanced architecture and design","Decompose complex systems, choose trade-offs, document invariants and maintainability decisions"),
 (91,"Advanced debugging and root-cause analysis","Reproduce failures, isolate root causes, inspect evidence and verify fixes"),
@@ -84,6 +107,8 @@ def extend_curricula(curricula):
         _extend(curricula["Python"], PYTHON_ADVANCED)
     if "SQL Server" in curricula:
         _extend(curricula["SQL Server"], SQLSERVER_ADVANCED)
+    if "Rust" in curricula:
+        _extend_rust(curricula["Rust"])
 
 
 # Compact model-provided seed knowledge. It is a starting layer, not a substitute for
