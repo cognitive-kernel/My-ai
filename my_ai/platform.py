@@ -77,7 +77,7 @@ def _hybrid_search_cached(query: str, limit: int, bucket: int) -> list[dict[str,
         span = worst - best
         lexical_scores = {int(r["id"]):(1.0 if span == 0 else (worst-float(r["fts_rank"]))/span) for r in lexical}
     rows = fetch_all("SELECT * FROM knowledge ORDER BY id DESC")
-    cached = fetch_all("SELECT knowledge_id,content_hash,embedding FROM knowledge_embeddings WHERE model=?", (settings.embedding_model,)
+    cached = fetch_all("SELECT knowledge_id,content_hash,embedding FROM knowledge_embeddings WHERE model=?", (settings.embedding_model,))
     cache = {int(r["knowledge_id"]): r for r in cached}
     missing = []
     missing_rows = []
