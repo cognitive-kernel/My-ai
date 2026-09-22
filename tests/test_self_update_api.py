@@ -12,7 +12,7 @@ def test_self_repair_has_permission_rule():
 
 def test_self_update_api_passes_only_explicit_health_url(monkeypatch):
     seen = {}
-    monkeypatch.setattr(api, "require_admin", lambda request: {"id": 1, "role": "admin"})
+    monkeypatch.setattr(api, "require_admin", lambda request: {"id": 1, "username": "test-admin", "role": "admin"})
     monkeypatch.setattr(api, "self_update_apply", lambda **kwargs: seen.update(kwargs) or {"status": "up_to_date"})
     request = api.SelfUpdateRequest(health_url="http://127.0.0.1:8000/health")
     api.self_update_apply_api(request, object())
