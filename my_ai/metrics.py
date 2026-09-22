@@ -6,8 +6,8 @@ from collections import defaultdict
 from typing import Any
 
 _lock = threading.Lock()
-_counts = defaultdict(int)
-_totals = defaultdict(float)
+_counts: defaultdict[str, int] = defaultdict(int)
+_totals: defaultdict[str, float] = defaultdict(float)
 
 def record_inference(provider: str, model: str, duration: float, *, prompt_tokens: int | None = None, output_tokens: int | None = None) -> None:
     key = f"{provider}:{model}"
