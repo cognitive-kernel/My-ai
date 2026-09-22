@@ -3,8 +3,11 @@ from __future__ import annotations
 import json
 import os
 import urllib.request
+from .config import settings
 
 def notify(event: str, payload: dict[str, object]) -> bool:
+    if settings.offline_strict:
+        return False
     url = os.getenv("MYAI_NOTIFICATION_WEBHOOK", "").strip()
     if not url:
         return False
