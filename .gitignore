@@ -18,3 +18,9 @@ data/self_update/
 
 data/*.db-wal
 data/*.db-shm
+
+# Runtime-generated workspaces
+projects/*
+!projects/.gitkeep
+self-repair/*
+!self-repair/.gitkeep
