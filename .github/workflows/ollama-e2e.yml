@@ -58,10 +58,16 @@ jobs:
         run: |
           if test -f /tmp/my-ai.pid; then
             kill "$(cat /tmp/my-ai.pid)" 2>/dev/null || true
-            for i in $(seq 1 10); do
-              if ! kill -0 "$(cat /tmp/my-ai.pid)" 2>/dev/null; then break; fi
-              sleep 1
-            done
+          fi
+          sudo fuser -k 8000/tcp 2>/dev/null || true
+          for i in $(seq 1 15); do
+            if ! ss -ltn '( sport = :8000 )' | tail -n +2 | grep -q LISTEN; then break; fi
+            sleep 1
+          done
+          if ss -ltn '( sport = :8000 )' | tail -n +2 | grep -q LISTEN; then
+            echo "port 8000 is still in use"
+            ss -ltnp '( sport = :8000 )' || true
+            exit 1
           fi
           docker compose down -v --remove-orphans 2>/dev/null || true
           trap 'docker compose down -v --remove-orphans 2>/dev/null || true' EXIT
