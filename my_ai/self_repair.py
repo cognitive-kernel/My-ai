@@ -12,6 +12,8 @@ from pathlib import Path
 from .db import execute
 from .llm import create_llm
 from .self_update import recent_lessons
+from .decision_log import record as record_decision
+from .notifications import notify
 
 ROOT = Path(__file__).resolve().parent.parent
 PROPOSALS = ROOT / "self-repair" / "proposals"
@@ -110,9 +112,25 @@ def propose_repair(issue: str) -> dict[str, object]:
         f"RECENT LESSONS:\n{json.dumps(recent_lessons(20), ensure_ascii=False, indent=2)}"
     )
     llm = create_llm("coding")
-    raw = llm.chat(prompt, system="You generate minimal, testable git patches. Never return prose.")
-    patch = _normalize_patch(raw)
-    passed, test_result = _test_patch(patch, base)
+    raw = ""
+    patch = ""
+    passed = False
+    test_result = ""
+    last_error = ""
+    for attempt in range(3):
+        retry_prompt = prompt
+        if last_error:
+            retry_prompt += "\n\nPREVIOUS OUTPUT WAS INVALID. REPAIR IT AND RETURN ONLY THE FULL VALID UNIFIED DIFF:\n" + last_error
+        raw = llm.chat(retry_prompt, system="You generate minimal, testable git patches. Never return prose.")
+        try:
+            patch = _normalize_patch(raw)
+        except ValueError as exc:
+            last_error = str(exc) + "\nOUTPUT:\n" + raw[:12000]
+            continue
+        passed, test_result = _test_patch(patch, base)
+        break
+    if not patch:
+        raise ValueError("The model failed to produce a valid unified git patch after 3 attempts.")
     proposal_id = uuid.uuid4().hex
     PROPOSALS.mkdir(parents=True, exist_ok=True)
     proposal = {
@@ -131,6 +149,8 @@ def propose_repair(issue: str) -> dict[str, object]:
         "INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",
         ("repair_proposal", patch, test_result, 0),
     )
+    record_decision("self_repair_proposal", "propose", {"proposal_id": proposal_id, "isolated_tests_passed": passed})
+
     return proposal
 
 
@@ -167,6 +187,8 @@ def apply_repair(proposal_id: str, approved: bool) -> dict[str, object]:
     path.write_text(json.dumps(proposal, ensure_ascii=False, indent=2), encoding="utf-8")
     execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",
             ("repair_applied", proposal["patch"], tests, 1))
+    record_decision("self_repair", "apply", {"proposal_id": proposal_id})
+    notify("self_repair_applied", {"proposal_id": proposal_id, "base": proposal["base"]})
     return {
         "status": "applied",
         "proposal_id": proposal_id,
@@ -174,6 +196,21 @@ def apply_repair(proposal_id: str, approved: bool) -> dict[str, object]:
         "tests": tests,
         "working_tree": "modified",
     }
+
+def list_proposals() -> list[dict[str, object]]:
+    PROPOSALS.mkdir(parents=True, exist_ok=True)
+    items = []
+    for path in sorted(PROPOSALS.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            item = json.loads(path.read_text(encoding="utf-8"))
+            items.append({k: item.get(k) for k in ("id","created_at","base","issue","isolated_tests_passed","approved","applied")})
+        except Exception:
+            continue
+    return items[:100]
+
+def proposal_diff(proposal_id: str) -> dict[str, object]:
+    proposal = proposal_status(proposal_id)
+    return {"id": proposal_id, "base": proposal.get("base"), "issue": proposal.get("issue"), "diff": proposal.get("patch", "")}
 
 
 def proposal_status(proposal_id: str) -> dict[str, object]:
