@@ -66,12 +66,13 @@ def _normalize_patch(raw: str) -> str:
     patch = raw.strip()
     fence = chr(96) * 3
     if patch.startswith(fence):
-        lines = patch.splitlines()
-        if lines and lines[0].startswith(fence):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == fence:
-            lines = lines[:-1]
-        patch = "\n".join(lines).strip()
+        patch = patch[len(fence):].lstrip()
+        if patch.startswith("diff"):
+            pass
+        elif "\n" in patch:
+            patch = patch.split("\n", 1)[1].lstrip()
+        if patch.endswith(fence):
+            patch = patch[:-len(fence)].rstrip()
     if "diff --git " not in patch:
         raise ValueError("The model did not return a unified git patch.")
     return patch + "\n"
