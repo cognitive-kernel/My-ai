@@ -366,6 +366,15 @@ POST /git/branch
 PUT  /git/file
 ```
 
+## Self-update و Self-repair
+
+دو مسیر جدا وجود دارد:
+
+- **Self-update**: وضعیت واقعی Git را می‌خواند؛ update در worktree جداگانه تست می‌شود؛ قبل از activation snapshot ساخته می‌شود و watchdog در صورت شکست rollback می‌کند.
+- **Self-repair**: ابتدا diagnose محلی اجرا می‌شود، سپس مدل coding با lessons قبلی یک unified patch تولید می‌کند. patch در worktree ایزوله با \`compileall + pytest\` تست می‌شود و فقط پس از تأیید صریح کاربر روی working tree اعمال می‌شود. اگر تست پس از اعمال شکست بخورد، patch به commit پایه rollback می‌شود.
+- \`self-repair/lessons.jsonl\` و جدول \`fix_attempts\` برای بستن حلقه یادگیری استفاده می‌شوند و lessons اخیر در promptهای تولید کد و patch قرار می‌گیرند.
+- درخواست‌های HTTP به مقصدهای خارجی با DNS pinning انجام می‌شوند: IP عمومی در زمان request انتخاب و همان IP برای اتصال TCP استفاده می‌شود، در حالی که hostname برای Host/SNI حفظ می‌شود.
+
 ## Docker
 
 اجرای پروژه:
@@ -413,7 +422,14 @@ http://127.0.0.1:8000
 | Variable | Default | Purpose |
 |---|---|---|
 | OLLAMA_BASE_URL | http://127.0.0.1:11434 | آدرس Ollama |
-| OLLAMA_MODEL | qwen2.5:7b | مدل محلی |
+| OLLAMA_MODEL | qwen2.5:7b | مدل پیش‌فرض |
+| ROUTER_MODEL | qwen2.5:1.5b | مدل سبک برای وظایف routing/classification |
+| CODING_MODEL | qwen2.5:7b | مدل تولید/اصلاح کد |
+| FALLBACK_MODEL | qwen2.5:3b | مدل جایگزین هنگام شکست مدل اصلی |
+| EMBEDDING_MODEL | nomic-embed-text | مدل embedding حافظه |
+| OLLAMA_NUM_CTX | 4096 | context window |
+| OLLAMA_NUM_THREAD | 6 | تعداد thread پیش‌فرض |
+| OLLAMA_KEEP_ALIVE | 30m | مدت نگه‌داری مدل در Ollama |
 | DB_PATH | data/myai.db | پایگاه‌داده پایدار |
 | MAX_WEB_CHARS | 30000 | حداکثر متن استخراج‌شده از وب |
 | EXEC_TIMEOUT | 10 | timeout اجرای Python |
