@@ -35,7 +35,7 @@ jobs:
         continue-on-error: true
         run: bandit -r my_ai -q -lll 2>&1 | tee ci-logs/bandit.log
       - name: Pip audit
-        id: pip-audit
+        id: pip_audit
         continue-on-error: true
         run: pip-audit 2>&1 | tee ci-logs/pip-audit.log
       - name: Pytest
@@ -43,11 +43,11 @@ jobs:
         continue-on-error: true
         run: pytest -q 2>&1 | tee ci-logs/pytest.log
       - name: Docker app image
-        id: docker-app
+        id: docker_app
         continue-on-error: true
         run: docker build -t my-ai-ci . 2>&1 | tee ci-logs/docker-app.log
       - name: Docker executor image
-        id: docker-executor
+        id: docker_executor
         continue-on-error: true
         run: docker build -f Dockerfile.executor -t my-ai-executor-ci . 2>&1 | tee ci-logs/docker-executor.log
       - name: Upload CI diagnostics
@@ -62,7 +62,7 @@ jobs:
           failed=0
           for outcome in             "${{ steps.setuptools.outcome }}" \
             "${{ steps.install.outcome }}" \
-            "${{ steps.compile.outcome }}"             "${{ steps.ruff.outcome }}"             "${{ steps.mypy.outcome }}"             "${{ steps.bandit.outcome }}"             "${{ steps.pip-audit.outcome }}"             "${{ steps.pytest.outcome }}"             "${{ steps.docker-app.outcome }}"             "${{ steps.docker-executor.outcome }}"
+            "${{ steps.compile.outcome }}"             "${{ steps.ruff.outcome }}"             "${{ steps.mypy.outcome }}"             "${{ steps.bandit.outcome }}"             "${{ steps.pip_audit.outcome }}"             "${{ steps.pytest.outcome }}"             "${{ steps.docker_app.outcome }}"             "${{ steps.docker_executor.outcome }}"
           do
             if [ "$outcome" != "success" ]; then failed=1; fi
           done
