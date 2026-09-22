@@ -118,9 +118,11 @@ class Agent:
                 return "بررسی متوقف شد چون تغییرات محلی commit نشده وجود دارد."
             if result.get("update_available"):
                 return "نسخه جدید در origin/main موجود است. برای اجرای تست ایزوله و فعال‌سازی امن، صریحاً بگو: «تأیید آپدیت»."
-            lessons = recent_lessons(5)
-            suffix = f"\nآخرین درس‌های ثبت‌شده: {len(lessons)} مورد." if lessons else ""
-            return "نسخه فعلی به‌روز است و تغییر جدیدی در origin/main وجود ندارد." + suffix
+            lessons = recent_lessons(10)
+            if lessons:
+                lesson_text=json.dumps(lessons,ensure_ascii=False,indent=2)
+                return "نسخه فعلی به‌روز است و تغییر جدیدی در origin/main وجود ندارد.\nدرس‌های اخیر:\n" + lesson_text
+            return "نسخه فعلی به‌روز است و تغییر جدیدی در origin/main وجود ندارد."
         return None
 
     def chat(self, message, session_id=1):
