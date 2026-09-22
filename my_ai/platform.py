@@ -6,8 +6,6 @@ import os
 import shutil
 import urllib.parse
 import urllib.robotparser
-import time
-import copy
 from pathlib import Path
 from typing import Any
 
