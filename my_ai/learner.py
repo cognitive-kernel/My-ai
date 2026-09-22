@@ -13,6 +13,7 @@ from .web_learner import WebLearner
 from .security import SecurityEngine
 from .dast import LocalDAST
 from .project_workspace import create_project_workspace, write_project_files
+from .config import settings
 
 class LearningEngine:
     def __init__(self,llm=None):
@@ -22,7 +23,8 @@ class LearningEngine:
     def _retry_forever(self, operation, label, progress_callback=None, topic=None, stop_event=None):
         """Retry a learning operation indefinitely until it succeeds or learning is explicitly stopped."""
         delay=1.0
-        while True:
+        max_attempts=max(1,int(settings.learning_max_retries))
+        for attempt in range(1,max_attempts+1):
             if stop_event is not None and stop_event.is_set():
                 raise InterruptedError("learning stopped")
             try:
@@ -30,14 +32,16 @@ class LearningEngine:
             except Exception as exc:
                 if stop_event is not None and stop_event.is_set():
                     raise InterruptedError("learning stopped") from exc
+                if attempt >= max_attempts:
+                    raise RuntimeError(f"{label} failed after {max_attempts} attempts") from exc
                 if progress_callback:
                     progress_callback("retrying", topic or label)
-                # Back off to avoid hammering an unavailable Ollama/API while still retrying forever.
                 if stop_event is not None:
                     stop_event.wait(delay)
                 else:
                     time.sleep(delay)
                 delay=min(delay*2.0,60.0)
+        raise RuntimeError(f"{label} failed")
 
     def _discover_prerequisites(self,language,topic,progress_callback=None,stop_event=None):
         routing_llm=self.llm if self.llm is not None else create_llm("routing")
