@@ -4,8 +4,12 @@ from typing import Iterator, Sequence
 import json
 
 import httpx
+import ipaddress
+import urllib.parse
+import time
 
 from .config import settings
+from .metrics import record_inference, record_error
 
 
 class LLMError(RuntimeError):
@@ -18,6 +22,13 @@ HistoryMessage = dict[str, str]
 class OllamaClient:
     def __init__(self, task: str | None = None) -> None:
         self.base_url = getattr(settings, "ollama_base_url", "http://127.0.0.1:11434").rstrip("/")
+        if settings.offline_strict:
+            host = urllib.parse.urlparse(self.base_url).hostname
+            try:
+                if not host or not ipaddress.ip_address(host).is_loopback:
+                    raise ValueError
+            except ValueError as exc:
+                raise LLMError("Offline strict mode permits only loopback Ollama endpoints.") from exc
         self.default_model = getattr(settings, "ollama_model", "qwen2.5:7b")
         self.fallback_model = getattr(settings, "fallback_model", self.default_model)
         self.model = self._select_model(task)
@@ -104,10 +115,12 @@ class OllamaClient:
                 messages.append({"role": role, "content": content})
         messages.append({"role": "user", "content": message})
 
+        started = time.perf_counter()
         try:
             response = httpx.post(f"{self.base_url}/api/chat", json=payload, timeout=300)
             response.raise_for_status()
         except httpx.HTTPError as exc:
+            record_error("ollama", self.model)
             if self.model != self.fallback_model:
                 fallback_payload = dict(payload)
                 fallback_payload["model"] = self.fallback_model
@@ -121,6 +134,7 @@ class OllamaClient:
                 raise LLMError(f"Ollama request failed: {exc}") from exc
 
         data = response.json()
+        record_inference("ollama", self.model, time.perf_counter() - started, prompt_tokens=data.get("prompt_eval_count"), output_tokens=data.get("eval_count"))
         try:
             return str(data["message"]["content"])
         except (KeyError, TypeError) as exc:
@@ -131,6 +145,8 @@ class OpenAICompatibleClient:
     """OpenAI Responses API backend, also usable with compatible gateways."""
 
     def __init__(self) -> None:
+        if settings.offline_strict:
+            raise LLMError("OpenAI is disabled in offline strict mode.")
         self.base_url = settings.openai_base_url
         self.model = settings.openai_model
         self.api_key = settings.openai_api_key
@@ -157,6 +173,7 @@ class OpenAICompatibleClient:
         }
         if system:
             payload["instructions"] = system
+        started = time.perf_counter()
         try:
             response = httpx.post(
                 f"{self.base_url}/responses",
@@ -169,9 +186,12 @@ class OpenAICompatibleClient:
             )
             response.raise_for_status()
         except httpx.HTTPError as exc:
+            record_error("openai", self.model)
             raise LLMError(f"OpenAI-compatible request failed: {exc}") from exc
 
         data = response.json()
+        usage = data.get("usage") if isinstance(data, dict) else {}
+        record_inference("openai", self.model, time.perf_counter() - started, prompt_tokens=(usage or {}).get("input_tokens"), output_tokens=(usage or {}).get("output_tokens"))
         if isinstance(data.get("output_text"), str):
             return data["output_text"]
         chunks: list[str] = []
