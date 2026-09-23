@@ -5,11 +5,12 @@ from my_ai import settings_feature as sf
 
 
 def test_settings_and_learning_routes_are_registered():
-    paths = {getattr(route, "path", "") for route in app.routes}
-    assert "/settings" in paths
-    assert "/learning" in paths
-    assert "/settings/courses" in paths
-    assert "/learning/active" in paths
+    with TestClient(app):
+        paths = {getattr(route, "path", "") for route in app.routes}
+        assert "/settings" in paths
+        assert "/learning" in paths
+        assert "/settings/courses" in paths
+        assert "/learning/active" in paths
 
 
 def test_default_cisco_course_is_seeded():
