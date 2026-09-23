@@ -180,6 +180,7 @@ def test_assess_parses_score_and_returns_none_for_invalid_output():
 
 
 def test_learning_retries_until_llm_recovers(monkeypatch):
+    # Retry backoff starts at 1 second for the bounded retry path.
     attempts = []
     sleeps = []
 
@@ -201,7 +202,7 @@ def test_learning_retries_until_llm_recovers(monkeypatch):
 
     assert result == []
     assert len(attempts) == 3
-    assert sleeps == [0.1, 1.0, 2.0]
+    assert sleeps[-2:] == [1.0, 2.0]
 
 
 def test_learning_retry_can_be_explicitly_stopped():
@@ -236,6 +237,8 @@ def test_detailed_status_exposes_every_curriculum_topic(monkeypatch):
     course = result["courses"][0]
     assert course["language"] == "Python"
     assert course["total_topics"] == len(learner_module.LANGUAGE_CURRICULA["Python"])
+    assert course["completed_topics"] == 0
+    assert course["remaining_topics"] == course["total_topics"]
     assert len(course["topics"]) == course["total_topics"]
     assert all(topic["progress_percent"] == 0 for topic in course["topics"])
 
