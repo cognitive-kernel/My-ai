@@ -149,14 +149,24 @@ def ensure_domain(name, llm=None):
 
 
 def resolve_learning_target(message, fallback="Python"):
+    """Resolve a learning subject without substring-matching short aliases inside words."""
     text = str(message or "").strip()
-    low = text.lower()
+    low = text.casefold()
+
+    # Match aliases as complete words/phrases. This prevents the C alias from
+    # matching unrelated subjects such as "Cisco".
     for alias, canonical in sorted(LANGUAGE_ALIASES.items(), key=lambda x: len(x[0]), reverse=True):
-        if alias in low:
+        alias_text = str(alias).strip().casefold()
+        if not alias_text:
+            continue
+        if re.search(rf"(?<![\w]){re.escape(alias_text)}(?![\w])", low, re.IGNORECASE):
             return canonical
+
     patterns = [
         r"(?:یاد\s*بگیر|یادگیری|شروع\s*یادگیری|learn|study)\s+(?:the\s+)?(.+)$",
         r"(?:یاد\s*بده|teach\s+me)\s+(.+)$",
+        r"^(.+?)\s+(?:یاد\s*بگیر|یاد\s*بده)$",
+        r"^(.+?)\s+(?:learn|study)$",
     ]
     for pattern in patterns:
         match = re.search(pattern, text, re.IGNORECASE)
