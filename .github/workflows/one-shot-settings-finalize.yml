@@ -1,0 +1,31 @@
+name: one-shot-settings-finalize
+on:
+  push:
+    branches: [audit/fix-local-first-hardening]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: "!contains(github.event.head_commit.message, '[settings-finalized]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Move settings registration after API routes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('my_ai/api.py')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('\nfrom .settings_feature import install as _install_settings_features\n_install_settings_features(app)\n', '\n', 1)
+          if 'from .settings_feature import install as _install_settings_features' not in s:
+              s += '\n\nfrom .settings_feature import install as _install_settings_features\n_install_settings_features(app)\n'
+          p.write_text(s, encoding='utf-8')
+          Path('.github/workflows/one-shot-settings-finalize.yml').unlink(missing_ok=True)
+          PY
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add my_ai/api.py .github/workflows/one-shot-settings-finalize.yml
+          git commit -m 'Finalize settings route registration [settings-finalized]'
+          git push
