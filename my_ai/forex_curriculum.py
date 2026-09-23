@@ -123,7 +123,8 @@ FOREX_CURRICULUM = [
     {"order": 117, "topic": "Quantitative strategy research", "goal": "Research workflow, feature construction, statistical validation and reproducibility"},
     {"order": 118, "topic": "Advanced portfolio construction", "goal": "Allocation, correlation-aware exposure, risk budgets and portfolio-level constraints"},
     {"order": 119, "topic": "Production trading-system engineering", "goal": "Versioning, configuration, logging, monitoring, recovery and operational safeguards"},
-    {"order": 120, "topic": "Forex and MetaTrader expert capstone", "goal": "Design, implement, test, document and robustly validate a complete educational algorithmic trading system"},
+    {"order": 120, "topic": "Professional capital management", "goal": "Advanced account-level capital allocation, risk budgeting, exposure limits, compounding, drawdown control, portfolio heat, leverage discipline, scenario stress testing and long-horizon capital preservation"},
+    {"order": 121, "topic": "Forex and MetaTrader expert capstone", "goal": "Design, implement, test, document and robustly validate a complete educational algorithmic trading system"},
 ]
 
 FOREX_SOURCES = [
