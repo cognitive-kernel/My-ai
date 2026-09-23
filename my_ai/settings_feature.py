@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
+from starlette.types import Message
 
 from .auth import require_admin, require_user, audit
 from .db import execute, fetch_all, init_db
@@ -84,9 +85,13 @@ def _setup() -> None:
         row = conn.execute("SELECT id FROM custom_courses WHERE lower(name)=lower(?)", ("Cisco",)).fetchone()
         if not row:
             cur = conn.execute("INSERT INTO custom_courses(name,description) VALUES(?,?)", ("Cisco", "Cisco networking / IOS learning path with practical, verification-focused modules."))
+            if cur.lastrowid is None:
+                raise RuntimeError("Unable to create the default Cisco course")
             course_id = int(cur.lastrowid)
             for order, (title, goal, source) in enumerate(DEFAULT_TOPICS, 1):
                 tcur = conn.execute("INSERT INTO custom_course_topics(course_id,topic_order,title,goal,source_url) VALUES(?,?,?,?,?)", (course_id, order, title, goal, source))
+                if tcur.lastrowid is None:
+                    raise RuntimeError("Unable to create a Cisco topic")
                 conn.execute("INSERT INTO custom_course_progress(course_id,topic_id) VALUES(?,?)", (course_id, int(tcur.lastrowid)))
         conn.commit()
 
@@ -274,7 +279,7 @@ async function loginGit(){try{let j=await req('/git/login',{method:'POST'});gito
 async function logoutGit(){try{let j=await req('/git/logout',{method:'POST'});gitout.textContent=j.message||'خارج شدی'}catch(e){gitout.textContent=e.message}}
 async function createCourse(){try{let topics=ct.value.split(/\n+/).map(x=>x.trim()).filter(Boolean).map(x=>{let p=x.split('|').map(s=>s.trim());return {title:p[0],goal:p[1]||'',source_url:p[2]||''}});let j=await req('/settings/courses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:cn.value,description:cd.value,topics:topics})});courseout.textContent='آموزش ساخته شد: '+j.id;loadCourses()}catch(e){courseout.textContent=e.message}}
 async function startCourse(id){await req('/settings/courses/'+id+'/start',{method:'POST'});loadCourses()}
-async function loadCourses(){try{let j=await req('/settings/courses');courses.innerHTML=(j.items||[]).map(c=>'<div class="card"><h3>'+esc(c.name)+'</h3><p>'+esc(c.description)+'</p><div class="bar"><div class="fill" style="width:'+c.progress_percent+'%">'+c.progress_percent+'%</div></div><p class="muted">'+c.completed_topics+' از '+c.total_topics+' سرفصل کامل شده'+(c.current?' · اکنون: '+esc(c.current.title)+' · مرحله: '+esc(c.current.phase):'')+'</p><button onclick="startCourse('+c.id+')">شروع/ادامه یادگیری</button><a href="/learning?course='+c.id">جزئیات</a></div>').join('')||'آموزشی نیست'}catch(e){courses.textContent=e.message}}
+async function loadCourses(){try{let j=await req('/settings/courses');courses.innerHTML=(j.items||[]).map(c=>'<div class="card"><h3>'+esc(c.name)+'</h3><p>'+esc(c.description)+'</p><div class="bar"><div class="fill" style="width:'+c.progress_percent+'%">'+c.progress_percent+'%</div></div><p class="muted">'+c.completed_topics+' از '+c.total_topics+' سرفصل کامل شده'+(c.current?' · اکنون: '+esc(c.current.title)+' · مرحله: '+esc(c.current.phase):'')+'</p><button onclick="startCourse('+c.id+')">شروع/ادامه یادگیری</button><a href="/learning?course='+c.id+'">جزئیات</a></div>').join('')||'آموزشی نیست'}catch(e){courses.textContent=e.message}}
 function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 loadUsers();loadCourses();setInterval(loadCourses,10000)
 </script></html>"""
@@ -294,7 +299,7 @@ def install(app: Any) -> None:
     app._myai_settings_installed = True
     app.include_router(router)
 
-    api_module = __import__("my_ai.api", fromlist=["page"])
+    api_module: Any = __import__("my_ai.api", fromlist=["page"])
     original_page = getattr(api_module, "page", None)
     if original_page is not None and not getattr(app, "_myai_page_patched", False):
         app._myai_page_patched = True
@@ -321,18 +326,20 @@ def install(app: Any) -> None:
             is_learn = any(x in text for x in ("یاد بگیر","یادگیری","learn"))
             if "سیسکو" not in text or not is_learn:
                 sent=False
-                async def replay():
+                async def replay() -> Message:
                     nonlocal sent
                     if sent: return {"type":"http.request","body":b"","more_body":False}
                     sent=True; return {"type":"http.request","body":body,"more_body":False}
                 return await self.inner(scope, replay, send)
-            request=Request(scope, receive=lambda: {"type":"http.request","body":b"","more_body":False})
+            async def empty_receive() -> Message:
+                return {"type":"http.request","body":b"","more_body":False}
+            request=Request(scope, receive=empty_receive)
             __import__("my_ai.auth", fromlist=["require_user"]).require_user(request)
             _setup()
             rows=fetch_all("SELECT id FROM custom_courses WHERE lower(name)=lower(?) AND active=1",("Cisco",))
             if not rows:
                 sent=False
-                async def replay_missing():
+                async def replay_missing() -> Message:
                     nonlocal sent
                     if sent: return {"type":"http.request","body":b"","more_body":False}
                     sent=True; return {"type":"http.request","body":body,"more_body":False}
