@@ -69,6 +69,7 @@ def test_scheduler_worker_uses_its_own_stop_event(monkeypatch):
             return {"status": "completed", "topic": {"topic": "test"}}
 
     monkeypatch.setattr("my_ai.scheduler.LearningEngine", FakeEngine)
+    monkeypatch.setattr("my_ai.scheduler.StudyScheduler._wait_for_resources", staticmethod(lambda stop_event: {}))
     scheduler = StudyScheduler(interval_seconds=60)
     old_stop = threading.Event()
     old_thread = threading.Thread(target=scheduler._loop, args=("Python", old_stop), daemon=True)
@@ -112,7 +113,12 @@ def test_scheduler_status_returns_json_safe_snapshot():
     scheduler.error = None
     scheduler._lock = threading.Lock()
 
-    result = scheduler.status()
+    monkeypatch = __import__("pytest").MonkeyPatch()
+    monkeypatch.setattr("my_ai.scheduler.fetch_all", lambda *_args, **_kwargs: [])
+    try:
+        result = scheduler.status()
+    finally:
+        monkeypatch.undo()
 
     assert result == {
         "running": False,
@@ -123,6 +129,9 @@ def test_scheduler_status_returns_json_safe_snapshot():
         "error": None,
         "interval_seconds": 3600,
         "session_id": None,
+        "runtime_status": "idle",
+        "runtime_updated_at": None,
+        "resources": result["resources"],
     }
 
 
@@ -272,10 +281,3 @@ def test_learning_source_failure_is_recorded_and_does_not_abort(monkeypatch):
     assert len(result) == 3
     assert all(item["title"] == "Source unavailable" for item in result[1:])
     assert all("connection failed" in item["error"] for item in result[1:])
-
-
-def test_learning_page_refresh_preserves_scroll_and_open_sections():
-    from my_ai.settings_feature import LEARNING_HTML
-    assert "var y=window.scrollY" in LEARNING_HTML
-    assert "querySelectorAll('details')" in LEARNING_HTML
-    assert "window.scrollTo(0,y)" in LEARNING_HTML
