@@ -236,6 +236,8 @@ def test_detailed_status_exposes_every_curriculum_topic(monkeypatch):
     course = result["courses"][0]
     assert course["language"] == "Python"
     assert course["total_topics"] == len(learner_module.LANGUAGE_CURRICULA["Python"])
+    assert course["completed_topics"] == 0
+    assert course["remaining_topics"] == course["total_topics"]
     assert len(course["topics"]) == course["total_topics"]
     assert all(topic["progress_percent"] == 0 for topic in course["topics"])
 
