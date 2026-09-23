@@ -457,7 +457,15 @@ http://127.0.0.1:8000
 | EXEC_CPUS | 1.0 | سقف CPU کانتینر |
 | EXEC_PIDS | 64 | سقف process کانتینر |
 | EXEC_OUTPUT_CHARS | 12000 | سقف خروجی |
-| SCHEDULER_INTERVAL_SECONDS | 3600 | فاصله اجرای scheduler |\n| SCHEDULER_MAX_CPU_PERCENT | 70 | سقف CPU برای learning scheduler |\n| SCHEDULER_MAX_RAM_PERCENT | 80 | سقف RAM برای learning scheduler |\n| SCHEDULER_AUTO_RESUME | false | عدم ادامه خودکار learning بعد از restart |\n| LEARNING_MAX_RETRIES | 5 | حداکثر retry هر عملیات یادگیری |\n| MYAI_BACKUP_ROOT | data/backups | ریشه مجاز backup/import/restore |\n| MYAI_SQLITE_ROOT | data/sqlite | ریشه مجاز SQLite خارجی |\n| WHISPER_CPP_BIN | خالی | مسیر صریح whisper-cli؛ fallback به `main` حذف شده است |\n| HOST | 127.0.0.1 | آدرس bind API |
+| SCHEDULER_INTERVAL_SECONDS | 3600 | فاصله اجرای scheduler |
+| SCHEDULER_MAX_CPU_PERCENT | 70 | سقف CPU برای learning scheduler |
+| SCHEDULER_MAX_RAM_PERCENT | 80 | سقف RAM برای learning scheduler |
+| SCHEDULER_AUTO_RESUME | false | عدم ادامه خودکار learning بعد از restart |
+| LEARNING_MAX_RETRIES | 5 | حداکثر retry هر عملیات یادگیری |
+| MYAI_BACKUP_ROOT | data/backups | ریشه مجاز backup/import/restore |
+| MYAI_SQLITE_ROOT | data/sqlite | ریشه مجاز SQLite خارجی |
+| WHISPER_CPP_BIN | خالی | مسیر صریح whisper-cli؛ fallback به `main` حذف شده است |
+| HOST | 127.0.0.1 | آدرس bind API |
 | PORT | 8000 | پورت API |
 | GITHUB_TOKEN | — | token اتصال GitHub |
 | GITHUB_API_URL | — | API پایه GitHub Enterprise |
@@ -561,3 +569,311 @@ CI تست‌های خودکار را روی push و pull request اجرا می�
 - CI واقعی روی آخرین commit: موفق، ۱۸ تست سبز در workflow تست‌ها و compileall موفق
 - تست end-to-end روی محیط دارای Ollama و Docker
 - تست دستی نهایی UI، Voice، Learning، GitHub و Security
+
+---
+
+# My-AI — English Documentation
+
+## Overview
+
+My-AI is a local-first personal AI assistant for chat, persistent memory, continuous learning, code generation, project planning, security testing, Git/GitHub, documentation help, self-update, and self-repair.
+
+### GPU is NOT required
+
+- My-AI supports CPU-only operation.
+- The default GPU layer count is **0**.
+- A GPU is optional Ollama acceleration, not a project requirement.
+- Default learning resource limits are **70% CPU, 8 CPU threads, 80% RAM, and 0 GPU layers**.
+- CPU, RAM, CPU-thread, and GPU-layer limits can be changed from Settings.
+- Learning checks live CPU/RAM usage and waits when configured limits are exceeded.
+
+## Features and modules
+
+| Module | Capabilities |
+|---|---|
+| Chat / Agent | Local chat, command routing, context-aware responses and persistent knowledge |
+| Persistent Memory | SQLite + FTS5 for conversations, knowledge, sessions, experiments and project state |
+| Learning Engine | Curriculum, source collection, knowledge extraction, lessons, examples, practice, assessment and progress |
+| Learning Scheduler | Long-running learning, explicit-stop control, resource-aware execution and runtime status |
+| Resource Control | CPU %, CPU threads, RAM % and GPU layers with persistent Settings |
+| Web Learning | URL ingestion, source extraction and documentation lookup |
+| Code Generation | Code generation/fixing, task decomposition and acceptance criteria |
+| Project Planning | Project plans, tasks and isolated generated-project workspaces |
+| Python Executor | Container isolation, no network, read-only host filesystem, CPU/RAM/PID limits, timeout and output limits |
+| Toolchain | Toolchain/build/lint/test support for Python, C, PHP, JavaScript, Rust, Kotlin and Swift, plus Android/iOS paths |
+| SQL | Read-only schema/query tooling for SQL Server and SQLite |
+| Security Scanner | Static analysis for secrets, eval/exec, shell execution, SQL injection, traversal, CORS, DOM sinks, passwords and dependencies |
+| DAST | Local HTTP testing, route discovery, headers, 500/debug leakage, reflection, TRACE, cookie flags, CSRF and OpenAPI checks |
+| Pentest Learning | Security curriculum covering Linux/networking, web/API, reconnaissance, vulnerability assessment, code review and reporting |
+| Voice | Browser SpeechRecognition and speechSynthesis for Persian and English |
+| Git/GitHub | Repository, tree, file, issues, pull requests, branches and controlled write operations |
+| Help / Documentation | Integrated help, documentation lookup and user-approved documentation updates |
+| Self-update | Git state, isolated worktree, snapshots, testing, activation and rollback/watchdog |
+| Self-repair | Diagnosis, lesson-aware patch generation, isolated tests, explicit approval and rollback |
+| Backup / Restore | Runtime backup and restore inside configured safe roots |
+| API / Web UI | FastAPI/OpenAPI, `/docs`, `/redoc`, Persian RTL UI and English LTR UI |
+
+## Learning paths
+
+- Rust: fundamentals through ownership, lifetimes, async, unsafe, FFI, performance, security, production and capstone.
+- Python
+- C
+- PHP
+- JavaScript
+- SQL Server / T-SQL
+- MySQL
+- SQLite
+- Android / Kotlin
+- iOS / Swift
+- Pentest / Security Testing
+
+The Pentest path is independent from PHP and has its own security curriculum.
+
+## Continuous learning
+
+The learning pipeline is:
+
+Curriculum → topic selection → source retrieval → local-model extraction → SQLite persistence → lesson/examples/practice/checklist → assessment → progress → next topic.
+
+Learning is designed to continue until the user explicitly stops it. A bounded retry count must not silently terminate the long-running learning loop.
+
+## Workspace and self-repair
+
+- `projects/` stores generated projects.
+- `self-repair/` stores self-repair/watchdog snapshots, lessons and artifacts.
+- Runtime artifacts are ignored by Git.
+
+## Python execution
+
+The default executor is the isolated container mode. It disables network access, mounts the host filesystem read-only, drops capabilities, enables `no-new-privileges`, limits RAM/CPU/PIDs, applies timeout/output limits, and removes the container after execution. `EXECUTOR_MODE=subprocess` enables the less-isolated subprocess mode.
+
+## Security and DAST
+
+Static analysis covers secrets, eval/exec, shell execution, weak hashes, SQL injection, debug mode, unsafe CORS, DOM sinks, path traversal, plaintext passwords and dependency manifests.
+
+DAST supports authorized local projects. External targets require an explicitly supplied URL and appropriate authorization; external scanning is non-destructive and is not used for remote code modification.
+
+## Git and GitHub
+
+Read operations include repository, tree, file, issues, pull requests and branches. Write operations include branch creation and file create/update and require `allow_write=true` plus appropriate token permissions.
+
+Environment variables:
+
+~~~bash
+GITHUB_TOKEN=YOUR_TOKEN
+GITHUB_API_URL=https://github.example/api/v3
+~~~
+
+## Help and documentation
+
+The integrated Help system provides `/help`, `/help/ask`, `/help/updates`, `/help/approve/{update_id}` and `/help/reject/{update_id}`. Proposed documentation changes require explicit user approval before application.
+
+## Main API
+
+~~~text
+POST /chat
+POST /code/generate
+POST /code/run
+POST /security/scan
+GET  /security/history
+POST /learn/url
+POST /learning/start
+POST /learning/step
+POST /learning/learn
+GET  /learning/status
+POST /learning/practice
+POST /projects/plan
+GET  /projects/tasks
+GET  /memory/search
+GET  /memory/knowledge
+POST /scheduler/start
+GET  /scheduler/status
+POST /scheduler/stop
+GET  /help
+POST /help/ask
+GET  /help/updates
+POST /help/approve/{update_id}
+POST /help/reject/{update_id}
+GET  /git/repo
+GET  /git/tree
+GET  /git/file
+GET  /git/issues
+GET  /git/pulls
+GET  /git/branches
+POST /git/branch
+PUT  /git/file
+GET  /tools/catalog
+GET  /tools/doctor
+POST /tools/project
+POST /tools/python
+GET  /tools/sqlserver/schema
+POST /tools/sqlserver/query
+GET  /tools/sqlite/schema
+POST /tools/sqlite/query
+~~~
+
+## Voice
+
+- `SpeechRecognition` / `webkitSpeechRecognition`
+- `speechSynthesis`
+- Persian: `fa-IR`
+- English: `en-US`
+
+Speech recognition depends on browser support and microphone permission.
+
+## Docker
+
+~~~bash
+docker compose up --build
+~~~
+
+## Installation
+
+Requirements: Python 3.11+, Ollama, internet access for model/documentation downloads, and at least 16 GB RAM (32 GB recommended). **No GPU is required.**
+
+Windows:
+
+~~~powershell
+python -m venv .venv
+.\\.venv\\Scripts\\Activate.ps1
+pip install -r requirements.txt
+ollama pull qwen2.5:7b
+python -m my_ai
+~~~
+
+Linux/macOS:
+
+~~~bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+ollama pull qwen2.5:7b
+python -m my_ai
+~~~
+
+Open `http://127.0.0.1:8000` after startup.
+
+## Resource settings
+
+| Setting | Default | Purpose |
+|---|---:|---|
+| CPU max | 70% | Learning CPU ceiling |
+| CPU threads | 8 | CPU thread count |
+| RAM max | 80% | Learning RAM ceiling |
+| GPU layers | 0 | CPU-only default |
+
+## Architecture
+
+~~~text
+Web UI / Voice
+      |
+      v
+   FastAPI
+      |
+      +--> Command Router / Agent
+      |      +--> Chat
+      |      +--> Memory
+      |      +--> Learning
+      |      +--> Code Generation
+      |      +--> Project Planning
+      |      +--> Security / DAST
+      |      +--> Help / Documentation
+      |      +--> Git / GitHub
+      |      +--> Self-update / Self-repair
+      |
+      +--> Ollama local LLM
+      +--> SQLite + FTS5
+      +--> Web/reference sources
+      +--> Container Python Executor
+      +--> Learning Scheduler
+~~~
+
+**GPU is not required by this architecture; CPU-only execution is the default supported path.**
+
+## Technical boundary
+
+My-AI does not retrain the base model weights. The local model provides reasoning; My-AI adds persistent memory, external sources, curriculum, lessons, practice, assessment, controlled execution, project generation, security testing, scheduling, Help, Git/GitHub and self-update/self-repair workflows.
+
+## Testing and CI
+
+~~~bash
+pip install -e .
+pytest -q
+python -m compileall -q my_ai tests
+~~~
+
+CI runs on push and pull requests and covers linting, type checking, security checks, dependency auditing, tests and Docker builds.
+
+## Bilingual UI / رابط دو زبانه
+
+The web application supports Persian RTL and English LTR interfaces. The README documents the same capabilities in both Persian and English.
+
+# English Feature Reference
+
+## Chat, Agent, and Persistent Memory
+
+My-AI runs a local Ollama model and routes requests to chat, learning, project generation, security, Help, and Git/GitHub subsystems. SQLite provides persistent storage for conversations, knowledge, learning sessions, experiments, project tasks, generated projects, security scans, and Help updates. Knowledge retrieval uses FTS5.
+
+## Learning Engine and Scheduler
+
+The learning engine selects curriculum topics, retrieves reference material, extracts knowledge with the local model, stores sources and notes, creates lessons and exercises, evaluates results, and records progress. Supported paths include Rust, Python, C, PHP, JavaScript, SQL Server/T-SQL, MySQL, SQLite, Android/Kotlin, iOS/Swift, and Pentest/Security Testing.
+
+The scheduler continues learning in the background, exposes runtime status, supports explicit stop, and enforces CPU/RAM resource limits before starting each learning unit. Temporary failures use backoff instead of permanently terminating long-running learning because a bounded retry count was reached.
+
+## Resource Control and CPU-Only Operation
+
+GPU hardware is not required. The default configuration is CPU 70%, 8 CPU threads, RAM 80%, and 0 GPU layers. GPU layers are optional Ollama acceleration. CPU, RAM, CPU-thread, and GPU-layer settings are persistent and can be changed from Settings.
+
+## Code Generation, Projects, and Toolchain
+
+My-AI can turn a goal into tasks and acceptance criteria, retrieve relevant memory, generate or modify code, validate Python in the controlled executor, and store generated project state. Toolchain support covers Python, C, PHP, JavaScript, Rust, Kotlin, Swift, Android, and iOS. Project tools are restricted to the configured project workspace rather than an unrestricted shell.
+
+## Python Executor
+
+The default Python executor uses an isolated container with no network access, a read-only host filesystem view, dropped capabilities, no-new-privileges, CPU/RAM/PID limits, timeout and output limits, and automatic container removal. Subprocess mode is available only as a less-isolated alternative.
+
+## SQL Tools
+
+SQL Server provides read-only schema and query tools through the supported Microsoft driver. SQLite also provides read-only schema and query operations. Database connection roots and credentials are controlled by configuration.
+
+## Security Scanner and DAST
+
+Static analysis checks secrets, eval/exec, shell execution, weak hashes, SQL injection indicators, debug mode, unsafe CORS, DOM sinks, path traversal, plaintext passwords, and dependency manifests.
+
+DAST can test authorized local projects through real HTTP requests and inspect security headers, 500 responses, debug or stack-trace leakage, reflection, TRACE, cookie flags, CSRF indicators, limited same-origin routes, and OpenAPI endpoints. External targets require an explicitly supplied URL and authorization; external scanning is non-destructive.
+
+## Pentest Learning
+
+The Pentest curriculum is independent from PHP. It covers security fundamentals, Linux and networking, web/API security, reconnaissance, vulnerability assessment, code review, security tooling, reporting, and authorized project testing.
+
+## Git and GitHub
+
+The GitHub integration can read repositories, trees, files, issues, pull requests, and branches. Controlled write operations can create branches and create/update files, and require allow_write=true plus suitable token permissions. GitHub Enterprise is supported through a configurable API base URL.
+
+## Help and Documentation Updates
+
+The integrated Help system provides practical guidance for GitHub, Docker, Learning, Security, and other project capabilities. It can compare the current project instructions with current reference documentation and create a proposed update. Documentation changes require explicit user approval before they are applied.
+
+## Web Learning, Practice, and Voice
+
+Web Learning accepts a specific URL and topic, extracts reference content, and stores useful knowledge for later learning. Practice requests are evaluated and can contribute to learning progress. Browser Voice uses SpeechRecognition or webkitSpeechRecognition and speechSynthesis for Persian fa-IR and English en-US, subject to browser and microphone permissions.
+
+## Self-Update and Self-Repair
+
+Self-update tests repository changes in an isolated worktree, creates a snapshot before activation, and supports watchdog rollback. Self-repair diagnoses the local project, generates a lesson-aware patch, validates it with compileall and pytest in an isolated worktree, requires explicit approval before applying it, and rolls back if post-application tests fail. Repair lessons are persisted for later attempts.
+
+## Backup, Docker, API, and Architecture
+
+Backup/import/restore operations are restricted to configured safe roots. Docker can run the complete application with docker compose. FastAPI exposes interactive OpenAPI documentation at /docs and /redoc and provides the Chat, Learning, Memory, Scheduler, Projects, Security, Help, Git, and Tool endpoints documented above.
+
+## Installation and Configuration
+
+Requirements are Python 3.11+, Ollama, internet access for model/documentation downloads, and at least 16 GB RAM (32 GB recommended). No GPU is required. The default model configuration is designed for a single local model and CPU operation.
+
+## Testing and CI
+
+Local validation uses pytest and compileall. CI runs automated linting, type checking, security checks, dependency auditing, tests, and Docker builds on pushes and pull requests. Passing CI confirms the automated checks for that commit; it does not replace manual end-to-end validation with Ollama and Docker.
+
+## English Documentation Policy
+
+The Persian and English sections describe the same implemented capabilities. English is not intended to be only a short summary: module behavior, configuration, APIs, security boundaries, learning behavior, resource control, Git/GitHub, Voice, Help, self-update, and self-repair are documented in English as well.
