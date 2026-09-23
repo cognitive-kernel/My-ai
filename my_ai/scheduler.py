@@ -34,7 +34,8 @@ class StudyScheduler:
         self._monitor_thread = None
 
     def start_review_monitor(self):
-        if self._monitor_thread and self._monitor_thread.is_alive(): return
+        if self._monitor_thread and self._monitor_thread.is_alive():
+            return
         self._review_stop.clear()
         self._monitor_thread = threading.Thread(target=self._review_loop, daemon=True, name="myai-weekly-review")
         self._monitor_thread.start()
@@ -68,12 +69,7 @@ class StudyScheduler:
         worker_stop = threading.Event()
         self._stop = worker_stop
         execute("INSERT INTO learning_runtime(id,language,session_id,status,started_at,updated_at) VALUES(1,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET language=excluded.language,session_id=excluded.session_id,status=excluded.status,started_at=excluded.started_at,updated_at=CURRENT_TIMESTAMP", (language, session_id, "running"))
-        self._thread = threading.Thread(
-            target=self._loop,
-            args=(language, worker_stop),
-            daemon=True,
-            name=f"myai-learning-{language}",
-        )
+        self._thread = threading.Thread(target=self._loop, args=(language, worker_stop), daemon=True, name=f"myai-learning-{language}")
         self._thread.start()
 
     def stop_learning(self):
@@ -92,19 +88,54 @@ class StudyScheduler:
         return bool(self._thread and self._thread.is_alive())
 
     def status(self):
-        """Return a JSON-safe snapshot for the API/UI scheduler dashboard."""
         with self._lock:
-            last_result = self.last_result
+            runtime = fetch_all("SELECT language,session_id,status,started_at,updated_at FROM learning_runtime WHERE id=1")
+            rt = runtime[0] if runtime else {}
             return {
                 "running": self.running(),
-                "language": self.language,
+                "language": self.language or rt.get("language") or "Python",
                 "stage": self.stage,
                 "current_topic": self.current_topic,
-                "last_result": last_result,
+                "last_result": self.last_result,
                 "error": self.error,
                 "interval_seconds": self.interval_seconds,
-                "session_id": ((fetch_all("SELECT session_id FROM learning_runtime WHERE id=1") or [{"session_id": None}])[0]["session_id"]),
+                "session_id": rt.get("session_id"),
+                "runtime_status": rt.get("status", "idle"),
+                "started_at": rt.get("started_at"),
+                "updated_at": rt.get("updated_at"),
+                "resources": self._resource_snapshot(),
             }
+
+    @staticmethod
+    def _resource_snapshot():
+        r = resource_status()
+        try:
+            r.update({
+                "cpu_limit_percent": float(get_setting("resources.cpu_percent", str(settings.scheduler_max_cpu_percent))),
+                "cpu_threads": int(get_setting("resources.cpu_threads", str(settings.ollama_num_thread))),
+                "ram_limit_percent": float(get_setting("resources.ram_percent", str(settings.scheduler_max_ram_percent))),
+                "gpu_layers": int(get_setting("resources.gpu_layers", str(settings.ollama_num_gpu))),
+            })
+        except (TypeError, ValueError):
+            pass
+        return r
+
+    @staticmethod
+    def _wait_for_resources(stop_event):
+        while not stop_event.is_set():
+            try:
+                cpu_limit = float(get_setting("resources.cpu_percent", str(settings.scheduler_max_cpu_percent)))
+                ram_limit = float(get_setting("resources.ram_percent", str(settings.scheduler_max_ram_percent)))
+            except (TypeError, ValueError):
+                cpu_limit = float(settings.scheduler_max_cpu_percent)
+                ram_limit = float(settings.scheduler_max_ram_percent)
+            resources = resource_status()
+            cpu = resources.get("cpu_percent")
+            ram = resources.get("ram_percent")
+            if cpu is None or ram is None or (cpu <= cpu_limit and ram <= ram_limit):
+                return resources
+            stop_event.wait(1.0)
+        raise InterruptedError("learning stopped")
 
     def update_progress(self, stage, topic=None):
         with self._lock:
@@ -114,12 +145,7 @@ class StudyScheduler:
 
     @staticmethod
     def _latest_learning_message():
-        rows = fetch_all(
-            """SELECT c.content FROM conversations c
-               JOIN chat_sessions s ON s.id=c.session_id
-               WHERE c.role='user' AND s.kind='learning'
-               ORDER BY c.id DESC LIMIT 1"""
-        )
+        rows = fetch_all("""SELECT c.content FROM conversations c JOIN chat_sessions s ON s.id=c.session_id WHERE c.role='user' AND s.kind='learning' ORDER BY c.id DESC LIMIT 1""")
         return str(rows[0]["content"]) if rows else ""
 
     @staticmethod
@@ -131,23 +157,8 @@ class StudyScheduler:
             return
         now = datetime.now(timezone.utc)
         next_review = (now + timedelta(days=REVIEW_DAYS)).isoformat()
-        execute(
-            """CREATE TABLE IF NOT EXISTS learning_domains (
-                name TEXT PRIMARY KEY, topics_json TEXT NOT NULL,
-                sources_json TEXT NOT NULL DEFAULT '[]',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                last_review_at TEXT, next_review_at TEXT
-            )"""
-        )
-        execute(
-            """INSERT INTO learning_domains(name,topics_json,sources_json,next_review_at)
-               VALUES(?,?,?,?) ON CONFLICT(name) DO UPDATE SET
-               topics_json=excluded.topics_json,sources_json=excluded.sources_json,
-               updated_at=CURRENT_TIMESTAMP,
-               next_review_at=COALESCE(learning_domains.next_review_at,excluded.next_review_at)""",
-            (language, json.dumps(topics, ensure_ascii=False), json.dumps(sources, ensure_ascii=False), next_review),
-        )
+        execute("""CREATE TABLE IF NOT EXISTS learning_domains (name TEXT PRIMARY KEY, topics_json TEXT NOT NULL, sources_json TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, last_review_at TEXT, next_review_at TEXT)""")
+        execute("""INSERT INTO learning_domains(name,topics_json,sources_json,next_review_at) VALUES(?,?,?,?) ON CONFLICT(name) DO UPDATE SET topics_json=excluded.topics_json,sources_json=excluded.sources_json,updated_at=CURRENT_TIMESTAMP,next_review_at=COALESCE(learning_domains.next_review_at,excluded.next_review_at)""", (language, json.dumps(topics, ensure_ascii=False), json.dumps(sources, ensure_ascii=False), next_review))
 
     @staticmethod
     def _domain_complete(language):
@@ -164,13 +175,10 @@ class StudyScheduler:
                 for name in due_domains():
                     if self._review_stop.is_set():
                         break
-                    if not ensure_domain(name):
-                        continue
-                    if not self._domain_complete(name):
+                    if not ensure_domain(name) or not self._domain_complete(name):
                         continue
                     self.update_progress("weekly_review", name)
-                    engine = LearningEngine()
-                    result = weekly_review(name, engine.web, engine.llm)
+                    result = weekly_review(name, LearningEngine().web, LearningEngine().llm)
                     if result.get("added"):
                         self.last_result = {"status": "weekly_review", "language": name, **result}
                     self.update_progress("idle")
@@ -179,32 +187,25 @@ class StudyScheduler:
             self._review_stop.wait(min(self.interval_seconds, 3600))
 
     def _loop(self, language, stop_event=None):
-        # Bind the worker to its own immutable stop event. Replacing self._stop
-        # for a new language must never revive or redirect an older worker.
         stop_event = stop_event or self._stop
         engine = LearningEngine()
-        consecutive_errors=0
+        consecutive_errors = 0
         while not stop_event.is_set():
             try:
                 if language not in LANGUAGE_CURRICULA:
                     language = ensure_domain(language, getattr(engine, "llm", None)) or language
                     self.language = language
-                limits_cpu = float(get_setting("resources.cpu_percent", str(settings.scheduler_max_cpu_percent)))
-                limits_ram = float(get_setting("resources.ram_percent", str(settings.scheduler_max_ram_percent)))
-                resources = resource_status()
-                if resources.get("cpu_percent") is not None and (resources["cpu_percent"] > limits_cpu or resources["ram_percent"] > limits_ram):
-                    self.update_progress("paused", "system load high")
-                    self.last_result = {"status":"paused","reason":"system load high","resources":resources}
-                    stop_event.wait(min(self.interval_seconds, 60))
-                    continue
+                resources = self._wait_for_resources(stop_event)
                 self.update_progress("starting")
                 self.last_result = engine.learn_next(language, progress_callback=self.update_progress, stop_event=stop_event)
-                consecutive_errors=0
+                consecutive_errors = 0
                 if self.last_result.get("status") == "completed":
                     self.update_progress("completed", self.last_result.get("topic", {}).get("topic"))
-                    execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("completed",))
+                    execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("running",))
                     if self._domain_complete(language):
                         self._schedule_review(language)
+                        execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("completed",))
+                        break
                 elif self.last_result.get("status") == "complete":
                     self.update_progress("completed")
                     execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("completed",))
@@ -216,19 +217,14 @@ class StudyScheduler:
             except Exception as exc:
                 if stop_event.is_set():
                     break
-                self.error = str(exc)
                 consecutive_errors += 1
-                self.last_result = {"status": "error", "error": str(exc), "consecutive_errors": consecutive_errors}
-                if consecutive_errors >= max(1,int(settings.learning_max_retries)):
-                    self.update_progress("paused", "retry limit reached")
-                    execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("paused",))
-                    break
-                self.update_progress("retrying")
+                self.error = str(exc)
+                self.last_result = {"status": "error", "error": str(exc), "consecutive_errors": consecutive_errors, "resources": resources if 'resources' in locals() else resource_status()}
+                self.update_progress("retrying", self.current_topic or "waiting for retry")
+                execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("retrying",))
+                # A learning request is persistent: errors must not terminate it.
+                # Backoff is bounded, and the same persisted learning session is retried.
                 stop_event.wait(min(60.0, 2.0 ** min(consecutive_errors, 5)))
                 continue
-            if self.last_result and self.last_result.get("message", "").endswith("complete."):
-                self._schedule_review(language)
-                execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("completed",))
-                break
             if stop_event.wait(self.interval_seconds):
                 break
