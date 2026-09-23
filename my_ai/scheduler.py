@@ -119,7 +119,6 @@ class StudyScheduler:
                 """SELECT id,language,session_id,status,stage,current_topic,error,last_result,started_at,updated_at
                    FROM learning_workers ORDER BY id"""
             )
-            workers_map = getattr(self, "_workers", {})
             workers = []
             for row in rows:
                 item = dict(row)
@@ -128,8 +127,8 @@ class StudyScheduler:
                 except (TypeError, ValueError):
                     item["last_result"] = None
                 item["running"] = bool(
-                    self._workers.get(str(item["language"]).casefold())
-                    and self._workers[str(item["language"]).casefold()][0].is_alive()
+                    getattr(self, "_workers", {}).get(str(item["language"]).casefold())
+                    and getattr(self, "_workers", {}).get(str(item["language"]).casefold())[0].is_alive()
                 )
                 workers.append(item)
             active = [x for x in workers if x["running"] or x["status"] in {"running","retrying","stopping","paused"}]
