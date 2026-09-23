@@ -99,6 +99,8 @@ def preview_update() -> dict[str, object]:
 
 def apply_confirmed_update(health_url=None, health_timeout=45):
     """Test origin/main in isolation, snapshot current code, fast-forward, then supervise restart."""
+    if health_url is None:
+        health_url = str(get_setting("self_update.health_url","")).strip() or None
     if _git("status", "--porcelain"):
         raise RuntimeError("Self-update متوقف شد: ابتدا تغییرات محلی را commit کنید یا در جای امن نگه دارید.")
     if not get_bool("self_update.enabled", False):
