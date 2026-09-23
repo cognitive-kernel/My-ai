@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 from starlette.types import Message
 
@@ -290,6 +290,12 @@ def settings_page(request: Request):
 def learning_page(request: Request):
     require_user(request)
     return HTMLResponse(LEARNING_HTML)
+
+@router.get("/settings/script.js")
+def settings_script(request: Request):
+    require_admin(request)
+    js = fetch_settings_script()
+    return Response(js, media_type="application/javascript", headers={"Cache-Control":"no-store"})
 
 @router.get("/settings/courses")
 def courses(request: Request):
