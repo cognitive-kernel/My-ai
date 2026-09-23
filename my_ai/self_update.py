@@ -8,6 +8,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from .db import execute
+from .settings_store import get_bool, get_setting
 from .decision_log import record as record_decision
 from .notifications import notify
 
@@ -98,11 +99,13 @@ def preview_update() -> dict[str, object]:
 
 def apply_confirmed_update(health_url=None, health_timeout=45):
     """Test origin/main in isolation, snapshot current code, fast-forward, then supervise restart."""
+    if health_url is None:
+        health_url = str(get_setting("self_update.health_url","")).strip() or None
     if _git("status", "--porcelain"):
         raise RuntimeError("Self-update متوقف شد: ابتدا تغییرات محلی را commit کنید یا در جای امن نگه دارید.")
-    if os.getenv("MYAI_SELF_UPDATE_ENABLED", "false").strip().lower() != "true":
+    if not get_bool("self_update.enabled", False):
         raise RuntimeError("Self-update is deny-by-default. Set MYAI_SELF_UPDATE_ENABLED=true only after explicit user approval and policy review.")
-    if os.getenv("MYAI_SELF_UPDATE_APPROVED", "false").strip().lower() != "true":
+    if not get_bool("self_update.approved", False):
         raise RuntimeError("Self-update requires an explicit approval gate.")
     if os.getenv("MYAI_OFFLINE_STRICT", "false").strip().lower() == "true":
         raise RuntimeError("Self-update is disabled in offline strict mode.")

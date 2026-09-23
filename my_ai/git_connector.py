@@ -4,6 +4,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 import httpx
 from .config import settings
+from .settings_store import get_github_settings, set_setting, delete_setting
 
 class GitHubAPIError(ValueError):
     def __init__(self, status_code, message, *, headers=None, body=None):
@@ -14,7 +15,12 @@ class GitHubConnector:
     _oauth_pending = None; _gcm_pending = None; _oauth_lock = threading.Lock(); _gcm_lock = threading.Lock()
     """GitHub connector. Reads are default; writes require allow_write=True."""
     def __init__(self, token: str | None = None, api_url: str | None = None):
-        self._explicit_token = token; self.api_url = (api_url or os.getenv("GITHUB_API_URL") or "https://api.github.com").rstrip("/"); self.timeout = float(os.getenv("MYAI_GITHUB_TIMEOUT", "15"))
+        cfg=get_github_settings()
+        self._explicit_token = token
+        self.api_url = (api_url or cfg.get("api_url") or "").rstrip("/")
+        self.timeout = float(os.getenv("MYAI_GITHUB_TIMEOUT", "15"))
+        if not self.api_url:
+            raise RuntimeError("GitHub API URL is not configured in Settings.")
     @staticmethod
     def _token_path():
         configured=os.getenv("MYAI_GITHUB_TOKEN_FILE")
@@ -24,17 +30,34 @@ class GitHubConnector:
     @classmethod
     def _saved_token(cls):
         try:
-            p=cls._token_path(); return p.read_text(encoding="utf-8").strip() or None if p.exists() else None
-        except OSError:return None
+            token=get_github_settings().get("token","").strip()
+            return token or None
+        except Exception:
+            return None
     @classmethod
     def save_token(cls,token):
-        token=token.strip(); p=cls._token_path(); p.parent.mkdir(parents=True,exist_ok=True)
+        token=token.strip()
         if token:
-            p.write_text(token,encoding="utf-8")
-            try:os.chmod(p,0o600)
-            except OSError:pass
-        elif p.exists():p.unlink()
+            set_setting("github.token",token,secret=True)
+        else:
+            delete_setting("github.token")
         return bool(token)
+    @classmethod
+    def save_config(cls, *, api_url: str, repository: str, username: str = ""):
+        api_url=api_url.strip().rstrip("/")
+        repository=repository.strip()
+        username=username.strip()
+        if not api_url.startswith(("http://","https://")):
+            raise ValueError("GitHub API URL must use http:// or https://.")
+        if not repository:
+            raise ValueError("GitHub repository is required.")
+        cls.parse_repo(repository)
+        set_setting("github.api_url",api_url)
+        set_setting("github.repository",repository)
+        set_setting("github.username",username)
+    @classmethod
+    def configured_repository(cls):
+        return get_github_settings().get("repository","").strip()
     @staticmethod
     def _gh_executable():return shutil.which("gh") or shutil.which("gh.exe")
     @staticmethod
@@ -89,7 +112,7 @@ class GitHubConnector:
     @classmethod
     def oauth_client_id(cls):return (os.getenv("MYAI_GITHUB_CLIENT_ID") or os.getenv("GITHUB_CLIENT_ID") or "").strip()
     @classmethod
-    def oauth_available(cls):return bool(cls.oauth_client_id() or cls._saved_token() or cls._gcm_token() or os.getenv("GITHUB_TOKEN") or cls.gcm_available())
+    def oauth_available(cls):return bool(cls.oauth_client_id() or cls._saved_token() or cls._gcm_token() or cls.gcm_available())
     @classmethod
     def oauth_start(cls):
         if settings.offline_strict:
@@ -165,7 +188,6 @@ class GitHubConnector:
     def token_source(cls):
         if cls.gh_logged_in():return "github_cli_oauth"
         if cls._saved_token():return "saved"
-        if os.getenv("GITHUB_TOKEN"):return "environment"
         if cls._gcm_token():return "git_credential_manager"
         return "none"
     @classmethod

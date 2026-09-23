@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .db import execute
+from .settings_store import get_bool
 from .llm import create_llm
 from .self_update import recent_lessons
 from .decision_log import record as record_decision
@@ -100,6 +101,8 @@ def _test_patch(patch: str, base: str) -> tuple[bool, str]:
 
 
 def propose_repair(issue: str) -> dict[str, object]:
+    if not get_bool("self_repair.enabled", True):
+        raise ValueError("Self-repair is disabled in Settings.")
     if not issue.strip():
         raise ValueError("A concrete local bug description is required.")
     diagnosis = diagnose_local()
@@ -156,7 +159,9 @@ def propose_repair(issue: str) -> dict[str, object]:
 
 
 def apply_repair(proposal_id: str, approved: bool) -> dict[str, object]:
-    if not approved:
+    if not get_bool("self_repair.enabled", True):
+        raise ValueError("Self-repair is disabled in Settings.")
+    if get_bool("self_repair.require_approval", True) and not approved:
         raise ValueError("Explicit approval is required before applying a repair.")
     path = PROPOSALS / f"{proposal_id}.json"
     if not path.is_file():

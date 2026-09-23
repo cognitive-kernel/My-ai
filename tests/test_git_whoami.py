@@ -10,6 +10,6 @@ def test_whoami_uses_user_endpoint(monkeypatch):
         return {"login": "test-user", "name": "Test User"}
 
     monkeypatch.setattr(GitHubConnector, "_request", fake_request)
-    identity = GitHubConnector(token="test-token").whoami()
+    identity = GitHubConnector(token="test-token", api_url="https://api.example.test").whoami()
     assert identity["login"] == "test-user"
     assert seen == {"method": "GET", "path": "/user"}

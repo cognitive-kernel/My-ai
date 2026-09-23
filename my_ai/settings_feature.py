@@ -14,6 +14,7 @@ from .auth import require_admin, require_user, audit
 from .db import execute, fetch_all, init_db
 from .git_connector import GitHubConnector
 from .llm import create_llm
+from .settings_store import get_setting, set_setting, get_bool, get_int, get_github_settings
 
 router = APIRouter(tags=["settings"])
 _workers = ThreadPoolExecutor(max_workers=1, thread_name_prefix="myai-learning")
@@ -75,6 +76,27 @@ class CourseRequest(BaseModel):
 
 class TokenRequest(BaseModel):
     token: str = Field(default="", max_length=10000)
+
+class GithubConfigRequest(BaseModel):
+    api_url: str = Field(min_length=8, max_length=500)
+    repository: str = Field(min_length=3, max_length=300)
+    username: str = Field(default="", max_length=200)
+
+class FeatureSettingsRequest(BaseModel):
+    self_update_enabled: bool = False
+    self_update_approved: bool = False
+    self_update_health_url: str = ""
+    self_repair_enabled: bool = True
+    self_repair_require_approval: bool = True
+    learning_fast_enabled: bool = False
+    learning_interval_seconds: int = 3600
+    learning_max_retries: int = 5
+
+class ToolPermissionRequest(BaseModel):
+    user_id: int
+    tool_name: str = Field(min_length=1, max_length=120)
+    action: str = Field(min_length=1, max_length=40)
+    allowed: bool
 
 
 def _setup() -> None:
@@ -163,6 +185,66 @@ def _run_course(course_id: int) -> None:
     finally:
         _running.discard(course_id)
 
+
+@router.get("/settings/config")
+def settings_config(request: Request):
+    require_admin(request)
+    g=get_github_settings()
+    return {
+        "github": {"api_url":g.get("api_url",""),"repository":g.get("repository",""),"username":g.get("username",""),"token_configured":bool(g.get("token"))},
+        "features": {
+            "self_update_enabled":get_bool("self_update.enabled",False),
+            "self_update_approved":get_bool("self_update.approved",False),
+            "self_update_health_url":str(get_setting("self_update.health_url","")),
+            "self_repair_enabled":get_bool("self_repair.enabled",True),
+            "self_repair_require_approval":get_bool("self_repair.require_approval",True),
+            "learning_fast_enabled":get_bool("learning.fast_enabled",False),
+            "learning_interval_seconds":get_int("learning.interval_seconds",3600),
+            "learning_max_retries":get_int("learning.max_retries",5),
+        },
+    }
+
+@router.put("/settings/github")
+def save_github_config(r: GithubConfigRequest, request: Request):
+    user=require_admin(request)
+    try:
+        GitHubConnector.save_config(api_url=r.api_url,repository=r.repository,username=r.username)
+    except ValueError as exc:
+        raise HTTPException(400,str(exc)) from exc
+    audit(user,"github","write","200","settings-configured")
+    return {"saved":True}
+
+@router.put("/settings/features")
+def save_feature_settings(r: FeatureSettingsRequest, request: Request):
+    user=require_admin(request)
+    if not 60 <= r.learning_interval_seconds <= 86400:
+        raise HTTPException(400,"learning_interval_seconds must be 60..86400")
+    if not 1 <= r.learning_max_retries <= 20:
+        raise HTTPException(400,"learning_max_retries must be 1..20")
+    if r.self_update_health_url:
+        from urllib.parse import urlparse
+        host=urlparse(r.self_update_health_url).hostname
+        if host not in {"127.0.0.1","localhost","::1"}:
+            raise HTTPException(400,"Self-update health URL must target the local host.")
+    values={"self_update.enabled":r.self_update_enabled,"self_update.approved":r.self_update_approved,"self_update.health_url":r.self_update_health_url.strip(),"self_repair.enabled":r.self_repair_enabled,"self_repair.require_approval":r.self_repair_require_approval,"learning.fast_enabled":r.learning_fast_enabled,"learning.interval_seconds":r.learning_interval_seconds,"learning.max_retries":r.learning_max_retries}
+    for key,value in values.items(): set_setting(key,value)
+    audit(user,"settings","write","200","feature-settings-updated")
+    return {"saved":True,"features":values}
+
+@router.get("/settings/tool-permissions")
+def settings_tool_permissions(request: Request):
+    require_admin(request)
+    return {"items":fetch_all("SELECT * FROM tool_permissions ORDER BY user_id,tool_name,action")}
+
+@router.put("/settings/tool-permissions")
+def save_tool_permission(r: ToolPermissionRequest, request: Request):
+    user=require_admin(request)
+    if not fetch_all("SELECT id FROM users WHERE id=?",(r.user_id,)):
+        raise HTTPException(404,"User not found.")
+    execute("""INSERT INTO tool_permissions(user_id,tool_name,action,allowed) VALUES(?,?,?,?)
+              ON CONFLICT(user_id,tool_name,action) DO UPDATE SET allowed=excluded.allowed,updated_at=CURRENT_TIMESTAMP""",(r.user_id,r.tool_name,r.action,1 if r.allowed else 0))
+    audit(user,"tool-permissions","write","200",f"{r.user_id}:{r.tool_name}:{r.action}:{r.allowed}")
+    return {"ok":True}
 
 @router.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request):
@@ -268,20 +350,30 @@ def settings_users(request:Request):
     require_admin(request)
     return {"items":fetch_all("SELECT id,username,display_name,role,active,created_at FROM users ORDER BY id")}
 
-SETTINGS_HTML = """<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>تنظیمات | My-AI</title><style>body{font-family:Tahoma,system-ui;background:#f3f4f6;margin:0;color:#17202a}.wrap{max-width:1100px;margin:auto;padding:20px}.card{background:#fff;padding:18px;border-radius:14px;margin:12px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}input,textarea,select{width:100%;box-sizing:border-box;padding:10px;margin:5px 0;border:1px solid #ccc;border-radius:8px}button{padding:9px 14px;margin:3px;border:0;border-radius:8px;cursor:pointer}.bar{height:22px;background:#ddd;border-radius:8px;overflow:hidden}.fill{height:100%;background:#2563eb;color:#fff;text-align:center;line-height:22px;font-size:12px}.topic{border:1px solid #ddd;padding:9px;border-radius:9px;margin:6px 0}.muted{font-size:13px;color:#667085}.ok{background:#dcfce7}.warn{background:#fef3c7}.danger{background:#fee2e2}</style><div class='wrap'><h1>تنظیمات My-AI</h1><p><a href='/'>صفحه اصلی</a> · <a href='/learning'>پیشرفت و مسیر یادگیری</a></p><div class='grid'><section class='card'><h2>اتصال GitHub</h2><p class='muted'>توکن فقط از طریق اتصال امن برنامه ذخیره و برای نمایش دوباره خوانده نمی‌شود.</p><input id='repo' value='cognitive-kernel/My-ai' placeholder='owner/repository'><input id='token' type='password' autocomplete='off' placeholder='GitHub API / Personal Access Token'><button onclick='saveToken()'>ثبت کلید/API</button><button onclick='checkGit()'>بررسی اتصال</button><button onclick='loginGit()'>ورود با GitHub CLI/OAuth</button><button onclick='logoutGit()'>خروج</button><div id='gitout' class='muted'></div></section><section class='card'><h2>مدیریت کاربران</h2><div id='users'>در حال بارگذاری...</div><hr><input id='nu' placeholder='نام کاربری'><input id='np' type='password' placeholder='رمز عبور حداقل ۱۰ کاراکتر'><input id='nd' placeholder='نام نمایشی'><button onclick='addUser()'>ایجاد کاربر</button><div id='userout' class='muted'></div></section></div><section class='card'><h2>ساخت آموزش جدید</h2><p class='muted'>هر خط یک سرفصل: <code>عنوان | هدف | آدرس منبع رسمی اختیاری</code>. می‌توانی «Cisco» یا هر موضوع دیگری بسازی.</p><input id='cn' placeholder='نام آموزش، مثلاً Cisco'><input id='cd' placeholder='توضیح آموزش'><textarea id='ct' rows='12' placeholder='Cisco IOS CLI | کار با حالت‌های CLI و show/configure | https://www.cisco.com/...\nVLAN | ساخت VLAN و trunk | https://www.cisco.com/...'></textarea><button onclick='createCourse()'>ایجاد آموزش</button><div id='courseout' class='muted'></div></section><section class='card'><h2>آموزش‌ها و پیشرفت</h2><div id='courses'>در حال بارگذاری...</div></section></div><script>
+SETTINGS_HTML = """<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>تنظیمات | My-AI</title><style>body{font-family:Tahoma,system-ui;background:#f3f4f6;margin:0;color:#17202a}.wrap{max-width:1100px;margin:auto;padding:20px}.card{background:#fff;padding:18px;border-radius:14px;margin:12px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}input,textarea,select{width:100%;box-sizing:border-box;padding:10px;margin:5px 0;border:1px solid #ccc;border-radius:8px}button{padding:9px 14px;margin:3px;border:0;border-radius:8px;cursor:pointer}.bar{height:22px;background:#ddd;border-radius:8px;overflow:hidden}.fill{height:100%;background:#2563eb;color:#fff;text-align:center;line-height:22px;font-size:12px}.topic{border:1px solid #ddd;padding:9px;border-radius:9px;margin:6px 0}.muted{font-size:13px;color:#667085}.ok{background:#dcfce7}.warn{background:#fef3c7}.danger{background:#fee2e2}</style><div class='wrap'><h1>تنظیمات My-AI</h1><p><a href='/'>صفحه اصلی</a> · <a href='/learning'>پیشرفت و مسیر یادگیری</a></p><div class='grid'><section class='card'><h2>اتصال GitHub</h2><p class='muted'>هیچ Repository یا API URL پیش‌فرضی وجود ندارد. تنظیمات در دیتابیس نگهداری می‌شود؛ Token به‌صورت رمزنگاری‌شده ذخیره می‌شود. GitHub REST API با username/password احراز هویت نمی‌کند و برای API باید Token یا OAuth/CLI استفاده شود.</p><input id='apiurl' placeholder='GitHub API URL'><input id='repo' placeholder='owner/repository'><input id='ghuser' placeholder='GitHub username (اختیاری)'><input id='token' type='password' autocomplete='new-password' placeholder='Personal Access Token'><button onclick='saveGithubConfig()'>ثبت تنظیمات GitHub</button><button onclick='saveToken()'>ثبت Token</button><button onclick='checkGit()'>بررسی اتصال</button><button onclick='loginGit()'>ورود با GitHub CLI/OAuth</button><button onclick='logoutGit()'>خروج</button><div id='gitout' class='muted'></div></section>
+<section class='card'><h2>Self-Update</h2><label><input id='su_enabled' type='checkbox'> فعال</label><label><input id='su_approved' type='checkbox'> اجازه اجرای Update</label><input id='su_health' placeholder='Health URL محلی، مثلاً http://127.0.0.1:8000/health'><button onclick='saveFeatures()'>ذخیره</button><div id='suout' class='muted'></div></section>
+<section class='card'><h2>Self-Repair</h2><label><input id='sr_enabled' type='checkbox'> فعال</label><label><input id='sr_approval' type='checkbox' checked> نیاز به تأیید قبل از اعمال تعمیر</label><button onclick='saveFeatures()'>ذخیره</button><div id='srout' class='muted'></div></section>
+<section class='card'><h2>یادگیری سریع</h2><label><input id='lf_enabled' type='checkbox'> فعال</label><input id='lf_interval' type='number' min='60' max='86400' placeholder='فاصله یادگیری (ثانیه)'><input id='lf_retries' type='number' min='1' max='20' placeholder='حداکثر تلاش منبع'><button onclick='saveFeatures()'>ذخیره</button><div id='lfout' class='muted'></div></section><section class='card'><h2>مدیریت کاربران</h2><div id='users'>در حال بارگذاری...</div><hr><input id='nu' placeholder='نام کاربری'><input id='np' type='password' placeholder='رمز عبور حداقل ۱۰ کاراکتر'><input id='nd' placeholder='نام نمایشی'><button onclick='addUser()'>ایجاد کاربر</button><div id='userout' class='muted'></div></section></div>
+<section class='card'><h2>مجوز ابزار کاربران</h2><p class='muted'>برای هر کاربر، ابزار و نوع عملیات را مشخص کنید. عدم وجود مجوز یعنی Deny.</p><div id='permissions'>در حال بارگذاری...</div></section><section class='card'><h2>ساخت آموزش جدید</h2><p class='muted'>هر خط یک سرفصل: <code>عنوان | هدف | آدرس منبع رسمی اختیاری</code>. می‌توانی «Cisco» یا هر موضوع دیگری بسازی.</p><input id='cn' placeholder='نام آموزش، مثلاً Cisco'><input id='cd' placeholder='توضیح آموزش'><textarea id='ct' rows='12' placeholder='Cisco IOS CLI | کار با حالت‌های CLI و show/configure | https://www.cisco.com/...\nVLAN | ساخت VLAN و trunk | https://www.cisco.com/...'></textarea><button onclick='createCourse()'>ایجاد آموزش</button><div id='courseout' class='muted'></div></section><section class='card'><h2>آموزش‌ها و پیشرفت</h2><div id='courses'>در حال بارگذاری...</div></section></div><script>
 async function req(url,opt){let r=await fetch(url,opt||{});let t=await r.text();let j;try{j=JSON.parse(t)}catch(e){throw Error('HTTP '+r.status)}if(!r.ok)throw Error(j.detail||'خطا');return j}
 async function loadUsers(){try{let j=await req('/settings/users');users.innerHTML=(j.items||[]).map(u=>'<div class="topic"><b>'+esc(u.username)+'</b> — '+esc(u.role)+' — '+(u.active?'فعال':'غیرفعال')+' <button onclick="toggleUser('+u.id+','+(!u.active)+')">'+(u.active?'غیرفعال‌کردن':'فعال‌کردن')+'</button></div>').join('')||'کاربری نیست'}catch(e){users.textContent=e.message}}
 async function toggleUser(id,active){await req('/admin/users/'+id+'/active?active='+active,{method:'PATCH'});loadUsers()}
 async function addUser(){try{let j=await req('/admin/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:nu.value,password:np.value,display_name:nd.value,active:true})});userout.textContent='کاربر ایجاد شد: '+j.user.username;nu.value=np.value=nd.value='';loadUsers()}catch(e){userout.textContent=e.message}}
+async function loadSettings(){try{let j=await req('/settings/config');apiurl.value=j.github.api_url||'';repo.value=j.github.repository||'';ghuser.value=j.github.username||'';su_enabled.checked=j.features.self_update_enabled;su_approved.checked=j.features.self_update_approved;su_health.value=j.features.self_update_health_url||'';sr_enabled.checked=j.features.self_repair_enabled;sr_approval.checked=j.features.self_repair_require_approval;lf_enabled.checked=j.features.learning_fast_enabled;lf_interval.value=j.features.learning_interval_seconds;lf_retries.value=j.features.learning_max_retries;gitout.textContent=j.github.token_configured?'Token تنظیم شده است':'Token تنظیم نشده است'}catch(e){gitout.textContent=e.message}}
+async function saveGithubConfig(){try{await req('/settings/github',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_url:apiurl.value,repository:repo.value,username:ghuser.value})});gitout.textContent='تنظیمات GitHub ذخیره شد'}catch(e){gitout.textContent=e.message}}
 async function saveToken(){try{let j=await req('/settings/github-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:token.value})});gitout.textContent=j.authenticated?'متصل: '+j.login:'توکن حذف شد';token.value=''}catch(e){gitout.textContent=e.message}}
 async function checkGit(){try{let j=await req('/git/check?repository='+encodeURIComponent(repo.value));gitout.textContent=j.message||j.status||'بررسی شد'}catch(e){gitout.textContent=e.message}}
+async function saveFeatures(){try{await req('/settings/features',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({self_update_enabled:su_enabled.checked,self_update_approved:su_approved.checked,self_update_health_url:su_health.value,self_repair_enabled:sr_enabled.checked,self_repair_require_approval:sr_approval.checked,learning_fast_enabled:lf_enabled.checked,learning_interval_seconds:Number(lf_interval.value||3600),learning_max_retries:Number(lf_retries.value||5)})});suout.textContent='ذخیره شد';srout.textContent='ذخیره شد';lfout.textContent='ذخیره شد'}catch(e){suout.textContent=srout.textContent=lfout.textContent=e.message}}
+async function loadPermissions(){try{let [u,p]=await Promise.all([req('/settings/users'),req('/settings/tool-permissions')]);let map={};(p.items||[]).forEach(x=>map[x.user_id+':'+x.tool_name+':'+x.action]=x.allowed);let tools=['github','self-update','self-repair','learning','code-execution','code-generation','security','database','web','voice','projects','tools','chat'];permissions.innerHTML=(u.items||[]).map(user=>'<div class="topic"><b>'+esc(user.username)+'</b><div>'+tools.map(t=>['read','write','execute'].map(a=>{let k=user.id+':'+t+':'+a;return '<label style="display:inline-block;margin:3px"><input type="checkbox" '+(map[k]?'checked':'')+' onchange="setPermission('+user.id+',\''+t+'\',\''+a+'\',this.checked)"> '+t+':'+a+'</label>'}).join('')).join('')+'</div></div>').join('')||'کاربری نیست'}catch(e){permissions.textContent=e.message}}
+async function setPermission(uid,tool,action,allowed){try{await req('/settings/tool-permissions',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,tool_name:tool,action:action,allowed:allowed})})}catch(e){alert(e.message)}}
+
 async function loginGit(){try{let j=await req('/git/login',{method:'POST'});gitout.textContent=j.message||'درخواست ورود ارسال شد'}catch(e){gitout.textContent=e.message}}
 async function logoutGit(){try{let j=await req('/git/logout',{method:'POST'});gitout.textContent=j.message||'خارج شدی'}catch(e){gitout.textContent=e.message}}
 async function createCourse(){try{let topics=ct.value.split(/\n+/).map(x=>x.trim()).filter(Boolean).map(x=>{let p=x.split('|').map(s=>s.trim());return {title:p[0],goal:p[1]||'',source_url:p[2]||''}});let j=await req('/settings/courses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:cn.value,description:cd.value,topics:topics})});courseout.textContent='آموزش ساخته شد: '+j.id;loadCourses()}catch(e){courseout.textContent=e.message}}
 async function startCourse(id){await req('/settings/courses/'+id+'/start',{method:'POST'});loadCourses()}
 async function loadCourses(){try{let j=await req('/settings/courses');courses.innerHTML=(j.items||[]).map(c=>'<div class="card"><h3>'+esc(c.name)+'</h3><p>'+esc(c.description)+'</p><div class="bar"><div class="fill" style="width:'+c.progress_percent+'%">'+c.progress_percent+'%</div></div><p class="muted">'+c.completed_topics+' از '+c.total_topics+' سرفصل کامل شده'+(c.current?' · اکنون: '+esc(c.current.title)+' · مرحله: '+esc(c.current.phase):'')+'</p><button onclick="startCourse('+c.id+')">شروع/ادامه یادگیری</button><a href="/learning?course='+c.id+'">جزئیات</a></div>').join('')||'آموزشی نیست'}catch(e){courses.textContent=e.message}}
 function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
-loadUsers();loadCourses();setInterval(loadCourses,10000)
+loadUsers();loadCourses();loadSettings();loadPermissions();setInterval(loadCourses,10000)
 </script></html>"""
 
 LEARNING_HTML = """<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>پیشرفت یادگیری | My-AI</title><style>body{font-family:Tahoma,system-ui;background:#f3f4f6;margin:0}.wrap{max-width:1100px;margin:auto;padding:20px}.card{background:#fff;padding:18px;border-radius:14px;margin:12px 0}.bar{height:26px;background:#ddd;border-radius:9px;overflow:hidden}.fill{height:100%;background:#2563eb;color:#fff;text-align:center;line-height:26px;min-width:2em}.course{border:1px solid #d0d5dd;border-radius:12px;margin:12px 0;overflow:hidden;background:#fff}.course>summary{cursor:pointer;padding:16px;font-size:18px;font-weight:700;list-style:none}.course>summary::-webkit-details-marker{display:none}.courseBody{padding:0 16px 16px}.topic{padding:12px;border:1px solid #e4e7ec;border-radius:10px;margin:8px 0}.topicHead{display:flex;justify-content:space-between;gap:12px;align-items:center}.started{background:#eff6ff}.completed{background:#ecfdf3}.paused{background:#fffaeb}.small{font-size:13px;color:#667085}pre{direction:ltr;text-align:left}.empty{padding:20px;text-align:center;color:#667085}</style><div class='wrap'><h1>پیشرفت کامل یادگیری</h1><p><a href='/settings'>تنظیمات</a> · <a href='/'>صفحه اصلی</a></p><p class='small'>همه مباحث موجود اینجا هستند. روی هر مبحث کلیک کنید تا سرفصل‌ها و درصد یادگیری هر سرفصل باز شود.</p><div id='root'>در حال بارگذاری...</div></div><script>

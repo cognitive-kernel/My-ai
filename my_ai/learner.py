@@ -14,6 +14,7 @@ from .security import SecurityEngine
 from .dast import LocalDAST
 from .project_workspace import create_project_workspace, write_project_files
 from .config import settings
+from .settings_store import get_int
 
 class LearningEngine:
     def __init__(self,llm=None):
@@ -23,7 +24,7 @@ class LearningEngine:
     def _retry_with_limit(self, operation, label, progress_callback=None, topic=None, stop_event=None):
         """Retry a learning operation up to the configured limit, respecting cancellation."""
         delay=1.0
-        max_attempts=max(1,int(settings.learning_max_retries))
+        max_attempts=max(1,get_int("learning.max_retries",settings.learning_max_retries))
         for attempt in range(1,max_attempts+1):
             if stop_event is not None and stop_event.is_set():
                 raise InterruptedError("learning stopped")
