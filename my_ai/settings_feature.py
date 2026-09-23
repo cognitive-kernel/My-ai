@@ -421,3 +421,61 @@ function topicHtml(t){var cls=t.status==='completed'?'completed':t.status==='pau
 async function load(){try{var a=await req('/learning/status'),j=a.courses||[],custom=await req('/learning/active'),html='';j.forEach(function(c){html+='<details class="course"><summary>'+esc(c.language)+' — '+Number(c.progress_percent||0)+'% ('+c.completed_topics+'/'+c.total_topics+')</summary><div class="courseBody">'+bar(c.progress_percent)+c.topics.map(topicHtml).join('')+'</div></details>'});(custom.items||[]).forEach(function(x){var c=x.course,s=x.summary;html+='<details class="course"><summary>'+esc(c.name)+' — '+Number(s.progress_percent||0)+'% ('+s.completed_topics+'/'+s.total_topics+')</summary><div class="courseBody">'+bar(s.progress_percent)+s.topics.map(topicHtml).join('')+'</div></details>'});root.innerHTML=html||'<div class="card empty">هنوز مبحثی ثبت نشده است.</div>'}catch(e){root.textContent='خطا: '+e.message}}
 load();setInterval(load,5000)
 </script></html>"""
+def install(app: Any) -> None:
+    _setup()
+    if not any(getattr(route, "path", "") == "/settings" for route in app.routes):
+        app.router.routes[0:0] = router.routes
+    app._myai_settings_installed = True
+
+    api_module: Any = __import__("my_ai.api", fromlist=["page"])
+    original_page = getattr(api_module, "page", None)
+    if original_page is not None and not getattr(app, "_myai_page_patched", False):
+        app._myai_page_patched = True
+        def page_with_learning():
+            html = original_page()
+            link = "<a href='/settings' style='float:left;padding:6px 10px;background:#e0e7ff;border-radius:7px;text-decoration:none'>تنظیمات</a>"
+            return html.replace("<h1>My-AI ", "<h1>My-AI "+link+" ", 1)
+        api_module.page = page_with_learning
+
+    if not getattr(app, "_myai_learning_middleware_installed", False):
+        app._myai_learning_middleware_installed = True
+        class CustomLearningMiddleware:
+            def __init__(self, inner: Any): self.inner = inner
+            async def __call__(self, scope: dict[str, Any], receive: Any, send: Any):
+                if scope.get("type") != "http" or scope.get("path") != "/chat" or scope.get("method") != "POST":
+                    return await self.inner(scope, receive, send)
+                body = b""
+                while True:
+                    message = await receive()
+                    body += message.get("body", b"")
+                    if not message.get("more_body", False): break
+                try:
+                    payload=json.loads(body.decode("utf-8")); text=str(payload.get("message","")).strip().lower()
+                except Exception:
+                    text=""
+                is_learn = any(x in text for x in ("یاد بگیر","یادگیری","learn"))
+                if "سیسکو" not in text or not is_learn:
+                    sent=False
+                    async def replay() -> Message:
+                        nonlocal sent
+                        if sent: return {"type":"http.request","body":b"","more_body":False}
+                        sent=True; return {"type":"http.request","body":body,"more_body":False}
+                    return await self.inner(scope, replay, send)
+                async def empty_receive() -> Message:
+                    return {"type":"http.request","body":b"","more_body":False}
+                request=Request(scope, receive=empty_receive)
+                __import__("my_ai.auth", fromlist=["require_user"]).require_user(request)
+                _setup()
+                rows=fetch_all("SELECT id FROM custom_courses WHERE lower(name)=lower(?) AND active=1",("Cisco",))
+                if not rows:
+                    sent=False
+                    async def replay_missing() -> Message:
+                        nonlocal sent
+                        if sent: return {"type":"http.request","body":b"","more_body":False}
+                        sent=True; return {"type":"http.request","body":body,"more_body":False}
+                    return await self.inner(scope, replay_missing, send)
+                cid=int(rows[0]["id"])
+                if cid not in _running: _workers.submit(_run_course,cid)
+                response=JSONResponse({"type":"learning","answer":"یادگیری Cisco در پس‌زمینه شروع/ادامه شد.","data":{"course_id":cid,"status":"started"}})
+                return await response(scope, receive, send)
+        app.add_middleware(CustomLearningMiddleware)
