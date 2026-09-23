@@ -1,0 +1,39 @@
+name: one-shot-settings-patch
+on:
+  push:
+    branches: [audit/fix-local-first-hardening]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: "!contains(github.event.head_commit.message, '[settings-patched]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply integration patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          api = Path('my_ai/api.py')
+          text = api.read_text(encoding='utf-8')
+          marker = 'app=FastAPI(title="My-AI",version="0.2.0",description="Local-first personal learning and coding agent.",lifespan=lifespan)'
+          if 'from .settings_feature import install as _install_settings_features' not in text:
+              text = text.replace(marker, marker + '\nfrom .settings_feature import install as _install_settings_features\n_install_settings_features(app)', 1)
+              api.write_text(text, encoding='utf-8')
+
+          Path('my_ai/__init__.py').write_text('__version__ = "0.2.0"\n', encoding='utf-8')
+          config = Path('my_ai/config.py')
+          ctext = config.read_text(encoding='utf-8')
+          ctext = ctext.replace('\nfrom .feature_bootstrap import install as _install_feature_bootstrap\n_install_feature_bootstrap()\n', '\n')
+          config.write_text(ctext, encoding='utf-8')
+          Path('my_ai/feature_bootstrap.py').unlink(missing_ok=True)
+          Path('.github/workflows/one-shot-settings-patch.yml').unlink(missing_ok=True)
+          PY
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add my_ai/api.py my_ai/config.py my_ai/__init__.py my_ai/feature_bootstrap.py .github/workflows/one-shot-settings-patch.yml
+          git commit -m 'Integrate settings feature into app startup [settings-patched]'
+          git push
