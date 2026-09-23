@@ -137,6 +137,10 @@ def _hybrid_search_cached(query: str, limit: int, bucket: int) -> list[dict[str,
     return sorted(rows, key=lambda x:x["hybrid_score"], reverse=True)[:limit]
 
 
+def invalidate_hybrid_search_cache() -> None:
+    _hybrid_search_cached.cache_clear()
+
+
 def hybrid_search(query: str, limit: int = 8) -> list[dict[str, Any]]:
     limit=max(1,min(limit,50))
     bucket=int(time.monotonic() // max(1,settings.cache_ttl_seconds))
@@ -167,9 +171,23 @@ def choose_model(task: str) -> str:
     return os.getenv("CODING_MODEL", settings.ollama_model) if coding else os.getenv("ROUTER_MODEL", settings.ollama_model)
 
 
+DATA_ROOT = Path(settings.db_path).expanduser().resolve().parent
+BACKUP_ROOT = Path(os.getenv("MYAI_BACKUP_ROOT", str(DATA_ROOT / "backups"))).expanduser().resolve()
+
+
+def _safe_backup_path(value: str) -> Path:
+    path=Path(value).expanduser().resolve()
+    BACKUP_ROOT.mkdir(parents=True, exist_ok=True)
+    try:
+        path.relative_to(BACKUP_ROOT)
+    except ValueError as exc:
+        raise ValueError(f"Backup paths must stay under {BACKUP_ROOT}.") from exc
+    return path
+
+
 def backup_database(destination: str, password: str | None = None) -> str:
     src = Path(settings.db_path)
-    dst = Path(destination).expanduser().resolve()
+    dst = _safe_backup_path(destination)
     if password:
         temp = dst.with_name(dst.name + ".plain.tmp")
         temp.parent.mkdir(parents=True, exist_ok=True)
@@ -204,7 +222,7 @@ class sqlite3_backup:
 
 
 def export_database(destination: str, password: str | None = None) -> str:
-    dst = Path(destination).expanduser().resolve()
+    dst = _safe_backup_path(destination)
     dst.parent.mkdir(parents=True, exist_ok=True)
     with connect() as conn:
         data = {}
@@ -243,18 +261,18 @@ def _import_data(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def import_database(source: str) -> dict[str, Any]:
-    path = Path(source).expanduser().resolve()
+    path = _safe_backup_path(source)
     return _import_data(json.loads(path.read_text(encoding="utf-8")))
 
 
 def import_encrypted_database(source: str, password: str) -> dict[str, Any]:
     from .backup_crypto import decrypt_bytes
-    data = json.loads(decrypt_bytes(Path(source).read_bytes(), password).decode("utf-8"))
+    data = json.loads(decrypt_bytes(_safe_backup_path(source).read_bytes(), password).decode("utf-8"))
     return _import_data(data)
 
 
 def restore_encrypted_backup(source: str, destination: str, password: str) -> str:
-    return decrypt_file(source, destination, password)
+    return decrypt_file(_safe_backup_path(source), _safe_backup_path(destination), password)
 
 
 def _assert_public_http_url(url: str) -> urllib.parse.ParseResult:
@@ -297,9 +315,9 @@ def resource_status() -> dict[str, Any]:
 
 def voice_status() -> dict[str, Any]:
     return {
-        "whisper_cpp": shutil.which("whisper-cli") or shutil.which("main"),
+        "whisper_cpp": os.getenv("WHISPER_CPP_BIN") or shutil.which("whisper-cli"),
         "piper": shutil.which("piper"),
-        "offline": bool((shutil.which("whisper-cli") or shutil.which("main")) and shutil.which("piper")),
+        "offline": bool((os.getenv("WHISPER_CPP_BIN") or shutil.which("whisper-cli")) and shutil.which("piper")),
     }
 
 

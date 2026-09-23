@@ -10,11 +10,12 @@ from .curriculum import LANGUAGE_CURRICULA, LANGUAGE_SOURCES, canonical_language
 from .db import execute, fetch_all
 from .domain_registry import load_saved_domains
 from .dynamic_learning import REVIEW_DAYS, ensure_domain, resolve_learning_target, due_domains, weekly_review
+from .config import settings
 
 
 class StudyScheduler:
-    def __init__(self, interval_seconds=3600):
-        self.interval_seconds = interval_seconds
+    def __init__(self, interval_seconds=None):
+        self.interval_seconds = int(interval_seconds or settings.scheduler_interval_seconds)
         self._stop = threading.Event()
         self._review_stop = threading.Event()
         self._thread = None
@@ -173,13 +174,14 @@ class StudyScheduler:
         # for a new language must never revive or redirect an older worker.
         stop_event = stop_event or self._stop
         engine = LearningEngine()
+        consecutive_errors=0
         while not stop_event.is_set():
             try:
                 if language not in LANGUAGE_CURRICULA:
                     language = ensure_domain(language, getattr(engine, "llm", None)) or language
                     self.language = language
-                limits_cpu = float(__import__("os").getenv("SCHEDULER_MAX_CPU_PERCENT", "90"))
-                limits_ram = float(__import__("os").getenv("SCHEDULER_MAX_RAM_PERCENT", "90"))
+                limits_cpu = float(settings.scheduler_max_cpu_percent)
+                limits_ram = float(settings.scheduler_max_ram_percent)
                 resources = resource_status()
                 if resources.get("cpu_percent") is not None and (resources["cpu_percent"] > limits_cpu or resources["ram_percent"] > limits_ram):
                     self.update_progress("paused", "system load high")
@@ -188,6 +190,7 @@ class StudyScheduler:
                     continue
                 self.update_progress("starting")
                 self.last_result = engine.learn_next(language, progress_callback=self.update_progress, stop_event=stop_event)
+                consecutive_errors=0
                 if self.last_result.get("status") == "completed":
                     self.update_progress("completed", self.last_result.get("topic", {}).get("topic"))
                     if self._domain_complete(language):
@@ -202,10 +205,13 @@ class StudyScheduler:
                 if stop_event.is_set():
                     break
                 self.error = str(exc)
-                self.last_result = {"status": "error", "error": str(exc)}
+                consecutive_errors += 1
+                self.last_result = {"status": "error", "error": str(exc), "consecutive_errors": consecutive_errors}
+                if consecutive_errors >= max(1,int(settings.learning_max_retries)):
+                    self.update_progress("paused", "retry limit reached")
+                    break
                 self.update_progress("retrying")
-                # Unexpected errors outside the engine's retry boundary are also retried.
-                stop_event.wait(1.0)
+                stop_event.wait(min(60.0, 2.0 ** min(consecutive_errors, 5)))
                 continue
             if self.last_result and self.last_result.get("message", "").endswith("complete."):
                 self._schedule_review(language)

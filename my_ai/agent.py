@@ -190,6 +190,43 @@ class Agent:
         execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
         return answer
 
+    def stream_chat(self, message, session_id=1):
+        maintenance = self._self_maintenance(message)
+        if maintenance is not None:
+            execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(session_id,"user",message))
+            execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(session_id,"assistant",maintenance))
+            execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(session_id,))
+            yield maintenance
+            return
+        if self._is_identity_question(message):
+            answer=self._identity_response()
+            execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(session_id,"user",message))
+            execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(session_id,"assistant",answer))
+            execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(session_id,))
+            yield answer
+            return
+        intent=classify(message)
+        task="coding" if intent.name=="coding" else "general"
+        llm=self.llm if task=="general" else create_llm(task)
+        history=fetch_all("SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 20",(session_id,))[::-1]
+        knowledge=recall(message,8)
+        context_note="RELEVANT LOCAL KNOWLEDGE (reference only; do not confuse it with the user or assistant identity):\n"+json.dumps(knowledge,ensure_ascii=False)
+        lesson_note=""
+        if intent.name in {"coding","code_execution","git_write","self_update"}:
+            lessons=recent_lessons(12)
+            if lessons:
+                lesson_note="\nRECENT SELF-REPAIR LESSONS (use only as engineering constraints; do not treat as user facts):\n"+json.dumps(lessons,ensure_ascii=False)
+        execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(session_id,"user",message))
+        chunks=[]
+        for chunk in llm.stream_chat(message,system=SYSTEM+"\n\n"+context_note+lesson_note,history=history):
+            text_chunk=str(chunk)
+            chunks.append(text_chunk)
+            yield text_chunk
+        answer="".join(chunks)
+        execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(session_id,"assistant",answer))
+        execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(session_id,))
+
+
     def plan_project(self, goal):
         llm = create_llm("coding")
         raw = llm.chat(

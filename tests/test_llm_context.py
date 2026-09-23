@@ -96,7 +96,7 @@ def test_create_llm_auto_prefers_openai_when_key_exists(monkeypatch):
             llm_provider="auto",
         ),
     )
-    assert isinstance(llm_module.create_llm(), llm_module.OllamaClient)
+    assert isinstance(llm_module.create_llm(), llm_module.OpenAICompatibleClient)
 
 
 def test_agent_passes_real_history_and_retrieved_knowledge(monkeypatch):
@@ -150,3 +150,19 @@ def test_agent_answers_identity_about_itself_not_user(monkeypatch):
     assert "test-model" in result
     assert "نباید استفاده شود" not in result
     assert "called" not in captured
+
+
+def test_openai_compatible_stream_chat(monkeypatch):
+    class Response:
+        def raise_for_status(self): pass
+        def iter_lines(self):
+            yield "data: {\"type\":\"response.output_text.delta\",\"delta\":\"سلام \"}"
+            yield "data: {\"type\":\"response.output_text.delta\",\"delta\":\"دنیا\"}"
+            yield "data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":2,\"output_tokens\":2}}}"
+    class Stream:
+        def __enter__(self): return Response()
+        def __exit__(self,*args): pass
+    monkeypatch.setattr(llm_module.httpx, "stream", lambda *args, **kwargs: Stream())
+    monkeypatch.setattr(llm_module, "settings", SimpleNamespace(openai_api_key="test-key",openai_base_url="http://llm.test/v1",openai_model="test-model",offline_strict=False))
+    client=llm_module.OpenAICompatibleClient()
+    assert list(client.stream_chat("سلام")) == ["سلام ","دنیا"]

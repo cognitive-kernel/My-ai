@@ -1,6 +1,8 @@
 from __future__ import annotations
 from contextlib import asynccontextmanager
+import subprocess
 import re
+from urllib.parse import urlparse
 from pathlib import Path
 from fastapi import FastAPI,HTTPException,Request
 from fastapi.responses import HTMLResponse,JSONResponse,RedirectResponse,StreamingResponse
@@ -15,7 +17,7 @@ from .dynamic_learning import resolve_learning_target
 from .router import classify
 from .scheduler import StudyScheduler
 from .ui import page
-from .help import page as help_page, ask_help, local_help_html
+from .help import page as help_page, ask_help, local_help_html, apply_help_update
 from .git_connector import GitHubConnector
 from .auth import authenticate, audit, create_account, create_session, current_user, require_admin, revoke_session, require_user, tool_allowed
 from .platform import backup_database, choose_model, eval_retrieval, export_database, hybrid_search, import_database, model_health, resource_status, voice_status, web_fetch_policy
@@ -26,7 +28,6 @@ from .voice import status as voice_engine_status, transcribe, synthesize
 from .metrics import snapshot as metrics_snapshot
 from .platform import import_encrypted_database, restore_encrypted_backup
 from .self_repair import list_proposals, proposal_diff
-from .llm import create_llm
 from .tooling import catalog as tool_catalog, doctor as tool_doctor, run_project_tool, run_python_snippet, sqlserver_query, sqlserver_schema, mysql_query, mysql_schema, sqlite_query, sqlite_schema
 
 scheduler=StudyScheduler()
@@ -35,7 +36,7 @@ async def lifespan(_):
     init_db()
     scheduler.start_review_monitor()
     active=fetch_all("SELECT language FROM learning_sessions WHERE status='started' ORDER BY id DESC LIMIT 1")
-    if active: scheduler.start(active[0]["language"])
+    if active and settings.scheduler_auto_resume: scheduler.start(active[0]["language"])
     yield
     scheduler.stop()
 app=FastAPI(title="My-AI",version="0.2.0",description="Local-first personal learning and coding agent.",lifespan=lifespan)
@@ -97,6 +98,7 @@ def _voice_path(value:str, must_exist:bool=False) -> str:
     if must_exist and not path.is_file(): raise HTTPException(404,"Voice input/model file not found.")
     return str(path)
 class ChatRequest(BaseModel): message:str; session_id:int|None=None
+class SelfUpdateRequest(BaseModel): health_url: HttpUrl | None = None
 class RepairRequest(BaseModel): issue:str=""; proposal_id:str|None=None; approved:bool=False
 class AuthRegisterRequest(BaseModel): username:str; password:str; display_name:str=""
 class AuthLoginRequest(BaseModel): username:str; password:str
@@ -116,8 +118,8 @@ class ProgramRequest(BaseModel): request:str; language:str="Python"
 class LanguageRequest(BaseModel): language:str="Python"
 class SecurityRequest(BaseModel): project_path:str|None=None; target_url:str|None=None; code:str|None=None; language:str="Python"; fix:bool=False; headers:dict[str,str]=Field(default_factory=dict)
 class GitRequest(BaseModel): repository:str; path:str|None=None; ref:str|None=None; branch:str|None=None; content:str|None=None; message:str|None=None; allow_write:bool=False
-class SchedulerRequest(BaseModel): language:str="Python"; interval_seconds:int=3600
-class LearnRequest(BaseModel): language:str="Python"; interval_seconds:int=3600
+class SchedulerRequest(BaseModel): language:str="Python"; interval_seconds:int=settings.scheduler_interval_seconds
+class LearnRequest(BaseModel): language:str="Python"; interval_seconds:int=settings.scheduler_interval_seconds
 class ToolRequest(BaseModel): language:str="Python"; operation:str="test"; cwd:str|None=None; timeout:int=120
 class PythonToolRequest(BaseModel): code:str
 class SQLQueryRequest(BaseModel): sql:str; limit:int=1000
@@ -256,19 +258,19 @@ def admin_tools(request: Request):
 @app.post("/chat/stream")
 def chat_stream(r:ChatRequest, request:Request):
     user=require_user(request)
-    if r.session_id is not None and not fetch_all("SELECT id FROM chat_sessions WHERE id=? AND user_id=?",(r.session_id,user["id"])):
-        raise HTTPException(404,"Chat session not found.")
-    intent=classify(r.message)
-    task="coding" if intent.name=="coding" else "general"
-    llm=create_llm(task)
+    if r.session_id is not None:
+        if not fetch_all("SELECT id FROM chat_sessions WHERE id=? AND user_id=?",(r.session_id,user["id"])):
+            raise HTTPException(404,"Chat session not found.")
+        sid=r.session_id
+    else:
+        sid=execute("INSERT INTO chat_sessions(title,kind,user_id) VALUES(?,?,?)",((r.message or "گفتگوی جدید").strip()[:60],"chat",user["id"]))
     def generate():
-        stream=getattr(llm,"stream_chat",None)
-        if stream is None:
-            yield agent.chat(r.message,r.session_id)
-            return
-        for chunk in stream(r.message):
-            yield chunk
-    audit(user,"chat","stream","200")
+        try:
+            yield from agent.stream_chat(r.message,sid)
+            audit(user,"chat","stream","200")
+        except Exception as exc:
+            audit(user,"chat","stream","502",str(exc))
+            raise
     return StreamingResponse(generate(),media_type="text/plain; charset=utf-8")
 
 @app.get("/memory/knowledge")
@@ -437,9 +439,14 @@ def self_repair_apply_api(r:RepairRequest, request:Request):
     return result
 
 @app.post("/self-update/apply")
-def self_update_apply_api(r:ChatRequest, request:Request):
+def self_update_apply_api(r:SelfUpdateRequest, request:Request):
     user=require_admin(request)
-    result=self_update_apply(r.message)
+    health_url = str(r.health_url) if r.health_url else None
+    if health_url:
+        host=urlparse(health_url).hostname
+        if host not in {"127.0.0.1","localhost","::1"}:
+            raise HTTPException(400,"Self-update health URL must target the local host.")
+    result=self_update_apply(health_url=health_url)
     audit(user,"self-update","write",str(result.get("status") or ("activated" if result.get("applied") else "blocked")),result.get("reason","") or result.get("details",""))
     return result
 
@@ -547,8 +554,11 @@ def help_approve(update_id:int,request:Request):
     proposal=rows[0].get("proposed_update") or ""
     if proposal.strip()=="NO_CHANGE":
         execute("UPDATE help_updates SET status='rejected' WHERE id=?",(update_id,)); return {"status":"rejected","update_id":update_id,"message":"No documentation change was proposed."}
+    component=rows[0]["component"]
+    if not apply_help_update(component, proposal):
+        raise HTTPException(400,"The help component is not supported.")
     execute("UPDATE help_updates SET status='approved' WHERE id=?",(update_id,))
-    return {"status":"approved","update_id":update_id,"message":"The approved help update is now visible in /help."}
+    return {"status":"approved","update_id":update_id,"message":"The approved help update was applied to the local help file."}
 @app.post("/help/reject/{update_id}")
 def help_reject(update_id:int,request:Request):
     require_admin(request)
@@ -616,7 +626,7 @@ def chat(r:ChatRequest, request:Request):
             language=resolve_learning_target(msg, requested or "Python")
             language=canonical_language(language)
             execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"user",msg))
-            scheduler.interval_seconds=3600
+            scheduler.interval_seconds=settings.scheduler_interval_seconds
             scheduler.start(language)
             answer=f"یادگیری {language} در پس‌زمینه شروع شد."
             execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"assistant",answer)); execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(sid,))
@@ -691,7 +701,9 @@ def tools_sqlite_query(r:SQLiteQueryRequest,request:Request):
 @app.get("/learning/status")
 def learning_status(request:Request, language:str|None=None):
     require_user(request)
-    return learner.status(language)
+    summary=learner.status(language)
+    summary.update(learner.detailed_status(language))
+    return summary
 @app.post("/learning/practice")
 def practice(r:ChatRequest, request:Request):
     require_user(request)
@@ -764,8 +776,7 @@ def git_logout():
         GitHubConnector.save_token("")
         exe=GitHubConnector._gh_executable()
         if exe:
-            import subprocess
-            r=subprocess.run([exe,"auth","logout","--hostname","github.com","--yes"],capture_output=True,text=True,timeout=30,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
+            r=subprocess.run([exe,"auth","logout","--hostname","github.com"],input="y\n",capture_output=True,text=True,timeout=30,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
             if r.returncode != 0:
                 raise RuntimeError((r.stderr or r.stdout or "GitHub logout failed").strip())
         return {"authenticated":False,"message":"از GitHub خارج شدی."}
@@ -957,3 +968,7 @@ def scheduler_stop(request:Request):
     require_user(request)
     scheduler.stop_learning()
     return {"status":"stopped"}
+
+
+from .settings_feature import install as _install_settings_features
+_install_settings_features(app)

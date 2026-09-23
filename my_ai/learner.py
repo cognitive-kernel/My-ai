@@ -13,16 +13,18 @@ from .web_learner import WebLearner
 from .security import SecurityEngine
 from .dast import LocalDAST
 from .project_workspace import create_project_workspace, write_project_files
+from .config import settings
 
 class LearningEngine:
     def __init__(self,llm=None):
         self.llm=llm or create_llm("general"); self.web=WebLearner()
         self.security=SecurityEngine(self.llm); self.dast=LocalDAST()
 
-    def _retry_forever(self, operation, label, progress_callback=None, topic=None, stop_event=None):
-        """Retry a learning operation indefinitely until it succeeds or learning is explicitly stopped."""
+    def _retry_with_limit(self, operation, label, progress_callback=None, topic=None, stop_event=None):
+        """Retry a learning operation up to the configured limit, respecting cancellation."""
         delay=1.0
-        while True:
+        max_attempts=max(1,int(settings.learning_max_retries))
+        for attempt in range(1,max_attempts+1):
             if stop_event is not None and stop_event.is_set():
                 raise InterruptedError("learning stopped")
             try:
@@ -30,14 +32,20 @@ class LearningEngine:
             except Exception as exc:
                 if stop_event is not None and stop_event.is_set():
                     raise InterruptedError("learning stopped") from exc
+                if attempt >= max_attempts:
+                    raise RuntimeError(f"{label} failed after {max_attempts} attempts") from exc
                 if progress_callback:
                     progress_callback("retrying", topic or label)
-                # Back off to avoid hammering an unavailable Ollama/API while still retrying forever.
                 if stop_event is not None:
                     stop_event.wait(delay)
                 else:
                     time.sleep(delay)
                 delay=min(delay*2.0,60.0)
+        raise RuntimeError(f"{label} failed")
+
+    def _retry_forever(self, operation, label, progress_callback=None, topic=None, stop_event=None):
+        """Backward-compatible wrapper for callers using the previous retry method name."""
+        return self._retry_with_limit(operation, label, progress_callback, topic, stop_event)
 
     def _discover_prerequisites(self,language,topic,progress_callback=None,stop_event=None):
         routing_llm=self.llm if self.llm is not None else create_llm("routing")
@@ -45,7 +53,7 @@ class LearningEngine:
                  '{"prerequisites":[{"name":"...","reason":"...","recommended_order":1}]}. '
                  "Do not duplicate the main topic. Only include concrete skills needed to build real projects. "
                  f"MAIN SUBJECT: {language}\nCURRENT TOPIC: {topic['topic']}\nGOAL: {topic['goal']}")
-        return self._retry_forever(
+        return self._retry_with_limit(
             lambda: self._parse_prerequisites(routing_llm.chat(prompt,system="Return valid JSON only. Prefer official ecosystem prerequisites.")),
             "prerequisites",progress_callback,topic["topic"],stop_event,
         )
@@ -197,6 +205,49 @@ class LearningEngine:
         r=run_python(code); p=r.return_code==0 and not r.timed_out; execute("INSERT INTO experiments(language,code,output,error,passed) VALUES(?,?,?,?,?)",("Python",code,r.output,r.error,int(p))); return {"passed":p,"output":r.output,"error":r.error,"return_code":r.return_code,"timed_out":r.timed_out}
     @staticmethod
     def _half_percent(value): return max(0.0,min(100.0,round(float(value)*2)/2))
+
+    def detailed_status(self,language=None):
+        """Return every curriculum topic with its persisted learning progress."""
+        rows=fetch_all("SELECT * FROM learning_sessions ORDER BY id DESC")
+        selected = [canonical_language(language)] if language else list(LANGUAGE_CURRICULA.keys())
+        courses=[]
+        for lang in selected:
+            topics=LANGUAGE_CURRICULA.get(lang,[])
+            if not topics:
+                continue
+            lang_rows=[r for r in rows if r["language"]==lang]
+            latest={}
+            for row in lang_rows:
+                name=str(row["topic"])
+                if name in latest and latest[name]["status"]=="completed":
+                    continue
+                latest[name]=row
+            topic_items=[]
+            for item in topics:
+                row=latest.get(str(item["topic"]))
+                progress=100.0 if row and row["status"]=="completed" else (float(row["progress_percent"] or 0) if row else 0.0)
+                topic_items.append({
+                    "order": item.get("order"),
+                    "topic": item["topic"],
+                    "goal": item.get("goal",""),
+                    "status": str(row["status"]) if row else "planned",
+                    "phase": str(row["phase"]) if row else "planned",
+                    "progress_percent": self._half_percent(progress),
+                    "score": row["score"] if row and row["score"] is not None else None,
+                    "updated_at": row["created_at"] if row else None,
+                })
+            completed=sum(1 for x in topic_items if x["status"]=="completed")
+            active=next((x for x in topic_items if x["status"] not in {"completed","paused"}),None)
+            overall=self._half_percent(sum(float(x["progress_percent"]) for x in topic_items)/len(topic_items)) if topic_items else 0.0
+            courses.append({
+                "language":lang,
+                "total_topics":len(topic_items),
+                "completed_topics":completed,
+                "progress_percent":overall,
+                "current":active,
+                "topics":topic_items,
+            })
+        return {"courses":courses}
 
     def status(self,language=None):
         rows=fetch_all("SELECT * FROM learning_sessions ORDER BY id DESC"); out=[]

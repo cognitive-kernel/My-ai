@@ -5,6 +5,7 @@ from functools import lru_cache
 
 from .config import settings
 from .db import remember_knowledge, search_knowledge
+from .platform import invalidate_hybrid_search_cache
 
 
 @lru_cache(maxsize=128)
@@ -15,6 +16,7 @@ def _recall_cached(query: str, limit: int, bucket: int):
 def remember(topic, title, content, source_url=None):
     result = remember_knowledge(topic, title, content, source_url)
     _recall_cached.cache_clear()
+    invalidate_hybrid_search_cache()
     return result
 
 

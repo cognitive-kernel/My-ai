@@ -14,6 +14,10 @@ class Intent:
 HIGH_RISK = {"pentest_external","git_write","self_update","database_import","code_execution"}
 
 
+def _contains_phrase(text: str, phrase: str) -> bool:
+    return bool(re.search(r"(?<!\\w)"+re.escape(phrase)+r"(?!\\w)", text, re.UNICODE))
+
+
 def classify(text: str) -> Intent:
     low = re.sub(r"\s+", " ", text.lower()).strip()
     patterns = [
@@ -26,6 +30,6 @@ def classify(text: str) -> Intent:
         ("chat", tuple(), 0.5),
     ]
     for name, words, confidence in patterns:
-        if words and any(w in low for w in words):
+        if words and any(_contains_phrase(low,w) for w in words):
             return Intent(name, confidence, name in HIGH_RISK)
     return Intent("chat", 0.5, False)

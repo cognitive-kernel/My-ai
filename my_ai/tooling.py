@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .executor import run_python
+from .config import settings
 
 LANGUAGE_TOOLS = {
     "Python": {"toolchains":["python","pytest","ruff","mypy"],"tests":["python -m pytest"],"build":["python -m compileall"],"lint":["ruff check ."]},
@@ -122,8 +123,20 @@ def sqlserver_query(sql:str,limit:int=1000)->dict[str,Any]:
 def sqlserver_schema(limit:int=500)->dict[str,Any]:
     return sqlserver_query("SELECT TABLE_SCHEMA,TABLE_NAME,COLUMN_NAME,DATA_TYPE,ORDINAL_POSITION FROM INFORMATION_SCHEMA.COLUMNS ORDER BY TABLE_SCHEMA,TABLE_NAME,ORDINAL_POSITION",limit)
 
+def _safe_sqlite_path(value: str) -> Path:
+    db=Path(value).expanduser().resolve()
+    primary=Path(settings.db_path).expanduser().resolve()
+    root=Path(os.getenv("MYAI_SQLITE_ROOT","data/sqlite")).expanduser().resolve()
+    if db != primary:
+        try:
+            db.relative_to(root)
+        except ValueError as exc:
+            raise ValueError(f"SQLite paths must be the active database or stay under {root}.") from exc
+    return db
+
+
 def sqlite_schema(path:str)->dict[str,Any]:
-    db=Path(path).expanduser().resolve()
+    db=_safe_sqlite_path(path)
     if not db.is_file(): raise ValueError("SQLite database file not found.")
     conn=sqlite3.connect(f"file:{db}?mode=ro",uri=True)
     try:
@@ -159,7 +172,7 @@ def mysql_schema(limit:int=500)->dict[str,Any]:
 
 def sqlite_query(path:str,sql:str,limit:int=1000)->dict[str,Any]:
     query=_validate_readonly_sql(sql)
-    db=Path(path).expanduser().resolve()
+    db=_safe_sqlite_path(path)
     conn=sqlite3.connect(f"file:{db}?mode=ro",uri=True)
     try:
         cur=conn.execute(query)

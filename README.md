@@ -425,7 +425,7 @@ python -m my_ai
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-ollama pull qwen2.5-coder:7b
+ollama pull qwen2.5:7b
 python -m my_ai
 ```
 
@@ -441,13 +441,13 @@ http://127.0.0.1:8000
 |---|---|---|
 | OLLAMA_BASE_URL | http://127.0.0.1:11434 | آدرس Ollama |
 | OLLAMA_MODEL | qwen2.5:7b | مدل پیش‌فرض |
-| ROUTER_MODEL | qwen2.5:1.5b | مدل سبک برای وظایف routing/classification |
+| ROUTER_MODEL | qwen2.5:7b | مدل routing؛ برای اجرای تک‌مدلی روی CPU |
 | CODING_MODEL | qwen2.5:7b | مدل تولید/اصلاح کد |
-| FALLBACK_MODEL | qwen2.5:3b | مدل جایگزین هنگام شکست مدل اصلی |
+| FALLBACK_MODEL | qwen2.5:7b | مدل جایگزین؛ همان مدل اصلی برای جلوگیری از چندمدلی شدن |
 | EMBEDDING_MODEL | nomic-embed-text | مدل embedding حافظه |
-| OLLAMA_NUM_CTX | 4096 | context window |
-| OLLAMA_NUM_THREAD | 6 | تعداد thread پیش‌فرض |
-| OLLAMA_KEEP_ALIVE | 30m | مدت نگه‌داری مدل در Ollama |
+| OLLAMA_NUM_CTX | 2048 | context window مناسب CPU |
+| OLLAMA_NUM_THREAD | 8 | تعداد thread پیش‌فرض |
+| OLLAMA_KEEP_ALIVE | 10m | مدت نگه‌داری مدل در Ollama |
 | DB_PATH | data/myai.db | پایگاه‌داده پایدار |
 | MAX_WEB_CHARS | 30000 | حداکثر متن استخراج‌شده از وب |
 | EXEC_TIMEOUT | 10 | timeout اجرای Python |
@@ -457,7 +457,7 @@ http://127.0.0.1:8000
 | EXEC_CPUS | 1.0 | سقف CPU کانتینر |
 | EXEC_PIDS | 64 | سقف process کانتینر |
 | EXEC_OUTPUT_CHARS | 12000 | سقف خروجی |
-| HOST | 127.0.0.1 | آدرس bind API |
+| SCHEDULER_INTERVAL_SECONDS | 3600 | فاصله اجرای scheduler |\n| SCHEDULER_MAX_CPU_PERCENT | 70 | سقف CPU برای learning scheduler |\n| SCHEDULER_MAX_RAM_PERCENT | 80 | سقف RAM برای learning scheduler |\n| SCHEDULER_AUTO_RESUME | false | عدم ادامه خودکار learning بعد از restart |\n| LEARNING_MAX_RETRIES | 5 | حداکثر retry هر عملیات یادگیری |\n| MYAI_BACKUP_ROOT | data/backups | ریشه مجاز backup/import/restore |\n| MYAI_SQLITE_ROOT | data/sqlite | ریشه مجاز SQLite خارجی |\n| WHISPER_CPP_BIN | خالی | مسیر صریح whisper-cli؛ fallback به `main` حذف شده است |\n| HOST | 127.0.0.1 | آدرس bind API |
 | PORT | 8000 | پورت API |
 | GITHUB_TOKEN | — | token اتصال GitHub |
 | GITHUB_API_URL | — | API پایه GitHub Enterprise |

@@ -40,3 +40,12 @@ def test_password_authentication_and_tool_permission(isolated_db):
 def test_admin_always_has_tool_access(isolated_db):
     admin = auth.create_account("owner", "a-secure-password")
     assert auth.tool_allowed(admin, "anything", "write") is True
+
+
+def test_concurrent_first_accounts_create_only_one_admin(isolated_db):
+    from concurrent.futures import ThreadPoolExecutor
+    def create(i):
+        return auth.create_account(f"member{i}", "a-secure-password")
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        users=list(pool.map(create, (1,2)))
+    assert sorted(u["role"] for u in users) == ["admin", "user"]

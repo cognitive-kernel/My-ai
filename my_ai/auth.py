@@ -3,12 +3,13 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
+import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import HTTPException, Request
 
-from .db import execute, fetch_all
+from .db import connect, execute, fetch_all
 
 
 SESSION_TTL_HOURS = 24
@@ -47,16 +48,27 @@ def create_account(username: str, password: str, display_name: str = "") -> dict
         raise ValueError("Username must contain at least 3 characters.")
     if not password:
         raise ValueError("Password is required.")
-    if fetch_all("SELECT id FROM users WHERE username=?", (username,)):
-        raise ValueError("Username already exists.")
-
     salt, digest = _hash_password(password)
-    role = "admin" if not has_users() else "user"
-    user_id = execute(
-        "INSERT INTO users(username,password_salt,password_hash,display_name,role) VALUES(?,?,?,?,?)",
-        (username, salt, digest, display_name.strip()[:120], role),
-    )
-    return {"id": user_id, "username": username, "display_name": display_name.strip()[:120], "role": role}
+    display_name = display_name.strip()[:120]
+    try:
+        with connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            if conn.execute("SELECT 1 FROM users WHERE username=?",(username,)).fetchone():
+                raise ValueError("Username already exists.")
+            role = "admin" if conn.execute("SELECT 1 FROM users LIMIT 1").fetchone() is None else "user"
+            cur=conn.execute(
+                "INSERT INTO users(username,password_salt,password_hash,display_name,role) VALUES(?,?,?,?,?)",
+                (username,salt,digest,display_name,role),
+            )
+            if cur.lastrowid is None:
+                raise RuntimeError("User insert did not return an id.")
+            user_id=int(cur.lastrowid)
+            conn.commit()
+    except ValueError:
+        raise
+    except sqlite3.IntegrityError as exc:
+        raise ValueError("Username already exists.") from exc
+    return {"id":user_id,"username":username,"display_name":display_name,"role":role}
 
 
 def authenticate(username: str, password: str) -> dict[str, Any] | None:

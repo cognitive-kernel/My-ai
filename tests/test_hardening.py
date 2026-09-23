@@ -154,3 +154,15 @@ def test_health_metrics_is_public(client_db):
     response = client.get("/health/metrics")
     assert response.status_code == 200
     assert "inference" in response.json()
+
+
+def test_sqlite_tool_rejects_external_path(tmp_path):
+    from my_ai import tooling
+    with pytest.raises(ValueError):
+        tooling.sqlite_schema(str(tmp_path / "other.db"))
+
+
+def test_backup_path_rejects_external_path(tmp_path):
+    from my_ai import platform
+    with pytest.raises(ValueError):
+        platform._safe_backup_path(str(tmp_path / "other.json"))
