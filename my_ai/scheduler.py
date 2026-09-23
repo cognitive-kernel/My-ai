@@ -89,7 +89,7 @@ class StudyScheduler:
 
     def status(self):
         with self._lock:
-            runtime = fetch_all("SELECT language,session_id,status,started_at,updated_at FROM learning_runtime WHERE id=1")
+            runtime = fetch_all("SELECT language,session_id,status FROM learning_runtime WHERE id=1")
             rt = runtime[0] if runtime else {}
             return {
                 "running": self.running(),
@@ -100,25 +100,7 @@ class StudyScheduler:
                 "error": self.error,
                 "interval_seconds": self.interval_seconds,
                 "session_id": rt.get("session_id"),
-                "runtime_status": rt.get("status", "idle"),
-                "started_at": rt.get("started_at"),
-                "updated_at": rt.get("updated_at"),
-                "resources": self._resource_snapshot(),
             }
-
-    @staticmethod
-    def _resource_snapshot():
-        r = resource_status()
-        try:
-            r.update({
-                "cpu_limit_percent": float(get_setting("resources.cpu_percent", str(settings.scheduler_max_cpu_percent))),
-                "cpu_threads": int(get_setting("resources.cpu_threads", str(settings.ollama_num_thread))),
-                "ram_limit_percent": float(get_setting("resources.ram_percent", str(settings.scheduler_max_ram_percent))),
-                "gpu_layers": int(get_setting("resources.gpu_layers", str(settings.ollama_num_gpu))),
-            })
-        except (TypeError, ValueError):
-            pass
-        return r
 
     @staticmethod
     def _wait_for_resources(stop_event):
@@ -178,7 +160,8 @@ class StudyScheduler:
                     if not ensure_domain(name) or not self._domain_complete(name):
                         continue
                     self.update_progress("weekly_review", name)
-                    result = weekly_review(name, LearningEngine().web, LearningEngine().llm)
+                    engine = LearningEngine()
+                    result = weekly_review(name, engine.web, engine.llm)
                     if result.get("added"):
                         self.last_result = {"status": "weekly_review", "language": name, **result}
                     self.update_progress("idle")
@@ -222,8 +205,6 @@ class StudyScheduler:
                 self.last_result = {"status": "error", "error": str(exc), "consecutive_errors": consecutive_errors, "resources": resources if 'resources' in locals() else resource_status()}
                 self.update_progress("retrying", self.current_topic or "waiting for retry")
                 execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("retrying",))
-                # A learning request is persistent: errors must not terminate it.
-                # Backoff is bounded, and the same persisted learning session is retried.
                 stop_event.wait(min(60.0, 2.0 ** min(consecutive_errors, 5)))
                 continue
             if stop_event.wait(self.interval_seconds):
