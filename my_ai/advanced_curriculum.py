@@ -101,14 +101,20 @@ def _extend_universal(target):
             target.append({"order":order,"topic":topic,"goal":goal})
 
 def extend_curricula(curricula):
-    for _target in curricula.values():
-        _extend_universal(_target)
+    # Curricula with an explicit numbered expert track already have their own
+    # authoritative endpoint. Do not append the generic gates on top of them;
+    # doing so changes Python's 40-topic path into 48 and mixes unrelated
+    # completion records into the selected subject.
     if "Python" in curricula:
         _extend(curricula["Python"], PYTHON_ADVANCED)
     if "SQL Server" in curricula:
         _extend(curricula["SQL Server"], SQLSERVER_ADVANCED)
     if "Rust" in curricula:
         _extend_rust(curricula["Rust"])
+    explicit = {"Python", "SQL Server", "Rust"}
+    for name, target in curricula.items():
+        if name not in explicit:
+            _extend_universal(target)
 
 
 # Compact model-provided seed knowledge. It is a starting layer, not a substitute for
