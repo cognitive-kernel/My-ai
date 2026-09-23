@@ -113,6 +113,23 @@ class StudyScheduler:
                 "resources": {**live, **cfg},
             }
 
+    @staticmethod
+    def _wait_for_resources(stop_event):
+        while not stop_event.is_set():
+            try:
+                cpu_limit = float(get_setting("resources.cpu_percent", str(settings.scheduler_max_cpu_percent)))
+                ram_limit = float(get_setting("resources.ram_percent", str(settings.scheduler_max_ram_percent)))
+            except (TypeError, ValueError):
+                cpu_limit = float(settings.scheduler_max_cpu_percent)
+                ram_limit = float(settings.scheduler_max_ram_percent)
+            resources = resource_status()
+            cpu = resources.get("cpu_percent")
+            ram = resources.get("ram_percent")
+            if cpu is None or ram is None or (cpu <= cpu_limit and (ram is None or ram <= ram_limit)):
+                return resources
+            stop_event.wait(1.0)
+        raise InterruptedError("learning stopped")
+
     def update_progress(self, stage, topic=None):
         with self._lock:
             self.stage = stage
@@ -196,15 +213,7 @@ class StudyScheduler:
                 if language not in LANGUAGE_CURRICULA:
                     language = ensure_domain(language, getattr(engine, "llm", None)) or language
                     self.language = language
-                limits_cpu = float(get_setting("resources.cpu_percent", str(settings.scheduler_max_cpu_percent)))
-                limits_ram = float(get_setting("resources.ram_percent", str(settings.scheduler_max_ram_percent)))
-                resources = resource_status()
-                if resources.get("cpu_percent") is not None and (resources["cpu_percent"] > limits_cpu or resources["ram_percent"] > limits_ram):
-                    self.update_progress("paused", "system load high")
-                    self.last_result = {"status":"paused","reason":"system load high","resources":resources}
-                    if stop_event.wait(1.0):
-                        break
-                    continue
+                resources = self._wait_for_resources(stop_event)
                 self.update_progress("starting")
                 self.last_result = engine.learn_next(language, progress_callback=self.update_progress, stop_event=stop_event)
                 consecutive_errors=0
@@ -233,12 +242,8 @@ class StudyScheduler:
                     break
                 self.error = str(exc)
                 consecutive_errors += 1
-                self.last_result = {"status": "error", "error": str(exc), "consecutive_errors": consecutive_errors}
-                if consecutive_errors >= max(1,int(settings.learning_max_retries)):
-                    self.update_progress("paused", "retry limit reached")
-                    execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("paused",))
-                    break
-                self.update_progress("retrying")
+                self.last_result = {"status": "error", "error": str(exc), "consecutive_errors": consecutive_errors, "resources": resources if "resources" in locals() else resource_status()}
+                self.update_progress("retrying", self.current_topic or "waiting for retry")
                 if stop_event.wait(min(60.0, 2.0 ** min(consecutive_errors, 5))):
                     break
                 continue
