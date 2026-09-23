@@ -33,7 +33,7 @@ class LearningEngine:
                 if stop_event is not None and stop_event.is_set():
                     raise InterruptedError("learning stopped") from exc
                 if attempt >= max_attempts:
-                    raise RuntimeError(f"{label} failed after {max_attempts} attempts") from exc
+                    raise RuntimeError(f"{label} failed after {max_attempts} attempts: {exc}") from exc
                 if progress_callback:
                     progress_callback("retrying", topic or label)
                 if stop_event is not None:
@@ -78,7 +78,16 @@ class LearningEngine:
                                     f"LANGUAGE: {language}\nTARGETS: {json.dumps(queries,ensure_ascii=False)}\nSOURCE:\n{source}",
                                     system="You are a rigorous programming teacher.")
                 return title,note
-            title,note=self._retry_forever(fetch_and_extract,"source",progress_callback,topic["topic"],stop_event)
+            try:
+                title,note=self._retry_forever(fetch_and_extract,"source",progress_callback,topic["topic"],stop_event)
+            except InterruptedError:
+                raise
+            except Exception as exc:
+                message=str(exc)
+                knowledge.append({"title":"Source unavailable","url":url,"error":message})
+                if progress_callback:
+                    progress_callback("source_unavailable",topic["topic"])
+                continue
             remember(language,title,note,url); knowledge.append({"title":title,"url":url})
         return knowledge
 
