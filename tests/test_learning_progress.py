@@ -222,3 +222,19 @@ def test_learning_retry_can_be_explicitly_stopped():
         raise AssertionError("retry loop must stop when explicitly requested")
 
     assert calls == [1]
+
+
+def test_learning_engine_keeps_compatible_retry_method():
+    engine = LearningEngine.__new__(LearningEngine)
+    assert hasattr(engine, "_retry_forever")
+
+
+def test_detailed_status_exposes_every_curriculum_topic(monkeypatch):
+    monkeypatch.setattr(learner_module, "fetch_all", lambda *_args, **_kwargs: [])
+    engine = LearningEngine.__new__(LearningEngine)
+    result = engine.detailed_status("Python")
+    course = result["courses"][0]
+    assert course["language"] == "Python"
+    assert course["total_topics"] == len(learner_module.LANGUAGE_CURRICULA["Python"])
+    assert len(course["topics"]) == course["total_topics"]
+    assert all(topic["progress_percent"] == 0 for topic in course["topics"])
