@@ -11,7 +11,7 @@ from .db import execute, fetch_all
 from .domain_registry import load_saved_domains
 from .dynamic_learning import REVIEW_DAYS, ensure_domain, resolve_learning_target, due_domains, weekly_review
 from .config import settings
-from .settings_store import get_bool, get_int, get_setting
+from .settings_store import get_setting
 
 
 class StudyScheduler:
