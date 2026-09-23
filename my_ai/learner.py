@@ -14,7 +14,7 @@ from .security import SecurityEngine
 from .dast import LocalDAST
 from .project_workspace import create_project_workspace, write_project_files
 from .config import settings
-from .settings_store import get_bool, get_int
+from .settings_store import get_int
 
 class LearningEngine:
     def __init__(self,llm=None):
