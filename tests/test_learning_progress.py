@@ -112,7 +112,12 @@ def test_scheduler_status_returns_json_safe_snapshot():
     scheduler.error = None
     scheduler._lock = threading.Lock()
 
-    result = scheduler.status()
+    monkeypatch = __import__("pytest").MonkeyPatch()
+    monkeypatch.setattr("my_ai.scheduler.fetch_all", lambda *_args, **_kwargs: [])
+    try:
+        result = scheduler.status()
+    finally:
+        monkeypatch.undo()
 
     assert result == {
         "running": False,
