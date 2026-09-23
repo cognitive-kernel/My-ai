@@ -9,6 +9,7 @@ import urllib.parse
 import time
 
 from .config import settings
+from .settings_store import get_int, get_setting
 from .metrics import record_inference, record_error
 
 
@@ -49,7 +50,7 @@ class OllamaClient:
         system: str | None = None,
         history: Sequence[HistoryMessage] | None = None,
     ) -> Iterator[str]:
-        payload: dict[str, object] = {"model": self.model, "stream": True, "options": {"num_ctx": settings.ollama_num_ctx, "num_thread": settings.ollama_num_thread, "num_gpu": settings.ollama_num_gpu},
+        payload: dict[str, object] = {"model": self.model, "stream": True, "options": {"num_ctx": settings.ollama_num_ctx, "num_thread": get_int("resources.cpu_threads", settings.ollama_num_thread), "num_gpu": get_int("resources.gpu_layers", settings.ollama_num_gpu)},
             "keep_alive": settings.ollama_keep_alive, "messages": []}
         messages = payload["messages"]
         assert isinstance(messages, list)
@@ -106,7 +107,7 @@ class OllamaClient:
         payload: dict[str, object] = {
             "model": self.model,
             "stream": False,
-            "options": {"num_ctx": settings.ollama_num_ctx, "num_thread": settings.ollama_num_thread, "num_gpu": settings.ollama_num_gpu},
+            "options": {"num_ctx": settings.ollama_num_ctx, "num_thread": get_int("resources.cpu_threads", settings.ollama_num_thread), "num_gpu": get_int("resources.gpu_layers", settings.ollama_num_gpu)},
             "keep_alive": settings.ollama_keep_alive,
             "messages": [],
         }
