@@ -261,6 +261,11 @@ def save_resource_settings(r: ResourceSettingsRequest, request: Request):
     audit(user, "settings", "write", "200", "resource-settings-updated")
     return {"saved": True, "resources": {"cpu_percent": r.cpu_percent, "cpu_threads": r.cpu_threads, "ram_percent": r.ram_percent, "gpu_layers": r.gpu_layers}}
 
+@router.get("/settings/users")
+def settings_users(request: Request):
+    require_admin(request)
+    return {"items": fetch_all("SELECT id,username,display_name,role,active,created_at FROM users ORDER BY id")}
+
 @router.get("/settings/tool-permissions")
 def settings_tool_permissions(request: Request):
     require_admin(request)
@@ -417,7 +422,24 @@ function bar(p){p=Number(p||0);return '<div class="bar"><div class="fill" style=
 function topicHtml(t){var cls=t.status==='completed'?'completed':t.status==='paused'?'paused':t.status==='started'?'started':'';return '<div class="topic '+cls+'"><div class="topicHead"><b>'+esc(t.order||t.topic_order)+'. '+esc(t.topic||t.title)+'</b><b>'+Number(t.progress_percent||0)+'%</b></div>'+bar(t.progress_percent)+'<div class="small">وضعیت: '+esc(t.status)+' · مرحله: '+esc(t.phase)+'</div><div>هدف: '+esc(t.goal)+'</div>'+(t.score!=null?'<div class="small">امتیاز ارزیابی: '+esc(t.score)+'</div>':'')+(t.lesson?'<details><summary>متن درس</summary><pre>'+esc(t.lesson)+'</pre></details>':'')+'</div>'}
 async function load(){try{var a=await req('/learning/status'),j=a.courses||[],custom=await req('/learning/active'),html='';j.forEach(function(c){html+='<details class="course"><summary>'+esc(c.language)+' — '+Number(c.progress_percent||0)+'% ('+c.completed_topics+'/'+c.total_topics+')</summary><div class="courseBody">'+bar(c.progress_percent)+c.topics.map(topicHtml).join('')+'</div></details>'});(custom.items||[]).forEach(function(x){var c=x.course,s=x.summary;html+='<details class="course"><summary>'+esc(c.name)+' — '+Number(s.progress_percent||0)+'% ('+s.completed_topics+'/'+s.total_topics+')</summary><div class="courseBody">'+bar(s.progress_percent)+s.topics.map(topicHtml).join('')+'</div></details>'});root.innerHTML=html||'<div class="card empty">هنوز مبحثی ثبت نشده است.</div>'}catch(e){root.textContent='خطا: '+e.message}}
 load();setInterval(load,5000)
-</script></html>"""
+</script></html><script>
+(function(){
+  window.saveResources = async function(){
+    var payload={cpu_percent:Number(document.getElementById('cpu_percent').value||70),cpu_threads:Number(document.getElementById('cpu_threads').value||8),ram_percent:Number(document.getElementById('ram_percent').value||80),gpu_layers:Number(document.getElementById('gpu_layers').value||0)};
+    var out=document.getElementById('resourceout');
+    try{
+      var r=await fetch('/settings/resources',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      var j=await r.json();
+      if(!r.ok) throw new Error(j.detail||j.message||('HTTP '+r.status));
+      document.getElementById('cpu_percent').value=j.resources.cpu_percent;
+      document.getElementById('cpu_threads').value=j.resources.cpu_threads;
+      document.getElementById('ram_percent').value=j.resources.ram_percent;
+      document.getElementById('gpu_layers').value=j.resources.gpu_layers;
+      if(out) out.textContent='مقادیر فعال: CPU '+j.resources.cpu_percent+'% · '+j.resources.cpu_threads+' thread · RAM '+j.resources.ram_percent+'% · GPU '+j.resources.gpu_layers+' layer';
+    }catch(e){if(out) out.textContent='خطا در ذخیره منابع: '+e.message;}
+  };
+})();
+</script>"""
 
 
 def install(app: Any) -> None:
