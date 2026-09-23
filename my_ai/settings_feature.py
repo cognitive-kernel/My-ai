@@ -291,7 +291,10 @@ function bar(p){p=Number(p||0);return '<div class="bar"><div class="fill" style=
 function topicHtml(t){var cls=t.status==='completed'?'completed':t.status==='paused'?'paused':t.status==='started'?'started':'';return '<div class="topic '+cls+'"><div class="topicHead"><b>'+esc(t.order||t.topic_order)+'. '+esc(t.topic||t.title)+'</b><b>'+Number(t.progress_percent||0)+'%</b></div>'+bar(t.progress_percent)+'<div class="small">وضعیت: '+esc(t.status)+' · مرحله: '+esc(t.phase)+'</div><div>هدف: '+esc(t.goal)+'</div>'+(t.score!=null?'<div class="small">امتیاز ارزیابی: '+esc(t.score)+'</div>':'')+(t.lesson?'<details><summary>متن درس</summary><pre>'+esc(t.lesson)+'</pre></details>':'')+'</div>'}
 async function load(){try{var a=await req('/learning/status'),j=a.courses||[],custom=await req('/learning/active'),html='';j.forEach(function(c){html+='<details class="course"><summary>'+esc(c.language)+' — '+Number(c.progress_percent||0)+'% ('+c.completed_topics+'/'+c.total_topics+')</summary><div class="courseBody">'+bar(c.progress_percent)+c.topics.map(topicHtml).join('')+'</div></details>'});(custom.items||[]).forEach(function(x){var c=x.course,s=x.summary;html+='<details class="course"><summary>'+esc(c.name)+' — '+Number(s.progress_percent||0)+'% ('+s.completed_topics+'/'+s.total_topics+')</summary><div class="courseBody">'+bar(s.progress_percent)+s.topics.map(topicHtml).join('')+'</div></details>'});root.innerHTML=html||'<div class="card empty">هنوز مبحثی ثبت نشده است.</div>'}catch(e){root.textContent='خطا: '+e.message}}
 load();setInterval(load,5000)
-</script></html>"""def install(app: Any) -> None:
+</script></html>"""
+
+
+def install(app: Any) -> None:
     _setup()
     if not any(getattr(route, "path", "") == "/settings" for route in app.routes):
         app.router.routes[0:0] = router.routes
