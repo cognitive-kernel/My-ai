@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -133,7 +132,7 @@ def _learn_topic(course_id: int, topic: dict[str, Any]) -> None:
     match = re.search(r"(?<!\d)(100|\d{1,2})(?!\d)", raw)
     score = float(match.group(1)) if match else 0.0
     _set_topic(topic_id, "completed", 100, "completed", score=score)
-    audit({"id": 0, "username": "learning-engine"}, "learning", "execute", "200", f"custom-course:{course_id}:topic:{topic_id}")
+    audit(None, "learning", "execute", "200", f"custom-course:{course_id}:topic:{topic_id}")
 
 
 def _run_course(course_id: int) -> None:
@@ -146,7 +145,7 @@ def _run_course(course_id: int) -> None:
             if not course or not course["active"]:
                 return
             rows = _progress(course_id)
-            topic = next((x for x in rows if x["status"] != "completed"), None)
+            topic = next((x for x in rows if x["status"] not in {"completed", "paused"}), None)
             if not topic:
                 return
             try:
@@ -290,16 +289,17 @@ load();setInterval(load,3000)
 
 def install(app: Any) -> None:
     _setup()
+    if getattr(app, "_myai_settings_installed", False):
+        return
+    app._myai_settings_installed = True
     app.include_router(router)
 
-    original_page = getattr(app, "_myai_original_page", None)
     api_module = __import__("my_ai.api", fromlist=["page"])
-    if original_page is None and hasattr(api_module, "page"):
-        original_page = api_module.page
-        app._myai_original_page = original_page
+    original_page = getattr(api_module, "page", None)
+    if original_page is not None and not getattr(app, "_myai_page_patched", False):
+        app._myai_page_patched = True
         def page_with_learning():
             html = original_page()
-            marker = "</section>\n<div class='card'><h2 id='progressTitle'"
             link = "<a href='/settings' style='float:left;padding:6px 10px;background:#e0e7ff;border-radius:7px;text-decoration:none'>تنظیمات</a>"
             return html.replace("<h1>My-AI ", "<h1>My-AI "+link+" ", 1)
         api_module.page = page_with_learning
@@ -314,7 +314,8 @@ def install(app: Any) -> None:
                 message = await receive()
                 body += message.get("body", b"")
                 if not message.get("more_body", False): break
-            try: payload=json.loads(body.decode("utf-8")); text=str(payload.get("message","")).strip().lower()
+            try:
+                payload=json.loads(body.decode("utf-8")); text=str(payload.get("message","")).strip().lower()
             except Exception:
                 payload={}; text=""
             is_learn = any(x in text for x in ("یاد بگیر","یادگیری","learn"))
@@ -326,12 +327,18 @@ def install(app: Any) -> None:
                     sent=True; return {"type":"http.request","body":body,"more_body":False}
                 return await self.inner(scope, replay, send)
             request=Request(scope, receive=lambda: {"type":"http.request","body":b"","more_body":False})
-            user = __import__("my_ai.auth", fromlist=["require_user"]).require_user(request)
+            user=__import__("my_ai.auth", fromlist=["require_user"]).require_user(request)
+            _setup()
             rows=fetch_all("SELECT id FROM custom_courses WHERE lower(name)=lower(?) AND active=1",("Cisco",))
-            if not rows: return await self.inner(scope, lambda: {"type":"http.request","body":body,"more_body":False}, send)
+            if not rows:
+                sent=False
+                async def replay_missing():
+                    nonlocal sent
+                    if sent: return {"type":"http.request","body":b"","more_body":False}
+                    sent=True; return {"type":"http.request","body":body,"more_body":False}
+                return await self.inner(scope, replay_missing, send)
             cid=int(rows[0]["id"])
             if cid not in _running: _workers.submit(_run_course,cid)
-            result={"type":"learning","answer":"یادگیری Cisco در پس‌زمینه شروع/ادامه شد.","data":{"course_id":cid,"status":"started"}}
-            response=JSONResponse(result)
+            response=JSONResponse({"type":"learning","answer":"یادگیری Cisco در پس‌زمینه شروع/ادامه شد.","data":{"course_id":cid,"status":"started"}})
             return await response(scope, receive, send)
     app.add_middleware(CustomLearningMiddleware)
