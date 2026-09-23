@@ -123,6 +123,9 @@ def test_scheduler_status_returns_json_safe_snapshot():
         "error": None,
         "interval_seconds": 3600,
         "session_id": None,
+        "runtime_status": "idle",
+        "runtime_updated_at": None,
+        "resources": result["resources"],
     }
 
 
