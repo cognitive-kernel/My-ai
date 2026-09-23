@@ -69,6 +69,7 @@ def test_scheduler_worker_uses_its_own_stop_event(monkeypatch):
             return {"status": "completed", "topic": {"topic": "test"}}
 
     monkeypatch.setattr("my_ai.scheduler.LearningEngine", FakeEngine)
+    monkeypatch.setattr("my_ai.scheduler.StudyScheduler._wait_for_resources", staticmethod(lambda stop_event: {}))
     scheduler = StudyScheduler(interval_seconds=60)
     old_stop = threading.Event()
     old_thread = threading.Thread(target=scheduler._loop, args=("Python", old_stop), daemon=True)
@@ -112,7 +113,12 @@ def test_scheduler_status_returns_json_safe_snapshot():
     scheduler.error = None
     scheduler._lock = threading.Lock()
 
-    result = scheduler.status()
+    monkeypatch = __import__("pytest").MonkeyPatch()
+    monkeypatch.setattr("my_ai.scheduler.fetch_all", lambda *_args, **_kwargs: [])
+    try:
+        result = scheduler.status()
+    finally:
+        monkeypatch.undo()
 
     assert result == {
         "running": False,
@@ -123,6 +129,9 @@ def test_scheduler_status_returns_json_safe_snapshot():
         "error": None,
         "interval_seconds": 3600,
         "session_id": None,
+        "runtime_status": "idle",
+        "runtime_updated_at": None,
+        "resources": result["resources"],
     }
 
 

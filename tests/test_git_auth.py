@@ -5,6 +5,7 @@ from my_ai.git_connector import GitHubConnector
 
 def test_environment_token_is_not_used(monkeypatch):
     monkeypatch.setattr(GitHubConnector, "_gh_executable", staticmethod(lambda: None))
+    monkeypatch.setattr(GitHubConnector, "_gcm_token", classmethod(lambda cls: None))
     monkeypatch.setenv("GITHUB_TOKEN", "github_pat_TEST_TOKEN")
     monkeypatch.setattr("my_ai.git_connector.get_github_settings", lambda: {"api_url":"https://api.github.com","repository":"","username":"","token":""})
     assert GitHubConnector.token_source() == "none"
