@@ -111,7 +111,7 @@ class OpenAICompatibleClient:
                         usage=((data.get("response") or {}).get("usage") or {}); record_inference("openai",self.model,time.perf_counter()-started,prompt_tokens=usage.get("input_tokens"),output_tokens=usage.get("output_tokens"))
         except (httpx.HTTPError,json.JSONDecodeError) as exc: record_error("openai",self.model); raise LLMError(f"OpenAI-compatible streaming request failed: {exc}") from exc
     def chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None)->str:
-        input_items=[]
+        input_items: list[HistoryMessage] = []
         for item in history or ():
             role=item.get("role"); content=item.get("content")
             if role in {"user","assistant"} and isinstance(content,str) and content.strip(): input_items.append({"role":role,"content":content})
