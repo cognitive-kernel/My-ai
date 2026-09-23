@@ -74,8 +74,8 @@ class LearningEngine:
             def fetch_and_extract(url=url):
                 title,source=self.web.fetch(url)
                 note=self.llm.chat("Extract only accurate knowledge relevant to these study targets from the supplied source. "
-                                    "Separate the targets and state prerequisites explicitly. Never invent facts.\\n"
-                                    f"LANGUAGE: {language}\\nTARGETS: {json.dumps(queries,ensure_ascii=False)}\\nSOURCE:\\n{source}",
+                                    "Separate the targets and state prerequisites explicitly. Never invent facts.\n"
+                                    f"LANGUAGE: {language}\nTARGETS: {json.dumps(queries,ensure_ascii=False)}\nSOURCE:\n{source}",
                                     system="You are a rigorous programming teacher.")
                 return title,note
             try:
