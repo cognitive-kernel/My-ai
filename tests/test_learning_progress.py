@@ -180,6 +180,7 @@ def test_assess_parses_score_and_returns_none_for_invalid_output():
 
 
 def test_learning_retries_until_llm_recovers(monkeypatch):
+    # Retry backoff starts at 1 second for the bounded retry path.
     attempts = []
     sleeps = []
 
