@@ -284,6 +284,11 @@ def settings_page(request: Request):
     require_admin(request)
     return HTMLResponse(SETTINGS_HTML)
 
+@router.get("/settings/script.js")
+def settings_script(request: Request):
+    require_admin(request)
+    return Response(SETTINGS_JS, media_type="application/javascript", headers={"Cache-Control":"no-store"})
+
 @router.get("/learning", response_class=HTMLResponse)
 def learning_page(request: Request):
     require_user(request)
