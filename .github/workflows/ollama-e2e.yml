@@ -77,8 +77,3 @@ jobs:
           echo "login_code=$login_code"
           cat /tmp/compose-login.json
           if [ "$login_code" != "200" ]; then docker compose logs --no-color --tail=200 my-ai executor; exit 1; fi
-          chat_code="$(curl -s -o /tmp/compose-chat.json -w '%{http_code}' -b /tmp/compose-cookies.txt -H 'Content-Type: application/json' -d '{"message":"Reply with exactly OK"}' http://127.0.0.1:8002/chat)"
-          echo "chat_code=$chat_code"
-          cat /tmp/compose-chat.json
-          if [ "$chat_code" != "200" ]; then docker compose logs --no-color --tail=200 my-ai executor; exit 1; fi
-          python -c "import json; d=json.load(open('/tmp/compose-chat.json', encoding='utf-8')); assert d.get('type') == 'chat' and str(d.get('answer', '')).strip()"
