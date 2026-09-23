@@ -111,7 +111,7 @@ def extend_curricula(curricula):
         _extend(curricula["SQL Server"], SQLSERVER_ADVANCED)
     if "Rust" in curricula:
         _extend_rust(curricula["Rust"])
-    explicit = {"Python", "SQL Server", "Rust"}
+    explicit = {"Python", "SQL Server", "Rust", "Forex"}
     for name, target in curricula.items():
         if name not in explicit:
             _extend_universal(target)
