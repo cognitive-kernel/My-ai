@@ -112,7 +112,7 @@ class GitHubConnector:
     @classmethod
     def oauth_client_id(cls):return (os.getenv("MYAI_GITHUB_CLIENT_ID") or os.getenv("GITHUB_CLIENT_ID") or "").strip()
     @classmethod
-    def oauth_available(cls):return bool(cls.oauth_client_id() or cls._saved_token() or cls._gcm_token() or os.getenv("GITHUB_TOKEN") or cls.gcm_available())
+    def oauth_available(cls):return bool(cls.oauth_client_id() or cls._saved_token() or cls._gcm_token() or cls.gcm_available())
     @classmethod
     def oauth_start(cls):
         if settings.offline_strict:
@@ -188,7 +188,6 @@ class GitHubConnector:
     def token_source(cls):
         if cls.gh_logged_in():return "github_cli_oauth"
         if cls._saved_token():return "saved"
-        if os.getenv("GITHUB_TOKEN"):return "environment"
         if cls._gcm_token():return "git_credential_manager"
         return "none"
     @classmethod
