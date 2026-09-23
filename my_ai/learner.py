@@ -21,7 +21,7 @@ class LearningEngine:
         self.security=SecurityEngine(self.llm); self.dast=LocalDAST()
 
     def _retry_with_limit(self, operation, label, progress_callback=None, topic=None, stop_event=None):
-        """Retry a learning operation indefinitely until it succeeds or learning is explicitly stopped."""
+        """Retry a learning operation up to the configured limit, respecting cancellation."""
         delay=1.0
         max_attempts=max(1,int(settings.learning_max_retries))
         for attempt in range(1,max_attempts+1):
@@ -42,6 +42,10 @@ class LearningEngine:
                     time.sleep(delay)
                 delay=min(delay*2.0,60.0)
         raise RuntimeError(f"{label} failed")
+
+    def _retry_forever(self, operation, label, progress_callback=None, topic=None, stop_event=None):
+        """Backward-compatible wrapper for callers using the previous retry method name."""
+        return self._retry_with_limit(operation, label, progress_callback, topic, stop_event)
 
     def _discover_prerequisites(self,language,topic,progress_callback=None,stop_event=None):
         routing_llm=self.llm if self.llm is not None else create_llm("routing")
