@@ -36,8 +36,9 @@ scheduler=StudyScheduler()
 async def lifespan(_):
     init_db()
     scheduler.start_review_monitor()
-    active=fetch_all("SELECT language FROM learning_sessions WHERE status='started' ORDER BY id DESC LIMIT 1")
-    if active and settings.scheduler_auto_resume: scheduler.start(active[0]["language"])
+    runtime=fetch_all("SELECT language,session_id,status FROM learning_runtime WHERE id=1")
+    if runtime and runtime[0]["status"] in {"running","stopping","retrying","paused"} and runtime[0]["language"]:
+        scheduler.start(runtime[0]["language"], runtime[0]["session_id"])
     yield
     scheduler.stop()
 app=FastAPI(title="My-AI",version="0.2.0",description="Local-first personal learning and coding agent.",lifespan=lifespan)
@@ -628,7 +629,7 @@ def chat(r:ChatRequest, request:Request):
             language=canonical_language(language)
             execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"user",msg))
             scheduler.interval_seconds=settings.scheduler_interval_seconds
-            scheduler.start(language)
+            scheduler.start(language, sid)
             answer=f"یادگیری {language} در پس‌زمینه شروع شد."
             execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"assistant",answer)); execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(sid,))
             return {"type":"learning","answer":answer,"data":{"status":"started","language":language,"interval_seconds":3600,"session_id":sid},"session_id":sid}
@@ -651,7 +652,9 @@ def learn_url(r:URLRequest, request:Request):
 @app.post("/learning/start")
 def learning_start(r:LanguageRequest, request:Request):
     require_user(request)
-    return learner.start(r.language)
+    result=learner.start(r.language)
+    if result.get("status")=="started": scheduler.start(r.language, result.get("session_id"))
+    return result
 @app.post("/learning/step")
 def learning_step(r:LanguageRequest, request:Request):
     require_user(request)

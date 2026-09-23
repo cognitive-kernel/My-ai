@@ -39,7 +39,7 @@ class StudyScheduler:
         self._monitor_thread = threading.Thread(target=self._review_loop, daemon=True, name="myai-weekly-review")
         self._monitor_thread.start()
 
-    def start(self, language="Python"):
+    def start(self, language="Python", session_id=None):
         language = str(language or "Python").strip() or "Python"
         known = canonical_language(language)
         if known in LANGUAGE_CURRICULA:
@@ -50,6 +50,7 @@ class StudyScheduler:
 
         if self._thread and self._thread.is_alive():
             if self.language == language:
+                execute("UPDATE learning_runtime SET session_id=?,status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", (session_id, "running"))
                 return
             old_stop = self._stop
             old_stop.set()
@@ -60,8 +61,13 @@ class StudyScheduler:
         self.error = None
         self.stage = "starting"
         self.current_topic = None
+        if session_id:
+            rows = fetch_all("SELECT topic FROM learning_sessions WHERE id=?", (session_id,))
+            if rows:
+                self.current_topic = rows[0]["topic"]
         worker_stop = threading.Event()
         self._stop = worker_stop
+        execute("INSERT INTO learning_runtime(id,language,session_id,status,started_at,updated_at) VALUES(1,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET language=excluded.language,session_id=excluded.session_id,status=excluded.status,started_at=excluded.started_at,updated_at=CURRENT_TIMESTAMP", (language, session_id, "running"))
         self._thread = threading.Thread(
             target=self._loop,
             args=(language, worker_stop),
@@ -73,6 +79,7 @@ class StudyScheduler:
     def stop_learning(self):
         self._stop.set()
         self.stage = "stopping"
+        execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("stopping",))
 
     def stop(self):
         self.stop_learning()
@@ -96,6 +103,7 @@ class StudyScheduler:
                 "last_result": last_result,
                 "error": self.error,
                 "interval_seconds": self.interval_seconds,
+                "session_id": ((fetch_all("SELECT session_id FROM learning_runtime WHERE id=1") or [{"session_id": None}])[0]["session_id"]),
             }
 
     def update_progress(self, stage, topic=None):
@@ -194,13 +202,16 @@ class StudyScheduler:
                 consecutive_errors=0
                 if self.last_result.get("status") == "completed":
                     self.update_progress("completed", self.last_result.get("topic", {}).get("topic"))
+                    execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("completed",))
                     if self._domain_complete(language):
                         self._schedule_review(language)
                 elif self.last_result.get("status") == "complete":
                     self.update_progress("completed")
+                    execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("completed",))
                     self._schedule_review(language)
                     break
             except InterruptedError:
+                execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("idle",))
                 break
             except Exception as exc:
                 if stop_event.is_set():
@@ -210,12 +221,14 @@ class StudyScheduler:
                 self.last_result = {"status": "error", "error": str(exc), "consecutive_errors": consecutive_errors}
                 if consecutive_errors >= max(1,int(settings.learning_max_retries)):
                     self.update_progress("paused", "retry limit reached")
+                    execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("paused",))
                     break
                 self.update_progress("retrying")
                 stop_event.wait(min(60.0, 2.0 ** min(consecutive_errors, 5)))
                 continue
             if self.last_result and self.last_result.get("message", "").endswith("complete."):
                 self._schedule_review(language)
+                execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("completed",))
                 break
             if stop_event.wait(self.interval_seconds):
                 break

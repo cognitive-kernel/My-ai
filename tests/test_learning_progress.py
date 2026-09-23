@@ -122,6 +122,7 @@ def test_scheduler_status_returns_json_safe_snapshot():
         "last_result": {"status": "completed", "score": 91},
         "error": None,
         "interval_seconds": 3600,
+        "session_id": None,
     }
 
 
