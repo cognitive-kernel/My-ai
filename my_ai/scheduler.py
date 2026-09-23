@@ -12,6 +12,7 @@ from .domain_registry import load_saved_domains
 from .dynamic_learning import REVIEW_DAYS, ensure_domain, resolve_learning_target, due_domains, weekly_review
 from .config import settings
 from .settings_store import get_setting
+from .resource_guard import limits as resource_limits
 
 
 class StudyScheduler:
@@ -95,6 +96,9 @@ class StudyScheduler:
         """Return a JSON-safe snapshot for the API/UI scheduler dashboard."""
         with self._lock:
             last_result = self.last_result
+            runtime = fetch_all("SELECT language,session_id,status,started_at,updated_at FROM learning_runtime WHERE id=1")
+            live = resource_status()
+            cfg = resource_limits()
             return {
                 "running": self.running(),
                 "language": self.language,
@@ -103,7 +107,10 @@ class StudyScheduler:
                 "last_result": last_result,
                 "error": self.error,
                 "interval_seconds": self.interval_seconds,
-                "session_id": ((fetch_all("SELECT session_id FROM learning_runtime WHERE id=1") or [{"session_id": None}])[0]["session_id"]),
+                "session_id": runtime[0]["session_id"] if runtime else None,
+                "runtime_status": runtime[0]["status"] if runtime else "idle",
+                "runtime_updated_at": runtime[0]["updated_at"] if runtime else None,
+                "resources": {**live, **cfg},
             }
 
     def update_progress(self, stage, topic=None):
@@ -195,21 +202,29 @@ class StudyScheduler:
                 if resources.get("cpu_percent") is not None and (resources["cpu_percent"] > limits_cpu or resources["ram_percent"] > limits_ram):
                     self.update_progress("paused", "system load high")
                     self.last_result = {"status":"paused","reason":"system load high","resources":resources}
-                    stop_event.wait(min(self.interval_seconds, 60))
+                    if stop_event.wait(1.0):
+                        break
                     continue
                 self.update_progress("starting")
                 self.last_result = engine.learn_next(language, progress_callback=self.update_progress, stop_event=stop_event)
                 consecutive_errors=0
                 if self.last_result.get("status") == "completed":
                     self.update_progress("completed", self.last_result.get("topic", {}).get("topic"))
-                    execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("completed",))
+                    execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("running",))
                     if self._domain_complete(language):
                         self._schedule_review(language)
-                elif self.last_result.get("status") == "complete":
+                    # Do not sleep for interval_seconds between topics. The
+                    # learning command remains active until the user stops it.
+                    continue
+                if self.last_result.get("status") == "complete":
                     self.update_progress("completed")
                     execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("completed",))
                     self._schedule_review(language)
-                    break
+                    # The curriculum has no remaining unit. Keep the runtime
+                    # alive and observable until the explicit stop command.
+                    if stop_event.wait(60.0):
+                        break
+                    continue
             except InterruptedError:
                 execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("idle",))
                 break
@@ -224,11 +239,16 @@ class StudyScheduler:
                     execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("paused",))
                     break
                 self.update_progress("retrying")
-                stop_event.wait(min(60.0, 2.0 ** min(consecutive_errors, 5)))
+                if stop_event.wait(min(60.0, 2.0 ** min(consecutive_errors, 5))):
+                    break
                 continue
             if self.last_result and self.last_result.get("message", "").endswith("complete."):
                 self._schedule_review(language)
                 execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("completed",))
-                break
-            if stop_event.wait(self.interval_seconds):
+                if stop_event.wait(60.0):
+                    break
+                continue
+            # A scheduler interval is only used as a safety fallback when a
+            # learning step did not complete a topic.
+            if stop_event.wait(min(self.interval_seconds, 60)):
                 break
