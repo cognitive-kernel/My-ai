@@ -238,3 +238,33 @@ def test_detailed_status_exposes_every_curriculum_topic(monkeypatch):
     assert course["total_topics"] == len(learner_module.LANGUAGE_CURRICULA["Python"])
     assert len(course["topics"]) == course["total_topics"]
     assert all(topic["progress_percent"] == 0 for topic in course["topics"])
+
+
+def test_learning_source_failure_is_recorded_and_does_not_abort(monkeypatch):
+    from my_ai.learner import LearningEngine
+
+    engine = LearningEngine.__new__(LearningEngine)
+    engine.llm = type("LLM", (), {
+        "chat": lambda self, prompt, system=None: "extracted note"
+    })()
+    engine.web = type("Web", (), {
+        "fetch": lambda self, url: (_ for _ in ()).throw(RuntimeError("connection failed"))
+    })()
+
+    monkeypatch.setattr("my_ai.learner.source_urls", lambda _language: [
+        "https://docs.example.test/tutorial/",
+        "https://docs.example.test/library/",
+    ])
+    monkeypatch.setattr("my_ai.learner.seed_for", lambda *_args: "seed")
+    monkeypatch.setattr("my_ai.learner.remember", lambda *args, **kwargs: None)
+    monkeypatch.setattr("my_ai.learner.settings", type("Settings", (), {"learning_max_retries": 1})())
+
+    result = engine._learn_sources_for_topic(
+        "Python",
+        {"topic": "Import system", "goal": "imports"},
+        [],
+    )
+
+    assert len(result) == 3
+    assert all(item["title"] == "Source unavailable" for item in result[1:])
+    assert all("connection failed" in item["error"] for item in result[1:])
