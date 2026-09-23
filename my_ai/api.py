@@ -36,9 +36,14 @@ scheduler=StudyScheduler()
 async def lifespan(_):
     init_db()
     scheduler.start_review_monitor()
-    runtime=fetch_all("SELECT language,session_id,status FROM learning_runtime WHERE id=1")
-    if runtime and runtime[0]["status"] in {"running","stopping","retrying","paused"} and runtime[0]["language"]:
-        scheduler.start(runtime[0]["language"], runtime[0]["session_id"])
+    workers=fetch_all("SELECT language,session_id,status FROM learning_workers WHERE status IN ('running','retrying','paused','stopping')")
+    if workers:
+        for worker in workers:
+            scheduler.start(worker["language"], worker["session_id"])
+    else:
+        runtime=fetch_all("SELECT language,session_id,status FROM learning_runtime WHERE id=1")
+        if runtime and runtime[0]["status"] in {"running","stopping","retrying","paused"} and runtime[0]["language"]:
+            scheduler.start(runtime[0]["language"], runtime[0]["session_id"])
     yield
     scheduler.stop()
 app=FastAPI(title="My-AI",version="0.2.0",description="Local-first personal learning and coding agent.",lifespan=lifespan)
@@ -629,10 +634,26 @@ def chat(r:ChatRequest, request:Request):
             language=canonical_language(language)
             execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"user",msg))
             scheduler.interval_seconds=settings.scheduler_interval_seconds
-            scheduler.start(language, sid)
-            answer=f"یادگیری {language} در پس‌زمینه شروع شد."
+            requested_languages=[]
+            for key,name in sorted(aliases.items(),key=lambda x:len(x[0]),reverse=True):
+                matched = bool(
+                    re.search(r"(?<![a-z0-9])"+re.escape(key)+r"(?![a-z0-9])",low)
+                    if key.isascii() else re.search(r"(?<!\w)"+re.escape(key)+r"(?!\w)",low,re.UNICODE)
+                )
+                if matched and name not in requested_languages:
+                    requested_languages.append(name)
+            if not requested_languages:
+                requested_languages=[requested or "Python"]
+            languages=[]
+            for target in requested_languages:
+                target_language=canonical_language(resolve_learning_target(msg,target))
+                if target_language not in languages:
+                    languages.append(target_language)
+                    scheduler.start(target_language, sid)
+            label="، ".join(languages)
+            answer=f"یادگیری {label} در پس‌زمینه شروع شد." if len(languages)==1 else f"یادگیری همزمان {label} در پس‌زمینه شروع شد."
             execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"assistant",answer)); execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(sid,))
-            return {"type":"learning","answer":answer,"data":{"status":"started","language":language,"interval_seconds":3600,"session_id":sid},"session_id":sid}
+            return {"type":"learning","answer":answer,"data":{"status":"started","languages":languages,"language":languages[0],"interval_seconds":3600,"session_id":sid},"session_id":sid}
         if code_intent:
             language=requested or "Python"
             return {"type":"code","answer":"Generated program:","data":learner.generate_program(msg,language)}
@@ -979,7 +1000,7 @@ def learning_learn(r:LearnRequest, request:Request):
 def scheduler_stop(request:Request):
     require_user(request)
     scheduler.stop_learning()
-    return {"status":"stopped"}
+    return {"status":"stopped","languages":[x["language"] for x in scheduler.status().get("workers",[]) if x.get("status")=="stopping"]}
 
 
 from .settings_feature import install as _install_settings_features
