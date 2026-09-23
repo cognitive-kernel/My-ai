@@ -18,90 +18,69 @@ from .resource_guard import limits as resource_limits
 class StudyScheduler:
     def __init__(self, interval_seconds=None):
         self.interval_seconds = int(interval_seconds or settings.scheduler_interval_seconds)
-        self._workers: dict[str, tuple[threading.Thread, threading.Event]] = {}
+        self._stop = threading.Event()
         self._review_stop = threading.Event()
+        self._thread = None
         self._monitor_thread = None
         self.language = "Python"
         self.last_result = None
         self.current_topic = None
         self.stage = "idle"
         self.error = None
-        self._lock = threading.RLock()
+        self._lock = threading.Lock()
         try:
             load_saved_domains()
         except Exception as exc:
             self.error = str(exc)
+        self._monitor_thread = None
 
     def start_review_monitor(self):
-        if self._monitor_thread and self._monitor_thread.is_alive():
-            return
+        if self._monitor_thread and self._monitor_thread.is_alive(): return
         self._review_stop.clear()
         self._monitor_thread = threading.Thread(target=self._review_loop, daemon=True, name="myai-weekly-review")
         self._monitor_thread.start()
 
-    def _normalize_language(self, language):
+    def start(self, language="Python", session_id=None):
         language = str(language or "Python").strip() or "Python"
         known = canonical_language(language)
         if known in LANGUAGE_CURRICULA:
-            return known
-        return resolve_learning_target(self._latest_learning_message(), language)
+            language = known
+        else:
+            language = resolve_learning_target(self._latest_learning_message(), language)
+            language = ensure_domain(language, LearningEngine().llm) or canonical_language(language)
 
-    def start(self, language="Python", session_id=None):
-        language = self._normalize_language(language)
-        key = language.casefold()
-        with self._lock:
-            existing = self._workers.get(key)
-            if existing and existing[0].is_alive():
-                if session_id:
-                    execute("UPDATE learning_workers SET session_id=?,status='running',updated_at=CURRENT_TIMESTAMP WHERE language=?", (session_id, language))
+        if self._thread and self._thread.is_alive():
+            if self.language == language:
+                execute("UPDATE learning_runtime SET session_id=?,status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", (session_id, "running"))
                 return
-            worker_stop = threading.Event()
-            thread = threading.Thread(
-                target=self._loop,
-                args=(language, worker_stop),
-                daemon=True,
-                name=f"myai-learning-{language}",
-            )
-            self._workers[key] = (thread, worker_stop)
-            self.language = language
-            self.stage = "starting"
-            self.current_topic = None
-            self.last_result = None
-            self.error = None
-            current_topic = None
-            if session_id:
-                rows = fetch_all("SELECT topic FROM learning_sessions WHERE id=?", (session_id,))
-                if rows:
-                    current_topic = rows[0]["topic"]
-            execute(
-                """INSERT INTO learning_workers(language,session_id,status,stage,current_topic,started_at,updated_at)
-                   VALUES(?,?,?,'starting',?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
-                   ON CONFLICT(language) DO UPDATE SET
-                   session_id=excluded.session_id,status='running',stage='starting',
-                   current_topic=excluded.current_topic,error=NULL,last_result=NULL,
-                   started_at=excluded.started_at,updated_at=CURRENT_TIMESTAMP""",
-                (language, session_id, "running", current_topic),
-            )
-            execute(
-                """INSERT INTO learning_runtime(id,language,session_id,status,started_at,updated_at)
-                   VALUES(1,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
-                   ON CONFLICT(id) DO UPDATE SET language=excluded.language,session_id=excluded.session_id,
-                   status=excluded.status,started_at=excluded.started_at,updated_at=CURRENT_TIMESTAMP""",
-                (language, session_id, "running"),
-            )
-            thread.start()
+            old_stop = self._stop
+            old_stop.set()
+            self._thread.join(timeout=5.0)
 
-    def stop_learning(self, language=None):
-        target = str(language).strip().casefold() if language else None
-        with self._lock:
-            for key, (thread, stop_event) in list(self._workers.items()):
-                if target is not None and key != target:
-                    continue
-                stop_event.set()
-                lang = key
-                execute("UPDATE learning_workers SET status='stopping',stage='stopping',updated_at=CURRENT_TIMESTAMP WHERE lower(language)=?", (lang,))
-            execute("UPDATE learning_runtime SET status='stopping',updated_at=CURRENT_TIMESTAMP WHERE id=1")
+        self.language = language
+        self.last_result = None
+        self.error = None
+        self.stage = "starting"
+        self.current_topic = None
+        if session_id:
+            rows = fetch_all("SELECT topic FROM learning_sessions WHERE id=?", (session_id,))
+            if rows:
+                self.current_topic = rows[0]["topic"]
+        worker_stop = threading.Event()
+        self._stop = worker_stop
+        execute("INSERT INTO learning_runtime(id,language,session_id,status,started_at,updated_at) VALUES(1,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET language=excluded.language,session_id=excluded.session_id,status=excluded.status,started_at=excluded.started_at,updated_at=CURRENT_TIMESTAMP", (language, session_id, "running"))
+        self._thread = threading.Thread(
+            target=self._loop,
+            args=(language, worker_stop),
+            daemon=True,
+            name=f"myai-learning-{language}",
+        )
+        self._thread.start()
+
+    def stop_learning(self):
+        self._stop.set()
         self.stage = "stopping"
+        execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("stopping",))
 
     def stop(self):
         self.stop_learning()
@@ -111,43 +90,26 @@ class StudyScheduler:
         self._review_stop.set()
 
     def running(self):
-        return any(thread.is_alive() for thread, _ in self._workers.values())
+        return bool(self._thread and self._thread.is_alive())
 
     def status(self):
+        """Return a JSON-safe snapshot for the API/UI scheduler dashboard."""
         with self._lock:
-            rows = fetch_all(
-                """SELECT id,language,session_id,status,stage,current_topic,error,last_result,started_at,updated_at
-                   FROM learning_workers ORDER BY id"""
-            )
-            workers = []
-            for row in rows:
-                item = dict(row)
-                try:
-                    item["last_result"] = json.loads(item["last_result"]) if item["last_result"] else None
-                except (TypeError, ValueError):
-                    item["last_result"] = None
-                item["running"] = bool(
-                    self._workers.get(str(item["language"]).casefold())
-                    and self._workers[str(item["language"]).casefold()][0].is_alive()
-                )
-                workers.append(item)
-            active = [x for x in workers if x["running"] or x["status"] in {"running","retrying","stopping","paused"}]
-            primary = active[0] if active else (workers[-1] if workers else None)
+            last_result = self.last_result
+            runtime = fetch_all("SELECT language,session_id,status,started_at,updated_at FROM learning_runtime WHERE id=1")
             live = resource_status()
             cfg = resource_limits()
             return {
-                "running": bool(active),
-                "language": primary["language"] if primary else self.language,
-                "stage": primary["stage"] if primary else self.stage,
-                "current_topic": primary["current_topic"] if primary else self.current_topic,
-                "last_result": primary["last_result"] if primary else self.last_result,
-                "error": primary["error"] if primary else self.error,
+                "running": self.running(),
+                "language": self.language,
+                "stage": self.stage,
+                "current_topic": self.current_topic,
+                "last_result": last_result,
+                "error": self.error,
                 "interval_seconds": self.interval_seconds,
-                "session_id": primary["session_id"] if primary else None,
-                "runtime_status": "running" if active else (primary["status"] if primary else "idle"),
-                "runtime_updated_at": primary["updated_at"] if primary else None,
-                "workers": workers,
-                "active_workers": active,
+                "session_id": runtime[0]["session_id"] if runtime else None,
+                "runtime_status": runtime[0]["status"] if runtime else "idle",
+                "runtime_updated_at": runtime[0]["updated_at"] if runtime else None,
                 "resources": {**live, **cfg},
             }
 
@@ -168,37 +130,11 @@ class StudyScheduler:
             stop_event.wait(1.0)
         raise InterruptedError("learning stopped")
 
-    def _update_worker(self, language, stage, topic=None, result=None, error=None, status=None):
+    def update_progress(self, stage, topic=None):
         with self._lock:
-            updates = ["stage=?", "updated_at=CURRENT_TIMESTAMP"]
-            params = [stage]
-            if topic is not None:
-                updates.append("current_topic=?")
-                params.append(topic)
-            if result is not None:
-                updates.append("last_result=?")
-                params.append(json.dumps(result, ensure_ascii=False, default=str))
-            if error is not None:
-                updates.append("error=?")
-                params.append(error)
-            if status is not None:
-                updates.append("status=?")
-                params.append(status)
-            params.append(language)
-            execute(f"UPDATE learning_workers SET {', '.join(updates)} WHERE language=?", tuple(params))
-            self.language = language
             self.stage = stage
             if topic:
                 self.current_topic = topic
-            if result is not None:
-                self.last_result = result
-            if error is not None:
-                self.error = error
-
-    def update_progress(self, stage, topic=None):
-        self.stage = stage
-        if topic:
-            self.current_topic = topic
 
     @staticmethod
     def _latest_learning_message():
@@ -266,57 +202,58 @@ class StudyScheduler:
                 self.error = str(exc)
             self._review_stop.wait(min(self.interval_seconds, 3600))
 
-    def _loop(self, language, stop_event):
+    def _loop(self, language, stop_event=None):
+        # Bind the worker to its own immutable stop event. Replacing self._stop
+        # for a new language must never revive or redirect an older worker.
+        stop_event = stop_event or self._stop
         engine = LearningEngine()
-        consecutive_errors = 0
-        try:
-            while not stop_event.is_set():
-                try:
-                    if language not in LANGUAGE_CURRICULA:
-                        language = ensure_domain(language, getattr(engine, "llm", None)) or language
-                    resources = self._wait_for_resources(stop_event)
-                    self._update_worker(language, "starting", status="running")
-                    result = engine.learn_next(
-                        language,
-                        progress_callback=lambda stage, topic=None: self._update_worker(language, stage, topic),
-                        stop_event=stop_event,
-                    )
-                    consecutive_errors = 0
-                    self._update_worker(language, self.stage, result=result, status="running")
-                    if result.get("status") == "completed":
-                        topic = result.get("topic", {}).get("topic")
-                        self._update_worker(language, "completed", topic=topic, result=result, status="running")
-                        if self._domain_complete(language):
-                            self._schedule_review(language)
-                        continue
-                    if result.get("status") == "complete":
-                        self._update_worker(language, "completed", result=result, status="completed")
+        consecutive_errors=0
+        while not stop_event.is_set():
+            try:
+                if language not in LANGUAGE_CURRICULA:
+                    language = ensure_domain(language, getattr(engine, "llm", None)) or language
+                    self.language = language
+                resources = self._wait_for_resources(stop_event)
+                self.update_progress("starting")
+                self.last_result = engine.learn_next(language, progress_callback=self.update_progress, stop_event=stop_event)
+                consecutive_errors=0
+                if self.last_result.get("status") == "completed":
+                    self.update_progress("completed", self.last_result.get("topic", {}).get("topic"))
+                    execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("running",))
+                    if self._domain_complete(language):
                         self._schedule_review(language)
-                        stop_event.wait(60.0)
-                        continue
-                    if stop_event.wait(min(self.interval_seconds, 60)):
+                    # Do not sleep for interval_seconds between topics. The
+                    # learning command remains active until the user stops it.
+                    continue
+                if self.last_result.get("status") == "complete":
+                    self.update_progress("completed")
+                    execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("completed",))
+                    self._schedule_review(language)
+                    # The curriculum has no remaining unit. Keep the runtime
+                    # alive and observable until the explicit stop command.
+                    if stop_event.wait(60.0):
                         break
-                except InterruptedError:
-                    self._update_worker(language, "idle", status="idle")
+                    continue
+            except InterruptedError:
+                execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("idle",))
+                break
+            except Exception as exc:
+                if stop_event.is_set():
                     break
-                except Exception as exc:
-                    if stop_event.is_set():
-                        break
-                    consecutive_errors += 1
-                    result = {
-                        "status": "error",
-                        "error": str(exc),
-                        "consecutive_errors": consecutive_errors,
-                        "resources": resources if "resources" in locals() else resource_status(),
-                    }
-                    self._update_worker(language, "retrying", result=result, error=str(exc), status="retrying")
-                    if stop_event.wait(min(60.0, 2.0 ** min(consecutive_errors, 5))):
-                        break
-        finally:
-            with self._lock:
-                self._workers.pop(language.casefold(), None)
-                execute(
-                    "UPDATE learning_workers SET status='idle',stage='idle',updated_at=CURRENT_TIMESTAMP WHERE language=? AND status='stopping'",
-                    (language,),
-                )
-
+                self.error = str(exc)
+                consecutive_errors += 1
+                self.last_result = {"status": "error", "error": str(exc), "consecutive_errors": consecutive_errors, "resources": resources if "resources" in locals() else resource_status()}
+                self.update_progress("retrying", self.current_topic or "waiting for retry")
+                if stop_event.wait(min(60.0, 2.0 ** min(consecutive_errors, 5))):
+                    break
+                continue
+            if self.last_result and self.last_result.get("message", "").endswith("complete."):
+                self._schedule_review(language)
+                execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("completed",))
+                if stop_event.wait(60.0):
+                    break
+                continue
+            # A scheduler interval is only used as a safety fallback when a
+            # learning step did not complete a topic.
+            if stop_event.wait(min(self.interval_seconds, 60)):
+                break
