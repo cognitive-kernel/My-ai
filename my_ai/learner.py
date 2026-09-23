@@ -253,6 +253,7 @@ class LearningEngine:
                 "language":lang,
                 "total_topics":len(topic_items),
                 "completed_topics":completed,
+                "remaining_topics":max(0, len(topic_items) - completed),
                 "progress_percent":overall,
                 "current":active,
                 "topics":topic_items,
@@ -269,6 +270,6 @@ class LearningEngine:
             active_progress=max([float(r["progress_percent"] or 0) if "progress_percent" in r.keys() and r["progress_percent"] is not None else 0.0 for r in lang_rows if r["status"]!="completed"] or [0.0])
             raw=((completed + active_progress/100.0) / total * 100.0) if total else 0.0
             scores=[float(r["score"]) for r in lang_rows if r["status"]=="completed" and r["score"] is not None]
-            out.append({"language":lang,"completed_topics":completed,"total_topics":total,"progress_percent":self._half_percent(raw),"progress_step":"0.5%","average_score":round(sum(scores)/len(scores),1) if scores else 0})
+            out.append({"language":lang,"completed_topics":completed,"remaining_topics":max(0, total - completed),"total_topics":total,"progress_percent":self._half_percent(raw),"progress_step":"0.5%","average_score":round(sum(scores)/len(scores),1) if scores else 0})
         if language: out=[x for x in out if x["language"].lower()==canonical_language(language).lower()]
         return {"languages":out,"sessions":rows,"available_languages":list(LANGUAGE_CURRICULA.keys())}
