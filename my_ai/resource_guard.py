@@ -5,18 +5,25 @@ from typing import Any
 
 from .settings_store import get_int, get_setting
 
-
 DEFAULT_CPU_PERCENT = 70.0
 DEFAULT_CPU_THREADS = 8
 DEFAULT_RAM_PERCENT = 80.0
 DEFAULT_GPU_LAYERS = 0
 
 
+def _number(key: str, default: float, low: float, high: float) -> float:
+    try:
+        value = float(get_setting(key, str(default)))
+    except (TypeError, ValueError):
+        value = default
+    return max(low, min(high, value))
+
+
 def limits() -> dict[str, float | int]:
     return {
-        "cpu_percent": max(1.0, min(100.0, float(get_setting("resources.cpu_percent", str(DEFAULT_CPU_PERCENT)))),
+        "cpu_percent": _number("resources.cpu_percent", DEFAULT_CPU_PERCENT, 1.0, 100.0),
         "cpu_threads": max(1, min(128, get_int("resources.cpu_threads", DEFAULT_CPU_THREADS))),
-        "ram_percent": max(1.0, min(100.0, float(get_setting("resources.ram_percent", str(DEFAULT_RAM_PERCENT)))),
+        "ram_percent": _number("resources.ram_percent", DEFAULT_RAM_PERCENT, 1.0, 100.0),
         "gpu_layers": max(0, min(128, get_int("resources.gpu_layers", DEFAULT_GPU_LAYERS))),
     }
 
@@ -52,13 +59,7 @@ def snapshot() -> dict[str, Any]:
 
 
 def wait_until_available(stop_event=None, *, max_wait: float | None = None) -> dict[str, Any]:
-    """Continuously observe host load before an inference starts.
-
-    CPU percentage and RAM percentage are host-load gates; Ollama receives the
-    configured thread/GPU-layer limits separately. This avoids claiming that a
-    process can reserve an exact percentage of a host's CPU or RAM when the
-    backend does not expose such a quota.
-    """
+    """Continuously observe host load before an inference starts."""
     started = time.monotonic()
     while True:
         state = snapshot()
