@@ -295,7 +295,7 @@ load();setInterval(load,3000)
 def install(app: Any) -> None:
     _setup()
     if not any(getattr(route, "path", "") == "/settings" for route in app.routes):
-        app.router.routes.extend(router.routes)
+        app.router.routes[0:0] = router.routes
     app._myai_settings_installed = True
 
     api_module: Any = __import__("my_ai.api", fromlist=["page"])
