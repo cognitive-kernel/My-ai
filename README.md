@@ -457,7 +457,15 @@ http://127.0.0.1:8000
 | EXEC_CPUS | 1.0 | سقف CPU کانتینر |
 | EXEC_PIDS | 64 | سقف process کانتینر |
 | EXEC_OUTPUT_CHARS | 12000 | سقف خروجی |
-| SCHEDULER_INTERVAL_SECONDS | 3600 | فاصله اجرای scheduler |\n| SCHEDULER_MAX_CPU_PERCENT | 70 | سقف CPU برای learning scheduler |\n| SCHEDULER_MAX_RAM_PERCENT | 80 | سقف RAM برای learning scheduler |\n| SCHEDULER_AUTO_RESUME | false | عدم ادامه خودکار learning بعد از restart |\n| LEARNING_MAX_RETRIES | 5 | حداکثر retry هر عملیات یادگیری |\n| MYAI_BACKUP_ROOT | data/backups | ریشه مجاز backup/import/restore |\n| MYAI_SQLITE_ROOT | data/sqlite | ریشه مجاز SQLite خارجی |\n| WHISPER_CPP_BIN | خالی | مسیر صریح whisper-cli؛ fallback به `main` حذف شده است |\n| HOST | 127.0.0.1 | آدرس bind API |
+| SCHEDULER_INTERVAL_SECONDS | 3600 | فاصله اجرای scheduler |
+| SCHEDULER_MAX_CPU_PERCENT | 70 | سقف CPU برای learning scheduler |
+| SCHEDULER_MAX_RAM_PERCENT | 80 | سقف RAM برای learning scheduler |
+| SCHEDULER_AUTO_RESUME | false | عدم ادامه خودکار learning بعد از restart |
+| LEARNING_MAX_RETRIES | 5 | حداکثر retry هر عملیات یادگیری |
+| MYAI_BACKUP_ROOT | data/backups | ریشه مجاز backup/import/restore |
+| MYAI_SQLITE_ROOT | data/sqlite | ریشه مجاز SQLite خارجی |
+| WHISPER_CPP_BIN | خالی | مسیر صریح whisper-cli؛ fallback به `main` حذف شده است |
+| HOST | 127.0.0.1 | آدرس bind API |
 | PORT | 8000 | پورت API |
 | GITHUB_TOKEN | — | token اتصال GitHub |
 | GITHUB_API_URL | — | API پایه GitHub Enterprise |
@@ -799,3 +807,73 @@ CI runs on push and pull requests and covers linting, type checking, security ch
 ## Bilingual UI / رابط دو زبانه
 
 The web application supports Persian RTL and English LTR interfaces. The README documents the same capabilities in both Persian and English.
+
+# English Feature Reference
+
+## Chat, Agent, and Persistent Memory
+
+My-AI runs a local Ollama model and routes requests to chat, learning, project generation, security, Help, and Git/GitHub subsystems. SQLite provides persistent storage for conversations, knowledge, learning sessions, experiments, project tasks, generated projects, security scans, and Help updates. Knowledge retrieval uses FTS5.
+
+## Learning Engine and Scheduler
+
+The learning engine selects curriculum topics, retrieves reference material, extracts knowledge with the local model, stores sources and notes, creates lessons and exercises, evaluates results, and records progress. Supported paths include Rust, Python, C, PHP, JavaScript, SQL Server/T-SQL, MySQL, SQLite, Android/Kotlin, iOS/Swift, and Pentest/Security Testing.
+
+The scheduler continues learning in the background, exposes runtime status, supports explicit stop, and enforces CPU/RAM resource limits before starting each learning unit. Temporary failures use backoff instead of permanently terminating long-running learning because a bounded retry count was reached.
+
+## Resource Control and CPU-Only Operation
+
+GPU hardware is not required. The default configuration is CPU 70%, 8 CPU threads, RAM 80%, and 0 GPU layers. GPU layers are optional Ollama acceleration. CPU, RAM, CPU-thread, and GPU-layer settings are persistent and can be changed from Settings.
+
+## Code Generation, Projects, and Toolchain
+
+My-AI can turn a goal into tasks and acceptance criteria, retrieve relevant memory, generate or modify code, validate Python in the controlled executor, and store generated project state. Toolchain support covers Python, C, PHP, JavaScript, Rust, Kotlin, Swift, Android, and iOS. Project tools are restricted to the configured project workspace rather than an unrestricted shell.
+
+## Python Executor
+
+The default Python executor uses an isolated container with no network access, a read-only host filesystem view, dropped capabilities, no-new-privileges, CPU/RAM/PID limits, timeout and output limits, and automatic container removal. Subprocess mode is available only as a less-isolated alternative.
+
+## SQL Tools
+
+SQL Server provides read-only schema and query tools through the supported Microsoft driver. SQLite also provides read-only schema and query operations. Database connection roots and credentials are controlled by configuration.
+
+## Security Scanner and DAST
+
+Static analysis checks secrets, eval/exec, shell execution, weak hashes, SQL injection indicators, debug mode, unsafe CORS, DOM sinks, path traversal, plaintext passwords, and dependency manifests.
+
+DAST can test authorized local projects through real HTTP requests and inspect security headers, 500 responses, debug or stack-trace leakage, reflection, TRACE, cookie flags, CSRF indicators, limited same-origin routes, and OpenAPI endpoints. External targets require an explicitly supplied URL and authorization; external scanning is non-destructive.
+
+## Pentest Learning
+
+The Pentest curriculum is independent from PHP. It covers security fundamentals, Linux and networking, web/API security, reconnaissance, vulnerability assessment, code review, security tooling, reporting, and authorized project testing.
+
+## Git and GitHub
+
+The GitHub integration can read repositories, trees, files, issues, pull requests, and branches. Controlled write operations can create branches and create/update files, and require allow_write=true plus suitable token permissions. GitHub Enterprise is supported through a configurable API base URL.
+
+## Help and Documentation Updates
+
+The integrated Help system provides practical guidance for GitHub, Docker, Learning, Security, and other project capabilities. It can compare the current project instructions with current reference documentation and create a proposed update. Documentation changes require explicit user approval before they are applied.
+
+## Web Learning, Practice, and Voice
+
+Web Learning accepts a specific URL and topic, extracts reference content, and stores useful knowledge for later learning. Practice requests are evaluated and can contribute to learning progress. Browser Voice uses SpeechRecognition or webkitSpeechRecognition and speechSynthesis for Persian fa-IR and English en-US, subject to browser and microphone permissions.
+
+## Self-Update and Self-Repair
+
+Self-update tests repository changes in an isolated worktree, creates a snapshot before activation, and supports watchdog rollback. Self-repair diagnoses the local project, generates a lesson-aware patch, validates it with compileall and pytest in an isolated worktree, requires explicit approval before applying it, and rolls back if post-application tests fail. Repair lessons are persisted for later attempts.
+
+## Backup, Docker, API, and Architecture
+
+Backup/import/restore operations are restricted to configured safe roots. Docker can run the complete application with docker compose. FastAPI exposes interactive OpenAPI documentation at /docs and /redoc and provides the Chat, Learning, Memory, Scheduler, Projects, Security, Help, Git, and Tool endpoints documented above.
+
+## Installation and Configuration
+
+Requirements are Python 3.11+, Ollama, internet access for model/documentation downloads, and at least 16 GB RAM (32 GB recommended). No GPU is required. The default model configuration is designed for a single local model and CPU operation.
+
+## Testing and CI
+
+Local validation uses pytest and compileall. CI runs automated linting, type checking, security checks, dependency auditing, tests, and Docker builds on pushes and pull requests. Passing CI confirms the automated checks for that commit; it does not replace manual end-to-end validation with Ollama and Docker.
+
+## English Documentation Policy
+
+The Persian and English sections describe the same implemented capabilities. English is not intended to be only a short summary: module behavior, configuration, APIs, security boundaries, learning behavior, resource control, Git/GitHub, Voice, Help, self-update, and self-repair are documented in English as well.
