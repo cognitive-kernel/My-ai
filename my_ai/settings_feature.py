@@ -294,10 +294,10 @@ load();setInterval(load,3000)
 
 def install(app: Any) -> None:
     _setup()
-    if getattr(app, "_myai_settings_installed", False):
-        return
+    has_routes = any(getattr(route, "path", "") == "/settings" for route in app.routes)
+    if not has_routes:
+        app.include_router(router)
     app._myai_settings_installed = True
-    app.include_router(router)
 
     api_module: Any = __import__("my_ai.api", fromlist=["page"])
     original_page = getattr(api_module, "page", None)
@@ -309,43 +309,45 @@ def install(app: Any) -> None:
             return html.replace("<h1>My-AI ", "<h1>My-AI "+link+" ", 1)
         api_module.page = page_with_learning
 
-    class CustomLearningMiddleware:
-        def __init__(self, inner: Any): self.inner = inner
-        async def __call__(self, scope: dict[str, Any], receive: Any, send: Any):
-            if scope.get("type") != "http" or scope.get("path") != "/chat" or scope.get("method") != "POST":
-                return await self.inner(scope, receive, send)
-            body = b""
-            while True:
-                message = await receive()
-                body += message.get("body", b"")
-                if not message.get("more_body", False): break
-            try:
-                payload=json.loads(body.decode("utf-8")); text=str(payload.get("message","")).strip().lower()
-            except Exception:
-                text=""
-            is_learn = any(x in text for x in ("یاد بگیر","یادگیری","learn"))
-            if "سیسکو" not in text or not is_learn:
-                sent=False
-                async def replay() -> Message:
-                    nonlocal sent
-                    if sent: return {"type":"http.request","body":b"","more_body":False}
-                    sent=True; return {"type":"http.request","body":body,"more_body":False}
-                return await self.inner(scope, replay, send)
-            async def empty_receive() -> Message:
-                return {"type":"http.request","body":b"","more_body":False}
-            request=Request(scope, receive=empty_receive)
-            __import__("my_ai.auth", fromlist=["require_user"]).require_user(request)
-            _setup()
-            rows=fetch_all("SELECT id FROM custom_courses WHERE lower(name)=lower(?) AND active=1",("Cisco",))
-            if not rows:
-                sent=False
-                async def replay_missing() -> Message:
-                    nonlocal sent
-                    if sent: return {"type":"http.request","body":b"","more_body":False}
-                    sent=True; return {"type":"http.request","body":body,"more_body":False}
-                return await self.inner(scope, replay_missing, send)
-            cid=int(rows[0]["id"])
-            if cid not in _running: _workers.submit(_run_course,cid)
-            response=JSONResponse({"type":"learning","answer":"یادگیری Cisco در پس‌زمینه شروع/ادامه شد.","data":{"course_id":cid,"status":"started"}})
-            return await response(scope, receive, send)
-    app.add_middleware(CustomLearningMiddleware)
+    if not getattr(app, "_myai_learning_middleware_installed", False):
+        app._myai_learning_middleware_installed = True
+        class CustomLearningMiddleware:
+            def __init__(self, inner: Any): self.inner = inner
+            async def __call__(self, scope: dict[str, Any], receive: Any, send: Any):
+                if scope.get("type") != "http" or scope.get("path") != "/chat" or scope.get("method") != "POST":
+                    return await self.inner(scope, receive, send)
+                body = b""
+                while True:
+                    message = await receive()
+                    body += message.get("body", b"")
+                    if not message.get("more_body", False): break
+                try:
+                    payload=json.loads(body.decode("utf-8")); text=str(payload.get("message","")).strip().lower()
+                except Exception:
+                    text=""
+                is_learn = any(x in text for x in ("یاد بگیر","یادگیری","learn"))
+                if "سیسکو" not in text or not is_learn:
+                    sent=False
+                    async def replay() -> Message:
+                        nonlocal sent
+                        if sent: return {"type":"http.request","body":b"","more_body":False}
+                        sent=True; return {"type":"http.request","body":body,"more_body":False}
+                    return await self.inner(scope, replay, send)
+                async def empty_receive() -> Message:
+                    return {"type":"http.request","body":b"","more_body":False}
+                request=Request(scope, receive=empty_receive)
+                __import__("my_ai.auth", fromlist=["require_user"]).require_user(request)
+                _setup()
+                rows=fetch_all("SELECT id FROM custom_courses WHERE lower(name)=lower(?) AND active=1",("Cisco",))
+                if not rows:
+                    sent=False
+                    async def replay_missing() -> Message:
+                        nonlocal sent
+                        if sent: return {"type":"http.request","body":b"","more_body":False}
+                        sent=True; return {"type":"http.request","body":body,"more_body":False}
+                    return await self.inner(scope, replay_missing, send)
+                cid=int(rows[0]["id"])
+                if cid not in _running: _workers.submit(_run_course,cid)
+                response=JSONResponse({"type":"learning","answer":"یادگیری Cisco در پس‌زمینه شروع/ادامه شد.","data":{"course_id":cid,"status":"started"}})
+                return await response(scope, receive, send)
+        app.add_middleware(CustomLearningMiddleware)
