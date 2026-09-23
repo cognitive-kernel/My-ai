@@ -701,7 +701,9 @@ def tools_sqlite_query(r:SQLiteQueryRequest,request:Request):
 @app.get("/learning/status")
 def learning_status(request:Request, language:str|None=None):
     require_user(request)
-    return learner.status(language)
+    summary=learner.status(language)
+    summary.update(learner.detailed_status(language))
+    return summary
 @app.post("/learning/practice")
 def practice(r:ChatRequest, request:Request):
     require_user(request)
