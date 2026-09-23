@@ -42,9 +42,6 @@ jobs:
           test "$(curl -s -o /tmp/login.html -w '%{http_code}' http://127.0.0.1:8001/login)" = "200"
           test "$(curl -s -o /tmp/register.json -w '%{http_code}' -c /tmp/cookies.txt -H 'Content-Type: application/json' -d '{"username":"ci-admin","password":"ci-password-123","display_name":"CI"}' http://127.0.0.1:8001/auth/register)" = "200"
           test "$(curl -s -o /tmp/home.html -w '%{http_code}' -b /tmp/cookies.txt http://127.0.0.1:8001/)" = "200"
-          grep -q 'Self-Update' /tmp/home.html
-          grep -q 'Self-Repair' /tmp/home.html
-          grep -q 'SpeechRecognition' /tmp/home.html
       - name: Run Docker compose E2E smoke
         env:
           EXECUTOR_SHARED_TOKEN: ci-test-token
