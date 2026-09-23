@@ -9,7 +9,7 @@ import urllib.parse
 import time
 
 from .config import settings
-from .settings_store import get_int, get_setting
+from .settings_store import get_int
 from .metrics import record_inference, record_error
 
 
