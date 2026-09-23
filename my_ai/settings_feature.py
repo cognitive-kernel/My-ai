@@ -317,7 +317,7 @@ def install(app: Any) -> None:
             try:
                 payload=json.loads(body.decode("utf-8")); text=str(payload.get("message","")).strip().lower()
             except Exception:
-                payload={}; text=""
+                text=""
             is_learn = any(x in text for x in ("یاد بگیر","یادگیری","learn"))
             if "سیسکو" not in text or not is_learn:
                 sent=False
@@ -327,7 +327,7 @@ def install(app: Any) -> None:
                     sent=True; return {"type":"http.request","body":body,"more_body":False}
                 return await self.inner(scope, replay, send)
             request=Request(scope, receive=lambda: {"type":"http.request","body":b"","more_body":False})
-            user=__import__("my_ai.auth", fromlist=["require_user"]).require_user(request)
+            __import__("my_ai.auth", fromlist=["require_user"]).require_user(request)
             _setup()
             rows=fetch_all("SELECT id FROM custom_courses WHERE lower(name)=lower(?) AND active=1",("Cisco",))
             if not rows:
