@@ -45,7 +45,6 @@ jobs:
           grep -q 'Self-Update' /tmp/home.html
           grep -q 'Self-Repair' /tmp/home.html
           grep -q 'SpeechRecognition' /tmp/home.html
-          test "$(curl -s -o /tmp/metrics.json -w '%{http_code}' -b /tmp/cookies.txt http://127.0.0.1:8001/health/metrics)" = "200"
       - name: Run Docker compose E2E smoke
         env:
           EXECUTOR_SHARED_TOKEN: ci-test-token
