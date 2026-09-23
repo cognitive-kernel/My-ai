@@ -47,7 +47,7 @@ jobs:
           grep -q 'SpeechRecognition' /tmp/home.html
           test "$(curl -s -o /tmp/metrics.json -w '%{http_code}' -b /tmp/cookies.txt http://127.0.0.1:8001/health/metrics)" = "200"
           test "$(curl -s -o /tmp/chat.json -w '%{http_code}' -b /tmp/cookies.txt -H 'Content-Type: application/json' -d '{"message":"Reply with exactly OK"}' http://127.0.0.1:8001/chat)" = "200"
-          grep -qi 'OK' /tmp/chat.json
+          python -c "import json; d=json.load(open('/tmp/chat.json', encoding='utf-8')); assert d.get('type') == 'chat' and str(d.get('answer', '')).strip()"
       - name: Run Docker compose E2E smoke
         env:
           EXECUTOR_SHARED_TOKEN: ci-test-token
@@ -87,4 +87,4 @@ jobs:
           echo "chat_code=$chat_code"
           cat /tmp/compose-chat.json
           if [ "$chat_code" != "200" ]; then docker compose logs --no-color --tail=200 my-ai executor; exit 1; fi
-          grep -qi 'OK' /tmp/compose-chat.json
+          python -c "import json; d=json.load(open('/tmp/compose-chat.json', encoding='utf-8')); assert d.get('type') == 'chat' and str(d.get('answer', '')).strip()"
