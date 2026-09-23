@@ -61,6 +61,10 @@ class StudyScheduler:
         self.error = None
         self.stage = "starting"
         self.current_topic = None
+        if session_id:
+            rows = fetch_all("SELECT topic FROM learning_sessions WHERE id=?", (session_id,))
+            if rows:
+                self.current_topic = rows[0]["topic"]
         worker_stop = threading.Event()
         self._stop = worker_stop
         execute("INSERT INTO learning_runtime(id,language,session_id,status,started_at,updated_at) VALUES(1,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET language=excluded.language,session_id=excluded.session_id,status=excluded.status,started_at=excluded.started_at,updated_at=CURRENT_TIMESTAMP", (language, session_id, "running"))
