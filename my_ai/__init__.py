@@ -1,8 +1,5 @@
 __version__ = "0.2.0"
 
-# The API module is the application entry point used by uvicorn.  Register the
-# optional settings router only after that module has finished creating `app`,
-# avoiding circular imports while keeping feature code separated from api.py.
 import importlib.abc
 import importlib.machinery
 import sys
