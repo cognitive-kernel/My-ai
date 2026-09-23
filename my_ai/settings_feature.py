@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -294,7 +295,7 @@ def learning_page(request: Request):
 @router.get("/settings/script.js")
 def settings_script(request: Request):
     require_admin(request)
-    js = fetch_settings_script()
+    js = Path(__file__).with_name("settings_script.js").read_text(encoding="utf-8")
     return Response(js, media_type="application/javascript", headers={"Cache-Control":"no-store"})
 
 @router.get("/settings/courses")
