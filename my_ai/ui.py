@@ -40,7 +40,41 @@ async function loadRepairs(){try{var r=await fetch('/self-repair/proposals?x='+D
 async function showRepairDiff(id){try{var r=await fetch('/self-repair/proposals/'+encodeURIComponent(id)+'/diff',{cache:'no-store'}),j=await r.json();if(!r.ok)throw Error(j.detail||'HTTP '+r.status);var box=$('repairDiff');box.innerHTML='';String(j.diff||'').split(String.fromCharCode(92,110)).forEach(function(line){var s=document.createElement('span');s.className='diffLine '+(line.startsWith('+')?'diffAdd':line.startsWith('-')?'diffDel':line.startsWith('@@')||line.startsWith('diff --git')?'diffMeta':'');s.textContent=line;box.appendChild(s)});box.style.display='block'}catch(e){$('repairDiff').style.display='block';$('repairDiff').textContent='خطا: '+e.message}}
 async function loadAdminPanel(){try{var me=await fetch('/auth/me',{cache:'no-store'});if(!me.ok)return;var mj=await me.json();if(!mj.user||mj.user.role!=='admin')return;$('adminToolsCard').style.display='block';var r=await fetch('/admin/users?x='+Date.now(),{cache:'no-store'}),j=await r.json();var sel=$('permUser');sel.innerHTML='';(j.items||[]).filter(function(x){return x.role!=='admin'}).forEach(function(x){var o=document.createElement('option');o.value=x.id;o.textContent=x.username+' (#'+x.id+')';sel.appendChild(o)})}catch(e){}}
 async function savePermission(){try{var body={user_id:Number($('permUser').value),tool_name:$('permTool').value,action:$('permAction').value,allowed:$('permAllowed').checked};var r=await fetch('/admin/tools',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});var j=await r.json();if(!r.ok)throw Error(j.detail||'HTTP '+r.status);$('permStatus').textContent='ذخیره شد.'}catch(e){$('permStatus').textContent='خطا: '+e.message}}
-async function loadDash(){try{var rr=await Promise.all([fetch('/learning/status',{cache:'no-store'}),fetch('/scheduler/status',{cache:'no-store'}),fetch('/learning/active',{cache:'no-store'})]);var j=await rr[0].json(),s=await rr[1].json(),ac=await rr[2].json(),courses=j.courses||[],html='';var activeLang=s.running?s.language:null;var current=null;if(activeLang){var c=courses.find(function(x){return x.language===activeLang});if(c)current={name:c.language,summary:{progress_percent:c.progress_percent,current:c.current,total_topics:c.total_topics,completed_topics:c.completed_topics,remaining_topics:c.remaining_topics},topics:c.topics||[]}}if(current){var cur=current.summary.current;var totalTopics=Number(current.summary.total_topics||courses.find(function(x){return x.language===current.name})?.total_topics||current.topics.length||0);var completedTopics=Number(current.summary.completed_topics||0);var remainingTopics=Number(current.summary.remaining_topics!=null?current.summary.remaining_topics:Math.max(0,totalTopics-completedTopics));html='<div class="card '+(s.error?'danger':'ok')+'"><h3>در حال یادگیری: '+escHtml(current.name)+'</h3>'+(cur?'<p><b>سرفصل فعلی:</b> '+escHtml(cur.topic||cur.title)+' · <b>مرحله:</b> '+escHtml(s.stage||cur.phase)+' · <b>پیشرفت این سرفصل:</b> '+Number(cur.progress_percent||0)+'%</p><p><b>تعداد کل سرفصل‌ها:</b> '+totalTopics+' · <b>تکمیل‌شده:</b> '+completedTopics+' · <b>باقی‌مانده:</b> '+remainingTopics+'</p>':'')+(s.error?'<div>خطا: '+escHtml(s.error)+'</div>':'')+'<div class="bar"><div class="fill" style="width:'+Number(current.summary.progress_percent||0)+'%">'+Number(current.summary.progress_percent||0)+'%</div></div><p class="small">پیشرفت کل '+escHtml(current.name)+' در مسیر یادگیری</p><div>';current.topics.forEach(function(t){html+='<div class="small" style="margin-top:8px"><b>'+escHtml(t.order||t.topic_order)+'. '+escHtml(t.topic||t.title)+'</b> — '+Number(t.progress_percent||0)+'%</div><div class="bar"><div class="fill" style="width:'+Number(t.progress_percent||0)+'%">'+Number(t.progress_percent||0)+'%</div></div>'});html+='</div></div>'}else{html='<div class="card ok"><b>وضعیت یادگیری:</b> در حال حاضر آموزشی در حال اجرا نیست.</div>'}$('dashboard').innerHTML=html}catch(e){$('dashboard').textContent='خطا: '+(e.message||String(e))}}
+async function loadDash(){
+try{
+var rr=await Promise.all([
+fetch('/learning/status',{cache:'no-store'}),
+fetch('/scheduler/status',{cache:'no-store'}),
+fetch('/learning/active',{cache:'no-store'})
+]);
+var j=await rr[0].json(),s=await rr[1].json(),ac=await rr[2].json();
+var courses=j.courses||[],workers=(s.active_workers||[]).filter(function(w){return w.running||['running','retrying','stopping','paused'].indexOf(w.status)>=0});
+var html='';
+if(workers.length){
+html+='<div class="small" style="margin-bottom:10px"><b>در حال یادگیری همزمان:</b> '+workers.length+' موضوع</div>';
+workers.forEach(function(w,index){
+var c=courses.find(function(x){return x.language===w.language});
+var summary=c||{progress_percent:0,total_topics:0,completed_topics:0,remaining_topics:0,topics:[]};
+var current=w.current_topic||((summary.current||{}).topic)||'در حال آماده‌سازی';
+var stage=w.stage||'starting';
+var pct=Number(summary.progress_percent||0);
+html+='<details class="card '+(w.error?'danger':'ok')+'"><summary style="cursor:pointer"><b>'+escHtml(w.language)+'</b> · '+escHtml(current)+' · '+pct+'%</summary>';
+html+='<p><b>مرحله:</b> '+escHtml(stage)+' · <b>تکمیل:</b> '+Number(summary.completed_topics||0)+' / '+Number(summary.total_topics||0)+' · <b>باقی‌مانده:</b> '+Number(summary.remaining_topics||0)+'</p>';
+if(w.error)html+='<div>خطا: '+escHtml(w.error)+'</div>';
+html+='<div class="bar"><div class="fill" style="width:'+pct+'%">'+pct+'%</div></div>';
+html+='<p class="small">مسیر یادگیری '+escHtml(w.language)+' — برای مشاهده سرفصل‌ها روی همین بخش کلیک کنید.</p>';
+(summary.topics||[]).forEach(function(t){
+html+='<div class="small" style="margin-top:8px"><b>'+escHtml(t.order||t.topic_order)+'. '+escHtml(t.topic||t.title)+'</b> — '+Number(t.progress_percent||0)+'%</div>';
+html+='<div class="bar"><div class="fill" style="width:'+Number(t.progress_percent||0)+'%">'+Number(t.progress_percent||0)+'%</div></div>';
+});
+html+='</details>';
+});
+}else{
+html='<div class="card ok"><b>وضعیت یادگیری:</b> در حال حاضر آموزشی در حال اجرا نیست.</div>';
+}
+$('dashboard').innerHTML=html;
+}catch(e){$('dashboard').textContent='خطا: '+(e.message||String(e))}
+}
 function init(){
 $('faBtn').addEventListener('click',function(){setLang('fa')});$('enBtn').addEventListener('click',function(){setLang('en')});$('voiceLang').addEventListener('change',function(){voiceLocale=this.value});$('voiceBtn').addEventListener('click',voiceInput);$('stopBtn').addEventListener('click',stopVoice);$('sendBtn').addEventListener('click',send);$('msg').addEventListener('keydown',function(event){if(event.key==='Enter'&&!event.ctrlKey&&!event.shiftKey){event.preventDefault();send()}});setLang('fa');loadSessions();loadDash();setInterval(loadDash,10000);$('newChat').addEventListener('click',newChat);$('githubLogin').addEventListener('click',githubLogin);$('githubLogout').addEventListener('click',githubLogout);$('githubConnect').addEventListener('click',connectGithub);connectGithub();$('msg').focus()}
 window.myAiSend=send;if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
