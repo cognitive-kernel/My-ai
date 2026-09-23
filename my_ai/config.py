@@ -43,5 +43,3 @@ class Settings:
 
 settings = Settings()
 
-from .feature_bootstrap import install as _install_feature_bootstrap
-_install_feature_bootstrap()

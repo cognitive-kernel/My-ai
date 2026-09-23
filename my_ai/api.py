@@ -40,6 +40,8 @@ async def lifespan(_):
     yield
     scheduler.stop()
 app=FastAPI(title="My-AI",version="0.2.0",description="Local-first personal learning and coding agent.",lifespan=lifespan)
+from .settings_feature import install as _install_settings_features
+_install_settings_features(app)
 
 _PUBLIC_PATHS = {"/", "/login", "/register", "/auth/register", "/auth/login", "/auth/logout", "/auth/register/status", "/health", "/health/metrics", "/openapi.json", "/docs", "/redoc"}
 _TOOL_RULES = (
