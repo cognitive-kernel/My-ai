@@ -1,36 +1,13 @@
 __version__ = "0.2.0"
 
-import importlib.abc
-import importlib.machinery
-import sys
+
+def _install_app_features() -> None:
+    # `my_ai.api` is the ASGI entry point. Import it once, then register the
+    # separated settings/learning feature against the fully-created FastAPI app.
+    from . import api
+    from .settings_feature import install
+
+    install(api.app)
 
 
-class _ApiFeatureFinder(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname, path=None, target=None):
-        if fullname != "my_ai.api":
-            return None
-        try:
-            sys.meta_path.remove(self)
-        except ValueError:
-            pass
-        spec = importlib.machinery.PathFinder.find_spec(fullname, path)
-        if spec is None or spec.loader is None:
-            return spec
-        original_loader = spec.loader
-
-        class _Loader(importlib.abc.Loader):
-            def create_module(self, module_spec):
-                create = getattr(original_loader, "create_module", None)
-                return create(module_spec) if create else None
-
-            def exec_module(self, module):
-                original_loader.exec_module(module)
-                from .settings_feature import install
-                install(module.app)
-
-        spec.loader = _Loader()
-        return spec
-
-
-if not any(type(x).__name__ == "_ApiFeatureFinder" for x in sys.meta_path):
-    sys.meta_path.insert(0, _ApiFeatureFinder())
+_install_app_features()
