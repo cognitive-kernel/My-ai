@@ -74,11 +74,20 @@ class LearningEngine:
             def fetch_and_extract(url=url):
                 title,source=self.web.fetch(url)
                 note=self.llm.chat("Extract only accurate knowledge relevant to these study targets from the supplied source. "
-                                    "Separate the targets and state prerequisites explicitly. Never invent facts.\n"
-                                    f"LANGUAGE: {language}\nTARGETS: {json.dumps(queries,ensure_ascii=False)}\nSOURCE:\n{source}",
+                                    "Separate the targets and state prerequisites explicitly. Never invent facts.\\n"
+                                    f"LANGUAGE: {language}\\nTARGETS: {json.dumps(queries,ensure_ascii=False)}\\nSOURCE:\\n{source}",
                                     system="You are a rigorous programming teacher.")
                 return title,note
-            title,note=self._retry_forever(fetch_and_extract,"source",progress_callback,topic["topic"],stop_event)
+            try:
+                title,note=self._retry_forever(fetch_and_extract,"source",progress_callback,topic["topic"],stop_event)
+            except InterruptedError:
+                raise
+            except Exception as exc:
+                message=str(exc)
+                knowledge.append({"title":"Source unavailable","url":url,"error":message})
+                if progress_callback:
+                    progress_callback("source_unavailable",topic["topic"])
+                continue
             remember(language,title,note,url); knowledge.append({"title":title,"url":url})
         return knowledge
 
