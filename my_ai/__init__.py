@@ -13,8 +13,8 @@ def _install_app_features() -> None:
         from .settings_feature import install
         install(self)
 
-    init_with_features._myai_features_wrapped = True
-    FastAPI.__init__ = init_with_features
+    init_with_features._myai_features_wrapped = True  # type: ignore[attr-defined]
+    FastAPI.__init__ = init_with_features  # type: ignore[method-assign]
 
 
 _install_app_features()
