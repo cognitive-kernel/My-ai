@@ -250,8 +250,8 @@ def learning_active(request:Request):
     require_user(request); _setup()
     items=[]
     for c in fetch_all("SELECT * FROM custom_courses WHERE active=1 ORDER BY id"):
-        s=_summary(int(c["id"]))
-        if s["completed_topics"] < s["total_topics"]: items.append({"course":c,"summary":s})
+        summary=_summary(int(c["id"]))
+        items.append({"course":c,"summary":summary,"active":summary["completed_topics"] < summary["total_topics"]})
     return {"items":items,"running":sorted(_running)}
 
 @router.get("/learning/catalog")
