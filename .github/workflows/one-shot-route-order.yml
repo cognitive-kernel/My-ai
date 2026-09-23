@@ -1,0 +1,28 @@
+name: one-shot-route-order
+on:
+  push:
+    branches: [audit/fix-local-first-hardening]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: "!contains(github.event.head_commit.message, '[route-order-fixed]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Fix route precedence
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('my_ai/settings_feature.py')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('app.router.routes.extend(router.routes)', 'app.router.routes[0:0] = router.routes', 1)
+          p.write_text(s, encoding='utf-8')
+          Path('.github/workflows/one-shot-route-order.yml').unlink(missing_ok=True)
+          PY
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add my_ai/settings_feature.py .github/workflows/one-shot-route-order.yml
+          git commit -m 'Fix settings route precedence [route-order-fixed]'
+          git push
