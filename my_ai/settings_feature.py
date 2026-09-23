@@ -14,6 +14,7 @@ from .auth import require_admin, require_user, audit
 from .db import execute, fetch_all, init_db
 from .git_connector import GitHubConnector
 from .llm import create_llm
+from .settings_store import get_setting, set_setting, get_bool, get_int, get_github_settings
 
 router = APIRouter(tags=["settings"])
 _workers = ThreadPoolExecutor(max_workers=1, thread_name_prefix="myai-learning")
@@ -75,6 +76,27 @@ class CourseRequest(BaseModel):
 
 class TokenRequest(BaseModel):
     token: str = Field(default="", max_length=10000)
+
+class GithubConfigRequest(BaseModel):
+    api_url: str = Field(min_length=8, max_length=500)
+    repository: str = Field(min_length=3, max_length=300)
+    username: str = Field(default="", max_length=200)
+
+class FeatureSettingsRequest(BaseModel):
+    self_update_enabled: bool = False
+    self_update_approved: bool = False
+    self_update_health_url: str = ""
+    self_repair_enabled: bool = True
+    self_repair_require_approval: bool = True
+    learning_fast_enabled: bool = False
+    learning_interval_seconds: int = 3600
+    learning_max_retries: int = 5
+
+class ToolPermissionRequest(BaseModel):
+    user_id: int
+    tool_name: str = Field(min_length=1, max_length=120)
+    action: str = Field(min_length=1, max_length=40)
+    allowed: bool
 
 
 def _setup() -> None:
@@ -163,6 +185,66 @@ def _run_course(course_id: int) -> None:
     finally:
         _running.discard(course_id)
 
+
+@router.get("/settings/config")
+def settings_config(request: Request):
+    require_admin(request)
+    g=get_github_settings()
+    return {
+        "github": {"api_url":g.get("api_url",""),"repository":g.get("repository",""),"username":g.get("username",""),"token_configured":bool(g.get("token"))},
+        "features": {
+            "self_update_enabled":get_bool("self_update.enabled",False),
+            "self_update_approved":get_bool("self_update.approved",False),
+            "self_update_health_url":str(get_setting("self_update.health_url","")),
+            "self_repair_enabled":get_bool("self_repair.enabled",True),
+            "self_repair_require_approval":get_bool("self_repair.require_approval",True),
+            "learning_fast_enabled":get_bool("learning.fast_enabled",False),
+            "learning_interval_seconds":get_int("learning.interval_seconds",3600),
+            "learning_max_retries":get_int("learning.max_retries",5),
+        },
+    }
+
+@router.put("/settings/github")
+def save_github_config(r: GithubConfigRequest, request: Request):
+    user=require_admin(request)
+    try:
+        GitHubConnector.save_config(api_url=r.api_url,repository=r.repository,username=r.username)
+    except ValueError as exc:
+        raise HTTPException(400,str(exc)) from exc
+    audit(user,"github","write","200","settings-configured")
+    return {"saved":True}
+
+@router.put("/settings/features")
+def save_feature_settings(r: FeatureSettingsRequest, request: Request):
+    user=require_admin(request)
+    if not 60 <= r.learning_interval_seconds <= 86400:
+        raise HTTPException(400,"learning_interval_seconds must be 60..86400")
+    if not 1 <= r.learning_max_retries <= 20:
+        raise HTTPException(400,"learning_max_retries must be 1..20")
+    if r.self_update_health_url:
+        from urllib.parse import urlparse
+        host=urlparse(r.self_update_health_url).hostname
+        if host not in {"127.0.0.1","localhost","::1"}:
+            raise HTTPException(400,"Self-update health URL must target the local host.")
+    values={"self_update.enabled":r.self_update_enabled,"self_update.approved":r.self_update_approved,"self_update.health_url":r.self_update_health_url.strip(),"self_repair.enabled":r.self_repair_enabled,"self_repair.require_approval":r.self_repair_require_approval,"learning.fast_enabled":r.learning_fast_enabled,"learning.interval_seconds":r.learning_interval_seconds,"learning.max_retries":r.learning_max_retries}
+    for key,value in values.items(): set_setting(key,value)
+    audit(user,"settings","write","200","feature-settings-updated")
+    return {"saved":True,"features":values}
+
+@router.get("/settings/tool-permissions")
+def settings_tool_permissions(request: Request):
+    require_admin(request)
+    return {"items":fetch_all("SELECT * FROM tool_permissions ORDER BY user_id,tool_name,action")}
+
+@router.put("/settings/tool-permissions")
+def save_tool_permission(r: ToolPermissionRequest, request: Request):
+    user=require_admin(request)
+    if not fetch_all("SELECT id FROM users WHERE id=?",(r.user_id,)):
+        raise HTTPException(404,"User not found.")
+    execute("""INSERT INTO tool_permissions(user_id,tool_name,action,allowed) VALUES(?,?,?,?)
+              ON CONFLICT(user_id,tool_name,action) DO UPDATE SET allowed=excluded.allowed,updated_at=CURRENT_TIMESTAMP""",(r.user_id,r.tool_name,r.action,1 if r.allowed else 0))
+    audit(user,"tool-permissions","write","200",f"{r.user_id}:{r.tool_name}:{r.action}:{r.allowed}")
+    return {"ok":True}
 
 @router.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request):
