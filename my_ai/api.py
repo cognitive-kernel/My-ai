@@ -10,7 +10,7 @@ from pydantic import BaseModel,HttpUrl,Field
 from .agent import Agent
 from .command_policy import parse_command
 from .config import settings
-from .settings_store import get_bool, get_int
+from .settings_store import get_bool, get_int, get_github_settings
 from .curriculum import canonical_language,LANGUAGE_CURRICULA
 from .db import fetch_all,init_db,execute
 from .learner import LearningEngine
@@ -858,7 +858,13 @@ def git_token_diagnostics():
 
 @app.get("/git/check")
 def git_check(repository:str|None=None):
-    c=GitHubConnector()
+    cfg=get_github_settings()
+    if not cfg.get("api_url"):
+        return {"authenticated":False,"repository":repository,"status":"not_configured","message":"GitHub API URL در تنظیمات ثبت نشده است."}
+    try:
+        c=GitHubConnector()
+    except RuntimeError as e:
+        return {"authenticated":False,"repository":repository,"status":"not_configured","message":str(e)}
     token_source=GitHubConnector.token_source()
     if token_source == "none":
         return {"authenticated":False,"repository":repository,"status":"no_token","message":"GitHub Token تنظیم نشده است."}
