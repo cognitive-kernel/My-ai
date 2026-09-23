@@ -35,7 +35,7 @@ SQLSERVER_ADVANCED = [
     (13, "Execution plans", "Estimated versus actual plans, operators, cardinality and plan diagnosis"),
     (14, "Statistics and cardinality estimation", "Statistics objects, histograms, estimation errors and maintenance"),
     (15, "Advanced indexing", "Covering, filtered, included-column, columnstore and index design tradeoffs"),
-    (16, "Query optimization", "SARGability, joins, parameter sensitivity, hints and evidence-based tuning"),
+    (16, "Advanced query optimization", "SARGability, joins, parameter sensitivity, hints and evidence-based tuning"),
     (17, "Transactions and isolation", "ACID, isolation levels, row versioning, locks and blocking"),
     (18, "Deadlocks and concurrency diagnosis", "Deadlock graphs, blocking chains, wait analysis and remediation"),
     (19, "TempDB and temporary objects", "Temp tables, table variables, version store and TempDB contention"),
@@ -74,7 +74,7 @@ RUST_ADVANCED=[
 (41,"Rust performance lab","Benchmarking, flamegraphs, allocation profiling and regression detection"),
 (42,"Rust security lab","Dependency auditing, supply-chain controls, fuzzing concepts and hardened input boundaries"),
 (43,"Advanced build systems","Cargo workspaces, feature matrices, cross compilation, reproducible builds and CI"),
-(44,"Expert Rust capstone","Design, implement, test, benchmark, secure and operate a multi-component Rust system"),
+(44,"Advanced Rust capstone","Design, implement, test, benchmark, secure and operate a multi-component Rust system"),
 ]
 
 def _extend_rust(target):
@@ -101,14 +101,20 @@ def _extend_universal(target):
             target.append({"order":order,"topic":topic,"goal":goal})
 
 def extend_curricula(curricula):
-    for _target in curricula.values():
-        _extend_universal(_target)
+    # Curricula with an explicit numbered expert track already have their own
+    # authoritative endpoint. Do not append the generic gates on top of them;
+    # doing so changes Python's 40-topic path into 48 and mixes unrelated
+    # completion records into the selected subject.
     if "Python" in curricula:
         _extend(curricula["Python"], PYTHON_ADVANCED)
     if "SQL Server" in curricula:
         _extend(curricula["SQL Server"], SQLSERVER_ADVANCED)
     if "Rust" in curricula:
         _extend_rust(curricula["Rust"])
+    explicit = {"Python", "SQL Server", "Rust"}
+    for name, target in curricula.items():
+        if name not in explicit:
+            _extend_universal(target)
 
 
 # Compact model-provided seed knowledge. It is a starting layer, not a substitute for

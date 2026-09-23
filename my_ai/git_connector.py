@@ -1,7 +1,7 @@
 from __future__ import annotations
 import base64, os, shutil, subprocess, threading, time, webbrowser
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 import httpx
 from .config import settings
 from .settings_store import get_github_settings, set_setting, delete_setting
@@ -19,8 +19,20 @@ class GitHubConnector:
         self._explicit_token = token
         self.api_url = (api_url or cfg.get("api_url") or "").rstrip("/")
         self.timeout = float(os.getenv("MYAI_GITHUB_TIMEOUT", "15"))
-        if not self.api_url:
+        self._validate_api_url(self.api_url)
+
+    @staticmethod
+    def _validate_api_url(api_url: str):
+        if not api_url:
             raise RuntimeError("GitHub API URL is not configured in Settings.")
+        parsed=urlparse(api_url)
+        if parsed.scheme != "https" or parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("GitHub API URL must be an HTTPS GitHub API endpoint.")
+        if parsed.netloc.lower() != "api.github.com":
+            raise ValueError("Only https://api.github.com is supported by the GitHub connector.")
+        if parsed.path not in {"", "/"}:
+            raise ValueError("GitHub API URL must point to the API root.")
+
     @staticmethod
     def _token_path():
         configured=os.getenv("MYAI_GITHUB_TOKEN_FILE")
@@ -47,8 +59,7 @@ class GitHubConnector:
         api_url=api_url.strip().rstrip("/")
         repository=repository.strip()
         username=username.strip()
-        if not api_url.startswith(("http://","https://")):
-            raise ValueError("GitHub API URL must use http:// or https://.")
+        cls._validate_api_url(api_url)
         if not repository:
             raise ValueError("GitHub repository is required.")
         cls.parse_repo(repository)
@@ -95,10 +106,14 @@ class GitHubConnector:
         git=cls._git_executable()
         if not git:raise RuntimeError("Git نصب نیست.")
         if not cls.gcm_available():raise RuntimeError("Git Credential Manager نصب/فعال نیست. Git for Windows را به‌روز کنید.")
+        repository=cls.configured_repository()
+        if not repository:raise RuntimeError("ابتدا مخزن GitHub را در Settings مشخص کنید.")
+        owner,name=cls.parse_repo(repository)
         with cls._gcm_lock:
             if cls._gcm_pending and cls._gcm_pending.poll() is None:return {"pending":True,"method":"gcm"}
             env=os.environ.copy(); env["GCM_GUI_PROMPT"]="true"; env["GCM_INTERACTIVE"]="auto"
-            cls._gcm_pending=subprocess.Popen([git,"-c","credential.interactive=auto","ls-remote","https://github.com/cognitive-kernel/My-ai.git","HEAD"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,stdin=subprocess.DEVNULL,env=env,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0),start_new_session=(os.name!="nt"))
+            target=f"https://github.com/{owner}/{name}.git"
+            cls._gcm_pending=subprocess.Popen([git,"-c","credential.interactive=auto","ls-remote",target,"HEAD"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,stdin=subprocess.DEVNULL,env=env,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0),start_new_session=(os.name!="nt"))
         return {"pending":True,"method":"gcm","message":"فرم رسمی ورود GitHub در مرورگر باز می‌شود؛ کد ایمیل/2FA را همان‌جا وارد کنید."}
     @classmethod
     def gcm_status(cls):
@@ -195,7 +210,9 @@ class GitHubConnector:
     def _effective_token(self):
         explicit=getattr(self,"_explicit_token",None)
         if explicit is not None:return explicit
-        return self.gh_token() or self._saved_token() or os.getenv("GITHUB_TOKEN") or self._gcm_token()
+        # Never fall back to GITHUB_TOKEN: GitHub credentials must come from the
+        # explicit Settings secret, GitHub CLI, or Git Credential Manager.
+        return self.gh_token() or self._saved_token() or self._gcm_token()
     def _headers(self):
         h={"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28","User-Agent":"My-AI-GitHub-Connector"}; token=self._effective_token()
         if token:h["Authorization"]="Bearer "+token
@@ -215,7 +232,14 @@ class GitHubConnector:
             value=p.path.lstrip("/")
         value=value.removesuffix(".git"); parts=value.split("/")
         if len(parts)!=2 or not all(parts):raise ValueError("Repository must be owner/name or a GitHub repository URL.")
+        if any(part in {".",".."} or not part.strip() for part in parts):raise ValueError("Invalid GitHub repository name.")
         return parts[0],parts[1]
+    @staticmethod
+    def _safe_ref(ref: str):
+        ref=str(ref or "").strip()
+        if not ref or ref.startswith("-") or ".." in ref or "@{" in ref or ref.endswith(".") or ref.endswith("/") or "//" in ref or any(ch.isspace() or ch in {"~","^",":","?","*","[","\\"} for ch in ref):
+            raise ValueError("Invalid Git reference.")
+        return ref
     def _request(self,method,path,**kwargs):
         if settings.offline_strict:
             raise RuntimeError("GitHub network access is disabled in offline strict mode.")
@@ -229,25 +253,31 @@ class GitHubConnector:
     def repo(self,repository):
         owner,name=self.parse_repo(repository);return self._request("GET",f"/repos/{owner}/{name}")
     def tree(self,repository,ref="HEAD",recursive=True):
-        owner,name=self.parse_repo(repository);data=self._request("GET",f"/repos/{owner}/{name}/git/trees/{ref}",params={"recursive":"1" if recursive else "0"});return data.get("tree",[])
+        owner,name=self.parse_repo(repository);ref=self._safe_ref(ref);data=self._request("GET",f"/repos/{owner}/{name}/git/trees/{quote(ref,safe='')}",params={"recursive":"1" if recursive else "0"});return data.get("tree",[])
     def file(self,repository,path,ref=None):
-        owner,name=self.parse_repo(repository);data=self._request("GET",f"/repos/{owner}/{name}/contents/{path.lstrip('/')}",params={"ref":ref} if ref else {})
+        owner,name=self.parse_repo(repository)
+        if not path or path.startswith("/") or ".." in Path(path).parts:raise ValueError("Invalid repository path.")
+        data=self._request("GET",f"/repos/{owner}/{name}/contents/{quote(path.lstrip('/'),safe='/')}",params={"ref":self._safe_ref(ref)} if ref else {})
         if isinstance(data,list):return {"type":"directory","items":data}
         content=data.get("content","")
         if data.get("encoding")=="base64":content=base64.b64decode(content).decode("utf-8",errors="replace")
         return {"path":data.get("path"),"sha":data.get("sha"),"content":content,"html_url":data.get("html_url")}
     def issues(self,repository,state="open",limit=30):
-        owner,name=self.parse_repo(repository);return self._request("GET",f"/repos/{owner}/{name}/issues",params={"state":state,"per_page":min(limit,100)})
+        owner,name=self.parse_repo(repository);state=str(state).lower();
+        if state not in {"open","closed","all"}:raise ValueError("Invalid issue state.")
+        return self._request("GET",f"/repos/{owner}/{name}/issues",params={"state":state,"per_page":min(max(int(limit),1),100)})
     def pull_requests(self,repository,state="open",limit=30):
-        owner,name=self.parse_repo(repository);return self._request("GET",f"/repos/{owner}/{name}/pulls",params={"state":state,"per_page":min(limit,100)})
+        owner,name=self.parse_repo(repository);state=str(state).lower();
+        if state not in {"open","closed","all"}:raise ValueError("Invalid pull request state.")
+        return self._request("GET",f"/repos/{owner}/{name}/pulls",params={"state":state,"per_page":min(max(int(limit),1),100)})
     def branches(self,repository,limit=100):
-        owner,name=self.parse_repo(repository);return self._request("GET",f"/repos/{owner}/{name}/branches",params={"per_page":min(limit,100)})
+        owner,name=self.parse_repo(repository);return self._request("GET",f"/repos/{owner}/{name}/branches",params={"per_page":min(max(int(limit),1),100)})
     def create_branch(self,repository,branch,base="main",allow_write=False):
         if not allow_write:raise PermissionError("GitHub writes require allow_write=True.")
-        owner,name=self.parse_repo(repository);ref=self._request("GET",f"/repos/{owner}/{name}/git/ref/heads/{base}");return self._request("POST",f"/repos/{owner}/{name}/git/refs",json={"ref":"refs/heads/"+branch,"sha":ref["object"]["sha"]})
+        owner,name=self.parse_repo(repository);branch=self._safe_ref(branch);base=self._safe_ref(base);ref=self._request("GET",f"/repos/{owner}/{name}/git/ref/heads/{quote(base,safe='')}");return self._request("POST",f"/repos/{owner}/{name}/git/refs",json={"ref":"refs/heads/"+branch,"sha":ref["object"]["sha"]})
     def update_file(self,repository,path,content,message,branch="main",allow_write=False):
         if not allow_write:raise PermissionError("GitHub writes require allow_write=True.")
-        owner,name=self.parse_repo(repository)
+        owner,name=self.parse_repo(repository);branch=self._safe_ref(branch)
         if not path or path.startswith("/") or ".." in Path(path).parts:
             raise ValueError("Invalid repository path.")
         try:
@@ -257,5 +287,5 @@ class GitHubConnector:
             current={}
         payload={"message":message,"content":base64.b64encode(content.encode()).decode(),"branch":branch}
         if current.get("sha"):payload["sha"]=current["sha"]
-        safe_path="/".join(__import__("urllib.parse",fromlist=["quote"]).quote(part,safe="") for part in path.split("/"))
+        safe_path="/".join(quote(part,safe="") for part in path.split("/"))
         return self._request("PUT",f"/repos/{owner}/{name}/contents/{safe_path}",json=payload)
