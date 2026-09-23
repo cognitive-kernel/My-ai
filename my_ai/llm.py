@@ -34,7 +34,7 @@ class OllamaClient:
     def _options(self) -> dict[str, int]:
         cfg=limits(); return {"num_ctx":int(settings.ollama_num_ctx),"num_thread":int(cfg["cpu_threads"]),"num_gpu":int(cfg["gpu_layers"])}
     def stream_chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None,stop_event=None)->Iterator[str]:
-        wait_until_available(stop_event); payload={"model":self.model,"stream":True,"options":self._options(),"keep_alive":settings.ollama_keep_alive,"messages":[]}; messages=payload["messages"]
+        wait_until_available(stop_event); messages: list[HistoryMessage] = []; payload={"model":self.model,"stream":True,"options":self._options(),"keep_alive":settings.ollama_keep_alive,"messages":messages}
         if system: messages.append({"role":"system","content":system})
         for item in history or ():
             if item.get("role") in {"user","assistant"} and isinstance(item.get("content"),str): messages.append({"role":item["role"],"content":item["content"]})
@@ -63,7 +63,7 @@ class OllamaClient:
                 except (httpx.HTTPError,json.JSONDecodeError) as fallback_exc: raise LLMError(f"Ollama streaming request failed for primary and fallback models: {exc}; {fallback_exc}") from fallback_exc
             raise LLMError(f"Ollama streaming request failed: {exc}") from exc
     def chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None,stop_event=None)->str:
-        wait_until_available(stop_event); payload={"model":self.model,"stream":False,"options":self._options(),"keep_alive":settings.ollama_keep_alive,"messages":[]}; messages=payload["messages"]
+        wait_until_available(stop_event); messages: list[HistoryMessage] = []; payload={"model":self.model,"stream":False,"options":self._options(),"keep_alive":settings.ollama_keep_alive,"messages":messages}
         if system: messages.append({"role":"system","content":system})
         for item in history or ():
             role=item.get("role"); content=item.get("content")
@@ -89,7 +89,7 @@ class OpenAICompatibleClient:
         self.base_url=settings.openai_base_url; self.model=settings.openai_model; self.api_key=settings.openai_api_key
         if not self.api_key: raise LLMError("OPENAI_API_KEY is required when LLM_PROVIDER=openai")
     def stream_chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None)->Iterator[str]:
-        input_items=[]
+        input_items: list[HistoryMessage] = []
         for item in history or ():
             role=item.get("role"); content=item.get("content")
             if role in {"user","assistant"} and isinstance(content,str) and content.strip(): input_items.append({"role":role,"content":content})
@@ -123,7 +123,7 @@ class OpenAICompatibleClient:
         except httpx.HTTPError as exc: record_error("openai",self.model); raise LLMError(f"OpenAI-compatible request failed: {exc}") from exc
         data=response.json(); usage=data.get("usage") if isinstance(data,dict) else {}; record_inference("openai",self.model,time.perf_counter()-started,prompt_tokens=(usage or {}).get("input_tokens"),output_tokens=(usage or {}).get("output_tokens"))
         if isinstance(data.get("output_text"),str): return data["output_text"]
-        chunks=[]
+        chunks: list[str] = []
         for item in data.get("output",[]) if isinstance(data,dict) else []:
             for content in item.get("content",[]) if isinstance(item,dict) else []:
                 if isinstance(content,dict) and isinstance(content.get("text"),str): chunks.append(content["text"])
