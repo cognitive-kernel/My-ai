@@ -4,6 +4,10 @@ from my_ai.api import app
 from my_ai import settings_feature as sf
 
 
+def test_settings_router_has_declared_routes():
+    assert any(getattr(route, "path", "") == "/settings" for route in sf.router.routes)
+
+
 def test_settings_and_learning_routes_are_registered():
     with TestClient(app):
         paths = {getattr(route, "path", "") for route in app.routes}
