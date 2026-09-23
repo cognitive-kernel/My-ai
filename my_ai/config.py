@@ -42,3 +42,6 @@ class Settings:
     learning_max_retries: int = int(os.getenv("LEARNING_MAX_RETRIES", "5"))
 
 settings = Settings()
+
+from .feature_bootstrap import install as _install_feature_bootstrap
+_install_feature_bootstrap()
