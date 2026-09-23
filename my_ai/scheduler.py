@@ -39,7 +39,7 @@ class StudyScheduler:
         self._monitor_thread = threading.Thread(target=self._review_loop, daemon=True, name="myai-weekly-review")
         self._monitor_thread.start()
 
-    def start(self, language="Python"):
+    def start(self, language="Python", session_id=None):
         language = str(language or "Python").strip() or "Python"
         known = canonical_language(language)
         if known in LANGUAGE_CURRICULA:
@@ -62,6 +62,7 @@ class StudyScheduler:
         self.current_topic = None
         worker_stop = threading.Event()
         self._stop = worker_stop
+        execute("INSERT INTO learning_runtime(id,language,session_id,status,started_at,updated_at) VALUES(1,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET language=excluded.language,session_id=excluded.session_id,status=excluded.status,started_at=excluded.started_at,updated_at=CURRENT_TIMESTAMP", (language, session_id, "running"))
         self._thread = threading.Thread(
             target=self._loop,
             args=(language, worker_stop),
@@ -73,6 +74,7 @@ class StudyScheduler:
     def stop_learning(self):
         self._stop.set()
         self.stage = "stopping"
+        execute("UPDATE learning_runtime SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=1", ("stopping",))
 
     def stop(self):
         self.stop_learning()
@@ -96,6 +98,7 @@ class StudyScheduler:
                 "last_result": last_result,
                 "error": self.error,
                 "interval_seconds": self.interval_seconds,
+                "session_id": ((fetch_all("SELECT session_id FROM learning_runtime WHERE id=1") or [{"session_id": None}])[0]["session_id"]),
             }
 
     def update_progress(self, stage, topic=None):
