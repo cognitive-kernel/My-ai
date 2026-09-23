@@ -206,6 +206,49 @@ class LearningEngine:
     @staticmethod
     def _half_percent(value): return max(0.0,min(100.0,round(float(value)*2)/2))
 
+    def detailed_status(self,language=None):
+        """Return every curriculum topic with its persisted learning progress."""
+        rows=fetch_all("SELECT * FROM learning_sessions ORDER BY id DESC")
+        selected = [canonical_language(language)] if language else list(LANGUAGE_CURRICULA.keys())
+        courses=[]
+        for lang in selected:
+            topics=LANGUAGE_CURRICULA.get(lang,[])
+            if not topics:
+                continue
+            lang_rows=[r for r in rows if r["language"]==lang]
+            latest={}
+            for row in lang_rows:
+                name=str(row["topic"])
+                if name in latest and latest[name]["status"]=="completed":
+                    continue
+                latest[name]=row
+            topic_items=[]
+            for item in topics:
+                row=latest.get(str(item["topic"]))
+                progress=100.0 if row and row["status"]=="completed" else (float(row["progress_percent"] or 0) if row else 0.0)
+                topic_items.append({
+                    "order": item.get("order"),
+                    "topic": item["topic"],
+                    "goal": item.get("goal",""),
+                    "status": str(row["status"]) if row else "planned",
+                    "phase": str(row["phase"]) if row else "planned",
+                    "progress_percent": self._half_percent(progress),
+                    "score": row["score"] if row and row["score"] is not None else None,
+                    "updated_at": row["created_at"] if row else None,
+                })
+            completed=sum(1 for x in topic_items if x["status"]=="completed")
+            active=next((x for x in topic_items if x["status"] not in {"completed","paused"}),None)
+            overall=self._half_percent(sum(float(x["progress_percent"]) for x in topic_items)/len(topic_items)) if topic_items else 0.0
+            courses.append({
+                "language":lang,
+                "total_topics":len(topic_items),
+                "completed_topics":completed,
+                "progress_percent":overall,
+                "current":active,
+                "topics":topic_items,
+            })
+        return {"courses":courses}
+
     def status(self,language=None):
         rows=fetch_all("SELECT * FROM learning_sessions ORDER BY id DESC"); out=[]
         for lang,topics in LANGUAGE_CURRICULA.items():
