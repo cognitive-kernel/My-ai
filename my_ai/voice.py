@@ -10,7 +10,7 @@ def _whisper_binary() -> str | None:
     configured=os.getenv("WHISPER_CPP_BIN","").strip()
     if configured:
         path=Path(configured).expanduser().resolve()
-        if path.is_file() and path.stat().st_mode & 0o111:
+        if path.is_file() and (os.name == "nt" or path.stat().st_mode & 0o111):
             return str(path)
         raise RuntimeError("WHISPER_CPP_BIN must point to an executable file.")
     return shutil.which("whisper-cli")
