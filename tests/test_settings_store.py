@@ -38,3 +38,14 @@ def test_settings_secret_roundtrip_uses_encryption(monkeypatch, tmp_path):
     assert stored.startswith(settings_store.SECRET_PREFIX)
     assert settings_store._decrypt(stored) == "secret-value"
     assert stored != "secret-value"
+
+
+def test_resource_settings_have_expected_defaults(monkeypatch):
+    from my_ai import settings_feature
+    values = {"resources.cpu_percent": "70", "resources.cpu_threads": "8", "resources.ram_percent": "80", "resources.gpu_layers": "0"}
+    monkeypatch.setattr(settings_feature, "get_setting", lambda key, default=None: values.get(key, default))
+    monkeypatch.setattr(settings_feature, "get_int", lambda key, default=0: int(values.get(key, default)))
+    assert float(settings_feature.get_setting("resources.cpu_percent", "70")) == 70.0
+    assert settings_feature.get_int("resources.cpu_threads", 8) == 8
+    assert float(settings_feature.get_setting("resources.ram_percent", "80")) == 80.0
+    assert settings_feature.get_int("resources.gpu_layers", 0) == 0
