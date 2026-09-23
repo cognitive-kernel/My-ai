@@ -201,7 +201,7 @@ def test_learning_retries_until_llm_recovers(monkeypatch):
 
     assert result == []
     assert len(attempts) == 3
-    assert sleeps == [0.1, 1.0, 2.0]
+    assert sleeps == [1.0, 2.0]
 
 
 def test_learning_retry_can_be_explicitly_stopped():
