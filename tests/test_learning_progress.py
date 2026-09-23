@@ -272,3 +272,10 @@ def test_learning_source_failure_is_recorded_and_does_not_abort(monkeypatch):
     assert len(result) == 3
     assert all(item["title"] == "Source unavailable" for item in result[1:])
     assert all("connection failed" in item["error"] for item in result[1:])
+
+
+def test_learning_page_refresh_preserves_scroll_and_open_sections():
+    from my_ai.settings_feature import LEARNING_HTML
+    assert "var y=window.scrollY" in LEARNING_HTML
+    assert "querySelectorAll('details')" in LEARNING_HTML
+    assert "window.scrollTo(0,y)" in LEARNING_HTML
