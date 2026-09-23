@@ -11,6 +11,7 @@ import time
 from .config import settings
 from .settings_store import get_int
 from .metrics import record_inference, record_error
+from .resource_guard import limits, wait_until_available
 
 
 class LLMError(RuntimeError):
@@ -44,14 +45,23 @@ class OllamaClient:
             return getattr(settings, "routing_model", self.default_model)
         return self.default_model
 
+    def _options(self) -> dict[str, int]:
+        cfg = limits()
+        return {
+            "num_ctx": int(settings.ollama_num_ctx),
+            "num_thread": int(cfg["cpu_threads"]),
+            "num_gpu": int(cfg["gpu_layers"]),
+        }
+
     def stream_chat(
         self,
         message: str,
         system: str | None = None,
         history: Sequence[HistoryMessage] | None = None,
+        stop_event=None,
     ) -> Iterator[str]:
-        payload: dict[str, object] = {"model": self.model, "stream": True, "options": {"num_ctx": settings.ollama_num_ctx, "num_thread": get_int("resources.cpu_threads", settings.ollama_num_thread), "num_gpu": get_int("resources.gpu_layers", settings.ollama_num_gpu)},
-            "keep_alive": settings.ollama_keep_alive, "messages": []}
+        wait_until_available(stop_event)
+        payload: dict[str, object] = {"model": self.model, "stream": True, "options": self._options(), "keep_alive": settings.ollama_keep_alive, "messages": []}
         messages = payload["messages"]
         assert isinstance(messages, list)
         if system:
@@ -78,8 +88,10 @@ class OllamaClient:
         except (httpx.HTTPError, json.JSONDecodeError) as exc:
             record_error("ollama", self.model)
             if not yielded and self.model != self.fallback_model:
+                wait_until_available(stop_event)
                 fallback_payload = dict(payload)
                 fallback_payload["model"] = self.fallback_model
+                fallback_payload["options"] = self._options()
                 try:
                     with httpx.stream("POST", f"{self.base_url}/api/chat", json=fallback_payload, timeout=300) as response:
                         response.raise_for_status()
@@ -103,11 +115,13 @@ class OllamaClient:
         message: str,
         system: str | None = None,
         history: Sequence[HistoryMessage] | None = None,
+        stop_event=None,
     ) -> str:
+        wait_until_available(stop_event)
         payload: dict[str, object] = {
             "model": self.model,
             "stream": False,
-            "options": {"num_ctx": settings.ollama_num_ctx, "num_thread": get_int("resources.cpu_threads", settings.ollama_num_thread), "num_gpu": get_int("resources.gpu_layers", settings.ollama_num_gpu)},
+            "options": self._options(),
             "keep_alive": settings.ollama_keep_alive,
             "messages": [],
         }
@@ -115,7 +129,7 @@ class OllamaClient:
         assert isinstance(messages, list)
         if system:
             messages.append({"role": "system", "content": system})
-        for item in history or ():
+        for item in history or () :
             role = item.get("role")
             content = item.get("content")
             if role in {"user", "assistant"} and isinstance(content, str) and content.strip():
@@ -129,8 +143,10 @@ class OllamaClient:
         except httpx.HTTPError as exc:
             record_error("ollama", self.model)
             if self.model != self.fallback_model:
+                wait_until_available(stop_event)
                 fallback_payload = dict(payload)
                 fallback_payload["model"] = self.fallback_model
+                fallback_payload["options"] = self._options()
                 try:
                     response = httpx.post(f"{self.base_url}/api/chat", json=fallback_payload, timeout=300)
                     response.raise_for_status()
@@ -259,8 +275,4 @@ def create_llm(task: str | None = None):
     provider = settings.llm_provider
     if provider in {"openai", "openai-compatible", "openai_compatible"}:
         return OpenAICompatibleClient()
-    if provider == "auto":
-        if settings.openai_api_key and not getattr(settings, "offline_strict", False):
-            return OpenAICompatibleClient()
-        return OllamaClient(task=task)
-    return OllamaClient(task=task)
+    return OllamaClient(task)
