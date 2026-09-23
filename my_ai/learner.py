@@ -33,7 +33,7 @@ class LearningEngine:
                 if stop_event is not None and stop_event.is_set():
                     raise InterruptedError("learning stopped") from exc
                 if attempt >= max_attempts:
-                    raise RuntimeError(f"{label} failed after {max_attempts} attempts") from exc
+                    raise RuntimeError(f"{label} failed after {max_attempts} attempts: {exc}") from exc
                 if progress_callback:
                     progress_callback("retrying", topic or label)
                 if stop_event is not None:
