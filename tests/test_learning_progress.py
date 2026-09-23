@@ -83,8 +83,9 @@ def test_scheduler_worker_uses_its_own_stop_event(monkeypatch):
     scheduler.stop()
 
 
-def test_scheduler_switches_language_when_already_running(monkeypatch):
+def test_scheduler_runs_multiple_languages_concurrently(monkeypatch):
     started = []
+    release = threading.Event()
 
     class FakeEngine:
         def __init__(self):
@@ -92,13 +93,20 @@ def test_scheduler_switches_language_when_already_running(monkeypatch):
 
         def learn_next(self, language, progress_callback=None, stop_event=None):
             started.append(language)
+            release.wait(1)
             return {"status": "completed", "topic": {"topic": "test"}}
 
     monkeypatch.setattr("my_ai.scheduler.LearningEngine", FakeEngine)
+    monkeypatch.setattr("my_ai.scheduler.StudyScheduler._wait_for_resources", staticmethod(lambda stop_event: {}))
     scheduler = StudyScheduler(interval_seconds=60)
     scheduler.start("Python")
     scheduler.start("SQL Server")
-    assert scheduler.language == "SQL Server"
+    deadline = time.time() + 1
+    while time.time() < deadline and set(started) != {"Python", "SQL Server"}:
+        time.sleep(0.01)
+    assert set(started) == {"Python", "SQL Server"}
+    assert len(scheduler.status()["active_workers"]) == 2
+    release.set()
     scheduler.stop()
 
 
@@ -120,19 +128,19 @@ def test_scheduler_status_returns_json_safe_snapshot():
     finally:
         monkeypatch.undo()
 
-    assert result == {
-        "running": False,
-        "language": "SQL Server",
-        "stage": "completed",
-        "current_topic": "T-SQL",
-        "last_result": {"status": "completed", "score": 91},
-        "error": None,
-        "interval_seconds": 3600,
-        "session_id": None,
-        "runtime_status": "idle",
-        "runtime_updated_at": None,
-        "resources": result["resources"],
-    }
+    assert result["running"] is False
+    assert result["language"] == "SQL Server"
+    assert result["stage"] == "completed"
+    assert result["current_topic"] == "T-SQL"
+    assert result["last_result"] == {"status": "completed", "score": 91}
+    assert result["error"] is None
+    assert result["interval_seconds"] == 3600
+    assert result["session_id"] is None
+    assert result["runtime_status"] == "idle"
+    assert result["runtime_updated_at"] is None
+    assert result["workers"] == []
+    assert result["active_workers"] == []
+    assert "resources" in result
 
 
 def test_knowledge_memory_deduplicates_normalized_content(monkeypatch):
