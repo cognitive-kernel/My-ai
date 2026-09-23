@@ -13,6 +13,12 @@ def test_settings_and_learning_routes_are_registered():
         assert "/learning/active" in paths
 
 
+def test_settings_feature_can_register_directly():
+    sf.install(app)
+    paths = {getattr(route, "path", "") for route in app.routes}
+    assert "/settings" in paths
+
+
 def test_default_cisco_course_is_seeded():
     sf._setup()
     rows = sf.fetch_all("SELECT id,name FROM custom_courses WHERE lower(name)=lower(?)", ("Cisco",))
