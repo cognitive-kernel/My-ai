@@ -7,11 +7,9 @@ from .learner import LearningEngine
 
 def retry_forever(self, operation, label, progress_callback=None, topic=None, stop_event=None):
     delay = 1.0
-    attempt = 0
     while True:
         if stop_event is not None and stop_event.is_set():
             raise InterruptedError("learning stopped")
-        attempt += 1
         try:
             return operation()
         except Exception as exc:
@@ -27,5 +25,5 @@ def retry_forever(self, operation, label, progress_callback=None, topic=None, st
 
 
 def install() -> None:
-    LearningEngine._retry_with_limit = retry_forever
-    LearningEngine._retry_forever = retry_forever
+    setattr(LearningEngine, "_retry_with_limit", retry_forever)
+    setattr(LearningEngine, "_retry_forever", retry_forever)
