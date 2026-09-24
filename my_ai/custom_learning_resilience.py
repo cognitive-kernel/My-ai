@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import time
-from typing import Any
 
 
 def install() -> None:
@@ -15,6 +14,7 @@ def install() -> None:
             return
         sf._running.add(course_id)
         delay = 1.0
+        first_iteration = True
         try:
             while True:
                 course = sf._course(course_id)
@@ -24,10 +24,11 @@ def install() -> None:
                 topic = next((x for x in rows if x["status"] != "completed"), None)
                 if not topic:
                     return
-                # A paused topic is a durable stop marker. A new /start request
-                # invokes this worker again and is therefore the explicit resume.
-                if topic["status"] == "paused" and delay == 1.0:
+                # On a new /start invocation, a paused topic is the resume target.
+                # During an already-running worker, a paused topic is a durable stop.
+                if topic["status"] == "paused" and not first_iteration:
                     return
+                first_iteration = False
                 try:
                     sf._learn_topic(course_id, topic)
                     delay = 1.0
@@ -36,12 +37,19 @@ def install() -> None:
                     current_topic = next((x for x in current if int(x["id"]) == int(topic["id"])), None)
                     if current_topic and current_topic["status"] == "paused":
                         return
-                    sf._set_topic(int(topic["id"]), "retrying", float(topic["progress_percent"]), "retrying", lesson=f"Learning error; retrying automatically: {exc}")
+                    sf._set_topic(
+                        int(topic["id"]),
+                        "retrying",
+                        float(topic["progress_percent"]),
+                        "retrying",
+                        lesson=f"Learning error; retrying automatically: {exc}",
+                    )
                     time.sleep(delay)
                     delay = min(delay * 2.0, 60.0)
                     continue
                 remaining = sf.fetch_all(
-                    "SELECT id FROM custom_course_topics t WHERE t.course_id=? AND NOT EXISTS (SELECT 1 FROM custom_course_progress p WHERE p.topic_id=t.id AND p.status='completed')",
+                    "SELECT id FROM custom_course_topics t WHERE t.course_id=? AND NOT EXISTS "
+                    "(SELECT 1 FROM custom_course_progress p WHERE p.topic_id=t.id AND p.status='completed')",
                     (course_id,),
                 )
                 if not remaining:
