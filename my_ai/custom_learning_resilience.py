@@ -24,8 +24,6 @@ def install() -> None:
                 topic = next((x for x in rows if x["status"] != "completed"), None)
                 if not topic:
                     return
-                # On a new /start invocation, a paused topic is the resume target.
-                # During an already-running worker, a paused topic is a durable stop.
                 if topic["status"] == "paused" and not first_iteration:
                     return
                 first_iteration = False
@@ -57,5 +55,5 @@ def install() -> None:
         finally:
             sf._running.discard(course_id)
 
-    sf._run_course = resilient_run_course
-    sf._myai_resilience_installed = True
+    setattr(sf, "_run_course", resilient_run_course)
+    setattr(sf, "_myai_resilience_installed", True)
