@@ -5,12 +5,14 @@ import uvicorn
 from .api import app, scheduler
 from .auth import audit, require_user
 from .config import settings
+from .custom_learning_resilience import install as install_custom_learning_resilience
 from .feature_routes import register_routes
 from .learning_resilience import install as install_learning_resilience
 from .ui_extensions import install_ui_extensions
 
 register_routes(app, scheduler, require_user, audit)
 install_learning_resilience()
+install_custom_learning_resilience()
 install_ui_extensions(app)
 
 
