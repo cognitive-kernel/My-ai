@@ -1,5 +1,5 @@
 HTML="""<!doctype html><html lang='fa' dir='rtl'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>My-AI</title><style>
-body{font-family:Tahoma,system-ui;margin:0;background:#f3f4f6;color:#17202a}main{max-width:1100px;margin:auto;padding:20px}.card{background:#fff;padding:18px;border-radius:14px;margin:12px 0}button,select{padding:10px 15px;border:0;border-radius:9px;cursor:pointer;margin:3px}textarea{width:100%;box-sizing:border-box;padding:12px;margin:8px 0;border:1px solid #ccc;border-radius:9px}#messages{height:400px;overflow:auto;background:#f8fafc;padding:10px}.msg{padding:9px;margin:7px;border-radius:9px;white-space:pre-wrap}.user{background:#dbeafe}.ai{background:#e5e7eb}pre{white-space:pre-wrap;background:#111827;color:#fff;padding:12px;direction:ltr;text-align:left;overflow:auto}.bar{height:24px;background:#ddd;border-radius:8px;overflow:hidden}.fill{height:100%;background:#2563eb;color:#fff;text-align:center;line-height:24px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.small{font-size:13px;color:#5b6470}.danger{background:#fee2e2}.layout{display:grid;grid-template-columns:240px 1fr;gap:14px}.sidebar{position:sticky;top:10px;height:fit-content}.chatItem{display:block;width:100%;text-align:right;background:#f8fafc;margin:4px 0;padding:9px;border-radius:8px}.chatItem.active{background:#dbeafe}.chatRow{display:flex;gap:4px;align-items:center}.chatRow .chatItem{flex:1}.chatAction{padding:7px 8px;background:#eef2ff}.githubBox{border:1px solid #d1d5db;padding:12px;border-radius:10px;margin-bottom:10px}.githubOut{white-space:pre-wrap;font-size:13px}@media(max-width:800px){.layout{grid-template-columns:1fr}.sidebar{position:static}}.helpBtn{font-size:13px;background:#e0e7ff;color:#1e3a8a;text-decoration:none;padding:6px 10px;border-radius:7px;float:left}.githubHelp{margin-top:7px;padding:10px;background:#eff6ff;border-radius:9px;font-size:13px;line-height:1.8}.githubHelp a{color:#1d4ed8}.ok{background:#dcfce7}.learning-stopping,.learning-stopped,.learning-paused{background:#fef3c7}.diffBox{background:#111827;color:#e5e7eb;padding:12px;border-radius:9px;direction:ltr;text-align:left;overflow:auto;max-height:420px;font-family:Consolas,monospace;font-size:12px}.diffAdd{background:#14532d}.diffDel{background:#7f1d1d}.diffMeta{color:#93c5fd}.diffLine{display:block;white-space:pre-wrap}.repairItem{padding:8px;margin:5px 0;border:1px solid #ddd;border-radius:8px;cursor:pointer}.repairItem:hover{background:#f8fafc}button:disabled{opacity:.55;cursor:not-allowed}</style></head><body><main>
+body{font-family:Tahoma,system-ui;margin:0;background:#f3f4f6;color:#17202a}main{max-width:1100px;margin:auto;padding:20px}.card{background:#fff;padding:18px;border-radius:14px;margin:12px 0}button,select{padding:10px 15px;border:0;border-radius:9px;cursor:pointer;margin:3px}textarea{width:100%;box-sizing:border-box;padding:12px;margin:8px 0;border:1px solid #ccc;border-radius:9px}#messages{height:400px;overflow:auto;background:#f8fafc;padding:10px}.msg{padding:9px;margin:7px;border-radius:9px;white-space:pre-wrap}.user{background:#dbeafe}.ai{background:#e5e7eb}pre{white-space:pre-wrap;background:#111827;color:#fff;padding:12px;direction:ltr;text-align:left;overflow:auto}.bar{height:24px;background:#ddd;border-radius:8px;overflow:hidden}.fill{height:100%;background:#2563eb;color:#fff;text-align:center;line-height:24px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.small{font-size:13px;color:#5b6470}.danger{background:#fee2e2}.layout{display:grid;grid-template-columns:240px 1fr;gap:14px}.sidebar{position:sticky;top:10px;height:fit-content}.chatItem{display:block;width:100%;text-align:right;background:#f8fafc;margin:4px 0;padding:9px;border-radius:8px}.chatItem.active{background:#dbeafe}.chatRow{display:flex;gap:4px;align-items:center}.chatRow .chatItem{flex:1}.chatAction{padding:7px 8px;background:#eef2ff}.githubBox{border:1px solid #d1d5db;padding:12px;border-radius:10px;margin-bottom:10px}.githubOut{white-space:pre-wrap;font-size:13px}@media(max-width:800px){.layout{grid-template-columns:1fr}.sidebar{position:static}}.helpBtn{font-size:13px;background:#e0e7ff;color:#1e3a8a;text-decoration:none;padding:6px 10px;border-radius:7px;float:left}.githubHelp{margin-top:7px;padding:10px;background:#eff6ff;border-radius:9px;font-size:13px;line-height:1.8}.githubHelp a{color:#1d4ed8}.ok{background:#dcfce7}.learning-stopping,.learning-stopped,.learning-paused{background:#fef3c7 !important}.diffBox{background:#111827;color:#e5e7eb;padding:12px;border-radius:9px;direction:ltr;text-align:left;overflow:auto;max-height:420px;font-family:Consolas,monospace;font-size:12px}.diffAdd{background:#14532d}.diffDel{background:#7f1d1d}.diffMeta{color:#93c5fd}.diffLine{display:block;white-space:pre-wrap}.repairItem{padding:8px;margin:5px 0;border:1px solid #ddd;border-radius:8px;cursor:pointer}.repairItem:hover{background:#f8fafc}button:disabled{opacity:.55;cursor:not-allowed}</style></head><body><main>
 <div class='layout'><aside class='card sidebar'><button id='newChat' type='button'>+ گفتگوی جدید</button><h3>چت‌های اخیر</h3><div id='chatList'></div><hr><div class='githubBox'><b>GitHub</b><p class='small'>اتصال گرافیکی به مخزن</p><p class='small'>مخزن و تنظیمات API فقط از بخش تنظیمات خوانده می‌شوند.</p><div style='margin-top:8px'><button id='githubLogin' type='button'>ورود با GitHub</button><button id='githubLogout' type='button'>خروج از GitHub</button><button id='githubConnect' type='button'>بررسی اتصال</button></div><div class='githubHelp'><b>اتصال امن GitHub</b><br>MY-AI در صورت وجود GitHub CLI از آن استفاده می‌کند؛ در غیر این صورت از OAuth داخلی GitHub با کد یک‌بارمصرف استفاده می‌کند. لازم نیست Personal Access Token را داخل برنامه وارد کنید.<br><a href='/help#git' target='_blank'>راهنمای آفلاین GitHub</a> · <a href='/help#github-online' target='_blank'>بررسی آنلاین راهنما</a></div><div id='githubStatus' class='small'></div></div></aside><section><h1>My-AI <a class='helpBtn' href='/help#chat' target='_blank'>راهنمای کامل</a></h1><p id='subtitle'>دستیار محلی برای یادگیری، برنامه‌نویسی و بررسی امنیتی</p>
 <div class='card'><button id='faBtn' type='button'>فارسی</button><button id='enBtn' type='button'>English</button><select id='voiceLang'><option value='fa-IR'>صدای فارسی</option><option value='en-US'>English voice</option></select></div>
 <div class='card'><h2 id='chatTitle'>دستور به دستیار <a class='helpBtn' href='/help#chat' target='_blank'>راهنما</a></h2><div id='messages'></div><textarea id='msg' rows='3' placeholder='مثلاً: پایتون یاد بگیر، بعد یک صفحه ورود بساز و پن‌تست بگیر' onkeydown='if(event.key==="Enter"&&!event.ctrlKey&&!event.shiftKey){event.preventDefault();window.myAiSend();}'></textarea><button type='button' id='sendBtn' onclick='window.myAiSend()'>ارسال</button><button type='button' id='voiceBtn'>گفتار</button><button type='button' id='stopBtn'>توقف صدا</button><p class='small' id='policy'>پیش‌فرض پن‌تست: فقط گزارش. برای اصلاح باید صریحاً درخواست رفع/اصلاح بدهید؛ «فقط گزارش بده» یا «فقط تست بگیر» همیشه بدون تغییر فایل اجرا می‌شود.</p></div>
@@ -48,30 +48,35 @@ fetch('/scheduler/status',{cache:'no-store'}),
 fetch('/learning/active',{cache:'no-store'})
 ]);
 var j=await rr[0].json(),s=await rr[1].json(),ac=await rr[2].json();
-var courses=j.courses||[],workers=(s.active_workers||[]).filter(function(w){return w.running||['running','retrying','stopping','paused','stopped'].indexOf(w.status)>=0});
+var courses=j.courses||[],workers=s.workers||[],workerMap={};
+workers.forEach(function(w){workerMap[String(w.language).toLowerCase()]=w});
+var items=courses.slice();
+workers.forEach(function(w){
+if(!items.some(function(x){return String(x.language).toLowerCase()===String(w.language).toLowerCase()}))items.push({language:w.language,progress_percent:0,total_topics:0,completed_topics:0,remaining_topics:0,topics:[]});
+});
 var previousOpen={};
 document.querySelectorAll('#dashboard details[data-learning-language]').forEach(function(d){previousOpen[d.getAttribute('data-learning-language')]=d.open});
 var savedScroll=window.scrollY;
 var html='';
-if(workers.length){
-html+='<div class="small" style="margin-bottom:10px"><b>در حال یادگیری همزمان:</b> '+workers.length+' موضوع</div>';
-workers.forEach(function(w,index){
-var c=courses.find(function(x){return x.language===w.language});
-var summary=c||{progress_percent:0,total_topics:0,completed_topics:0,remaining_topics:0,topics:[]};
-var current=w.current_topic||((summary.current||{}).topic)||'در حال آماده‌سازی';
-var stage=w.stage||'starting';
+if(items.length){
+var activeCount=workers.filter(function(w){return w.running||['running','retrying','stopping','paused'].indexOf(w.status)>=0}).length;
+html+='<div class="small" style="margin-bottom:10px"><b>موضوعات آموزشی:</b> '+items.length+' مورد'+(activeCount?' · <b>در حال یادگیری:</b> '+activeCount+' مورد':'')+'</div>';
+items.forEach(function(summary){
+var language=summary.language||summary.name||'آموزش';
+var w=workerMap[String(language).toLowerCase()]||null;
+var status=w?(w.status||'stopped'):'stopped';
+var current=w&&w.current_topic||((summary.current||{}).topic)||'در انتظار ادامه';
+var stage=w&&w.stage||'paused';
 var pct=Number(summary.progress_percent||0);
-var stoppedState=['stopping','stopped','paused'].indexOf(w.status)>=0;
-var cardClass=w.error?'danger':(w.status==='stopping'?'learning-stopping':(w.status==='stopped'?'learning-stopped':(w.status==='paused'?'learning-paused':'ok')));
-var stateText=w.status==='stopping'?'در حال توقف…':(w.status==='stopped'?'متوقف شده':(w.status==='paused'?'متوقف شده':'در حال اجرا'));
-html+='<details class="card '+cardClass+'" data-learning-language="'+escHtml(w.language)+'"><summary style="cursor:pointer"><b>'+escHtml(w.language)+'</b> · '+escHtml(current)+' · '+pct+'% · <b>'+stateText+'</b></summary>';
+var cardClass=status==='stopping'?'learning-stopping':(status==='running'||status==='retrying'?'ok':'learning-stopped');
+var stateText=status==='stopping'?'در حال توقف…':(status==='running'||status==='retrying'?'در حال اجرا':'متوقف شده');
+html+='<details class="card '+cardClass+'" data-learning-language="'+escHtml(language)+'"><summary style="cursor:pointer"><b>'+escHtml(language)+'</b> · '+escHtml(current)+' · '+pct+'% · <b>'+stateText+'</b></summary>';
 html+='<p><b>وضعیت:</b> '+stateText+' · <b>مرحله:</b> '+escHtml(stage)+' · <b>تکمیل:</b> '+Number(summary.completed_topics||0)+' / '+Number(summary.total_topics||0)+' · <b>باقی‌مانده:</b> '+Number(summary.remaining_topics||0)+'</p>';
-if(w.error)html+='<div>خطا: '+escHtml(w.error)+'</div>';
+if(w&&w.error)html+='<div>خطا: '+escHtml(w.error)+'</div>';
 html+='<div class="bar"><div class="fill" style="width:'+pct+'%">'+pct+'%</div></div>';
-html+='<p class="small">مسیر یادگیری '+escHtml(w.language)+' — برای مشاهده سرفصل‌ها روی همین بخش کلیک کنید.</p>';
-html+='<button type="button" data-learning-action="stop" data-learning-language="'+escHtml(w.language)+'" '+(['paused','stopping','stopped'].indexOf(w.status)>=0?'disabled':'')+'>متوقف کردن</button>';
-html+='<button type="button" data-learning-action="resume" data-learning-language="'+escHtml(w.language)+'" '+(['paused','stopping','stopped'].indexOf(w.status)<0?'disabled':'')+'>ادامه</button>';
-html+='</summary>';
+html+='<p class="small">مسیر یادگیری '+escHtml(language)+' — برای مشاهده سرفصل‌ها روی همین بخش کلیک کنید.</p>';
+html+='<button type="button" data-learning-action="stop" data-learning-language="'+escHtml(language)+'" '+(status!=='running'&&status!=='retrying'?'disabled':'')+'>متوقف کردن</button>';
+html+='<button type="button" data-learning-action="resume" data-learning-language="'+escHtml(language)+'" '+(status==='running'||status==='retrying'||status==='stopping'?'disabled':'')+'>ادامه</button>';
 (summary.topics||[]).forEach(function(t){
 html+='<div class="small" style="margin-top:8px"><b>'+escHtml(t.order||t.topic_order)+'. '+escHtml(t.topic||t.title)+'</b> — '+Number(t.progress_percent||0)+'%</div>';
 html+='<div class="bar"><div class="fill" style="width:'+Number(t.progress_percent||0)+'%">'+Number(t.progress_percent||0)+'%</div></div>';
@@ -79,7 +84,7 @@ html+='<div class="bar"><div class="fill" style="width:'+Number(t.progress_perce
 html+='</details>';
 });
 }else{
-html='<div class="card ok"><b>وضعیت یادگیری:</b> در حال حاضر آموزشی در حال اجرا نیست.</div>';
+html='<div class="card learning-stopped"><b>موضوع آموزشی ثبت‌شده‌ای وجود ندارد.</b></div>';
 }
 $('dashboard').innerHTML=html;
 document.querySelectorAll('#dashboard details[data-learning-language]').forEach(function(d){
