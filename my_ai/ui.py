@@ -63,10 +63,9 @@ html+='<p><b>مرحله:</b> '+escHtml(stage)+' · <b>تکمیل:</b> '+Number(s
 if(w.error)html+='<div>خطا: '+escHtml(w.error)+'</div>';
 html+='<div class="bar"><div class="fill" style="width:'+pct+'%">'+pct+'%</div></div>';
 html+='<p class="small">مسیر یادگیری '+escHtml(w.language)+' — برای مشاهده سرفصل‌ها روی همین بخش کلیک کنید.</p>';
-html+='<div style="margin:10px 0">';
-html+='<button type="button" data-learning-action="stop" data-learning-language="'+escHtml(w.language)+'" '+(['paused','stopping','stopped'].indexOf(w.status)>=0?'disabled':'')+'>متوقف کردن آموزش</button>';
-html+='<button type="button" data-learning-action="resume" data-learning-language="'+escHtml(w.language)+'" '+(['paused','stopping','stopped'].indexOf(w.status)<0?'disabled':'')+'>ادامه آموزش</button>';
-html+='</div>';
+html+='<button type="button" data-learning-action="stop" data-learning-language="'+escHtml(w.language)+'" '+(['paused','stopping','stopped'].indexOf(w.status)>=0?'disabled':'')+'>متوقف کردن</button>';
+html+='<button type="button" data-learning-action="resume" data-learning-language="'+escHtml(w.language)+'" '+(['paused','stopping','stopped'].indexOf(w.status)<0?'disabled':'')+'>ادامه</button>';
+html+='</span></summary>';
 (summary.topics||[]).forEach(function(t){
 html+='<div class="small" style="margin-top:8px"><b>'+escHtml(t.order||t.topic_order)+'. '+escHtml(t.topic||t.title)+'</b> — '+Number(t.progress_percent||0)+'%</div>';
 html+='<div class="bar"><div class="fill" style="width:'+Number(t.progress_percent||0)+'%">'+Number(t.progress_percent||0)+'%</div></div>';
