@@ -7,9 +7,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
-# Automatic installation is intentionally limited to packages that this feature
-# knows how to use. It never executes commands derived from file contents.
 OPTIONAL_PREREQUISITES: dict[str, str] = {
     "docx": "python-docx",
     "openpyxl": "openpyxl",
@@ -108,4 +105,33 @@ def create_xlsx(path: str, sheets: dict[str, list[list[Any]]]) -> str:
         for row in rows:
             ws.append(row)
     wb.save(str(output))
+    return str(output.resolve())
+
+
+def create_pdf(path: str, title: str, paragraphs: list[str]) -> str:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    output = Path(path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    styles = getSampleStyleSheet()
+    doc = SimpleDocTemplate(str(output), pagesize=A4)
+    story = [Paragraph(title, styles["Title"]), Spacer(1, 12)]
+    story.extend(Paragraph(p, styles["BodyText"]) for p in paragraphs)
+    doc.build(story)
+    return str(output.resolve())
+
+
+def create_pptx(path: str, title: str, slides: list[dict[str, str]]) -> str:
+    from pptx import Presentation
+    output = Path(path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    presentation = Presentation()
+    first = presentation.slides.add_slide(presentation.slide_layouts[0])
+    first.shapes.title.text = title
+    for slide_data in slides:
+        slide = presentation.slides.add_slide(presentation.slide_layouts[1])
+        slide.shapes.title.text = str(slide_data.get("title", ""))
+        slide.placeholders[1].text = str(slide_data.get("body", ""))
+    presentation.save(str(output))
     return str(output.resolve())
