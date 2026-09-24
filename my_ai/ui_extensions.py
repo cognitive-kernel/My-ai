@@ -15,12 +15,19 @@ INJECT = r"""
   </div>
   <div id="fileStatus" class="small"></div>
 </div>
+<div class="card" id="learningControls" style="margin-top:12px">
+  <b>کنترل آموزش</b>
+  <div class="small" style="margin:6px 0">توقف و ادامه هر مسیر یادگیری از همین فرم اصلی.</div>
+  <div id="learningControlList">در حال بارگذاری وضعیت آموزش...</div>
+</div>
 <script>
 (function(){
   if(window.__myAiFeatureExtensions)return;
   window.__myAiFeatureExtensions=true;
   var box=document.getElementById('localFileTools'),msg=document.getElementById('msg');
   if(box&&msg&&msg.parentNode)msg.parentNode.insertBefore(box,msg);
+  var controls=document.getElementById('learningControls'),dashboard=document.getElementById('dashboard');
+  if(controls&&dashboard&&dashboard.parentNode)dashboard.parentNode.insertBefore(controls,dashboard);
   async function uploadAndAnalyze(){
     var input=document.getElementById('chatFile');
     if(!input||!input.files||!input.files.length)return null;
@@ -63,25 +70,39 @@ INJECT = r"""
     if(!r.ok)throw Error(j.detail||'خطا');
     return j;
   }
+  function escapeHtml(value){return String(value==null?'':value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;')}
   async function addControls(){
-    var dash=document.getElementById('dashboard');if(!dash)return;
-    dash.querySelectorAll('details').forEach(function(d){
-      if(d.querySelector('.learning-controls'))return;
-      var summary=d.querySelector('summary');if(!summary)return;
-      var text=summary.textContent||'';
-      var language=text.split('·')[0].trim();if(!language)return;
-      var box=document.createElement('div');box.className='learning-controls';box.style.marginTop='8px';
-      var stop=document.createElement('button');stop.type='button';stop.textContent='متوقف کردن یادگیری';
-      var resume=document.createElement('button');resume.type='button';resume.textContent='ادامه یادگیری';
-      stop.onclick=async function(){try{await control(language,'stop');setTimeout(addControls,100)}catch(e){alert(e.message)}};
-      resume.onclick=async function(){try{await control(language,'resume');setTimeout(addControls,100)}catch(e){alert(e.message)}};
-      box.appendChild(stop);box.appendChild(resume);d.appendChild(box);
-    });
+    var list=document.getElementById('learningControlList');if(!list)return;
+    try{
+      var r=await fetch('/learning/controls?x='+Date.now(),{cache:'no-store'}),j=await r.json();
+      if(!r.ok)throw Error(j.detail||'HTTP '+r.status);
+      var workers=j.active_workers||[];
+      if(!workers.length){list.innerHTML='<div class="small">آموزشی در حال اجرا نیست.</div>';return}
+      var seen={};workers.forEach(function(w){seen[w.language]=w});
+      var html='';
+      Object.keys(seen).sort().forEach(function(language){
+        var w=seen[language],status=w.status||(w.running?'running':'stopped');
+        var stopped=['paused','stopping','stopped'].indexOf(status)>=0;
+        html+='<div class="card" style="margin:8px 0;padding:12px"><b>'+escapeHtml(language)+'</b> · '+escapeHtml(status)+'<div style="margin-top:6px">';
+        html+='<button type="button" data-learning-action="stop" data-learning-language="'+escapeHtml(language)+'" '+(stopped?'disabled':'')+'>متوقف کردن آموزش</button>';
+        html+='<button type="button" data-learning-action="resume" data-learning-language="'+escapeHtml(language)+'" '+(!stopped?'disabled':'')+'>ادامه آموزش</button>';
+        html+='</div></div>';
+      });
+      list.innerHTML=html;
+      list.querySelectorAll('[data-learning-action]').forEach(function(button){
+        button.onclick=async function(){
+          var language=this.getAttribute('data-learning-language'),action=this.getAttribute('data-learning-action');
+          this.disabled=true;
+          try{await control(language,action);await addControls();}
+          catch(e){alert(e.message);await addControls()}
+        };
+      });
+    }catch(e){list.textContent='خطا در وضعیت آموزش: '+e.message}
   }
+  window.myAiLearningControls=addControls;
   setInterval(addControls,1000);
   setTimeout(addControls,100);
 })();
-</script>
 """
 
 
