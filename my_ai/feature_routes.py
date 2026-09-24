@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
-from .file_processing import create_docx, create_xlsx, install_known_prerequisites
+from .file_processing import create_docx, create_pdf, create_pptx, create_xlsx, install_known_prerequisites
 from .local_files import filesystem_roots, inspect_file, list_directory, read_text, workspace_path
 from .multimodal import analyze
 
@@ -22,6 +22,18 @@ class GenerateDocxRequest(BaseModel):
 class GenerateXlsxRequest(BaseModel):
     filename: str
     sheets: dict[str, list[list[object]]]
+
+
+class GeneratePdfRequest(BaseModel):
+    filename: str
+    title: str
+    paragraphs: list[str]
+
+
+class GeneratePptxRequest(BaseModel):
+    filename: str
+    title: str
+    slides: list[dict[str, str]]
 
 
 def register_routes(app, scheduler, require_user, audit):
@@ -104,6 +116,20 @@ def register_routes(app, scheduler, require_user, audit):
     def files_generate_xlsx(payload: GenerateXlsxRequest, request: Request):
         user = require_user(request)
         path = create_xlsx(str(workspace_path(payload.filename)), payload.sheets)
+        audit(user, "files", "write", "201", f"generated:{path}")
+        return {"path": path, "local_path": path, "read_only_after_creation": True}
+
+    @router.post("/files/generate/pdf")
+    def files_generate_pdf(payload: GeneratePdfRequest, request: Request):
+        user = require_user(request)
+        path = create_pdf(str(workspace_path(payload.filename)), payload.title, payload.paragraphs)
+        audit(user, "files", "write", "201", f"generated:{path}")
+        return {"path": path, "local_path": path, "read_only_after_creation": True}
+
+    @router.post("/files/generate/pptx")
+    def files_generate_pptx(payload: GeneratePptxRequest, request: Request):
+        user = require_user(request)
+        path = create_pptx(str(workspace_path(payload.filename)), payload.title, payload.slides)
         audit(user, "files", "write", "201", f"generated:{path}")
         return {"path": path, "local_path": path, "read_only_after_creation": True}
 
