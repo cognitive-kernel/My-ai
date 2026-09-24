@@ -14,7 +14,8 @@ INJECT = r"""
 (function(){
   if(window.__myAiFeatureExtensions)return;
   window.__myAiFeatureExtensions=true;
-  function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+  var box=document.getElementById('localFileTools'),msg=document.getElementById('msg');
+  if(box&&msg&&msg.parentNode)msg.parentNode.insertBefore(box,msg);
   async function uploadAndAnalyze(){
     var input=document.getElementById('chatFile');
     if(!input||!input.files||!input.files.length)return null;
@@ -32,9 +33,9 @@ INJECT = r"""
     if(input&&input.files&&input.files.length){
       try{
         var analysis=await uploadAndAnalyze();
-        var msg=document.getElementById('msg');
+        var current=document.getElementById('msg');
         var extra='\n\n[Attached local file analysis]\n'+JSON.stringify(analysis,null,2);
-        msg.value=(msg.value||'')+extra;
+        current.value=(current.value||'')+extra;
       }catch(e){var s=document.getElementById('fileStatus');if(s)s.textContent='خطا: '+e.message;return}
     }
     return oldSend.apply(this,arguments);
@@ -54,16 +55,11 @@ INJECT = r"""
       var box=document.createElement('div');box.className='learning-controls';box.style.marginTop='8px';
       var stop=document.createElement('button');stop.type='button';stop.textContent='متوقف کردن یادگیری';
       var resume=document.createElement('button');resume.type='button';resume.textContent='ادامه یادگیری';
-      stop.onclick=async function(){try{await control(language,'stop');await window.__myAiReloadDash()}catch(e){alert(e.message)}};
-      resume.onclick=async function(){try{await control(language,'resume');await window.__myAiReloadDash()}catch(e){alert(e.message)}};
+      stop.onclick=async function(){try{await control(language,'stop');setTimeout(addControls,100)}catch(e){alert(e.message)}};
+      resume.onclick=async function(){try{await control(language,'resume');setTimeout(addControls,100)}catch(e){alert(e.message)}};
       box.appendChild(stop);box.appendChild(resume);d.appendChild(box);
     });
   }
-  window.__myAiReloadDash=async function(){
-    if(typeof window.__myAiOriginalLoadDash==='function')await window.__myAiOriginalLoadDash();
-    setTimeout(addControls,50);
-  };
-  if(typeof window.loadDash==='function' && !window.__myAiOriginalLoadDash)window.__myAiOriginalLoadDash=window.loadDash;
   setInterval(addControls,1000);
   setTimeout(addControls,100);
 })();
