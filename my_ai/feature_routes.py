@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
-from .file_processing import create_docx, create_pdf, create_pptx, create_xlsx, detect_type, install_known_prerequisites, missing_prerequisites
+from .file_processing import create_docx, create_pdf, create_pptx, create_xlsx, detect_type, install_known_prerequisites, missing_prerequisites, missing_system_prerequisites
 from .local_files import filesystem_roots, inspect_file, list_directory, read_text, workspace_path
 from .multimodal import analyze
 
@@ -34,6 +35,26 @@ class GeneratePptxRequest(BaseModel):
     filename: str
     title: str
     slides: list[dict[str, str]]
+
+
+class GenerateFromChatRequest(BaseModel):
+    prompt: str
+    format: str
+    filename: str
+
+
+def _normalise_format(value: str) -> str:
+    value = value.strip().lower().lstrip(".")
+    aliases = {"word": "docx", "doc": "docx", "excel": "xlsx", "xls": "xlsx", "powerpoint": "pptx", "power-point": "pptx", "presentation": "pptx", "pdf": "pdf"}
+    return aliases.get(value, value)
+
+
+def _chat_content(prompt: str, fmt: str) -> tuple[str, list[str], list[dict[str, str]]]:
+    clean = prompt.strip()
+    title = clean[:120] or "My-AI document"
+    paragraphs = [clean]
+    slides = [{"title": title, "body": clean}]
+    return title, paragraphs, slides
 
 
 def register_routes(app, scheduler, require_user, audit):
@@ -96,18 +117,18 @@ def register_routes(app, scheduler, require_user, audit):
         require_user(request)
         info = detect_type(payload.path)
         missing = missing_prerequisites(info["kind"])
-        installed = install_known_prerequisites(info["kind"]) if missing else []
+        install_system = os.getenv("MYAI_AUTO_INSTALL_SYSTEM_PREREQUISITES", "false").strip().lower() == "true"
+        prerequisites = install_known_prerequisites(info["kind"], install_system=install_system) if missing or missing_system_prerequisites(info["kind"]) else {"python_installed": [], "system_missing": [], "system_installed": []}
         result = analyze(payload.path)
-        result["prerequisites"] = {"missing_before": missing, "installed": installed}
+        result["prerequisites"] = {"missing_before": missing, **prerequisites}
         return result
 
     @router.post("/files/prerequisites")
-    def files_prerequisites(payload: FilePathRequest, request: Request):
+    def files_prerequisites(payload: FilePathRequest, request: Request, install_system: bool = False):
         require_user(request)
         kind = detect_type(payload.path)["kind"]
-        missing = missing_prerequisites(kind)
-        installed = install_known_prerequisites(kind) if missing else []
-        return {"kind": kind, "missing_before": missing, "installed": installed}
+        result = install_known_prerequisites(kind, install_system=install_system)
+        return {"kind": kind, "missing_before": missing_prerequisites(kind), **result}
 
     @router.post("/files/generate/docx")
     def files_generate_docx(payload: GenerateDocxRequest, request: Request):
@@ -136,5 +157,24 @@ def register_routes(app, scheduler, require_user, audit):
         path = create_pptx(str(workspace_path(payload.filename)), payload.title, payload.slides)
         audit(user, "files", "write", "201", f"generated:{path}")
         return {"path": path, "local_path": path, "read_only_after_creation": True}
+
+    @router.post("/files/generate/from-chat")
+    def files_generate_from_chat(payload: GenerateFromChatRequest, request: Request):
+        user = require_user(request)
+        fmt = _normalise_format(payload.format)
+        title, paragraphs, slides = _chat_content(payload.prompt, fmt)
+        filename = payload.filename.strip() or f"myai-generated.{fmt}"
+        if fmt == "docx":
+            path = create_docx(str(workspace_path(filename)), title, paragraphs)
+        elif fmt == "xlsx":
+            path = create_xlsx(str(workspace_path(filename)), {"Sheet1": [[title], [payload.prompt]]})
+        elif fmt == "pdf":
+            path = create_pdf(str(workspace_path(filename)), title, paragraphs)
+        elif fmt == "pptx":
+            path = create_pptx(str(workspace_path(filename)), title, slides)
+        else:
+            raise HTTPException(400, "format must be docx, xlsx, pdf, or pptx")
+        audit(user, "files", "write", "201", f"generated-from-chat:{path}")
+        return {"path": path, "local_path": path, "format": fmt, "source_prompt": payload.prompt, "read_only_after_creation": True}
 
     app.include_router(router)
