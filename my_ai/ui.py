@@ -63,6 +63,10 @@ html+='<p><b>مرحله:</b> '+escHtml(stage)+' · <b>تکمیل:</b> '+Number(s
 if(w.error)html+='<div>خطا: '+escHtml(w.error)+'</div>';
 html+='<div class="bar"><div class="fill" style="width:'+pct+'%">'+pct+'%</div></div>';
 html+='<p class="small">مسیر یادگیری '+escHtml(w.language)+' — برای مشاهده سرفصل‌ها روی همین بخش کلیک کنید.</p>';
+html+='<div style="margin:10px 0">';
+html+='<button type="button" data-learning-action="stop" data-learning-language="'+escHtml(w.language)+'" '+(['paused','stopping','stopped'].indexOf(w.status)>=0?'disabled':'')+'>متوقف کردن آموزش</button>';
+html+='<button type="button" data-learning-action="resume" data-learning-language="'+escHtml(w.language)+'" '+(['paused','stopping','stopped'].indexOf(w.status)<0?'disabled':'')+'>ادامه آموزش</button>';
+html+='</div>';
 (summary.topics||[]).forEach(function(t){
 html+='<div class="small" style="margin-top:8px"><b>'+escHtml(t.order||t.topic_order)+'. '+escHtml(t.topic||t.title)+'</b> — '+Number(t.progress_percent||0)+'%</div>';
 html+='<div class="bar"><div class="fill" style="width:'+Number(t.progress_percent||0)+'%">'+Number(t.progress_percent||0)+'%</div></div>';
@@ -73,6 +77,18 @@ html+='</details>';
 html='<div class="card ok"><b>وضعیت یادگیری:</b> در حال حاضر آموزشی در حال اجرا نیست.</div>';
 }
 $('dashboard').innerHTML=html;
+document.querySelectorAll('[data-learning-action]').forEach(function(button){
+button.onclick=async function(){
+var language=this.getAttribute('data-learning-language'),action=this.getAttribute('data-learning-action');
+this.disabled=true;
+try{
+var r=await fetch('/learning/'+encodeURIComponent(language)+'/'+action,{method:'POST'});
+var j=await r.json();
+if(!r.ok)throw Error(j.detail||'HTTP '+r.status);
+await loadDash();
+}catch(e){alert(e.message);await loadDash()}
+};
+});
 }catch(e){$('dashboard').textContent='خطا: '+(e.message||String(e))}
 }
 function init(){
