@@ -42,3 +42,16 @@ def test_read_only_file_inspection_endpoint(tmp_path: Path):
     assert response.status_code == 200
     assert response.json()["read_only"] is True
     assert target.read_text(encoding="utf-8") == "hello"
+
+
+def test_chat_file_generation_rejects_unknown_format():
+    app = FastAPI()
+    register_routes(app, FakeScheduler(), lambda request: {"id": 1}, lambda *args: None)
+    client = TestClient(app)
+
+    response = client.post(
+        "/files/generate/from-chat",
+        json={"prompt": "test", "format": "exe", "filename": "x.exe"},
+    )
+    assert response.status_code == 400
+    assert "format must be" in response.json()["detail"]
