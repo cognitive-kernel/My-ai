@@ -18,6 +18,9 @@ from .dynamic_learning import resolve_learning_target
 from .router import classify
 from .scheduler import StudyScheduler
 from .ui import page
+from .feature_routes import register_routes
+from .learning_resilience import install as install_learning_resilience
+from .ui_extensions import install_ui_extensions
 from .help import page as help_page, ask_help, local_help_html, apply_help_update
 from .git_connector import GitHubConnector
 from .auth import authenticate, audit, create_account, create_session, current_user, require_admin, revoke_session, require_user, tool_allowed
@@ -47,6 +50,10 @@ async def lifespan(_):
     yield
     scheduler.stop()
 app=FastAPI(title="My-AI",version="0.2.0",description="Local-first personal learning and coding agent.",lifespan=lifespan)
+
+register_routes(app, scheduler, require_user, audit)
+install_learning_resilience()
+install_ui_extensions(app)
 
 _PUBLIC_PATHS = {"/", "/login", "/register", "/auth/register", "/auth/login", "/auth/logout", "/auth/register/status", "/health", "/health/metrics", "/openapi.json", "/docs", "/redoc"}
 _TOOL_RULES = (
