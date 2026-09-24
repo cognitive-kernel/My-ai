@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
-from .file_processing import create_docx, create_pdf, create_pptx, create_xlsx, install_known_prerequisites
+from .file_processing import create_docx, create_pdf, create_pptx, create_xlsx, detect_type, install_known_prerequisites, missing_prerequisites
 from .local_files import filesystem_roots, inspect_file, list_directory, read_text, workspace_path
 from .multimodal import analyze
 
@@ -94,12 +94,16 @@ def register_routes(app, scheduler, require_user, audit):
     @router.post("/files/analyze")
     def files_analyze(payload: FilePathRequest, request: Request):
         require_user(request)
-        return analyze(payload.path)
+        info = detect_type(payload.path)
+        missing = missing_prerequisites(info["kind"])
+        installed = install_known_prerequisites(info["kind"]) if missing else []
+        result = analyze(payload.path)
+        result["prerequisites"] = {"missing_before": missing, "installed": installed}
+        return result
 
     @router.post("/files/prerequisites")
     def files_prerequisites(payload: FilePathRequest, request: Request):
         require_user(request)
-        from .file_processing import detect_type, missing_prerequisites
         kind = detect_type(payload.path)["kind"]
         missing = missing_prerequisites(kind)
         installed = install_known_prerequisites(kind) if missing else []
