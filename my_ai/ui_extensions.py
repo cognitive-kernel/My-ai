@@ -7,7 +7,12 @@ INJECT = r"""
 <div class="card" id="localFileTools" style="margin-top:12px">
   <b>فایل و پردازش محلی</b>
   <input id="chatFile" type="file" style="display:block;margin:8px 0" />
-  <span class="small">فایل انتخاب‌شده هنگام ارسال در فضای محلی برنامه ذخیره و برای تحلیل به My-AI داده می‌شود.</span>
+  <span class="small">فایل انتخاب‌شده در فضای محلی برنامه ذخیره و برای تحلیل به My-AI داده می‌شود.</span>
+  <div style="margin-top:8px">
+    <input id="fileGeneratePrompt" placeholder="برای ساخت فایل، توضیح کوتاه را بنویس" style="width:55%" />
+    <select id="fileGenerateFormat"><option value="docx">Word (.docx)</option><option value="xlsx">Excel (.xlsx)</option><option value="pdf">PDF</option><option value="pptx">PowerPoint (.pptx)</option></select>
+    <button type="button" id="fileGenerateButton">ساخت فایل</button>
+  </div>
   <div id="fileStatus" class="small"></div>
 </div>
 <script>
@@ -27,8 +32,21 @@ INJECT = r"""
     var aj=await a.json();if(!a.ok)throw Error(aj.detail||'خطای تحلیل فایل');
     status.textContent='فایل آماده شد: '+j.path;input.value='';return aj;
   }
+  async function generateFile(){
+    var prompt=document.getElementById('fileGeneratePrompt').value.trim();
+    var format=document.getElementById('fileGenerateFormat').value;
+    var status=document.getElementById('fileStatus');
+    if(!prompt){status.textContent='ابتدا توضیح ساخت فایل را وارد کنید.';return}
+    status.textContent='در حال ساخت فایل...';
+    var ext=format==='docx'?'docx':format;
+    var filename='myai-generated-'+Date.now()+'.'+ext;
+    var r=await fetch('/files/generate/from-chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:prompt,format:format,filename:filename})});
+    var j=await r.json();if(!r.ok)throw Error(j.detail||'خطای ساخت فایل');
+    status.textContent='فایل ساخته شد: '+j.local_path;
+  }
+  var gen=document.getElementById('fileGenerateButton');if(gen)gen.onclick=function(){generateFile().catch(function(e){document.getElementById('fileStatus').textContent='خطا: '+e.message})};
   var oldSend=window.myAiSend;
-  window.myAiSend=async function(){
+  if(typeof oldSend==='function')window.myAiSend=async function(){
     var input=document.getElementById('chatFile');
     if(input&&input.files&&input.files.length){
       try{
