@@ -1797,8 +1797,8 @@ Requirements:
 
 - Python 3.11+
 - Ollama
-- Internet for model/documentation retrieval
-- at least 16 GB RAM; 32 GB recommended
+- Internet only for explicitly online capabilities (LLM provider, confirmed web learning, learning sources, Git/GitHub and prerequisite installation)
+- at least 16 GB RAM; 32 GB recommended as a baseline; runtime settings are adapted to detected hardware
 - GPU not required
 
 Windows:
