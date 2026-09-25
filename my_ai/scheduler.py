@@ -13,6 +13,7 @@ from .dynamic_learning import REVIEW_DAYS, ensure_domain, resolve_learning_targe
 from .config import settings
 from .settings_store import get_setting
 from .resource_guard import limits as resource_limits
+from .learning_sources import find_unlearned_new_sources
 
 
 class StudyScheduler:
@@ -260,6 +261,32 @@ class StudyScheduler:
         rows = fetch_all("SELECT topic,status FROM learning_sessions WHERE language=? AND status='completed'", (language,))
         return names.issubset({str(r["topic"]) for r in rows})
 
+    def _queue_new_source_learning(self, language):
+        pending = find_unlearned_new_sources(language)
+        if not pending:
+            return []
+        topics = []
+        seen = set()
+        for item in pending:
+            topic = str(item["topic"])
+            if topic.casefold() in seen:
+                continue
+            seen.add(topic.casefold())
+            topics.append(topic)
+        completed = {str(r["topic"]) for r in fetch_all("SELECT topic FROM learning_sessions WHERE language=? AND status='completed'", (language,))}
+        queued = []
+        for topic in topics:
+            if topic not in completed:
+                continue
+            active = fetch_all("SELECT id FROM learning_sessions WHERE language=? AND topic=? AND status='started' LIMIT 1", (language, topic))
+            if active:
+                continue
+            goal = next((x.get("goal","") for x in LANGUAGE_CURRICULA.get(language, []) if x.get("topic")==topic), "")
+            execute("INSERT INTO learning_sessions(language,topic,status,notes,progress_percent,phase) VALUES(?,?,?,?,?,?)",
+                    (language, topic, "started", json.dumps({"topic":topic,"goal":goal}, ensure_ascii=False), 0.0, "new_source"))
+            queued.append(topic)
+        return queued
+
     def _review_loop(self):
         while not self._review_stop.is_set():
             try:
@@ -279,8 +306,9 @@ class StudyScheduler:
                     self.update_progress("weekly_review", name)
                     engine = LearningEngine()
                     result = weekly_review(name, engine.web, engine.llm)
-                    if result.get("added"):
-                        self.last_result = {"status": "weekly_review", "language": name, **result}
+                    new_source_topics = self._queue_new_source_learning(name)
+                    if result.get("added") or new_source_topics:
+                        self.last_result = {"status": "weekly_review", "language": name, **result, "new_source_topics": new_source_topics}
                         self.start(name)
                     self.update_progress("idle")
             except Exception as exc:
