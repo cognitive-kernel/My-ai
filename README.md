@@ -249,7 +249,7 @@ After a domain is fully completed, My-AI schedules a review every **7 days**. Th
 
 Manual **Stop** disables automatic restart for that learning domain; **Resume** re-enables it.
 
-Reference sets are domain-specific and include primary documentation plus ecosystem documentation, standards, release notes, security, testing, performance, tooling and production references where applicable. Python includes the official Python documentation, PyPA packaging documentation, PEPs and the Python Developer Guide. The official Python documentation itself notes that its tutorial is not intended to cover every feature, which is why the broader source set is used. citeturn0search5turn0search12turn0search0
+Reference sets are domain-specific and include primary documentation plus ecosystem documentation, standards, release notes, security, testing, performance, tooling and production references where applicable. Python includes the official Python documentation, PyPA packaging documentation, PEPs and the Python Developer Guide. The official Python documentation itself notes that its tutorial is not intended to cover every feature, which is why the broader source set is used.
 
 ## 7. Scheduler و اجرای background
 
