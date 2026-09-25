@@ -1894,6 +1894,7 @@ This section is intentional: it distinguishes **module exists**, **feature imple
 | `self_update.py` | Self-update workflow |
 | `self_repair.py` | Self-repair workflow |
 | `watchdog.py` | Health/watchdog and rollback support |
+| `self_diagnostics.py` | Continuous self-diagnostics and hardware-aware reporting |
 | `decision_log.py` | Decision logging |
 | `ui.py` | Main web UI |
 | `ui_extensions.py` | Runtime UI extensions for files and learning controls |
@@ -1957,6 +1958,104 @@ This section is intentional: it distinguishes **module exists**, **feature imple
 - [x] Docker
 - [x] OpenAPI docs
 - [x] Bilingual UI/README
+
+
+## Local Ownership and Self-Development Policy
+
+My-AI follows a **local-first, self-owned architecture**.
+
+The default engineering rule for every new capability is:
+
+**MY-AI native/local implementation → local open-source backend → optional external provider**
+
+An external company API must not become a mandatory dependency merely for convenience. LLM backends and Git/GitHub are explicit exceptions because they currently provide infrastructure that may be external by design. Web access is used only for capabilities that inherently require current internet content or an explicitly requested online operation.
+
+### Hardware-aware operation
+
+The application must adapt to the machine on which it is running instead of assuming one permanent hardware profile.
+
+At startup and during diagnostics it records available CPU, RAM, operating system, Python version and other detectable accelerator information. Resource settings, learning concurrency, model context/thread settings and background workloads should be selected from the detected capacity and the user's persistent limits.
+
+The repository's documented minimum/recommended hardware is a baseline only; actual runtime decisions must use live hardware detection.
+
+### Continuous self-check
+
+After startup, and periodically while running, My-AI checks itself:
+
+- Python compilation with compileall.
+- Full pytest suite.
+- Git working-tree and current commit state.
+- Runtime hardware information.
+- Diagnostic history and recurring failures.
+
+Reports are stored locally under data/diagnostics/ and in SQLite and are exposed through:
+
+```text
+GET /self-diagnostics/report
+GET /self-diagnostics/history
+```
+
+### Initial/Beta self-development policy
+
+During the initial and beta releases the system is **report-only**.
+
+If it finds a bug, regression, failed test, performance problem or hardware-specific optimization opportunity, it creates a diagnostic report. It does not automatically modify source code, install arbitrary packages, change permissions, publish changes or alter its own policy.
+
+The intended later lifecycle is:
+
+```text
+detect
+  ↓
+diagnose
+  ↓
+propose
+  ↓
+isolated test
+  ↓
+report
+  ↓
+policy/approval
+  ↓
+apply
+  ↓
+test
+  ↓
+rollback on failure
+```
+
+The existing self-repair subsystem is the foundation for this later phase.
+
+### Self-created modules
+
+After the self-development phase is enabled, the intended user workflow is:
+
+```text
+User: "برای خودت یک ماژول X بساز"
+                 ↓
+My-AI inspects its own architecture
+                 ↓
+designs the module
+                 ↓
+creates code + tests in isolation
+                 ↓
+runs compile/test/security checks
+                 ↓
+produces a change report
+                 ↓
+applies according to the active policy
+                 ↓
+registers the capability
+                 ↓
+updates documentation
+```
+
+This makes future module expansion a capability of My-AI itself rather than requiring every module to be manually created externally.
+
+No claim is made that the system is already a fully autonomous software engineer. The initial and beta phases deliberately collect evidence and reports first so the later self-modification phase can be introduced on top of tested rollback, audit and validation mechanisms.
+
+### Self-development documentation
+
+See `docs/help/self-development.md` for the lifecycle, hardware adaptation rules, ownership policy and future self-module workflow.
 
 ## Network and Offline Policy
 
