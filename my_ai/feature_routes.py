@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from .file_processing import create_docx, create_pdf, create_pptx, create_xlsx, detect_type, install_known_prerequisites, missing_prerequisites, missing_system_prerequisites
 from .local_files import filesystem_roots, inspect_file, list_directory, read_text, workspace_path
 from .multimodal import analyze
+from .image_generation import generate_image, IMAGE_ROOT, ImageGenerationError
 
 
 class FilePathRequest(BaseModel):
@@ -41,6 +42,13 @@ class GenerateFromChatRequest(BaseModel):
     prompt: str
     format: str
     filename: str
+
+
+class ImageGenerateRequest(BaseModel):
+    prompt: str
+    size: str = "1024x1024"
+    quality: str = "high"
+    negative_prompt: str = ""
 
 
 def _normalise_format(value: str) -> str:
@@ -78,6 +86,29 @@ def register_routes(app, scheduler, require_user, audit):
         scheduler.start(language)
         audit(user, "learning", "write", "200", f"resumed:{language}")
         return {"status": "running", "language": language}
+
+    @router.post("/image/generate")
+    def image_generate(payload: ImageGenerateRequest, request: Request):
+        user = require_user(request)
+        try:
+            result = generate_image(payload.prompt, payload.size, payload.quality, payload.negative_prompt)
+        except ImageGenerationError as exc:
+            raise HTTPException(502, str(exc))
+        audit(user, "image-generation", "execute", "200", f"generated:{result['filename']}")
+        return {**result, "url": f"/image/file/{result['filename']}"}
+
+    @router.get("/image/file/{filename}")
+    def image_file(filename: str, request: Request):
+        from fastapi.responses import FileResponse
+        require_user(request)
+        path = (IMAGE_ROOT / Path(filename).name).resolve()
+        try:
+            path.relative_to(IMAGE_ROOT)
+        except ValueError:
+            raise HTTPException(400, "Invalid image path.")
+        if not path.is_file():
+            raise HTTPException(404, "Generated image not found.")
+        return FileResponse(path)
 
     @router.get("/files/roots")
     def files_roots(request: Request):
