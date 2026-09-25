@@ -206,7 +206,7 @@ def weekly_review(name, web, llm, now=None):
     topics = list(LANGUAGE_CURRICULA.get(name, []))
     sources = list(LANGUAGE_SOURCES.get(name, []))
     evidence = []
-    for source in sources[:6]:
+    for source in sources[:12]:
         try:
             title, text = web.fetch(source)
             evidence.append({"title": title, "url": source, "text": text[:5000]})
@@ -219,7 +219,8 @@ def weekly_review(name, web, llm, now=None):
             evidence = []
     prompt = (
         "Review the following current web evidence for a completed learning domain. Identify genuinely new material that "
-        "should be learned since the previous curriculum. Do not invent releases or facts. Return JSON only: "
+        "should be learned since the previous curriculum. Prefer official documentation, standards, release notes and maintainer documentation. "
+        "Distinguish new topics from updates to existing topics. Do not invent releases or facts. Return JSON only: "
         '{"new_topics":[{"topic":"...","goal":"..."}],"updates":[{"topic":"...","reason":"..."}]}.'
         f"\nDOMAIN: {name}\nCURRENT TOPICS: {json.dumps(topics, ensure_ascii=False)}\nWEB EVIDENCE: {json.dumps(evidence, ensure_ascii=False)[:24000]}"
     )
