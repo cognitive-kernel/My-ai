@@ -22,8 +22,12 @@ def baseline_completed_sources(language: str) -> None:
         existing = fetch_all("SELECT 1 FROM learning_source_history WHERE language=? AND topic=? LIMIT 1", (language, topic))
         if existing:
             continue
-        for url in topic_source_urls(language, topic):
-            execute("INSERT OR IGNORE INTO learning_source_history(language,topic,url,learned_at) VALUES(?,?,?,CURRENT_TIMESTAMP)", (language, topic, url))
+        # Existing broad domain sources are the legacy baseline. Topic-specific
+        # supplementary sources are intentionally left pending on first migration,
+        # so a completed course learns the newly introduced supplementary material once.
+        for url in source_urls(language):
+            if str(url).startswith(("http://", "https://")):
+                execute("INSERT OR IGNORE INTO learning_source_history(language,topic,url,learned_at) VALUES(?,?,?,CURRENT_TIMESTAMP)", (language, topic, url))
 
 def find_unlearned_new_sources(language: str) -> list[dict]:
     ensure_source_tracking()
