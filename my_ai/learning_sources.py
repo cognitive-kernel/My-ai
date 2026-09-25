@@ -19,6 +19,9 @@ def baseline_completed_sources(language: str) -> None:
     completed = fetch_all("SELECT topic FROM learning_sessions WHERE language=? AND status='completed'", (language,))
     for row in completed:
         topic = str(row["topic"])
+        existing = fetch_all("SELECT 1 FROM learning_source_history WHERE language=? AND topic=? LIMIT 1", (language, topic))
+        if existing:
+            continue
         for url in topic_source_urls(language, topic):
             execute("INSERT OR IGNORE INTO learning_source_history(language,topic,url,learned_at) VALUES(?,?,?,CURRENT_TIMESTAMP)", (language, topic, url))
 
