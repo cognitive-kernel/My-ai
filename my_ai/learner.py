@@ -71,7 +71,7 @@ class LearningEngine:
         if seed:
             remember(language,"Model knowledge seed: "+topic["topic"],seed,"model://knowledge-seed")
             knowledge.append({"title":"Model knowledge seed","url":"model://knowledge-seed"})
-        for url in source_urls(language)[:2]:
+        for url in source_urls(language)[:12]:
             def fetch_and_extract(url=url):
                 title,source=self.web.fetch(url)
                 note=self.llm.chat("Extract only accurate knowledge relevant to these study targets from the supplied source. "
