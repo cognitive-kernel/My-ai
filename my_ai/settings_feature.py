@@ -105,6 +105,21 @@ class ResourceSettingsRequest(BaseModel):
     ram_percent: float = 80.0
     gpu_layers: int = 0
 
+class ImageSettingsRequest(BaseModel):
+    enabled: bool = True
+    provider: str = "automatic1111"
+    url: str = "http://127.0.0.1:7860"
+    model: str = ""
+    sampler: str = "DPM++ 2M Karras"
+    steps: int = 32
+    cfg: float = 7.0
+    hires: bool = True
+    hires_scale: float = 1.5
+    denoise: float = 0.35
+    hr_upscaler: str = "Latent"
+    default_size: str = "1024x1024"
+    negative_prompt: str = ""
+
 
 def _setup() -> None:
     init_db()
@@ -215,6 +230,21 @@ def settings_config(request: Request):
             "ram_percent": float(get_setting("resources.ram_percent", "80")),
             "gpu_layers": get_int("resources.gpu_layers", 0),
         },
+        "image": {
+            "enabled": get_bool("image.enabled", True),
+            "provider": str(get_setting("image.provider", "automatic1111")),
+            "url": str(get_setting("image.url", "http://127.0.0.1:7860")),
+            "model": str(get_setting("image.model", "")),
+            "sampler": str(get_setting("image.sampler", "DPM++ 2M Karras")),
+            "steps": get_int("image.steps", 32),
+            "cfg": float(get_setting("image.cfg", "7")),
+            "hires": get_bool("image.hires", True),
+            "hires_scale": float(get_setting("image.hires_scale", "1.5")),
+            "denoise": float(get_setting("image.denoise", "0.35")),
+            "hr_upscaler": str(get_setting("image.hr_upscaler", "Latent")),
+            "default_size": str(get_setting("image.default_size", "1024x1024")),
+            "negative_prompt": str(get_setting("image.negative_prompt", "")),
+        },
     }
 
 @router.put("/settings/github")
@@ -243,6 +273,39 @@ def save_feature_settings(r: FeatureSettingsRequest, request: Request):
     for key,value in values.items(): set_setting(key,value)
     audit(user,"settings","write","200","feature-settings-updated")
     return {"saved":True,"features":values}
+
+@router.put("/settings/image")
+def save_image_settings(r: ImageSettingsRequest, request: Request):
+    user = require_admin(request)
+    if r.provider.strip().lower() != "automatic1111":
+        raise HTTPException(400, "فقط Automatic1111 محلی پشتیبانی می‌شود.")
+    url = r.url.strip().rstrip("/")
+    if not url.startswith(("http://127.0.0.1:", "http://localhost:", "http://[::1]:")):
+        raise HTTPException(400, "برای حالت آفلاین، آدرس موتور تصویر باید localhost باشد.")
+    if not 1 <= r.steps <= 150 or not 1 <= r.cfg <= 30 or not 1 <= r.hires_scale <= 2 or not 0.1 <= r.denoise <= 1:
+        raise HTTPException(400, "مقادیر کیفیت تصویر خارج از محدوده مجاز هستند.")
+    if not re.fullmatch(r"\d{3,4}x\d{3,4}", r.default_size.strip()):
+        raise HTTPException(400, "default_size باید مثل 1024x1024 باشد.")
+    values = {
+        "image.enabled": bool(r.enabled), "image.provider": "automatic1111", "image.url": url,
+        "image.model": r.model.strip(), "image.sampler": r.sampler.strip() or "DPM++ 2M Karras",
+        "image.steps": r.steps, "image.cfg": r.cfg, "image.hires": bool(r.hires),
+        "image.hires_scale": r.hires_scale, "image.denoise": r.denoise,
+        "image.hr_upscaler": r.hr_upscaler.strip() or "Latent", "image.default_size": r.default_size.strip(),
+        "image.negative_prompt": r.negative_prompt.strip(),
+    }
+    for key, value in values.items(): set_setting(key, value)
+    audit(user, "image-generation", "write", "200", "offline-image-settings-updated")
+    return {"saved": True, "image": values}
+
+@router.get("/settings/image/status")
+def image_settings_status(request: Request):
+    require_admin(request)
+    try:
+        from .image_generation import local_image_status
+        return local_image_status()
+    except Exception as exc:
+        return {"connected": False, "error": str(exc)}
 
 @router.put("/settings/resources")
 def save_resource_settings(r: ResourceSettingsRequest, request: Request):
@@ -416,7 +479,7 @@ loadSettings();loadUsers();loadPermissions();loadCourses();setInterval(loadCours
 SETTINGS_HTML = """<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>تنظیمات | My-AI</title><style>body{font-family:Tahoma,system-ui;background:#f3f4f6;margin:0;color:#17202a}.wrap{max-width:1100px;margin:auto;padding:20px}.card{background:#fff;padding:18px;border-radius:14px;margin:12px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}input,textarea,select{width:100%;box-sizing:border-box;padding:10px;margin:5px 0;border:1px solid #ccc;border-radius:8px}button{padding:9px 14px;margin:3px;border:0;border-radius:8px;cursor:pointer}.bar{height:22px;background:#ddd;border-radius:8px;overflow:hidden}.fill{height:100%;background:#2563eb;color:#fff;text-align:center;line-height:22px;font-size:12px}.topic{border:1px solid #ddd;padding:9px;border-radius:9px;margin:6px 0}.muted{font-size:13px;color:#667085}.ok{background:#dcfce7}.warn{background:#fef3c7}.danger{background:#fee2e2}</style><style>body{background:linear-gradient(135deg,#eef2ff,#f8fafc 45%,#ecfeff)!important}.wrap{max-width:1180px!important}.card{border:1px solid #e5e7eb;box-shadow:0 8px 24px #0f172a0b!important;transition:.18s}.card:hover{box-shadow:0 12px 30px #0f172a12!important}.wrap>h1{background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:24px;border-radius:20px}.grid{gap:16px!important}button{background:#1d4ed8;color:#fff!important;font-weight:700}button:hover{filter:brightness(1.05)}.topic{background:#f8fafc;border-color:#e2e8f0}.permissionGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}.permGroup{background:#f8fafc;padding:10px;border-radius:10px;border:1px solid #e2e8f0}@media(max-width:700px){.wrap{padding:12px!important}}</style><div class='wrap'><form id='settings-form' hidden></form><h1>تنظیمات My-AI</h1><p><a href='/'>صفحه اصلی</a> · <a href='/learning'>پیشرفت و مسیر یادگیری</a></p><div class='grid'><section class='card'><h2>اتصال GitHub</h2><p class='muted'>هیچ Repository یا API URL پیش‌فرضی وجود ندارد. تنظیمات در دیتابیس نگهداری می‌شود؛ Token به‌صورت رمزنگاری‌شده ذخیره می‌شود. GitHub REST API با username/password احراز هویت نمی‌کند و برای API باید Token یا OAuth/CLI استفاده شود.</p><input id='apiurl' placeholder='GitHub API URL'><input id='repo' placeholder='owner/repository'><input id='ghuser' placeholder='GitHub username (اختیاری)'><input id='token' type='password' form='settings-form' autocomplete='new-password' placeholder='Personal Access Token'><button onclick='saveGithubConfig()'>ثبت تنظیمات GitHub</button><button onclick='saveToken()'>ثبت Token</button><button onclick='checkGit()'>بررسی اتصال</button><button onclick='loginGit()'>ورود با GitHub CLI/OAuth</button><button onclick='logoutGit()'>خروج</button><div id='gitout' class='muted'></div></section>
 <section class='card'><h2>Self-Update</h2><label><input id='su_enabled' type='checkbox'> فعال‌سازی Self-Update برای بررسی و اجرای به‌روزرسانی خودکار</label><label><input id='su_approved' type='checkbox'> اجازه اجرای Update بدون تأیید دستی در مرحله اجرا</label><input id='su_health' placeholder='Health URL محلی، مثلاً http://127.0.0.1:8000/health'><button onclick='saveFeatures()'>ذخیره</button><div id='suout' class='muted'></div></section>
 <section class='card'><h2>Self-Repair</h2><label><input id='sr_enabled' type='checkbox'> فعال‌سازی Self-Repair برای پیشنهاد/اجرای تعمیرات</label><label><input id='sr_approval' type='checkbox' checked> قبل از اعمال تعمیر، تأیید ادمین الزامی باشد</label><button onclick='saveFeatures()'>ذخیره</button><div id='srout' class='muted'></div></section>
-<section class='card'><h2>یادگیری سریع</h2><label><input id='lf_enabled' type='checkbox'> فعال</label><input id='lf_interval' type='number' min='60' max='86400' placeholder='فاصله یادگیری (ثانیه)'><input id='lf_retries' type='number' min='1' max='20' placeholder='حداکثر تلاش منبع'><button onclick='saveFeatures()'>ذخیره</button><div id='lfout' class='muted'></div></section><section class='card'><h2>منابع سخت‌افزاری</h2><p class='muted'>سقف پیش‌فرض اجرای یادگیری: CPU برابر 70٪ با 8 thread، RAM برابر 80٪ و GPU برابر 0 لایه (فقط CPU). این مقادیر قابل تغییر هستند.</p><label>حداکثر CPU (%)<input id='cpu_percent' type='number' min='1' max='100' step='0.5'></label><label>تعداد CPU thread<input id='cpu_threads' type='number' min='1' max='128' step='1'></label><label>حداکثر RAM (%)<input id='ram_percent' type='number' min='1' max='100' step='0.5'></label><label>GPU layers (0 = فقط CPU)<input id='gpu_layers' type='number' min='0' max='128' step='1'></label><button onclick='saveResources()'>ذخیره منابع</button><div id='resourceout' class='muted'></div></section><section class='card'><h2>مدیریت کاربران</h2><div id='users'>در حال بارگذاری...</div><hr><input id='nu' autocomplete='username' placeholder='نام کاربری'><input id='np' type='password' form='settings-form' autocomplete='new-password' placeholder='رمز عبور حداقل ۱۰ کاراکتر'><input id='nd' placeholder='نام نمایشی'><button onclick='addUser()'>ایجاد کاربر</button><div id='userout' class='muted'></div></section></div>
+<section class='card'><h2>یادگیری سریع</h2><label><input id='lf_enabled' type='checkbox'> فعال</label><input id='lf_interval' type='number' min='60' max='86400' placeholder='فاصله یادگیری (ثانیه)'><input id='lf_retries' type='number' min='1' max='20' placeholder='حداکثر تلاش منبع'><button onclick='saveFeatures()'>ذخیره</button><div id='lfout' class='muted'></div></section><section class='card'><h2>تولید تصویر کاملاً آفلاین</h2><p class='muted'>فقط Automatic1111 روی همین کامپیوتر استفاده می‌شود و این مسیر هیچ API ابری ندارد. برای کیفیت بالا، checkpoint مناسب Manga/Anime/SDXL را در Automatic1111 نصب کنید.</p><label><input id='img_enabled' type='checkbox'> فعال</label><input id='img_url' placeholder='http://127.0.0.1:7860'><input id='img_model' placeholder='نام checkpoint/مدل نصب‌شده'><input id='img_sampler' placeholder='DPM++ 2M Karras'><div class='grid'><label>Steps<input id='img_steps' type='number' min='1' max='150'></label><label>CFG<input id='img_cfg' type='number' min='1' max='30' step='0.1'></label><label>اندازه<input id='img_size' placeholder='1024x1024'></label><label>Hires Scale<input id='img_hires_scale' type='number' min='1' max='2' step='0.1'></label><label>Denoise<input id='img_denoise' type='number' min='0.1' max='1' step='0.05'></label><input id='img_upscaler' placeholder='Latent'></div><label><input id='img_hires' type='checkbox'> Hires Fix</label><textarea id='img_negative' rows='5' placeholder='Negative prompt پیش‌فرض'></textarea><button onclick='saveImageSettings()'>ذخیره تنظیمات تصویر</button><button onclick='checkImageEngine()'>بررسی موتور محلی</button><div id='imgout' class='muted'></div></section><section class='card'><h2>منابع سخت‌افزاری</h2><p class='muted'>سقف پیش‌فرض اجرای یادگیری: CPU برابر 70٪ با 8 thread، RAM برابر 80٪ و GPU برابر 0 لایه (فقط CPU). این مقادیر قابل تغییر هستند.</p><label>حداکثر CPU (%)<input id='cpu_percent' type='number' min='1' max='100' step='0.5'></label><label>تعداد CPU thread<input id='cpu_threads' type='number' min='1' max='128' step='1'></label><label>حداکثر RAM (%)<input id='ram_percent' type='number' min='1' max='100' step='0.5'></label><label>GPU layers (0 = فقط CPU)<input id='gpu_layers' type='number' min='0' max='128' step='1'></label><button onclick='saveResources()'>ذخیره منابع</button><div id='resourceout' class='muted'></div></section><section class='card'><h2>مدیریت کاربران</h2><div id='users'>در حال بارگذاری...</div><hr><input id='nu' autocomplete='username' placeholder='نام کاربری'><input id='np' type='password' form='settings-form' autocomplete='new-password' placeholder='رمز عبور حداقل ۱۰ کاراکتر'><input id='nd' placeholder='نام نمایشی'><button onclick='addUser()'>ایجاد کاربر</button><div id='userout' class='muted'></div></section></div>
 <section class='card'><h2>مجوز ابزار کاربران</h2><p class='muted'>برای هر کاربر، ابزار و نوع عملیات را مشخص کنید. عدم وجود مجوز یعنی Deny.</p><div id='permissions'>در حال بارگذاری...</div></section><section class='card'><h2>ساخت آموزش جدید</h2><p class='muted'>هر خط یک سرفصل: <code>عنوان | هدف | آدرس منبع رسمی اختیاری</code>. می‌توانی «Cisco» یا هر موضوع دیگری بسازی.</p><input id='cn' placeholder='نام آموزش، مثلاً Cisco'><input id='cd' placeholder='توضیح آموزش'><textarea id='ct' rows='12' placeholder='Cisco IOS CLI | کار با حالت‌های CLI و show/configure | https://www.cisco.com/...\nVLAN | ساخت VLAN و trunk | https://www.cisco.com/...'></textarea><button onclick='createCourse()'>ایجاد آموزش</button><div id='courseout' class='muted'></div></section><section class='card'><h2>آموزش‌ها و پیشرفت</h2><div id='courses'>در حال بارگذاری...</div></section></div><script src='/settings/script.js?v=20260923-3'></script></html>"""
 
 LEARNING_HTML = """<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>پیشرفت یادگیری | My-AI</title><style>body{font-family:Tahoma,system-ui;background:linear-gradient(135deg,#eef2ff,#f8fafc 45%,#ecfeff);margin:0;color:#17202a}.wrap{max-width:1180px;margin:auto;padding:20px}.card{background:rgba(255,255,255,.92);padding:18px;border-radius:16px;margin:12px 0;border:1px solid #e5e7eb;box-shadow:0 8px 24px #0f172a0b}.bar{height:26px;background:#ddd;border-radius:9px;overflow:hidden}.fill{height:100%;background:#2563eb;color:#fff;text-align:center;line-height:26px;min-width:2em}.course{border:1px solid #d0d5dd;border-radius:12px;margin:12px 0;overflow:hidden;background:#fff}.course>summary{cursor:pointer;padding:16px;font-size:18px;font-weight:700;list-style:none}.course>summary::-webkit-details-marker{display:none}.courseBody{padding:0 16px 16px}.topic{padding:12px;border:1px solid #e4e7ec;border-radius:10px;margin:8px 0}.topicHead{display:flex;justify-content:space-between;gap:12px;align-items:center}.started{background:#eff6ff}.completed{background:#ecfdf3}.paused{background:#fffaeb}.small{font-size:13px;color:#667085}pre{direction:ltr;text-align:left}.empty{padding:20px;text-align:center;color:#667085}</style><div class='wrap'><h1>پیشرفت کامل یادگیری</h1><p><a href='/settings'>تنظیمات</a> · <a href='/'>صفحه اصلی</a></p><p class='small'>همه مباحث موجود اینجا هستند. روی هر مبحث کلیک کنید تا سرفصل‌ها و درصد یادگیری هر سرفصل باز شود.</p><div id='root'>در حال بارگذاری...</div></div><script>
