@@ -4,6 +4,7 @@ import time
 
 from .curriculum import next_topic,canonical_language,source_urls,LANGUAGE_CURRICULA
 from .topic_resources import supplementary_source_urls
+from .learning_sources import topic_source_urls, mark_sources_learned
 from .advanced_curriculum import seed_for
 from .db import execute,fetch_all,search_knowledge
 from .executor import run_python
@@ -75,9 +76,8 @@ class LearningEngine:
         # Each topic gets its own supplementary references first, then official
         # domain documentation. This prevents a broad domain source list from
         # replacing topic-specific learning material.
-        topic_sources = list(dict.fromkeys(
-            supplementary_source_urls(language, topic["topic"]) + source_urls(language)
-        ))[:12]
+        topic_sources = topic_source_urls(language, topic["topic"])[:12]
+        learned_urls=[]
         for url in topic_sources:
             def fetch_and_extract(url=url):
                 title,source=self.web.fetch(url)
@@ -96,7 +96,8 @@ class LearningEngine:
                 if progress_callback:
                     progress_callback("source_unavailable",topic["topic"])
                 continue
-            remember(language,title,note,url); knowledge.append({"title":title,"url":url})
+            remember(language,title,note,url); knowledge.append({"title":title,"url":url}); learned_urls.append(url)
+        mark_sources_learned(language, topic["topic"], learned_urls)
         return knowledge
 
     def study_url(self,url,topic="Python"):
