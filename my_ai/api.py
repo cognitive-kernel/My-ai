@@ -33,6 +33,7 @@ from .metrics import snapshot as metrics_snapshot
 from .platform import import_encrypted_database, restore_encrypted_backup
 from .self_repair import list_proposals, proposal_diff
 from .tooling import catalog as tool_catalog, doctor as tool_doctor, run_project_tool, run_python_snippet, sqlserver_query, sqlserver_schema, mysql_query, mysql_schema, sqlite_query, sqlite_schema
+from .image_generation import generate_image, ImageGenerationError
 
 scheduler=StudyScheduler()
 @asynccontextmanager
@@ -616,6 +617,23 @@ def chat(r:ChatRequest, request:Request):
         if help_intent:
             component="git" if any(x in low for x in ("git","github","گیت","گیت‌هاب")) else ("security" if any(x in low for x in ("امنیت","پن‌تست","pentest")) else ("docker" if "docker" in low else ("python" if "python" in low or "پایتون" in low else "general")))
             return {"type":"help","answer":"راهنمای هوشمند آماده شد.","data":ask_help(msg,component,agent.llm,learner.web)}
+        image_words=("تصویر بساز","عکس بساز","عکس طراحی کن","تصویر طراحی کن","تصویر ایجاد کن","عکس ایجاد کن","مانگا","مانگا طراحی","کمیک","comic","manga","draw an image","generate an image","create an image","design an image")
+        image_intent=any(x in low for x in image_words)
+        if image_intent:
+            if not tool_allowed(user,"image-generation","execute"):
+                raise HTTPException(403,"Tool permission denied: image-generation:execute")
+            try:
+                image_result=generate_image(msg)
+            except ImageGenerationError as exc:
+                raise HTTPException(502,str(exc))
+            answer="تصویر با موفقیت تولید شد."
+            image_url=image_result["url"] if "url" in image_result else f"/image/file/{image_result['filename']}"
+            # Keep a compact textual history entry; the UI renders the returned image separately.
+            execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"user",msg))
+            execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"assistant",answer+" "+image_url))
+            execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(sid,))
+            return {"type":"image","answer":answer,"data":{**image_result,"url":image_url},"session_id":sid}
+
         code_words=("برنامه بنویس","کد بنویس","برام برنامه","write a program","write code","program","build an app","create an app"); code_intent=any(x in low for x in code_words)
         if security_words:
             if code_intent:
