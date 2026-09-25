@@ -9,6 +9,8 @@ from .llm import create_llm
 from .capabilities import system_context
 from .self_update import check_for_update, apply_confirmed_update, recent_lessons
 from .router import classify
+from .web_learner import WebLearner
+from .web_learning import create_pending, pending, learn_confirmed
 
 
 SYSTEM = """You are My-AI, a local-first personal AI assistant.
@@ -30,6 +32,7 @@ LANGUAGE AND RESPONSE QUALITY:
 - Before answering, silently check: (1) what the user is referring to, (2) who "من/تو/خودت" refers to, (3) whether the answer matches the requested language, and (4) whether the sentence structure is grammatical and unambiguous.
 - If the request is ambiguous, state the ambiguity briefly and answer the most likely interpretation instead of mixing interpretations.
 - Never invent sources, test results, APIs, versions, capabilities, or facts.
+- If the local knowledge/context is insufficient to answer confidently, output the exact marker __MYAI_UNKNOWN__ instead of guessing. My-AI handles this marker.
 - Never claim code was executed unless an execution result is supplied.
 - Prioritize correctness over confidence and clearly distinguish facts, assumptions, and uncertainty.
 
@@ -78,6 +81,26 @@ class Agent:
             f"مدل زبانی فعال من {model} است و backend فعلی من {provider} است. "
             "من را با کاربر اشتباه نمی‌گیرم: «من» در این پاسخ به خودِ دستیار اشاره دارد."
         )
+
+    @staticmethod
+    def _is_web_learning_confirmation(message: str) -> bool:
+        text = re.sub(r"\s+", " ", message.strip().casefold())
+        return text in {"بله", "بله یاد بگیر", "یاد بگیر", "تایید", "تأیید", "تایید کن", "تأیید کن", "yes", "yes learn", "learn it", "approve"}
+
+    def _web_learning_confirmation(self, message, session_id):
+        item = pending(session_id)
+        if not item or not self._is_web_learning_confirmation(message):
+            return None
+        result = learn_confirmed(session_id, item["question"], self.llm, WebLearner())
+        if result.get("status") == "learned":
+            return f"یادگیری تأییدشده انجام شد و به آموزش «{result['domain']}» در سرفصل «{result['topic']}» اضافه شد."
+        return "یادگیری اینترنتی انجام نشد: " + str(result.get("error", "خطای نامشخص"))
+
+    def _handle_unknown(self, answer, message, session_id):
+        if "__MYAI_UNKNOWN__" not in str(answer):
+            return answer
+        create_pending(session_id, message)
+        return "این مورد را در دانش محلی خودم پیدا نکردم و نمی‌خواهم حدس بزنم. اگر تأیید کنی، در اینترنت جستجو می‌کنم، منابع را بررسی می‌کنم و نتیجه را به بخش آموزشی مرتبط اضافه می‌کنم؛ اگر سرفصل مناسبی وجود نداشته باشد، یک سرفصل جدید می‌سازم."
 
     def _self_maintenance(self, message):
         low = message.strip().lower()
@@ -128,6 +151,12 @@ class Agent:
         return None
 
     def chat(self, message, session_id=1):
+        web_confirmation = self._web_learning_confirmation(message, session_id)
+        if web_confirmation is not None:
+            execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (session_id, "user", message))
+            execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (session_id, "assistant", web_confirmation))
+            execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
+            return web_confirmation
         maintenance = self._self_maintenance(message)
         if maintenance is not None:
             execute(
@@ -179,6 +208,7 @@ class Agent:
             system=SYSTEM + "\n\n" + context_note + lesson_note,
             history=history,
         )
+        answer = self._handle_unknown(answer, message, session_id)
         execute(
             "INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",
             (session_id, "user", message),
@@ -205,6 +235,13 @@ class Agent:
             execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(session_id,))
             yield answer
             return
+        web_confirmation = self._web_learning_confirmation(message, session_id)
+        if web_confirmation is not None:
+            execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(session_id,"user",message))
+            execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(session_id,"assistant",web_confirmation))
+            execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(session_id,))
+            yield web_confirmation
+            return
         intent=classify(message)
         task="coding" if intent.name=="coding" else "general"
         llm=self.llm if task=="general" else create_llm(task)
@@ -222,7 +259,7 @@ class Agent:
             text_chunk=str(chunk)
             chunks.append(text_chunk)
             yield text_chunk
-        answer="".join(chunks)
+        answer=self._handle_unknown("".join(chunks),message,session_id)
         execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(session_id,"assistant",answer))
         execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(session_id,))
 
