@@ -143,6 +143,17 @@ Next topic
 
 منابع آن شامل مستندات MetaTrader، MQL4/MQL5، منابع آموزشی Forex و منابع آموزشی CME/Investopedia است.
 
+### منابع تکمیلی اختصاصی هر سرفصل
+
+هر سرفصل فقط از فهرست عمومی منابع domain استفاده نمی‌کند. برای هر topic، My-AI یک مجموعه منبع تکمیلی topic-specific انتخاب می‌کند و آن را قبل از منابع عمومی وارد pipeline یادگیری می‌کند.
+
+- منابع رسمی و منابع تکمیلی از هم تفکیک شده‌اند.
+- هر topic حداقل دو منبع تکمیلی دارد.
+- منابع تکمیلی بر اساس موضوع انتخاب می‌شوند؛ مانند async، testing، security، performance، database، MQL4/MQL5، technical analysis و risk management.
+- review هفتگی نیز منابع تکمیلی topicها را بررسی می‌کند تا به‌روزرسانی curriculum فقط به مستندات عمومی وابسته نباشد.
+- برای Forex، پوشش منابع تکمیلی روی کل curriculum موجود، شامل مباحث تکنیکال، مدیریت ریسک، backtesting، MQL4/MQL5، MetaTrader و research/production نیز اعمال می‌شود.
+
+
 ### Cisco curriculum
 
 مسیر Cisco شامل موضوعاتی مانند:
