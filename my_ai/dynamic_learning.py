@@ -57,7 +57,9 @@ def _load_saved(name):
         return None
     try:
         topics = _normalize_topics(json.loads(rows[0]["topics_json"]))
-        sources = [str(x) for x in json.loads(rows[0]["sources_json"] or "[]") if str(x).startswith(("http://", "https://"))]
+        saved_sources = [str(x) for x in json.loads(rows[0]["sources_json"] or "[]") if str(x).startswith(("http://", "https://"))]
+        static_sources = list(LANGUAGE_SOURCES.get(canonical_language(name), []))
+        sources = list(dict.fromkeys(saved_sources + static_sources))
     except (TypeError, ValueError, json.JSONDecodeError):
         return None
     LANGUAGE_CURRICULA[name] = topics
