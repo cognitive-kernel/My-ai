@@ -1,4 +1,5 @@
-from my_ai.curriculum import PYTHON_CURRICULUM, SQLSERVER_CURRICULUM, next_topic
+from my_ai.curriculum import PYTHON_CURRICULUM, SQLSERVER_CURRICULUM, LANGUAGE_CURRICULA, next_topic
+from my_ai.topic_resources import validate_topic_resources, supplementary_source_urls
 from my_ai.learner import LearningEngine
 
 
@@ -26,3 +27,17 @@ def test_progress_uses_half_percent_steps():
     assert LearningEngine._half_percent(0.49) == 0.5
     assert LearningEngine._half_percent(1.24) == 1.0
     assert LearningEngine._half_percent(1.26) == 1.5
+
+
+def test_every_curriculum_topic_has_supplementary_resources():
+    missing = validate_topic_resources(LANGUAGE_CURRICULA)
+    assert missing == []
+    for language, topics in LANGUAGE_CURRICULA.items():
+        for item in topics:
+            assert len(supplementary_source_urls(language, item["topic"])) >= 2
+
+
+def test_forex_curriculum_is_fully_covered():
+    forex_topics = LANGUAGE_CURRICULA["Forex"]
+    assert len(forex_topics) >= 120
+    assert not validate_topic_resources({"Forex": forex_topics})
