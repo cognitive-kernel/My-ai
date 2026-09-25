@@ -1958,6 +1958,35 @@ This section is intentional: it distinguishes **module exists**, **feature imple
 - [x] OpenAPI docs
 - [x] Bilingual UI/README
 
+## Network and Offline Policy
+
+My-AI follows a strict **local-first / offline-by-default** rule.
+
+### Allowed online operations
+
+1. **LLM backend**, when the configured backend itself is online.
+2. **Chat knowledge acquisition**: when local knowledge is insufficient, the chat says it does not know and searches the web only after explicit user confirmation. The evidence is then learned and added to the matching curriculum topic, or a new topic is created.
+3. **Learning resources**: explicitly configured educational sources and scheduled learning review/update workflows.
+4. **Pentest/security tooling**: explicitly requested tools, targets, and resources that require network access.
+5. **Educational tool/prerequisite installation**: missing dependencies may be installed online by the prerequisite manager.
+6. **Git/GitHub**: repository, issue, pull-request and controlled Git operations are online by design.
+
+### Everything else
+
+All other application features are intended to operate locally without internet access: local memory/database, file processing, generated documents, local image generation, scheduler state, audit logs, settings, local voice processing, local code/project operations, and local security analysis.
+
+The image generator is offline-only and accepts only a local Automatic1111 endpoint. Automatic1111 exposes its API when launched with `--api`. citeturn0search11turn0search0
+
+### Unknown-answer learning flow
+
+The chat must not guess. If local knowledge is insufficient it reports that it does not know and asks for confirmation. After confirmation, the web-learning pipeline searches permitted public sources, fetches allowed pages, extracts the lesson, records sources, stores knowledge, and extends the curriculum when necessary.
+
+### Startup prerequisite policy
+
+On every application startup, My-AI checks Python dependencies in `requirements.txt` and selected system prerequisites. Missing Python packages are installed automatically when `MYAI_AUTO_INSTALL_PREREQUISITES=true` (default). Supported system tools are installed through an available OS package manager when possible; unresolved prerequisites are reported.
+
+This policy is part of the development contract: new features must remain offline by default unless they belong to an explicitly allowed online category above. New network-capable features must document their reason, permission boundary, and user-facing behavior.
+
 ## Deliberately visible follow-up gaps
 
 These are the areas most likely to need a dedicated implementation pass rather than only documentation:
