@@ -3,6 +3,7 @@ import json
 import time
 
 from .curriculum import next_topic,canonical_language,source_urls,LANGUAGE_CURRICULA
+from .topic_resources import supplementary_source_urls
 from .advanced_curriculum import seed_for
 from .db import execute,fetch_all,search_knowledge
 from .executor import run_python
@@ -71,7 +72,13 @@ class LearningEngine:
         if seed:
             remember(language,"Model knowledge seed: "+topic["topic"],seed,"model://knowledge-seed")
             knowledge.append({"title":"Model knowledge seed","url":"model://knowledge-seed"})
-        for url in source_urls(language)[:12]:
+        # Each topic gets its own supplementary references first, then official
+        # domain documentation. This prevents a broad domain source list from
+        # replacing topic-specific learning material.
+        topic_sources = list(dict.fromkeys(
+            supplementary_source_urls(language, topic["topic"]) + source_urls(language)
+        ))[:12]
+        for url in topic_sources:
             def fetch_and_extract(url=url):
                 title,source=self.web.fetch(url)
                 note=self.llm.chat("Extract only accurate knowledge relevant to these study targets from the supplied source. "
