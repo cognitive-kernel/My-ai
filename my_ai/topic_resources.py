@@ -52,8 +52,8 @@ FOREX_SOURCES = [
     "https://www.bis.org/publications/working-paper-1094-foreign-exchange-market",
 ]
 
-# Topic-specific supplementary sources. These are deliberately non-official
-# complements; official sources are kept in LANGUAGE_SOURCES.
+# Topic-specific supplementary sources. These complement official documentation
+# with independent educators, exchanges, regulators, standards bodies and other references.
 FOREX_TOPIC_SOURCES: Dict[str, List[str]] = {
     "Forex fundamentals": ["https://www.babypips.com/learn/forex/preschool", "https://www.cmegroup.com/education/courses/introduction-to-fx.html", "https://www.bis.org/publications/working-paper-1094-foreign-exchange-market"],
     "Currency pairs and quotes": ["https://www.babypips.com/learn/forex/preschool", "https://www.investopedia.com/terms/f/forex.asp", "https://www.cmegroup.com/education/courses/introduction-to-fx.html"],
