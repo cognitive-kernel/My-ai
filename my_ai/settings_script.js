@@ -38,7 +38,7 @@ async function loadSettings() {
     byId("su_enabled").checked=!!j.features.self_update_enabled; byId("su_approved").checked=!!j.features.self_update_approved; byId("su_health").value=j.features.self_update_health_url||"";
     byId("sr_enabled").checked=!!j.features.self_repair_enabled; byId("sr_approval").checked=!!j.features.self_repair_require_approval;
     byId("lf_enabled").checked=!!j.features.learning_fast_enabled; byId("lf_interval").value=j.features.learning_interval_seconds; byId("lf_retries").value=j.features.learning_max_retries;
-    byId("cpu_percent").value=j.resources.cpu_percent; byId("cpu_threads").value=j.resources.cpu_threads; byId("ram_percent").value=j.resources.ram_percent; byId("gpu_layers").value=j.resources.gpu_layers;
+    byId("cpu_percent").value=j.resources.cpu_percent; byId("cpu_threads").value=j.resources.cpu_threads; byId("ram_percent").value=j.resources.ram_percent; byId("gpu_layers").value=j.resources.gpu_layers; byId("img_enabled").checked=!!j.image.enabled; byId("img_url").value=j.image.url||""; byId("img_model").value=j.image.model||""; byId("img_sampler").value=j.image.sampler||""; byId("img_steps").value=j.image.steps; byId("img_cfg").value=j.image.cfg; byId("img_hires").checked=!!j.image.hires; byId("img_hires_scale").value=j.image.hires_scale; byId("img_denoise").value=j.image.denoise; byId("img_upscaler").value=j.image.hr_upscaler||""; byId("img_size").value=j.image.default_size||"1024x1024"; byId("img_negative").value=j.image.negative_prompt||"";
     setText("gitout",j.github.token_configured?"Token تنظیم شده است":"Token تنظیم نشده است"); await loadResourceStatus();
   } catch(e) { setText("gitout","خطا در بارگذاری تنظیمات: "+e.message); }
 }
@@ -57,6 +57,19 @@ async function saveToken(){try{var j=await req("/settings/github-token",{method:
 async function checkGit(){try{var j=await req("/git/check");setText("gitout",j.message||j.status||"بررسی انجام شد")}catch(e){setText("gitout","خطا در بررسی اتصال: "+e.message)}}
 async function saveFeatures(){try{await req("/settings/features",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({self_update_enabled:byId("su_enabled").checked,self_update_approved:byId("su_approved").checked,self_update_health_url:byId("su_health").value,self_repair_enabled:byId("sr_enabled").checked,self_repair_require_approval:byId("sr_approval").checked,learning_fast_enabled:byId("lf_enabled").checked,learning_interval_seconds:Number(byId("lf_interval").value||3600),learning_max_retries:Number(byId("lf_retries").value||5)})});setText("suout","تنظیمات ذخیره شد");setText("srout","تنظیمات ذخیره شد");setText("lfout","تنظیمات ذخیره شد");await loadSettings()}catch(e){setText("suout",e.message);setText("srout",e.message);setText("lfout",e.message)}}
 
+window.saveImageSettings=async function saveImageSettings(){
+  setText("imgout","در حال ذخیره...");
+  try{
+    var payload={enabled:byId("img_enabled").checked,provider:"automatic1111",url:byId("img_url").value.trim(),model:byId("img_model").value.trim(),sampler:byId("img_sampler").value.trim(),steps:Number(byId("img_steps").value||32),cfg:Number(byId("img_cfg").value||7),hires:byId("img_hires").checked,hires_scale:Number(byId("img_hires_scale").value||1.5),denoise:Number(byId("img_denoise").value||0.35),hr_upscaler:byId("img_upscaler").value.trim(),default_size:byId("img_size").value.trim()||"1024x1024",negative_prompt:byId("img_negative").value};
+    await req("/settings/image",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    setText("imgout","تنظیمات تصویر آفلاین ذخیره شد."); await loadSettings();
+  }catch(e){setText("imgout","خطا: "+e.message)}
+};
+window.checkImageEngine=async function checkImageEngine(){
+  setText("imgout","در حال بررسی موتور محلی...");
+  try{var j=await req("/settings/image/status"); if(!j.connected){setText("imgout","موتور محلی در دسترس نیست: "+(j.error||"خطای نامشخص"));return} setText("imgout","اتصال برقرار است · مدل فعال: "+(j.model||"نامشخص")+" · مدل‌های نصب‌شده: "+((j.models||[]).length));}
+  catch(e){setText("imgout","خطا در بررسی موتور: "+e.message)}
+};
 window.saveResources=async function saveResources(){
   setText("resourceout","در حال ذخیره و اعمال منابع...");
   try{var p={cpu_percent:Number(byId("cpu_percent").value||70),cpu_threads:Number(byId("cpu_threads").value||8),ram_percent:Number(byId("ram_percent").value||80),gpu_layers:Number(byId("gpu_layers").value||0)};
