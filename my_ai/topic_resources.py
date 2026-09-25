@@ -94,6 +94,24 @@ FOREX_TOPIC_SOURCES: Dict[str, List[str]] = {
 # Supplementary pools for the existing technical domains. Rules are keyword based
 # so newly appended advanced topics also receive topic-relevant links without
 # requiring a second hard-coded list.
+FOREX_RULES: List[Tuple[Tuple[str, ...], Tuple[str, ...]]] = [
+    (("mql4",), ("https://www.mql4.com/en/docs", "https://www.mql4.com/en/docs/basis", "https://www.mql4.com/en/docs/series")),
+    (("mql5",), ("https://www.mql5.com/en/docs", "https://www.mql5.com/en/docs/runtime", "https://www.mql5.com/en/docs/trading")),
+    (("metatrader", "custom trading dashboards"), ("https://www.metatrader5.com/en/terminal/help", "https://www.mql5.com/en/docs/objects", "https://www.mql5.com/en/docs/runtime/event_fire")),
+    (("backtest", "optimization", "walk-forward", "out-of-sample", "monte carlo"), ("https://www.mql5.com/en/docs/runtime/testing", "https://www.investopedia.com/terms/b/backtesting.asp", "https://www.babypips.com/learn/forex/undergraduate-junior")),
+    (("risk", "position sizing", "drawdown", "risk of ruin", "capital"), ("https://www.cftc.gov/LearnAndProtect/forexfrauds", "https://www.babypips.com/learn/forex/undergraduate-junior", "https://www.investopedia.com/terms/r/riskmanagement.asp")),
+    (("indicator", "moving average", "rsi", "macd", "stochastic", "bollinger", "atr", "adx", "cci", "williams", "ichimoku", "sar", "obv", "mfi", "cmf", "vwap", "pivot", "donchian", "keltner", "envelopes", "oscillator", "divergence", "fibonacci"), ("https://www.babypips.com/learn/forex/elementary", "https://www.investopedia.com/technical-analysis-4689657", "https://www.babypips.com/learn/forex/best-technical-indicator-forex")),
+    (("elliott", "harmonic", "chart pattern", "reversal pattern", "candlestick", "price action"), ("https://www.babypips.com/learn/forex/summer-school", "https://www.investopedia.com/technical-analysis-4689657", "https://www.babypips.com/learn/forex/riding-elliotts-waves")),
+    (("trend", "market structure", "support", "resistance", "breakout", "pullback", "retest", "bos", "choch", "liquidity", "order block", "imbalance", "supply", "demand"), ("https://www.babypips.com/learn/forex/elementary", "https://www.babypips.com/learn/forex/middle-school", "https://www.investopedia.com/technical-analysis-4689657")),
+    (("fundamental", "macro", "central bank", "interest rate", "inflation", "employment", "economic", "intermarket", "news"), ("https://www.babypips.com/learn/forex/undergraduate-freshman", "https://www.investopedia.com/forex-4427685", "https://www.federalreserve.gov/monetarypolicy.htm")),
+    (("broker", "execution", "spread", "commission", "order", "leverage", "margin", "lot", "pip", "session", "liquidity", "volatility"), ("https://www.babypips.com/learn/forex/preschool", "https://www.cftc.gov/LearnAndProtect/forexfrauds", "https://www.cmegroup.com/education/courses/introduction-to-fx.html")),
+    (("psychology", "journal", "statistics", "expectancy", "strategy engineering", "entry and exit", "trading plan"), ("https://www.babypips.com/learn/forex/undergraduate-junior", "https://www.investopedia.com/terms/b/behavioralfinance.asp", "https://www.cftc.gov/LearnAndProtect/forexfrauds")),
+    (("algorithmic", "quantitative", "portfolio", "systematic", "production", "robustness"), ("https://www.bis.org/publications/qr-202512/fx-trade-execution-landscape-through-prism-2025-bis-triennial-survey", "https://www.mql5.com/en/docs", "https://www.cmegroup.com/education.html")),
+    (("futures", "derivatives"), ("https://www.cmegroup.com/education/courses/introduction-to-fx.html", "https://www.cmegroup.com/education/courses.html", "https://www.investopedia.com/terms/f/futures.asp")),
+    (("regulation", "fraud", "due diligence"), ("https://www.cftc.gov/LearnAndProtect/forexfrauds", "https://www.cftc.gov/LearnAndProtect/AdvisoriesAndArticles/CustomerAdvisory_MustKnowForex.html", "https://www.cftc.gov/LearnAndProtect/AdvisoriesAndArticles/cftcnasaaforexalert.html")),
+    (("market structure", "microstructure", "execution", "research project", "capstone"), ("https://www.bis.org/publications/working-paper-1094-foreign-exchange-market", "https://www.bis.org/publications/qr-202512/fx-trade-execution-landscape-through-prism-2025-bis-triennial-survey", "https://www.cmegroup.com/education/courses/introduction-to-fx.html")),
+]
+
 DOMAIN_RULES: Dict[str, List[Tuple[Tuple[str, ...], Tuple[str, ...]]]] = {
     "Python": [
         (("async", "concurr"), ("https://realpython.com/async-io-python/", "https://realpython.com/python-concurrency/")),
@@ -208,7 +226,12 @@ def supplementary_source_urls(language: str, topic: str) -> List[str]:
     lang = str(language or "").strip()
     topic_text = str(topic or "").casefold()
     if lang == "Forex":
-        return list(dict.fromkeys(FOREX_TOPIC_SOURCES.get(str(topic), FOREX_SOURCES)))
+        matches = list(FOREX_TOPIC_SOURCES.get(str(topic), []))
+        for keywords, urls in FOREX_RULES:
+            if any(k.casefold() in topic_text for k in keywords):
+                matches.extend(urls)
+        matches.extend(FOREX_SOURCES)
+        return list(dict.fromkeys(matches))
 
     matches: List[str] = []
     for keywords, urls in DOMAIN_RULES.get(lang, []):
