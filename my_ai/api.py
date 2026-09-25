@@ -32,16 +32,19 @@ from .voice import status as voice_engine_status, transcribe, synthesize
 from .metrics import snapshot as metrics_snapshot
 from .platform import import_encrypted_database, restore_encrypted_backup
 from .self_repair import list_proposals, proposal_diff
+from .self_diagnostics import SelfDiagnosticsMonitor, latest_report, report_history
 from .tooling import catalog as tool_catalog, doctor as tool_doctor, run_project_tool, run_python_snippet, sqlserver_query, sqlserver_schema, mysql_query, mysql_schema, sqlite_query, sqlite_schema
 from .image_generation import generate_image, ImageGenerationError
 from .runtime_prerequisites import startup_check
 
 scheduler=StudyScheduler()
+self_diagnostics=SelfDiagnosticsMonitor()
 @asynccontextmanager
 async def lifespan(_):
     init_db()
     # Re-check on every application start; installation is limited to the explicit prerequisite manager.
     startup_check()
+    self_diagnostics.start()
     scheduler.start_review_monitor()
     workers=fetch_all("SELECT language,session_id,status FROM learning_workers WHERE status IN ('running','retrying','paused','stopping')")
     if workers:
@@ -53,6 +56,7 @@ async def lifespan(_):
             scheduler.start(runtime[0]["language"], runtime[0]["session_id"])
     yield
     scheduler.stop()
+    self_diagnostics.stop()
 app=FastAPI(title="My-AI",version="0.2.0",description="Local-first personal learning and coding agent.",lifespan=lifespan)
 
 register_routes(app, scheduler, require_user, audit)
@@ -66,7 +70,7 @@ _TOOL_RULES = (
     ("/learning/","learning"),("/scheduler/","scheduler"),("/backup/","database"),
     ("/voice/","voice"),("/skills","skill-engine"),("/models/","models"),
     ("/memory/search","memory"),("/web/","web"),("/projects/","projects"),
-    ("/eval/","eval"),("/self-update/","self-update"),("/self-repair/","self-repair"),("/help/ask","help"),("/tools/","tools"),("/files/","files"),("/image/","image-generation"),
+    ("/eval/","eval"),("/self-update/","self-update"),("/self-repair/","self-repair"),("/self-diagnostics/","self-diagnostics"),("/help/ask","help"),("/tools/","tools"),("/files/","files"),("/image/","image-generation"),
 )
 _PATH_ACTIONS = {"/git/token": "write", "/git/logout": "write"}
 _LOGIN_FAILURES: dict[str, tuple[int, float]] = {}
@@ -583,6 +587,16 @@ def help_reject(update_id:int,request:Request):
     rows=fetch_all("SELECT * FROM help_updates WHERE id=? AND status='pending'",(update_id,))
     if not rows: raise HTTPException(404,"Pending help update not found.")
     execute("UPDATE help_updates SET status='rejected' WHERE id=?",(update_id,)); return {"status":"rejected","update_id":update_id}
+@app.get("/self-diagnostics/report")
+def self_diagnostics_report(request: Request):
+    require_user(request)
+    return latest_report() or {"status": "pending"}
+
+@app.get("/self-diagnostics/history")
+def self_diagnostics_history(request: Request, limit: int = 20):
+    require_user(request)
+    return {"reports": report_history(limit)}
+
 @app.get("/health")
 def health(): return {"status":"ok","model":settings.ollama_model,"executor_mode":settings.exec_mode,"offline_strict":settings.offline_strict}
 
