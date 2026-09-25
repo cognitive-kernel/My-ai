@@ -1975,7 +1975,7 @@ My-AI follows a strict **local-first / offline-by-default** rule.
 
 All other application features are intended to operate locally without internet access: local memory/database, file processing, generated documents, local image generation, scheduler state, audit logs, settings, local voice processing, local code/project operations, and local security analysis.
 
-The image generator is offline-only and accepts only a local Automatic1111 endpoint. Automatic1111 exposes its API when launched with `--api`. citeturn0search11turn0search0
+The image generator is offline-only and accepts only a local Automatic1111 endpoint. Automatic1111 exposes its API when launched with `--api`.
 
 ### Unknown-answer learning flow
 
