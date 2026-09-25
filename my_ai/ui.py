@@ -48,11 +48,17 @@ fetch('/scheduler/status',{cache:'no-store'}),
 fetch('/learning/active',{cache:'no-store'})
 ]);
 var j=await rr[0].json(),s=await rr[1].json(),ac=await rr[2].json();
-var courses=j.courses||[],workers=s.workers||[],workerMap={};
+var courses=j.courses||[],workers=s.workers||[],workerMap={},completedLanguages={};
+courses.forEach(function(x){
+var language=String(x.language||x.name||'').toLowerCase();
+if(Number(x.progress_percent||0)>=100)completedLanguages[language]=true;
+});
 workers.forEach(function(w){workerMap[String(w.language).toLowerCase()]=w});
-var items=courses.slice();
+var items=courses.filter(function(x){return Number(x.progress_percent||0)<100});
 workers.forEach(function(w){
-if(!items.some(function(x){return String(x.language).toLowerCase()===String(w.language).toLowerCase()}))items.push({language:w.language,progress_percent:0,total_topics:0,completed_topics:0,remaining_topics:0,topics:[]});
+var language=String(w.language||'').toLowerCase();
+if(completedLanguages[language]||String(w.status||'').toLowerCase()==='completed')return;
+if(!items.some(function(x){return String(x.language).toLowerCase()===language}))items.push({language:w.language,progress_percent:0,total_topics:0,completed_topics:0,remaining_topics:0,topics:[]});
 });
 var previousOpen={};
 document.querySelectorAll('#dashboard details[data-learning-language]').forEach(function(d){previousOpen[d.getAttribute('data-learning-language')]=d.open});
