@@ -34,11 +34,14 @@ from .platform import import_encrypted_database, restore_encrypted_backup
 from .self_repair import list_proposals, proposal_diff
 from .tooling import catalog as tool_catalog, doctor as tool_doctor, run_project_tool, run_python_snippet, sqlserver_query, sqlserver_schema, mysql_query, mysql_schema, sqlite_query, sqlite_schema
 from .image_generation import generate_image, ImageGenerationError
+from .runtime_prerequisites import startup_check
 
 scheduler=StudyScheduler()
 @asynccontextmanager
 async def lifespan(_):
     init_db()
+    # Re-check on every application start; installation is limited to the explicit prerequisite manager.
+    startup_check()
     scheduler.start_review_monitor()
     workers=fetch_all("SELECT language,session_id,status FROM learning_workers WHERE status IN ('running','retrying','paused','stopping')")
     if workers:
