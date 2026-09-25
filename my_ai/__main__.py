@@ -2,6 +2,12 @@ from __future__ import annotations
 
 import uvicorn
 
+from .runtime_prerequisites import startup_check
+
+# Check/install runtime prerequisites before importing optional application modules.
+# Network is used only for this explicit prerequisite-install step.
+startup_check()
+
 from .api import app, scheduler
 from .auth import audit, require_user
 from .config import settings
