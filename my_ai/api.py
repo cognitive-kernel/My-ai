@@ -587,6 +587,22 @@ def help_reject(update_id:int,request:Request):
     rows=fetch_all("SELECT * FROM help_updates WHERE id=? AND status='pending'",(update_id,))
     if not rows: raise HTTPException(404,"Pending help update not found.")
     execute("UPDATE help_updates SET status='rejected' WHERE id=?",(update_id,)); return {"status":"rejected","update_id":update_id}
+@app.get("/self-diagnostics", response_class=HTMLResponse)
+def self_diagnostics_page(request: Request):
+    require_user(request)
+    return HTMLResponse("""<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>گزارش خودپایش | My-AI</title>
+<style>body{font-family:Tahoma,system-ui;background:#f3f4f6;margin:0;color:#17202a}main{max-width:1100px;margin:auto;padding:22px}.hero{background:linear-gradient(135deg,#111827,#1e3a8a);color:white;padding:24px;border-radius:20px}.card{background:white;padding:18px;border-radius:14px;margin:14px 0;box-shadow:0 5px 20px #0000000b}.ok{border-right:6px solid #22c55e;background:#f0fdf4}.bad{border-right:6px solid #ef4444;background:#fef2f2}.fixed{border-right:6px solid #22c55e;background:#dcfce7}.meta{color:#64748b;font-size:13px}.back{display:inline-block;margin-top:12px;color:white}.row{padding:9px;border-bottom:1px solid #e5e7eb}</style>
+<main><div class='hero'><h1>گزارش خودپایش و سلامت پروژه</h1><p>بررسی مداوم کد، تست‌ها، Git و سخت‌افزار</p><a class='back' href='/'>← بازگشت به صفحه اصلی</a></div><div id='out'><div class='card'>در حال دریافت گزارش...</div></div>
+<script>
+async function load(){let r=await fetch('/self-diagnostics/history?limit=20');let j=await r.json();let rows=j.reports||[];let out=document.getElementById('out');if(!rows.length){out.innerHTML='<div class="card">هنوز گزارشی ثبت نشده است.</div>';return}
+let html='';
+rows.forEach(function(rep,i){let checks=rep.checks||{};let previous=rows[i+1];let fixed=[];if(previous){Object.keys(checks).forEach(function(k){if(previous.checks&&previous.checks[k]&&!previous.checks[k].ok&&checks[k].ok)fixed.push(k)})}
+html+='<div class="card '+(rep.healthy?'ok':'bad')+'"><h2>'+(rep.healthy?'✓ وضعیت سالم':'⚠ نیازمند بررسی')+'</h2><div class="meta">'+(rep.timestamp||rep.created_at||'')+'</div>';
+if(fixed.length)html+='<div class="card fixed"><b>✓ باگ/خطای برطرف‌شده در این بررسی</b><p>'+fixed.map(function(x){return x+' — برطرف شده'}).join('<br>')+'</p></div>';
+Object.keys(checks).forEach(function(k){let x=checks[k]||{};html+='<div class="row">'+(x.ok?'🟢':'🔴')+' <b>'+k+'</b> — '+(x.ok?'سالم':'خطا / نیازمند بررسی')+'</div>'});
+html+='</div>'});out.innerHTML=html}load();setInterval(load,30000);
+</script></main></html>""")
+
 @app.get("/self-diagnostics/report")
 def self_diagnostics_report(request: Request):
     require_user(request)
