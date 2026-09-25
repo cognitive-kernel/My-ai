@@ -243,6 +243,14 @@ POST /settings/courses/{course_id}/pause
 POST /learning/{course_id}/start
 ```
 
+## 6.1 Continuous Learning Review
+
+After a domain is fully completed, My-AI schedules a review every **7 days**. The review reads the configured official and complementary reference set, checks current web evidence for real changes, deduplicates new material, appends genuinely new topics to the existing curriculum, and automatically starts learning the new topics. The main dashboard shows the new worker and its live status.
+
+Manual **Stop** disables automatic restart for that learning domain; **Resume** re-enables it.
+
+Reference sets are domain-specific and include primary documentation plus ecosystem documentation, standards, release notes, security, testing, performance, tooling and production references where applicable. Python includes the official Python documentation, PyPA packaging documentation, PEPs and the Python Developer Guide. The official Python documentation itself notes that its tutorial is not intended to cover every feature, which is why the broader source set is used. citeturn0search5turn0search12turn0search0
+
 ## 7. Scheduler و اجرای background
 
 ماژول: `scheduler.py`
