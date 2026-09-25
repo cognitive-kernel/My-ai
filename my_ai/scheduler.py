@@ -54,6 +54,10 @@ class StudyScheduler:
             if existing and existing[0].is_alive():
                 if session_id:
                     execute("UPDATE learning_workers SET session_id=?,status='running',updated_at=CURRENT_TIMESTAMP WHERE language=?", (session_id, language))
+                try:
+                    execute("UPDATE learning_domains SET auto_learn=1 WHERE lower(name)=?", (key,))
+                except Exception:
+                    pass
                 return
             worker_stop = threading.Event()
             thread = threading.Thread(
@@ -100,6 +104,11 @@ class StudyScheduler:
                 stop_event.set()
                 lang = key
                 execute("UPDATE learning_workers SET status='stopping',stage='stopping',updated_at=CURRENT_TIMESTAMP WHERE lower(language)=?", (lang,))
+                execute("CREATE TABLE IF NOT EXISTS learning_domains (name TEXT PRIMARY KEY, topics_json TEXT NOT NULL, sources_json TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, last_review_at TEXT, next_review_at TEXT, auto_learn INTEGER NOT NULL DEFAULT 1)")
+                try:
+                    execute("UPDATE learning_domains SET auto_learn=0 WHERE lower(name)=?", (lang,))
+                except Exception:
+                    pass
             execute("UPDATE learning_runtime SET status='stopping',updated_at=CURRENT_TIMESTAMP WHERE id=1")
         self.stage = "stopping"
 
@@ -225,9 +234,14 @@ class StudyScheduler:
                 sources_json TEXT NOT NULL DEFAULT '[]',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                last_review_at TEXT, next_review_at TEXT
+                last_review_at TEXT, next_review_at TEXT,
+                auto_learn INTEGER NOT NULL DEFAULT 1
             )"""
         )
+        try:
+            execute("ALTER TABLE learning_domains ADD COLUMN auto_learn INTEGER NOT NULL DEFAULT 1")
+        except Exception:
+            pass
         execute(
             """INSERT INTO learning_domains(name,topics_json,sources_json,next_review_at)
                VALUES(?,?,?,?) ON CONFLICT(name) DO UPDATE SET
@@ -256,11 +270,18 @@ class StudyScheduler:
                         continue
                     if not self._domain_complete(name):
                         continue
+                    try:
+                        domain_rows = fetch_all("SELECT auto_learn FROM learning_domains WHERE name=?", (name,))
+                        if domain_rows and int(domain_rows[0]["auto_learn"] or 0) != 1:
+                            continue
+                    except Exception:
+                        pass
                     self.update_progress("weekly_review", name)
                     engine = LearningEngine()
                     result = weekly_review(name, engine.web, engine.llm)
                     if result.get("added"):
                         self.last_result = {"status": "weekly_review", "language": name, **result}
+                        self.start(name)
                     self.update_progress("idle")
             except Exception as exc:
                 self.error = str(exc)
