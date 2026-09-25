@@ -5,6 +5,7 @@ import re
 from datetime import datetime, timedelta, timezone
 
 from .curriculum import LANGUAGE_ALIASES, LANGUAGE_CURRICULA, LANGUAGE_SOURCES, canonical_language
+from .topic_resources import supplementary_source_urls
 from .db import execute, fetch_all
 
 REVIEW_DAYS = 7
@@ -208,7 +209,13 @@ def weekly_review(name, web, llm, now=None):
     topics = list(LANGUAGE_CURRICULA.get(name, []))
     sources = list(LANGUAGE_SOURCES.get(name, []))
     evidence = []
-    for source in sources[:12]:
+    review_sources = list(sources)
+    # Include topic-specific supplementary material in the weekly review so
+    # curriculum updates are not based only on broad official documentation.
+    for item in topics:
+        review_sources.extend(supplementary_source_urls(name, item.get("topic", "")))
+    review_sources = list(dict.fromkeys(review_sources))
+    for source in review_sources[:24]:
         try:
             title, text = web.fetch(source)
             evidence.append({"title": title, "url": source, "text": text[:5000]})
