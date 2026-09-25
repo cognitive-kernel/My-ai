@@ -6,8 +6,8 @@ from .db import execute, fetch_all
 
 
 DOCS_DIR = Path(__file__).resolve().parent.parent / "docs" / "help"
-DOC_FILES = {"chat":"chat.md","learning":"learning.md","coding":"coding.md","security":"security.md","git":"github.md","memory":"memory.md","scheduler":"scheduler.md","voice":"voice.md","api":"api.md","docker":"docker.md"}
-DOC_TITLES = {"chat":"چت و گفتگو","learning":"یادگیری","coding":"برنامه‌نویسی","security":"امنیت و پن‌تست","git":"Git / GitHub","memory":"حافظه","scheduler":"Scheduler","voice":"صدا","api":"API","docker":"Docker"}
+DOC_FILES = {"chat":"chat.md","learning":"learning.md","coding":"coding.md","security":"security.md","git":"github.md","memory":"memory.md","scheduler":"scheduler.md","voice":"voice.md","api":"api.md","docker":"docker.md","network-policy":"network-policy.md"}
+DOC_TITLES = {"chat":"چت و گفتگو","learning":"یادگیری","coding":"برنامه‌نویسی","security":"امنیت و پن‌تست","git":"Git / GitHub","memory":"حافظه","scheduler":"Scheduler","voice":"صدا","api":"API","docker":"Docker","network-policy":"سیاست آفلاین و شبکه"}
 def local_help(component):
     key=(component or "chat").lower().strip()
     p=DOCS_DIR/DOC_FILES.get(key,"chat.md")
