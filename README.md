@@ -1941,6 +1941,7 @@ This section is intentional: it distinguishes **module exists**, **feature imple
 - [x] Chat file attachment
 - [x] DOCX/XLSX/PDF extraction
 - [x] Image metadata/vision analysis path
+- [x] Image generation module (chat-integrated manga/comic generation; OpenAI or local Automatic1111)
 - [x] Audio/video metadata path
 - [x] Prerequisite detection/install for known Python packages
 - [x] DOCX/XLSX/PDF/PPTX generation
