@@ -5,6 +5,8 @@ import os
 import shlex
 import subprocess
 import sys
+import ipaddress
+from urllib.parse import urlparse
 from datetime import datetime, timezone
 from pathlib import Path
 from .db import execute
@@ -20,6 +22,21 @@ LESSONS = STATE_DIR / "lessons.jsonl"
 
 def _run(args, cwd=ROOT, timeout=120):
     return subprocess.run(args, cwd=cwd, text=True, capture_output=True, timeout=timeout)
+
+
+
+def _validate_health_url(value: str | None) -> str | None:
+    if not value:
+        return None
+    parsed = urlparse(value)
+    if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
+        raise ValueError("Self-update health_url must use local HTTP loopback.")
+    try:
+        if parsed.hostname != "localhost" and not ipaddress.ip_address(parsed.hostname).is_loopback:
+            raise ValueError
+    except ValueError as exc:
+        raise ValueError("Self-update health_url must target loopback.") from exc
+    return value
 
 
 def _stamp():
@@ -101,6 +118,7 @@ def apply_confirmed_update(health_url=None, health_timeout=45):
     """Test origin/main in isolation, snapshot current code, fast-forward, then supervise restart."""
     if health_url is None:
         health_url = str(get_setting("self_update.health_url","")).strip() or None
+    health_url = _validate_health_url(health_url)
     if _git("status", "--porcelain"):
         raise RuntimeError("Self-update متوقف شد: ابتدا تغییرات محلی را commit کنید یا در جای امن نگه دارید.")
     if not get_bool("self_update.enabled", False):
