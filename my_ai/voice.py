@@ -21,10 +21,36 @@ def _piper_binary() -> str | None:
     return shutil.which("piper")
 
 
-def status() -> dict[str, object]:
+def status(transcription_model: str | None = None, synthesis_model: str | None = None) -> dict[str, object]:
     whisper = _whisper_binary()
     piper = _piper_binary()
-    return {"whisper_cpp": whisper, "piper": piper, "offline_ready": bool(whisper and piper)}
+    whisper_model_ok = bool(transcription_model and Path(transcription_model).expanduser().is_file())
+    piper_model_ok = bool(synthesis_model and Path(synthesis_model).expanduser().is_file())
+    return {
+        "whisper_cpp": whisper,
+        "piper": piper,
+        "whisper_model": transcription_model,
+        "piper_model": synthesis_model,
+        "whisper_model_ready": whisper_model_ok,
+        "piper_model_ready": piper_model_ok,
+        "offline_ready": bool(whisper and piper and whisper_model_ok and piper_model_ok),
+    }
+
+
+def offline_roundtrip(
+    audio_path: str,
+    transcription_model: str,
+    synthesis_model: str,
+    output_path: str,
+    language: str = "fa",
+    text: str | None = None,
+) -> dict[str, str]:
+    """Run the complete local STT -> text -> TTS pipeline without a network service."""
+    transcript = text if text is not None else transcribe(audio_path, transcription_model, language)
+    if not transcript.strip():
+        raise RuntimeError("Offline transcription returned empty text.")
+    synthesized = synthesize(transcript, synthesis_model, output_path)
+    return {"text": transcript, "audio_path": synthesized}
 
 
 def transcribe(audio_path: str, model_path: str, language: str = "fa") -> str:
