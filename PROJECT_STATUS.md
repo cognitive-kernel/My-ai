@@ -287,3 +287,29 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 - Ollama model/context defaults are centralized and aligned with qwen2.5:7b / OLLAMA_NUM_CTX.
 - Added regression coverage for registration closure, chat permissions/session isolation, and curly-apostrophe command negation.
 - Final verification on the latest commit: tests workflow successful, CI successful, Ollama E2E successful; CI included compileall, Ruff, mypy, Bandit, pip-audit, pytest, Docker build, and Docker Compose configuration validation.
+
+## 13. 2026-09-26 — Completion hardening pass
+
+- 42f5c600 — /learning/status no longer loads or returns the large learning_sessions.notes field; session payloads are explicitly sanitized. This prevents the observed FastAPI/JSON serialization MemoryError.
+- cb3e0c95, 20379360 — router now has an LLM-assisted classification path for ambiguous requests, with deterministic fallback and deterministic authority retained for high-risk intents. ROUTER_MODEL and ROUTER_LLM_ENABLED control the routing model/path.
+- 1a55dcc0 — Skill Engine evidence is version-tagged and revalidate() now rechecks evidence freshness, recalculates verification, and invalidates stale evidence.
+- 1356a11d — voice module now reports binary/model readiness and exposes a complete local STT-to-text-to-TTS roundtrip helper. Offline readiness is only true when both engines and both models are present.
+- 75c13444 — batch Ollama embeddings now use the same endpoint validation as single embeddings, including offline-strict loopback enforcement.
+- d0f7d521, 60fc0709 — regression coverage added for LLM-assisted routing.
+- ed6d4b56 — regression coverage added for skill evidence revalidation.
+- b0b4c59b — regression coverage added for the offline voice roundtrip.
+- 7ab7b643, 680b2cd4 — regression coverage added to ensure learning status never exposes lesson notes.
+- f3b4ec8f — CI now cancels stale runs for the same ref instead of accumulating unnecessary queued runs.
+- efcb75c0 — duplicate tests.yml workflow removed; CI checks are centralized in ci.yml.
+- 225bd321 — Ollama E2E now includes an authenticated /learning/status smoke test.
+
+### Current verification boundary
+
+The repository changes above are implemented and covered by regression tests, but they do not prove every local runtime dependency is installed on the user's machine. Full production claims still require the local Ollama/Whisper/Piper binaries and models to be exercised. GitHub Actions can verify the configured CI environment; it cannot certify the user's Windows runtime.
+
+### Remaining production work
+
+- Semantic retrieval is implemented with FTS5 + Ollama embeddings + cosine similarity; confidence remains explicitly heuristic and is not a calibrated probability. A future eval harness should benchmark retrieval quality and calibrate confidence.
+- Voice is now a complete local pipeline in code, but actual hardware/model availability must be verified on the target machine.
+- Multi-session server isolation is covered by existing authorization logic; a browser-level UI E2E suite remains optional future work.
+- Self-update remains deny-by-default and requires explicit approval plus the runtime enable flag.
