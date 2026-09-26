@@ -18,6 +18,8 @@ from .backup_crypto import encrypt_file, decrypt_file
 from functools import lru_cache
 import time
 
+BACKUP_FORMAT_VERSION = 1
+
 
 def _ollama_url(path: str) -> str:
     base = settings.ollama_base_url.rstrip("/")
@@ -231,7 +233,8 @@ def export_database(destination: str, password: str | None = None) -> str:
                 data[table] = [dict(x) for x in conn.execute(f"SELECT * FROM {table}").fetchall()]
             except Exception:
                 data[table] = []
-    raw = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+    payload = {"metadata": {"format_version": BACKUP_FORMAT_VERSION, "app_version": "0.2.0"}, "tables": data}
+    raw = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
     if password:
         from .backup_crypto import encrypt_bytes
         dst.write_bytes(encrypt_bytes(raw, password))
@@ -241,6 +244,12 @@ def export_database(destination: str, password: str | None = None) -> str:
 
 
 def _import_data(data: dict[str, Any]) -> dict[str, Any]:
+    if "tables" in data:
+        metadata = data.get("metadata") or {}
+        version = int(metadata.get("format_version", 0))
+        if version > BACKUP_FORMAT_VERSION:
+            raise ValueError(f"Backup format {version} is newer than supported format {BACKUP_FORMAT_VERSION}.")
+        data = data["tables"]
     allowed = {"knowledge","chat_sessions","conversations","learning_sessions","agent_runs","generated_projects","security_scans"}
     inserted = {}
     with connect() as conn:
