@@ -390,8 +390,6 @@ class StudyScheduler:
                         break
                     if not ensure_domain(name):
                         continue
-                    if not self._domain_complete(name):
-                        continue
                     try:
                         domain_rows = fetch_all("SELECT auto_learn FROM learning_domains WHERE name=?", (name,))
                         if domain_rows and int(domain_rows[0]["auto_learn"] or 0) != 1:
@@ -409,8 +407,22 @@ class StudyScheduler:
                 for course_id, course_name in self._custom_course_due():
                     if self._review_stop.is_set():
                         break
+                    try:
+                        from .settings_feature import _review_custom_course
+                        engine = LearningEngine()
+                        review = _review_custom_course(course_id, engine.web, engine.llm)
+                    except Exception as exc:
+                        review = {"status": "error", "added": [], "updated": [], "error": str(exc)}
+                        logger.exception("CUSTOM_COURSE_WEEKLY_REVIEW_FAILURE: course_id=%s", course_id)
                     if self._schedule_custom_course_review(course_id, course_name):
-                        self.last_result = {"status": "weekly_review", "course": course_name, "course_id": course_id}
+                        self.last_result = {
+                            "status": "weekly_review",
+                            "course": course_name,
+                            "course_id": course_id,
+                            "added_topics": review.get("added", []),
+                            "updated_topics": review.get("updated", []),
+                            "review_error": review.get("error"),
+                        }
             except Exception as exc:
                 self.error = str(exc)
             self._review_stop.wait(min(self.interval_seconds, 3600))
