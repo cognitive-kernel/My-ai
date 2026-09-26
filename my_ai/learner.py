@@ -254,7 +254,9 @@ class LearningEngine:
 
     def detailed_status(self,language=None):
         """Return every curriculum topic with its persisted learning progress."""
-        rows=fetch_all("SELECT * FROM learning_sessions ORDER BY id DESC")
+        rows=fetch_all(
+            "SELECT id,language,topic,status,score,progress_percent,phase,created_at FROM learning_sessions ORDER BY id DESC"
+        )
         selected = [canonical_language(language)] if language else list(LANGUAGE_CURRICULA.keys())
         courses=[]
         for lang in selected:
@@ -297,7 +299,9 @@ class LearningEngine:
         return {"courses":courses}
 
     def status(self,language=None):
-        rows=fetch_all("SELECT * FROM learning_sessions ORDER BY id DESC"); out=[]
+        rows=fetch_all(
+            "SELECT id,language,topic,status,score,progress_percent,phase,created_at FROM learning_sessions ORDER BY id DESC"
+        ); out=[]
         for lang,topics in LANGUAGE_CURRICULA.items():
             topic_names={str(x["topic"]) for x in topics}
             lang_rows=[r for r in rows if r["language"]==lang and str(r["topic"]) in topic_names]
