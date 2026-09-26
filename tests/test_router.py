@@ -73,3 +73,13 @@ def test_project_path_argument():
     result = classify("پروژه را در /projects/demo بساز")
     assert result.args["project_path"] == "/projects/demo"
     assert "coding" in result.intents
+
+
+def test_security_help_and_file_analysis_intents():
+    assert classify("اسکن امنیتی این کد را انجام بده").name == "security_scan"
+    assert classify("راهنما را نشان بده").name == "help"
+    assert classify("این فایل را تحلیل کن").name == "file_analysis"
+
+
+def test_execution_question_is_not_execution_command():
+    assert classify("چطور کد را اجرا کنم؟").name != "code_execution"
