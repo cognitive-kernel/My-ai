@@ -348,6 +348,37 @@ class StudyScheduler:
             queued.append(topic)
         return queued
 
+    def _custom_course_due(self):
+        try:
+            from .settings_feature import _course, _workers, _running
+            rows = fetch_all(
+                "SELECT c.id,c.name,d.next_review_at FROM custom_courses c "
+                "JOIN learning_domains d ON lower(d.name)=lower(c.name) "
+                "WHERE c.active=1 AND d.next_review_at IS NOT NULL"
+            )
+            now = datetime.now(timezone.utc)
+            due = []
+            for row in rows:
+                try:
+                    when = datetime.fromisoformat(str(row["next_review_at"]).replace("Z", "+00:00"))
+                    if when <= now:
+                        due.append((int(row["id"]), str(row["name"])))
+                except ValueError:
+                    due.append((int(row["id"]), str(row["name"])))
+            return due
+        except Exception:
+            return []
+
+    def _schedule_custom_course_review(self, course_id, name):
+        from .settings_feature import _course, _workers, _running
+        course = _course(course_id)
+        if not course or not course["active"] or course_id in _running:
+            return False
+        _workers.submit(__import__("my_ai.settings_feature", fromlist=["_run_course"])._run_course, course_id)
+        next_review = (datetime.now(timezone.utc) + timedelta(days=REVIEW_DAYS)).isoformat()
+        execute("UPDATE learning_domains SET last_review_at=CURRENT_TIMESTAMP,next_review_at=? WHERE lower(name)=lower(?)", (next_review, name))
+        return True
+
     def _review_loop(self):
         while not self._review_stop.is_set():
             try:
@@ -372,6 +403,11 @@ class StudyScheduler:
                         self.last_result = {"status": "weekly_review", "language": name, **result, "new_source_topics": new_source_topics}
                         self.start(name)
                     self.update_progress("idle")
+                for course_id, course_name in self._custom_course_due():
+                    if self._review_stop.is_set():
+                        break
+                    if self._schedule_custom_course_review(course_id, course_name):
+                        self.last_result = {"status": "weekly_review", "course": course_name, "course_id": course_id}
             except Exception as exc:
                 self.error = str(exc)
             self._review_stop.wait(min(self.interval_seconds, 3600))
