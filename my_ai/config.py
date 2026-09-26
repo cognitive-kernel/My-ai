@@ -41,6 +41,9 @@ class Settings:
     scheduler_max_ram_percent: float = float(os.getenv("SCHEDULER_MAX_RAM_PERCENT", "80"))
     scheduler_auto_resume: bool = os.getenv("SCHEDULER_AUTO_RESUME", "false").strip().lower() == "true"
     learning_max_retries: int = int(os.getenv("LEARNING_MAX_RETRIES", "5"))
+    learning_max_concurrent_workers: int = max(1, int(os.getenv("LEARNING_MAX_CONCURRENT_WORKERS", "2")))
+    learning_source_timeout_seconds: float = float(os.getenv("LEARNING_SOURCE_TIMEOUT_SECONDS", "8"))
+    learning_source_max_chars: int = max(1000, int(os.getenv("LEARNING_SOURCE_MAX_CHARS", "12000")))
 
 settings = Settings()
 
