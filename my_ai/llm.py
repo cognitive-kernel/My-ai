@@ -34,7 +34,7 @@ class OllamaClient:
     def _options(self) -> dict[str, int]:
         cfg=limits(); return {"num_ctx":int(settings.ollama_num_ctx),"num_thread":int(cfg["cpu_threads"]),"num_gpu":int(cfg["gpu_layers"])}
     def stream_chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None,stop_event=None)->Iterator[str]:
-        wait_until_available(stop_event); messages: list[HistoryMessage] = []; payload={"model":self.model,"stream":True,"options":self._options(),"keep_alive":settings.ollama_keep_alive,"messages":messages}
+        wait_until_available(stop_event, max_wait=settings.resource_wait_seconds); messages: list[HistoryMessage] = []; payload={"model":self.model,"stream":True,"options":self._options(),"keep_alive":settings.ollama_keep_alive,"messages":messages}
         if system: messages.append({"role":"system","content":system})
         for item in history or ():
             if item.get("role") in {"user","assistant"} and isinstance(item.get("content"),str): messages.append({"role":item["role"],"content":item["content"]})
@@ -50,7 +50,7 @@ class OllamaClient:
         except (httpx.HTTPError,json.JSONDecodeError) as exc:
             record_error("ollama",self.model)
             if not yielded and self.model!=self.fallback_model:
-                wait_until_available(stop_event); fallback_payload=dict(payload); fallback_payload["model"]=self.fallback_model; fallback_payload["options"]=self._options()
+                wait_until_available(stop_event, max_wait=settings.resource_wait_seconds); fallback_payload=dict(payload); fallback_payload["model"]=self.fallback_model; fallback_payload["options"]=self._options()
                 try:
                     with httpx.stream("POST",f"{self.base_url}/api/chat",json=fallback_payload,timeout=300) as response:
                         response.raise_for_status(); self.model=self.fallback_model
