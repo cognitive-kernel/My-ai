@@ -48,3 +48,8 @@ class Settings:
 
 settings = Settings()
 
+
+
+def assert_write_allowed(path: str) -> None:
+    if os.getenv("MYAI_READ_ONLY", "false").strip().lower() == "true":
+        raise RuntimeError("MYAI_READ_ONLY is enabled; write operation blocked.")
