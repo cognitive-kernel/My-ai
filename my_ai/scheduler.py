@@ -33,10 +33,48 @@ class StudyScheduler:
         self._lock = threading.RLock()
         self._worker_slots = threading.BoundedSemaphore(max(1, settings.learning_max_concurrent_workers))
         self._restart_lock = threading.Lock()
+        self._supervisor_stop = threading.Event()
+        self._supervisor_thread = None
         try:
             load_saved_domains()
         except Exception as exc:
             self.error = str(exc)
+
+    def start_learning_supervisor(self):
+        if self._supervisor_thread and self._supervisor_thread.is_alive():
+            return
+        self._supervisor_stop.clear()
+        self._supervisor_thread = threading.Thread(
+            target=self._supervisor_loop, daemon=True, name="myai-learning-supervisor"
+        )
+        self._supervisor_thread.start()
+
+    def stop_learning_supervisor(self):
+        self._supervisor_stop.set()
+
+    def _supervisor_loop(self):
+        while not self._supervisor_stop.is_set():
+            try:
+                rows = fetch_all(
+                    "SELECT language,session_id,status FROM learning_workers WHERE status IN ('running','retrying','paused')"
+                )
+                for row in rows:
+                    language = str(row["language"] or "").strip()
+                    if not language:
+                        continue
+                    key = language.casefold()
+                    with self._lock:
+                        owned = self._workers.get(key)
+                        alive = bool(owned and owned[0].is_alive())
+                    if not alive:
+                        logger.warning(
+                            "LEARNING_SUPERVISOR_RESTART: language=%s session_id=%s status=%s",
+                            language, row["session_id"], row["status"],
+                        )
+                        self.start(language, row["session_id"])
+            except Exception:
+                logger.exception("LEARNING_SUPERVISOR_FAILURE")
+            self._supervisor_stop.wait(2.0)
 
     def start_review_monitor(self):
         if self._monitor_thread and self._monitor_thread.is_alive():
@@ -130,6 +168,7 @@ class StudyScheduler:
     def stop(self):
         self.stop_learning()
         self.stop_review_monitor()
+        self.stop_learning_supervisor()
 
     def stop_review_monitor(self):
         self._review_stop.set()
