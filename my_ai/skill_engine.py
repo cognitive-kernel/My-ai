@@ -85,6 +85,9 @@ def revalidate(skill_id: int, current_version: str) -> dict[str,Any]:
 
 
 def snapshot() -> list[dict[str,Any]]:
-    return fetch_all("""SELECT s.*,COUNT(e.id) AS evidence_count
+    return fetch_all("""SELECT s.*,COUNT(e.id) AS evidence_count,
+                               CASE WHEN s.last_verified IS NULL
+                                         OR s.last_verified < datetime('now','-30 days')
+                                    THEN 1 ELSE 0 END AS review_due
                         FROM skills s LEFT JOIN skill_evidence e ON e.skill_id=s.id
                         GROUP BY s.id ORDER BY s.id DESC""")
