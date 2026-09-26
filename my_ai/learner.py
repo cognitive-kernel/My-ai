@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 import time
+import logging
 
 from .curriculum import next_topic,canonical_language,source_urls,LANGUAGE_CURRICULA
 from .topic_resources import supplementary_source_urls
@@ -17,6 +18,8 @@ from .dast import LocalDAST
 from .project_workspace import create_project_workspace, write_project_files
 from .config import settings
 from .settings_store import get_int
+
+logger = logging.getLogger(__name__)
 
 class LearningEngine:
     def __init__(self,llm=None):
@@ -92,6 +95,13 @@ class LearningEngine:
                 raise
             except Exception as exc:
                 message=str(exc)
+                logger.warning(
+                    "learning source failed: language=%s topic=%s url=%s error=%s",
+                    language,
+                    topic["topic"],
+                    url,
+                    message,
+                )
                 knowledge.append({"title":"Source unavailable","url":url,"error":message})
                 if progress_callback:
                     progress_callback("source_unavailable",topic["topic"])
