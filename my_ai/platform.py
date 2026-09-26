@@ -122,7 +122,7 @@ def _hybrid_search_cached(query: str, limit: int, bucket: int) -> list[dict[str,
         qvec = ollama_embed(normalized)
     except Exception:
         qvec = []
-    calibration={}
+    calibration: dict[float, list[int]] = {}
     for item in fetch_all("SELECT score,relevant FROM retrieval_judgments"):
         bucket=round(float(item["score"] or 0.0),1)
         state=calibration.setdefault(bucket,[0,0])
