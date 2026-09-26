@@ -54,15 +54,24 @@ class LearningEngine:
         return self._retry_with_limit(operation, label, progress_callback, topic, stop_event)
 
     def _discover_prerequisites(self,language,topic,progress_callback=None,stop_event=None):
-        routing_llm=self.llm if self.llm is not None else create_llm("routing")
-        prompt=("You are a curriculum architect. Analyze the requested programming subject and identify prerequisite subjects that must be learned before or alongside it. "
-                 '{"prerequisites":[{"name":"...","reason":"...","recommended_order":1}]}. '
-                 "Do not duplicate the main topic. Only include concrete skills needed to build real projects. "
-                 f"MAIN SUBJECT: {language}\nCURRENT TOPIC: {topic['topic']}\nGOAL: {topic['goal']}")
-        return self._retry_with_limit(
-            lambda: self._parse_prerequisites(routing_llm.chat(prompt,system="Return valid JSON only. Prefer official ecosystem prerequisites.")),
-            "prerequisites",progress_callback,topic["topic"],stop_event,
-        )
+        """Derive prerequisites locally; learning must not require a second model call."""
+        if stop_event is not None and stop_event.is_set():
+            raise InterruptedError("learning stopped")
+        topic_name=str(topic.get("topic") or "").casefold()
+        prerequisites=[]
+        for item in LANGUAGE_CURRICULA.get(language, []):
+            name=str(item.get("topic") or "")
+            if not name or name.casefold()==topic_name:
+                continue
+            order=int(item.get("order") or 0)
+            current_order=int(topic.get("order") or 0)
+            if current_order and 0 < order < current_order:
+                prerequisites.append({
+                    "name":name,
+                    "reason":"Earlier curriculum topic",
+                    "recommended_order":order,
+                })
+        return prerequisites[-3:]
 
     @staticmethod
     def _parse_prerequisites(raw):
@@ -84,11 +93,10 @@ class LearningEngine:
         for url in topic_sources:
             def fetch_and_extract(url=url):
                 title,source=self.web.fetch(url)
-                note=self.llm.chat("Extract only accurate knowledge relevant to these study targets from the supplied source. "
-                                    "Separate the targets and state prerequisites explicitly. Never invent facts.\n"
-                                    f"LANGUAGE: {language}\nTARGETS: {json.dumps(queries,ensure_ascii=False)}\nSOURCE:\n{source}",
-                                    system="You are a rigorous programming teacher.")
-                return title,note
+                # Web fetching is optional. Store the source as evidence; the single
+                # lesson call later performs synthesis. This removes one LLM call per URL.
+                compact_source=str(source)[:12000]
+                return title,compact_source
             try:
                 title,note=self._retry_with_limit(
                     fetch_and_extract,
@@ -220,17 +228,17 @@ class LearningEngine:
     def autonomous_step(self,language="Python"): return self.learn_next(language)
 
     def assess(self,topic,lesson,allow_retry=True):
-        import re
-        try:
-            raw=self.llm.chat("Return a numeric score from 0 to 100 for factual coverage. Topic:"+topic+"\nNOTE:"+lesson).strip()
-            match=re.search(r"(?<!\d)(100(?:\.0+)?|(?:\d{1,2})(?:\.\d+)?)(?!\d)",raw)
-            if not match:
-                raise ValueError("LLM returned no numeric assessment score")
-            return max(0.0,min(100.0,float(match.group(1))))
-        except (ValueError,TypeError):
-            if not allow_retry:
-                raise
+        """Deterministic coverage assessment; never adds another LLM dependency."""
+        text=str(lesson or "").strip()
+        if not text:
             return None
+        required=("prerequisite","example","exercise","test","mistake","security","mastery")
+        lowered=text.casefold()
+        coverage=sum(1 for item in required if item in lowered) / len(required)
+        length_score=min(1.0, len(text)/5000.0)
+        section_bonus=0.15 if text.count("\n") >= 8 else 0.0
+        score=(0.65*coverage + 0.25*length_score + section_bonus)*100.0
+        return round(max(0.0,min(100.0,score)),1)
 
     @staticmethod
     def _set_progress(session_id, progress, phase):
