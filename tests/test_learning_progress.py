@@ -335,6 +335,22 @@ def test_scheduler_worker_slot_limit(monkeypatch):
     assert scheduler._worker_slots.acquire(blocking=False) is False
     scheduler._worker_slots.release()
 
+
+def test_scheduler_supervisor_does_not_resume_paused_worker(monkeypatch):
+    scheduler = StudyScheduler.__new__(StudyScheduler)
+    scheduler._supervisor_stop = threading.Event()
+    scheduler._lock = threading.RLock()
+    scheduler._workers = {}
+    calls = []
+    scheduler.start = lambda language, session_id=None: calls.append((language, session_id))
+    monkeypatch.setattr(
+        "my_ai.scheduler.fetch_all",
+        lambda *_args, **_kwargs: [],
+    )
+    scheduler._supervisor_stop.set()
+    scheduler._supervisor_loop()
+    assert calls == []
+
 def test_scheduler_recovers_unexpected_worker_exit(monkeypatch):
     scheduler = StudyScheduler.__new__(StudyScheduler)
     calls = []
