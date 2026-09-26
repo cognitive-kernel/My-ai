@@ -39,6 +39,7 @@ from .self_diagnostics import SelfDiagnosticsMonitor, latest_report, report_hist
 from .tooling import catalog as tool_catalog, doctor as tool_doctor, run_project_tool, run_python_snippet, sqlserver_query, sqlserver_schema, mysql_query, mysql_schema, sqlite_query, sqlite_schema
 from .image_generation import generate_image, ImageGenerationError
 from .runtime_prerequisites import startup_check, runtime_status
+from .settings_feature import start_named_course
 from .readiness import build_readiness
 
 scheduler=StudyScheduler()
@@ -777,15 +778,21 @@ def chat(r:ChatRequest, request:Request):
             if not requested_languages:
                 requested_languages=[requested or "Python"]
             languages=[]
+            custom_courses=[]
             for target in requested_languages:
                 target_language=canonical_language(resolve_learning_target(msg,target))
                 if target_language not in languages:
                     languages.append(target_language)
+                    if target_language == "Cisco":
+                        course_id=start_named_course("Cisco")
+                        if course_id is not None:
+                            custom_courses.append({"language":"Cisco","course_id":course_id})
+                            continue
                     scheduler.start(target_language, sid)
             label="، ".join(languages)
             answer=f"یادگیری {label} در پس‌زمینه شروع شد." if len(languages)==1 else f"یادگیری همزمان {label} در پس‌زمینه شروع شد."
             execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"assistant",answer)); execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(sid,))
-            return {"type":"learning","answer":answer,"data":{"status":"started","languages":languages,"language":languages[0],"interval_seconds":3600,"session_id":sid},"session_id":sid}
+            return {"type":"learning","answer":answer,"data":{"status":"started","languages":languages,"language":languages[0],"interval_seconds":3600,"session_id":sid,"custom_courses":custom_courses},"session_id":sid}
         if code_intent:
             language=requested or "Python"
             return {"type":"code","answer":"Generated program:","data":learner.generate_program(msg,language)}
