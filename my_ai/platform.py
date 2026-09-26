@@ -349,17 +349,54 @@ def voice_status() -> dict[str, Any]:
 
 def eval_retrieval() -> dict[str, Any]:
     cases = [
-        ("Python list tuple", "Python"),
-        ("SQL Server index execution plan", "SQL Server"),
-        ("امنیت پن‌تست", "Pentest"),
+        ("Python list tuple", ("Python",)),
+        ("SQL Server index execution plan", ("SQL Server",)),
+        ("امنیت پن‌تست", ("Pentest",)),
     ]
     results = []
-    for query, expected in cases:
+    reciprocal_ranks = []
+    for query, expected_topics in cases:
         try:
-            hits = hybrid_search(query, 3)
-            results.append({"query": query, "expected": expected, "hit": bool(hits), "top": hits[0]["title"] if hits else None})
+            hits = hybrid_search(query, 5)
+            ranked = [str(item.get("topic") or "") for item in hits]
+            rank = next(
+                (index + 1 for index, topic in enumerate(ranked)
+                 if any(expected.casefold() in topic.casefold() for expected in expected_topics)),
+                None,
+            )
+            reciprocal_ranks.append(1.0 / rank if rank else 0.0)
+            results.append({
+                "query": query,
+                "expected_topics": list(expected_topics),
+                "rank": rank,
+                "top": hits[0].get("title") if hits else None,
+                "passed": rank is not None,
+            })
         except Exception as exc:
-            results.append({"query": query, "expected": expected, "hit": False, "error": str(exc)})
-    return {"cases": results, "passed": sum(1 for x in results if x["hit"]), "total": len(results)}
+            reciprocal_ranks.append(0.0)
+            results.append({"query": query, "expected_topics": list(expected_topics), "rank": None, "passed": False, "error": str(exc)})
+    judgments = fetch_all("SELECT score,relevant FROM retrieval_judgments")
+    if judgments:
+        brier = sum((float(row["relevant"]) - float(row["score"])) ** 2 for row in judgments) / len(judgments)
+        buckets: dict[float, list[int]] = {}
+        for row in judgments:
+            bucket = round(float(row["score"]), 1)
+            buckets.setdefault(bucket, []).append(int(row["relevant"]))
+        ece = 0.0
+        total = len(judgments)
+        for bucket, labels in buckets.items():
+            ece += (len(labels) / total) * abs((sum(labels) / len(labels)) - bucket)
+        calibration = {"samples": total, "brier": round(brier, 6), "ece": round(ece, 6)}
+    else:
+        calibration = {"samples": 0, "brier": None, "ece": None}
+    passed = sum(1 for x in results if x["passed"])
+    return {
+        "cases": results,
+        "passed": passed,
+        "total": len(results),
+        "mrr": round(sum(reciprocal_ranks) / len(reciprocal_ranks), 6) if reciprocal_ranks else 0.0,
+        "calibration": calibration,
+        "calibration_ready": calibration["samples"] >= 5,
+    }
 
 
