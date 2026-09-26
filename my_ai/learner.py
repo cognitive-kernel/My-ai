@@ -26,10 +26,10 @@ class LearningEngine:
         self.llm=llm or create_llm("general"); self.web=WebLearner()
         self.security=SecurityEngine(self.llm); self.dast=LocalDAST()
 
-    def _retry_with_limit(self, operation, label, progress_callback=None, topic=None, stop_event=None):
+    def _retry_with_limit(self, operation, label, progress_callback=None, topic=None, stop_event=None, max_attempts=None):
         """Retry a learning operation up to the configured limit, respecting cancellation."""
         delay=1.0
-        max_attempts=max(1,get_int("learning.max_retries",settings.learning_max_retries))
+        max_attempts=max(1,int(max_attempts or get_int("learning.max_retries",settings.learning_max_retries)))
         for attempt in range(1,max_attempts+1):
             if stop_event is not None and stop_event.is_set():
                 raise InterruptedError("learning stopped")
@@ -90,7 +90,14 @@ class LearningEngine:
                                     system="You are a rigorous programming teacher.")
                 return title,note
             try:
-                title,note=self._retry_with_limit(fetch_and_extract,"source",progress_callback,topic["topic"],stop_event)
+                title,note=self._retry_with_limit(
+                    fetch_and_extract,
+                    "source",
+                    progress_callback,
+                    topic["topic"],
+                    stop_event,
+                    max_attempts=2,
+                )
             except InterruptedError:
                 raise
             except Exception as exc:
