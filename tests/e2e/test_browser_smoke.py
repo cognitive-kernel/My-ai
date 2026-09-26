@@ -31,3 +31,21 @@ def test_browser_authenticated_surface(page: Page, base_url: str):
     assert "languages" in learning and "courses" in learning
     voice = page.request.get(f"{base_url}/voice/status").json()
     assert "offline" in voice or "offline_ready" in voice
+
+    readiness = page.request.get(f"{base_url}/admin/readiness")
+    assert readiness.ok
+    readiness_body = readiness.json()
+    assert set(("checks", "runtime", "knowledge", "skills", "self_update_policy")) <= set(readiness_body["checks"].keys())
+
+    retrieval = page.request.get(f"{base_url}/eval/retrieval")
+    assert retrieval.ok
+    retrieval_body = retrieval.json()
+    assert "mrr" in retrieval_body and "calibration" in retrieval_body
+
+    skills = page.request.get(f"{base_url}/skills/reviews")
+    assert skills.ok
+    assert "items" in skills.json()
+
+    page.goto(f"{base_url}/")
+    assert page.locator("text=موضوعات آموزشی").count() >= 0
+    assert page.locator("body").count() == 1
