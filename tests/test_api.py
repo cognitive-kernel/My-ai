@@ -26,3 +26,25 @@ def test_github_logout_does_not_use_removed_yes_flag(monkeypatch):
 
 def kwargs_input(kwargs):
     return kwargs.get("input")
+
+
+def test_learning_step_and_status_handlers(monkeypatch):
+    import my_ai.api as api
+
+    monkeypatch.setattr(api, "require_user", lambda request: {"id": 1, "role": "admin"})
+    monkeypatch.setattr(
+        api.learner,
+        "learn_next",
+        lambda language: {"status": "completed", "language": language, "topic": {"topic": "test"}},
+    )
+    step = api.learning_step(api.LanguageRequest(language="Python"), object())
+    assert step["status"] == "completed"
+
+    monkeypatch.setattr(
+        api.scheduler,
+        "status",
+        lambda: {"running": False, "stage": "idle", "error": None, "workers": []},
+    )
+    status = api.scheduler_status(object())
+    assert status["stage"] == "idle"
+    assert status["error"] is None
