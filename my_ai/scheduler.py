@@ -31,6 +31,7 @@ class StudyScheduler:
         self.stage = "idle"
         self.error = None
         self._lock = threading.RLock()
+        self._worker_slots = threading.BoundedSemaphore(max(1, settings.learning_max_concurrent_workers))
         try:
             load_saved_domains()
         except Exception as exc:
@@ -333,8 +334,15 @@ class StudyScheduler:
     def _loop(self, language, stop_event):
         engine = LearningEngine()
         consecutive_errors = 0
+        slot_acquired = False
         try:
             while not stop_event.is_set():
+                if not slot_acquired:
+                    slot_acquired = self._worker_slots.acquire(timeout=0.5)
+                    if not slot_acquired:
+                        if stop_event.is_set():
+                            break
+                        continue
                 try:
                     if language not in LANGUAGE_CURRICULA:
                         language = ensure_domain(language, getattr(engine, "llm", None)) or language
@@ -383,6 +391,11 @@ class StudyScheduler:
                     if stop_event.wait(min(60.0, 2.0 ** min(consecutive_errors, 5))):
                         break
         finally:
+            if slot_acquired:
+                try:
+                    self._worker_slots.release()
+                except ValueError:
+                    pass
             with self._lock:
                 self._workers.pop(language.casefold(), None)
                 execute(
