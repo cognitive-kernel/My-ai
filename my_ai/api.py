@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 from pathlib import Path
 from fastapi import FastAPI,HTTPException,Request
 from fastapi.responses import HTMLResponse,JSONResponse,RedirectResponse,StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel,HttpUrl,Field
 from .agent import Agent
 from .command_policy import parse_command
@@ -58,6 +59,7 @@ async def lifespan(_):
     scheduler.stop()
     self_diagnostics.stop()
 app=FastAPI(title="My-AI",version="0.2.0",description="Local-first personal learning and coding agent.",lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=Path(__file__).resolve().parent / "static"), name="static")
 
 register_routes(app, scheduler, require_user, audit)
 install_learning_resilience()
