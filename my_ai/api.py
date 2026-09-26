@@ -96,12 +96,21 @@ async def auth_and_audit_middleware(request: Request, call_next):
     if settings.read_only and request.method in {"POST", "PUT", "PATCH", "DELETE"} and path not in {"/auth/login", "/auth/logout"} and not path.startswith("/docs/"):
         return JSONResponse({"detail":"MYAI_READ_ONLY is enabled; write operation blocked."}, status_code=423)
     if user and user["role"] != "admin":
+        permission = None
         for prefix,tool in _TOOL_RULES:
             if path.startswith(prefix) or path == prefix.rstrip("/"):
                 action=_PATH_ACTIONS.get(path, "read" if request.method=="GET" else "write" if request.method in {"PUT","PATCH","DELETE"} else "execute")
-                if not tool_allowed(user,tool,action):
-                    return JSONResponse({"detail":f"Tool permission denied: {tool}:{action}"},status_code=403)
+                permission = (tool, action)
                 break
+        if permission is None:
+            # Legacy routes without an explicit tool mapping are read-only for
+            # ordinary users. New write/execute routes must opt into a rule.
+            if request.method != "GET" and path not in {"/auth/login", "/auth/logout", "/auth/register", "/auth/register/status"}:
+                return JSONResponse({"detail":"Tool permission denied: unmapped write/execute route."}, status_code=403)
+        else:
+            tool, action = permission
+            if not tool_allowed(user,tool,action):
+                return JSONResponse({"detail":f"Tool permission denied: {tool}:{action}"},status_code=403)
     response=await call_next(request)
     if user and path!="/auth/logout":
         action={"GET":"read","POST":"execute","PUT":"write","PATCH":"write","DELETE":"write"}.get(request.method,request.method.lower())
