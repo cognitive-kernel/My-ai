@@ -47,5 +47,5 @@ def test_browser_authenticated_surface(page: Page, base_url: str):
     assert "items" in skills.json()
 
     page.goto(f"{base_url}/")
-    assert page.locator("text=موضوعات آموزشی").count() >= 0
+    assert page.locator("#dashboard").count() == 1
     assert page.locator("body").count() == 1
