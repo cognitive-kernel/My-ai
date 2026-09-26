@@ -2,6 +2,9 @@ name: ollama-e2e
 run-name: ${{ github.workflow }} @ ${{ github.sha }}
 permissions:
   contents: read
+concurrency:
+  group: ollama-e2e-${{ github.ref }}
+  cancel-in-progress: true
 
 on:
   workflow_dispatch:
