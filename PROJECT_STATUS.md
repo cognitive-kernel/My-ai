@@ -191,21 +191,15 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 
 ## 7. تغییرات این مرحله
 
-- `4719215` — Fix scheduler status API endpoint and add scheduler status regression coverage
-- Root cause: `my_ai/api.py` called `scheduler.status()`, while the refactored `StudyScheduler` no longer exposed that method.
-- Fix: restored a JSON-safe `StudyScheduler.status()` snapshot including `running`, `language`, `stage`, `current_topic`, `last_result`, `error` and `interval_seconds`.
-- Regression test: `tests/test_learning_progress.py` verifies scheduler status behavior.
+### 2026-09-26 — Learning stability, scheduler diagnostics and router hardening
 
-- `6fcf5fd5238e7a52f6dd1a772e1ad08356610be4` — Deduplicate knowledge storage and prepare database learning metadata
-- `2d6d5ffb301697f7dcc33e722cf8fa3e25a58313` — Use content-addressed memory to prevent duplicate knowledge
-- `f3b79a4d620b5891643099ea766952a1f271414e` — Add optional OpenAI-compatible model configuration
-- `6dbd3122244b188b7cb286d9ff20fe83bc3a0da7` — Add optional OpenAI Responses API backend
-- `c4d34f831369a165c6494a8afc488f5b1a1bd605` — Improve response quality and use configured LLM backend
-- `908f6d03fb6540a383d73a15fa24bc794250c67f` — Use configured LLM backend for autonomous learning
-- `725d51627e91ee23105588acec533d593256846f` — Add regression tests for memory deduplication
-- `1fc7f688ac8b3c8dda4224e5f9c42751fdc96446` — Finalize project status after successful deduplication and LLM tests
-
-- Local runtime configuration verified: `.env` was created from `.env.example` and `OLLAMA_MODEL` was aligned to the installed Ollama model `qwen2.5:7b`. This is a local environment change and is not committed as project code.
+- 33d42724 — resilience no longer overwrites LearningEngine._retry_with_limit; bounded retry policy remains authoritative.
+- 6ab19d30 — lesson and assessment stages now use bounded retries; web-source failures can fall back to previously stored local knowledge instead of making the learning pipeline dependent on successful web retrieval.
+- 0db458b3 — scheduler logs full worker exceptions with language, stage and consecutive-error count using logger.exception, while preserving the DB status/error snapshot.
+- c87018b2 — router adds explicit security_scan, help and file_analysis intents and retains deterministic high-risk routing.
+- 572f9b6e, d6ce8a3a, 26b702e3 — regression coverage for retry-policy integrity, new router intents/execution ambiguity and scheduler exception logging.
+- Structured router arguments remain available for language, topic, goal, project path and URLs; session context is passed from chat and streaming paths.
+- Self-update remains deny-by-default; health checks are restricted to loopback and arbitrary restart command overrides are not accepted.
 
 ## 8. تست و CI
 
