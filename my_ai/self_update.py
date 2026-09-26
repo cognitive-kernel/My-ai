@@ -13,6 +13,7 @@ from .db import execute
 from .settings_store import get_bool, get_setting
 from .decision_log import record as record_decision
 from .notifications import notify
+from .config import assert_write_allowed
 
 ROOT = Path(__file__).resolve().parent.parent
 STATE_DIR = ROOT / "self-repair"
@@ -115,6 +116,7 @@ def preview_update() -> dict[str, object]:
     return {"status": "update_available", "current": current, "remote": remote, "files": stat, "diff": patch}
 
 def apply_confirmed_update(health_url=None, health_timeout=45):
+    assert_write_allowed(ROOT)
     """Test origin/main in isolation, snapshot current code, fast-forward, then supervise restart."""
     if health_url is None:
         health_url = str(get_setting("self_update.health_url","")).strip() or None
