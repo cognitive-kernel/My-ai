@@ -1,5 +1,7 @@
 from __future__ import annotations
 import re
+import time
+import threading
 from urllib.parse import urlparse, quote_plus
 from urllib import robotparser
 import httpx
@@ -7,6 +9,21 @@ from bs4 import BeautifulSoup
 from .config import settings
 from .network import assert_public_hostname, pinned_client
 class WebLearner:
+    _rate_lock = threading.Lock()
+    _last_fetch: dict[str, float] = {}
+    _min_interval = 1.0
+
+    @classmethod
+    def _rate_limit(cls, host: str) -> None:
+        now = time.monotonic()
+        with cls._rate_lock:
+            previous = cls._last_fetch.get(host, 0.0)
+            wait = cls._min_interval - (now - previous)
+            if wait > 0:
+                time.sleep(wait)
+                now = time.monotonic()
+            cls._last_fetch[host] = now
+
     def search(self,query,domains=None,limit=6):
         q=query+((" site:"+" OR site:".join(domains)) if domains else "")
         r=httpx.get("https://html.duckduckgo.com/html/?q="+quote_plus(q),timeout=20,follow_redirects=True,headers={"User-Agent":"My-AI/0.2"}); r.raise_for_status()
@@ -44,6 +61,7 @@ class WebLearner:
 
     def fetch(self,url):
         self._validate_url(url)
+        self._rate_limit(urlparse(url).hostname or "")
         if not self._robots_allowed(url):
             raise ValueError("robots.txt disallows this URL or could not be verified.")
         with pinned_client(timeout=20,follow_redirects=False,headers={"User-Agent":"My-AI/0.2"}) as client:
@@ -54,6 +72,7 @@ class WebLearner:
                 location=r.headers.get("location")
                 if not location: break
                 url=str(httpx.URL(url).join(location)); self._validate_url(url)
+                self._rate_limit(urlparse(url).hostname or "")
                 if not self._robots_allowed(url): raise ValueError("robots.txt disallows redirect target.")
         r.raise_for_status()
         if "text/html" not in r.headers.get("content-type","") and "text/plain" not in r.headers.get("content-type",""): raise ValueError("URL does not contain HTML/text.")
