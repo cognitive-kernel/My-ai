@@ -289,3 +289,23 @@ def test_learning_source_failure_is_recorded_and_does_not_abort(monkeypatch):
     assert len(result) == 3
     assert all(item["title"] == "Source unavailable" for item in result[1:])
     assert all("connection failed" in item["error"] for item in result[1:])
+
+
+def test_scheduler_logs_full_worker_exception(monkeypatch, caplog):
+    import logging
+
+    class FakeEngine:
+        def __init__(self):
+            pass
+        def learn_next(self, language, progress_callback=None, stop_event=None):
+            raise RuntimeError("source fetch exploded")
+
+    monkeypatch.setattr("my_ai.scheduler.LearningEngine", FakeEngine)
+    monkeypatch.setattr("my_ai.scheduler.StudyScheduler._wait_for_resources", staticmethod(lambda stop_event: {}))
+    scheduler = StudyScheduler(interval_seconds=1)
+    stop = threading.Event()
+    monkeypatch.setattr(stop, "wait", lambda _timeout: True)
+    with caplog.at_level(logging.ERROR, logger="my_ai.scheduler"):
+        scheduler._loop("Python", stop)
+    assert "learning worker failed" in caplog.text
+    assert "source fetch exploded" in caplog.text
