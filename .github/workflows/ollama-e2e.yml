@@ -1,4 +1,7 @@
 name: ollama-e2e
+run-name: ${{ github.workflow }} @ ${{ github.sha }}
+permissions:
+  contents: read
 
 on:
   workflow_dispatch:
@@ -9,8 +12,8 @@ jobs:
   ollama:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - name: Install Ollama
@@ -29,11 +32,11 @@ jobs:
           fi
       - name: Pull small E2E model
         run: |
-          for attempt in 1 2 3; do
-            if ollama pull qwen2.5:0.5b; then exit 0; fi
-            sleep $((attempt * 5))
+          for attempt in 1 2 3 4 5; do
+            if OLLAMA_HOST=127.0.0.1:11434 ollama pull qwen2.5:0.5b; then exit 0; fi
+            sleep $((attempt * 10))
           done
-          ollama list
+          OLLAMA_HOST=127.0.0.1:11434 ollama list
           cat /tmp/ollama.log || true
           exit 1
       - name: Install project
