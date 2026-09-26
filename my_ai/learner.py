@@ -373,19 +373,74 @@ class LearningEngine:
         return {"courses":courses}
 
     def status(self,language=None):
+        """Return complete summary for every fixed or persisted learning track."""
         rows=fetch_all(
             "SELECT id,language,topic,status,score,progress_percent,phase,created_at FROM learning_sessions ORDER BY id DESC"
-        ); out=[]
-        for lang,topics in LANGUAGE_CURRICULA.items():
-            topic_names={str(x["topic"]) for x in topics}
-            lang_rows=[r for r in rows if r["language"]==lang and str(r["topic"]) in topic_names]
-            completed_topics={str(r["topic"]) for r in lang_rows if r["status"]=="completed"}
-            completed=len(completed_topics); total=len(topics)
-            active_progress=max([float(r["progress_percent"] or 0) if "progress_percent" in r.keys() and r["progress_percent"] is not None else 0.0 for r in lang_rows if r["status"]!="completed"] or [0.0])
-            raw=((completed + active_progress/100.0) / total * 100.0) if total else 0.0
-            scores=[float(r["score"]) for r in lang_rows if r["status"]=="completed" and r["score"] is not None]
-            out.append({"language":lang,"completed_topics":completed,"remaining_topics":max(0, total - completed),"total_topics":total,"progress_percent":self._half_percent(raw),"progress_step":"0.5%","average_score":round(sum(scores)/len(scores),1) if scores else 0})
-        if language: out=[x for x in out if x["language"].lower()==canonical_language(language).lower()]
+        )
+        row_languages=[]
+        for row in rows:
+            raw=str(row["language"] or "").strip()
+            if raw:
+                canonical=canonical_language(raw)
+                if canonical not in row_languages:
+                    row_languages.append(canonical)
+
+        languages=list(dict.fromkeys(list(LANGUAGE_CURRICULA.keys()) + row_languages))
+        if language:
+            wanted=canonical_language(language).lower()
+            languages=[name for name in languages if name.lower()==wanted]
+
+        out=[]
+        for lang in languages:
+            lang_rows=[r for r in rows if canonical_language(str(r["language"] or ""))==lang]
+            curriculum_topics=LANGUAGE_CURRICULA.get(lang,[])
+            topic_names={str(x["topic"]).strip() for x in curriculum_topics}
+            latest={}
+            for row in lang_rows:
+                topic=str(row["topic"] or "").strip()
+                if topic and topic not in latest:
+                    latest[topic]=row
+
+            # Include persisted ad-hoc topics (for example Cisco) in the
+            # aggregate summary, while retaining fixed curriculum topics.
+            all_topics=[str(x["topic"]).strip() for x in curriculum_topics]
+            for topic in latest:
+                if topic not in topic_names:
+                    all_topics.append(topic)
+
+            completed_topics=set()
+            progress_values=[]
+            scores=[]
+            for topic in all_topics:
+                row=latest.get(topic)
+                if row and row["status"]=="completed":
+                    progress=100.0
+                    completed_topics.add(topic)
+                    if row["score"] is not None:
+                        scores.append(float(row["score"]))
+                elif row:
+                    progress=float(row["progress_percent"] or 0)
+                else:
+                    progress=0.0
+                progress_values.append(self._half_percent(progress))
+
+            total=len(all_topics)
+            completed=len(completed_topics)
+            raw=(sum(progress_values)/total) if total else 0.0
+            out.append({
+                "language":lang,
+                "completed_topics":completed,
+                "remaining_topics":max(0,total-completed),
+                "total_topics":total,
+                "progress_percent":self._half_percent(raw),
+                "progress_step":"0.5%",
+                "average_score":round(sum(scores)/len(scores),1) if scores else 0,
+            })
+
         session_fields=("id","language","topic","status","score","progress_percent","phase","created_at")
-        sessions=[{key: row[key] for key in session_fields if key in row.keys()} for row in rows]
-        return {"languages":out,"sessions":sessions,"available_languages":list(LANGUAGE_CURRICULA.keys())}
+        sessions=[{key:row[key] for key in session_fields if key in row.keys()} for row in rows]
+        return {
+            "languages":out,
+            "sessions":sessions,
+            "available_languages":list(dict.fromkeys(list(LANGUAGE_CURRICULA.keys()) + row_languages)),
+        }
