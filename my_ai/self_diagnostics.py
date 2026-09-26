@@ -107,22 +107,37 @@ def latest_report() -> dict[str, object] | None:
         return None
 
 
+def _report_fingerprint(report: dict[str, object]) -> str:
+    stable = dict(report)
+    stable.pop("timestamp", None)
+    stable.pop("id", None)
+    stable.pop("created_at", None)
+    return json.dumps(stable, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
 def report_history(limit: int = 20) -> list[dict[str, object]]:
     rows = fetch_all(
         "SELECT id,created_at,healthy,report_json "
-        "FROM self_diagnostic_reports ORDER BY id DESC LIMIT ?",
-        (max(1, min(int(limit), 100)),),
+        "FROM self_diagnostic_reports ORDER BY id DESC LIMIT 1000"
     )
     result = []
+    seen: set[str] = set()
     for row in rows:
         try:
             item = json.loads(row["report_json"])
         except Exception:
             item = {"raw": row["report_json"]}
+        fingerprint = _report_fingerprint(item)
+        if fingerprint in seen:
+            continue
+        seen.add(fingerprint)
         item["id"] = row["id"]
         item["created_at"] = row["created_at"]
         result.append(item)
+        if len(result) >= max(1, min(int(limit), 100)):
+            break
     return result
+
 
 
 class SelfDiagnosticsMonitor:
