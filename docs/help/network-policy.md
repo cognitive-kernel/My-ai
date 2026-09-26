@@ -25,6 +25,6 @@ Everything else must use local resources and local processing.
 
 ## Prerequisites
 
-`my_ai/runtime_prerequisites.py` checks `requirements.txt` and selected system tools at startup. With `MYAI_AUTO_INSTALL_PREREQUISITES=true` it installs missing Python packages and supported system tools through the local OS package manager.
+`my_ai/runtime_prerequisites.py` checks `requirements.txt` and selected system tools at startup. With `MYAI_AUTO_INSTALL_PREREQUISITES=true` it installs missing Python packages and supported system tools through the local OS package manager. The default is `false` so application startup does not perform package installation.
 
 New network-capable features must be explicitly added to the allowed list and documented here before implementation.
