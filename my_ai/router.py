@@ -141,7 +141,7 @@ def _extract_goal(text: str) -> str | None:
 
 
 def _extract_project_path(text: str) -> str | None:
-    for candidate in re.findall(r"(?<!https?://)(?:(?:[A-Za-z]:[\\/])|/|\\\\)[^\s<>]+", text):
+    for candidate in re.findall(r"(?:(?:[A-Za-z]:[\\/])|/|\\\\)[^\s<>]+", text):
         candidate = candidate.rstrip(".,،؛;:)")
         if candidate not in {"/", "\\"} and any(
             token in candidate.casefold()
