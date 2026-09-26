@@ -63,7 +63,7 @@ def test_additional_learning_and_coding_variants():
 
 
 def test_structured_learning_arguments():
-    result = classify("پایتون یاد بگیر درباره async و بعد یک API بساز")
+    result = classify("پایتون یاد بگیر درباره async و بعد یک API بساز برای مدیریت کارها")
     assert result.args["language"] == "python"
     assert "async" in result.args["topic"]
     assert "goal" in result.args
