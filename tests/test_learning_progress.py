@@ -337,3 +337,16 @@ def test_assessment_is_local_and_does_not_call_llm():
     score = engine.assess("Python", lesson)
     assert score is not None
     assert 0.0 <= score <= 100.0
+
+
+def test_scheduler_worker_slot_limit(monkeypatch):
+    monkeypatch.setattr("my_ai.scheduler.settings", type("S", (), {
+        "scheduler_interval_seconds": 60,
+        "scheduler_max_cpu_percent": 70,
+        "scheduler_max_ram_percent": 80,
+        "learning_max_concurrent_workers": 1,
+    })())
+    scheduler = StudyScheduler(interval_seconds=60)
+    assert scheduler._worker_slots.acquire(blocking=False)
+    assert scheduler._worker_slots.acquire(blocking=False) is False
+    scheduler._worker_slots.release()
