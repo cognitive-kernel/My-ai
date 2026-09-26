@@ -87,7 +87,7 @@ class LearningEngine:
                                     system="You are a rigorous programming teacher.")
                 return title,note
             try:
-                title,note=self._retry_forever(fetch_and_extract,"source",progress_callback,topic["topic"],stop_event)
+                title,note=self._retry_with_limit(fetch_and_extract,"source",progress_callback,topic["topic"],stop_event)
             except InterruptedError:
                 raise
             except Exception as exc:
