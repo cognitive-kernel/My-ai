@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from .config import assert_write_allowed
 
 ROOT = Path(__file__).resolve().parent.parent
 PROJECTS_ROOT = ROOT / "projects"
@@ -19,6 +20,7 @@ def project_slug(name: str) -> str:
 
 
 def create_project_workspace(name: str) -> Path:
+    assert_write_allowed(PROJECTS_ROOT)
     slug = project_slug(name)
     base = PROJECTS_ROOT / slug
     if not base.exists():
@@ -34,6 +36,7 @@ def create_project_workspace(name: str) -> Path:
 
 
 def write_project_files(workspace: Path, language: str, request: str, code: str) -> list[str]:
+    assert_write_allowed(workspace)
     workspace = workspace.resolve()
     workspace.relative_to(PROJECTS_ROOT.resolve())
 
