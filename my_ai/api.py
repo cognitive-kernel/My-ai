@@ -47,6 +47,7 @@ async def lifespan(_):
     # Re-check on every application start; installation is limited to the explicit prerequisite manager.
     startup_check()
     self_diagnostics.start()
+    scheduler.start_learning_supervisor()
     scheduler.start_review_monitor()
     workers=fetch_all("SELECT language,session_id,status FROM learning_workers WHERE status IN ('running','retrying','paused','stopping')")
     if workers:
