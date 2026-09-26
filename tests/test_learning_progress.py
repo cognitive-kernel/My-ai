@@ -350,7 +350,7 @@ def test_scheduler_supervisor_does_not_resume_paused_worker(monkeypatch):
         return []
 
     monkeypatch.setattr("my_ai.scheduler.fetch_all", fake_fetch_all)
-    scheduler._supervisor_stop.set()
+    scheduler._supervisor_stop.wait = lambda _timeout: scheduler._supervisor_stop.set()
     scheduler._supervisor_loop()
     assert calls == []
     assert "status IN ('running','retrying')" in queries[0]
