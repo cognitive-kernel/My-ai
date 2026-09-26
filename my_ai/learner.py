@@ -55,9 +55,7 @@ class LearningEngine:
         prompt=("You are a curriculum architect. Analyze the requested programming subject and identify prerequisite subjects that must be learned before or alongside it. "
                  '{"prerequisites":[{"name":"...","reason":"...","recommended_order":1}]}. '
                  "Do not duplicate the main topic. Only include concrete skills needed to build real projects. "
-                 f"MAIN SUBJECT: {language}
-CURRENT TOPIC: {topic['topic']}
-GOAL: {topic['goal']}")
+                 f"MAIN SUBJECT: {language}\nCURRENT TOPIC: {topic['topic']}\nGOAL: {topic['goal']}")
         return self._retry_with_limit(
             lambda: self._parse_prerequisites(routing_llm.chat(prompt,system="Return valid JSON only. Prefer official ecosystem prerequisites.")),
             "prerequisites",progress_callback,topic["topic"],stop_event,
@@ -84,12 +82,8 @@ GOAL: {topic['goal']}")
             def fetch_and_extract(url=url):
                 title,source=self.web.fetch(url)
                 note=self.llm.chat("Extract only accurate knowledge relevant to these study targets from the supplied source. "
-                                    "Separate the targets and state prerequisites explicitly. Never invent facts.
-"
-                                    f"LANGUAGE: {language}
-TARGETS: {json.dumps(queries,ensure_ascii=False)}
-SOURCE:
-{source}",
+                                    "Separate the targets and state prerequisites explicitly. Never invent facts.\n"
+                                    f"LANGUAGE: {language}\nTARGETS: {json.dumps(queries,ensure_ascii=False)}\nSOURCE:\n{source}",
                                     system="You are a rigorous programming teacher.")
                 return title,note
             try:
@@ -111,12 +105,7 @@ SOURCE:
         note=self.llm.chat(
             "Study the supplied source and produce a concise, accurate learning note. "
             "Use only information supported by the source; identify uncertainty instead of inventing facts. "
-            f"
-TOPIC: {topic}
-SOURCE TITLE: {title}
-SOURCE URL: {url}
-SOURCE:
-{source}",
+            f"\nTOPIC: {topic}\nSOURCE TITLE: {title}\nSOURCE URL: {url}\nSOURCE:\n{source}",
             system="You are a rigorous programming teacher."
         )
         remember(topic,title,note,url)
@@ -153,16 +142,10 @@ SOURCE:
         lesson=self._retry_forever(
             lambda: self.llm.chat("Teach the topic as a complete, structured study unit. Include prerequisite lessons first, then the main topic, examples, exercises, tests, common mistakes, security considerations and a mastery checklist. "
                              "Use the model knowledge seed only as an initial layer; reconcile it with supplied official-source knowledge and explicitly correct conflicts. "
-                             "Do not claim mastery unless supported by the supplied knowledge. Return clear sections.
-"
-                             f"LANGUAGE: {language}
-TOPIC: {t['topic']}
-GOAL: {t['goal']}
-"
-                             f"MODEL KNOWLEDGE SEED: {seed}
-"
-                             f"DISCOVERED PREREQUISITES: {json.dumps(prerequisites,ensure_ascii=False)}
-"
+                             "Do not claim mastery unless supported by the supplied knowledge. Return clear sections.\n"
+                             f"LANGUAGE: {language}\nTOPIC: {t['topic']}\nGOAL: {t['goal']}\n"
+                             f"MODEL KNOWLEDGE SEED: {seed}\n"
+                             f"DISCOVERED PREREQUISITES: {json.dumps(prerequisites,ensure_ascii=False)}\n"
                              f"LEARNED KNOWLEDGE: {json.dumps(search_knowledge(language+' '+t['topic'],12),ensure_ascii=False)}"),
             "lesson",progress_callback,t["topic"],stop_event,
         )
@@ -179,9 +162,8 @@ GOAL: {t['goal']}
     def assess(self,topic,lesson,allow_retry=True):
         import re
         try:
-            raw=self.llm.chat("Return a numeric score from 0 to 100 for factual coverage. Topic:"+topic+"
-NOTE:"+lesson).strip()
-            match=re.search(r"(?<!d)(100(?:\.0+)?|(?:d{1,2})(?:\.\d+)?)(?!d)",raw)
+            raw=self.llm.chat("Return a numeric score from 0 to 100 for factual coverage. Topic:"+topic+"\nNOTE:"+lesson).strip()
+            match=re.search(r"(?<!\d)(100(?:\.0+)?|(?:\d{1,2})(?:\.\d+)?)(?!\d)",raw)
             if not match:
                 raise ValueError("LLM returned no numeric assessment score")
             return max(0.0,min(100.0,float(match.group(1))))
@@ -204,17 +186,13 @@ NOTE:"+lesson).strip()
         lessons=recent_lessons(12)
         code=coding_llm.chat("Write a complete runnable "+language+" program for the user request. Use accumulated learning knowledge. "
                             "Apply secure coding practices, validate inputs, avoid unsafe defaults, include appropriate error handling and tests where practical. "
-                            "Return ONLY source code.
-REQUEST: "+request+"
-KNOWLEDGE: "+json.dumps(context,ensure_ascii=False)+"
-RECENT SELF-REPAIR LESSONS: "+json.dumps(lessons,ensure_ascii=False),
+                            "Return ONLY source code.\nREQUEST: "+request+"\nKNOWLEDGE: "+json.dumps(context,ensure_ascii=False)+"\nRECENT SELF-REPAIR LESSONS: "+json.dumps(lessons,ensure_ascii=False),
                             system="You are a senior secure software engineer. Never claim execution unless a result is supplied.").strip()
         fence=chr(96)*3
         if code.startswith(fence):
             lines=code.splitlines()[1:]
             if lines and lines[-1].strip()==fence: lines=lines[:-1]
-            code="
-".join(lines).strip()
+            code="\n".join(lines).strip()
         workspace=create_project_workspace(request)
         written_files=write_project_files(workspace,language,request,code)
         pid=execute("INSERT INTO generated_projects(language,request,code) VALUES(?,?,?)",(language,request,code))
