@@ -50,16 +50,31 @@ fetch('/scheduler/status',{cache:'no-store'}),
 fetch('/learning/active',{cache:'no-store'})
 ]);
 var j=await rr[0].json(),s=await rr[1].json(),ac=await rr[2].json();
-var courses=j.courses||[],workers=s.workers||[],workerMap={},completedLanguages={};
+var courses=j.courses||[],workers=s.workers||[],workerMap={},items=[];
+workers.forEach(function(w){workerMap[String(w.language||'').toLowerCase()]=w});
 courses.forEach(function(x){
-var language=String(x.language||x.name||'').toLowerCase();
-if(Number(x.progress_percent||0)>=100)completedLanguages[language]=true;
+var language=String(x.language||x.name||'').trim();
+if(!language||Number(x.progress_percent||0)>=100)return;
+items.push(x);
 });
-workers.forEach(function(w){workerMap[String(w.language).toLowerCase()]=w});
-var items=courses.slice();
+(ac.items||[]).forEach(function(x){
+var c=x.course||{},summary=x.summary||{},language=String(c.name||'').trim();
+if(!language||Number(summary.progress_percent||0)>=100)return;
+var key=language.toLowerCase();
+if(items.some(function(existing){return String(existing.language||existing.name||'').trim().toLowerCase()===key}))return;
+items.push({
+language:language,
+progress_percent:Number(summary.progress_percent||0),
+total_topics:Number(summary.total_topics||0),
+completed_topics:Number(summary.completed_topics||0),
+remaining_topics:Math.max(0,Number(summary.total_topics||0)-Number(summary.completed_topics||0)),
+current:summary.current?{topic:summary.current.title||summary.current.topic}:null,
+topics:summary.topics||[]
+});
+});
 workers.forEach(function(w){
-var language=String(w.language||'').toLowerCase();
-if(!items.some(function(x){return String(x.language).toLowerCase()===language}))items.push({language:w.language,progress_percent:0,total_topics:0,completed_topics:0,remaining_topics:0,topics:[]});
+var language=String(w.language||'').trim();
+if(!language||items.some(function(x){return String(x.language||x.name||'').trim().toLowerCase()===language.toLowerCase()}))return;
 });
 var previousOpen={};
 document.querySelectorAll('#dashboard details[data-learning-language]').forEach(function(d){previousOpen[d.getAttribute('data-learning-language')]=d.open});
@@ -75,7 +90,7 @@ var status=w?(w.status||'stopped'):'stopped';
 var current=w&&w.current_topic||((summary.current||{}).topic)||'در انتظار ادامه';
 var stage=w&&w.stage||'paused';
 var pct=Number(summary.progress_percent||0);
-var done=pct>=100; var cardClass=done?'learning-complete':(status==='stopping'?'learning-stopping':(status==='running'||status==='retrying'?'learning-running':'learning-stopped'));
+var cardClass=status==='stopping'?'learning-stopping':(status==='running'||status==='retrying'?'learning-running':'learning-stopped');
 var stateText=status==='stopping'?'در حال توقف…':(status==='running'||status==='retrying'?'در حال اجرا':'متوقف شده');
 html+='<details class="card learningCard '+cardClass+'" data-learning-language="'+escHtml(language)+'"><summary style="cursor:pointer"><b>'+escHtml(language)+'</b> · '+escHtml(current)+' · '+pct+'% · <b>'+stateText+'</b></summary>';
 html+='<div class="learningMeta"><span class="pill '+(status==='running'||status==='retrying'?'run':'stop')+'">'+stateText+'</span><span class="pill">مرحله: '+escHtml(stage)+'</span><span class="pill">پیشرفت: '+pct+'%</span></div><p><b>وضعیت:</b> '+stateText+' · <b>مرحله:</b> '+escHtml(stage)+' · <b>تکمیل:</b> '+Number(summary.completed_topics||0)+' / '+Number(summary.total_topics||0)+' · <b>باقی‌مانده:</b> '+Number(summary.remaining_topics||0)+'</p>';
