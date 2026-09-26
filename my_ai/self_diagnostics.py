@@ -64,8 +64,18 @@ def run_diagnostics() -> dict[str, object]:
     code, output = _run([sys.executable, "-m", "compileall", "-q", "my_ai"], 120)
     checks["compileall"] = {"ok": code == 0, "output": output[-12000:]}
 
-    code, output = _run([sys.executable, "-m", "pytest", "-q"], 300)
-    checks["pytest"] = {"ok": code == 0, "output": output[-20000:]}
+    # Running the full test suite from the live server creates a large
+    # temporary pytest tree and can spawn test processes that contend with
+    # the application's SQLite database. Keep it opt-in for diagnostics.
+    if os.environ.get("MYAI_SELF_DIAGNOSTICS_RUN_TESTS") == "1":
+        code, output = _run([sys.executable, "-m", "pytest", "-q"], 300)
+        checks["pytest"] = {"ok": code == 0, "output": output[-20000:]}
+    else:
+        checks["pytest"] = {
+            "ok": True,
+            "skipped": True,
+            "reason": "full pytest run is opt-in to avoid production temp files and DB contention",
+        }
 
     code, output = _run(["git", "status", "--short"], 60)
     checks["git_status"] = {"ok": code == 0, "output": output[-12000:]}
