@@ -14,6 +14,7 @@ class Settings:
     ollama_num_gpu: int = int(os.getenv("OLLAMA_NUM_GPU", "0"))
     ollama_keep_alive: str = os.getenv("OLLAMA_KEEP_ALIVE", "10m")
     routing_model: str = os.getenv("ROUTER_MODEL", "qwen2.5:7b")
+    router_llm_enabled: bool = os.getenv("ROUTER_LLM_ENABLED", "true").strip().lower() == "true"
     coding_model: str = os.getenv("CODING_MODEL", "qwen2.5:7b")
     fallback_model: str = os.getenv("FALLBACK_MODEL", "qwen2.5:7b")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
