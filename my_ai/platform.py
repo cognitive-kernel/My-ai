@@ -141,7 +141,7 @@ def _hybrid_search_cached(query: str, limit: int, bucket: int) -> list[dict[str,
         row["lexical_score"] = round(lexical_score, 6)
         row["hybrid_score"] = round(0.65*semantic + 0.35*lexical_score, 6)
         row["relevance"] = row["hybrid_score"]
-        bucket=round(float(row["hybrid_score"]),1)
+        score_bucket=round(float(row["hybrid_score"]),1)
         samples=calibration.get(bucket, (0,0))
         if samples[0] >= 5:
             row["confidence"]=round((samples[1]+1)/(samples[0]+2),6)
