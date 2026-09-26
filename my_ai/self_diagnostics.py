@@ -162,6 +162,37 @@ def report_history(limit: int = 20) -> list[dict[str, object]]:
     return result
 
 
+def paginated_report_history(page: int = 1, page_size: int = 10) -> dict[str, object]:
+    page = max(1, int(page))
+    page_size = max(1, min(int(page_size), 10))
+    rows = fetch_all(
+        "SELECT id,created_at,healthy,report_json "
+        "FROM self_diagnostic_reports ORDER BY id DESC LIMIT 1000"
+    )
+    result = []
+    seen: set[str] = set()
+    for row in rows:
+        try:
+            item = json.loads(row["report_json"])
+        except Exception:
+            item = {"raw": row["report_json"]}
+        fingerprint = _report_fingerprint(item)
+        if fingerprint in seen:
+            continue
+        seen.add(fingerprint)
+        item["id"] = row["id"]
+        item["created_at"] = row["created_at"]
+        result.append(item)
+    total = len(result)
+    start = (page - 1) * page_size
+    return {
+        "reports": result[start:start + page_size],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": max(1, (total + page_size - 1) // page_size),
+    }
+
 
 class SelfDiagnosticsMonitor:
     def __init__(self, interval_seconds: int = DEFAULT_INTERVAL_SECONDS):
