@@ -402,6 +402,17 @@ def backup_import(r:ImportRequest, request:Request):
     audit(user,"database","import","200",r.path)
     return {"imported":result}
 
+@app.post("/eval/retrieval/judgment")
+def retrieval_judgment(query: str, knowledge_id: int, relevant: bool, score: float, request: Request):
+    user=require_admin(request)
+    if not fetch_all("SELECT id FROM knowledge WHERE id=?", (knowledge_id,)):
+        raise HTTPException(404, "Knowledge item not found.")
+    if not 0.0 <= float(score) <= 1.0:
+        raise HTTPException(400, "score must be between 0 and 1.")
+    execute("INSERT INTO retrieval_judgments(query,knowledge_id,relevant,score) VALUES(?,?,?,?)", (query, knowledge_id, int(bool(relevant)), float(score)))
+    audit(user, "retrieval", "judge", "200", f"knowledge:{knowledge_id}")
+    return {"status":"recorded"}
+
 @app.get("/eval/retrieval")
 def eval_retrieval_api(request:Request):
     require_admin(request)
