@@ -37,6 +37,7 @@ from .self_diagnostics import SelfDiagnosticsMonitor, latest_report, report_hist
 from .tooling import catalog as tool_catalog, doctor as tool_doctor, run_project_tool, run_python_snippet, sqlserver_query, sqlserver_schema, mysql_query, mysql_schema, sqlite_query, sqlite_schema
 from .image_generation import generate_image, ImageGenerationError
 from .runtime_prerequisites import startup_check, runtime_status
+from .readiness import build_readiness
 
 scheduler=StudyScheduler()
 self_diagnostics=SelfDiagnosticsMonitor()
@@ -383,6 +384,11 @@ def voice_synthesize(r:VoiceSynthesizeRequest, request:Request):
 def voice_status_api(request:Request):
     require_user(request)
     return {**voice_status(), "engine": voice_engine_status()}
+
+@app.get("/admin/readiness")
+def admin_readiness(request: Request):
+    require_admin(request)
+    return build_readiness()
 
 @app.get("/runtime/status")
 def runtime_status_api(request: Request):
