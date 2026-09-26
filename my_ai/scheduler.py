@@ -382,10 +382,8 @@ class StudyScheduler:
                         break
                     consecutive_errors += 1
                     logger.exception(
-                        "learning worker failed: language=%s stage=%s consecutive_errors=%s",
-                        language,
-                        self.stage,
-                        consecutive_errors,
+                        "LEARNING_FAILURE: language=%s stage=%s topic=%s consecutive_errors=%s error=%s",
+                        language, self.stage, self.current_topic, consecutive_errors, exc,
                     )
                     result = {
                         "status": "error",
