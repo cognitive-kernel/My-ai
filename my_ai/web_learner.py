@@ -14,13 +14,17 @@ class WebLearner:
     _min_interval = 1.0
 
     @classmethod
-    def _rate_limit(cls, host: str) -> None:
+    def _rate_limit(cls, host: str, stop_event=None) -> None:
         now = time.monotonic()
         with cls._rate_lock:
             previous = cls._last_fetch.get(host, 0.0)
             wait = cls._min_interval - (now - previous)
             if wait > 0:
-                time.sleep(wait)
+                if stop_event is not None:
+                    if stop_event.wait(wait):
+                        raise InterruptedError("learning stopped")
+                else:
+                    time.sleep(wait)
                 now = time.monotonic()
             cls._last_fetch[host] = now
 
@@ -59,12 +63,13 @@ class WebLearner:
         except Exception:
             return False
 
-    def fetch(self,url):
+    def fetch(self,url,stop_event=None):
         self._validate_url(url)
-        self._rate_limit(urlparse(url).hostname or "")
+        self._rate_limit(urlparse(url).hostname or "", stop_event)
         if not self._robots_allowed(url):
             raise ValueError("robots.txt disallows this URL or could not be verified.")
-        with pinned_client(timeout=20,follow_redirects=False,headers={"User-Agent":"My-AI/0.2"}) as client:
+        timeout=httpx.Timeout(settings.learning_source_timeout_seconds, connect=min(3.0, settings.learning_source_timeout_seconds))
+        with pinned_client(timeout=timeout,follow_redirects=False,headers={"User-Agent":"My-AI/0.2"}) as client:
             for _ in range(6):
                 self._validate_url(url)
                 r=client.get(url)
@@ -72,7 +77,7 @@ class WebLearner:
                 location=r.headers.get("location")
                 if not location: break
                 url=str(httpx.URL(url).join(location)); self._validate_url(url)
-                self._rate_limit(urlparse(url).hostname or "")
+                self._rate_limit(urlparse(url).hostname or "", stop_event)
                 if not self._robots_allowed(url): raise ValueError("robots.txt disallows redirect target.")
         r.raise_for_status()
         if "text/html" not in r.headers.get("content-type","") and "text/plain" not in r.headers.get("content-type",""): raise ValueError("URL does not contain HTML/text.")
