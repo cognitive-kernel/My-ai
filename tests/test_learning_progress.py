@@ -316,3 +316,12 @@ def test_scheduler_logs_full_worker_exception(monkeypatch, caplog):
         scheduler._loop("Python", stop)
     assert "learning worker failed" in caplog.text
     assert "source fetch exploded" in caplog.text
+
+
+def test_status_does_not_return_large_lesson_notes(monkeypatch):
+    monkeypatch.setattr(learner_module, "LANGUAGE_CURRICULA", {"Python": [{"order": 1, "topic": "A", "goal": ""}]})
+    huge = "x" * 5_000_000
+    monkeypatch.setattr(learner_module, "fetch_all", lambda *_args, **_kwargs: [{"id": 1, "language": "Python", "topic": "A", "status": "completed", "score": 90, "progress_percent": 100, "phase": "completed", "created_at": "now", "notes": huge}])
+    result = LearningEngine.__new__(LearningEngine).status()
+    assert "notes" not in result["sessions"][0]
+    assert result["languages"][0]["progress_percent"] == 100.0
