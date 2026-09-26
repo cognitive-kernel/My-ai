@@ -376,6 +376,7 @@ def eval_retrieval() -> dict[str, Any]:
             reciprocal_ranks.append(0.0)
             results.append({"query": query, "expected_topics": list(expected_topics), "rank": None, "passed": False, "error": str(exc)})
     judgments = fetch_all("SELECT score,relevant FROM retrieval_judgments")
+    calibration: dict[str, float | int | None]
     if judgments:
         brier = sum((float(row["relevant"]) - float(row["score"])) ** 2 for row in judgments) / len(judgments)
         buckets: dict[float, list[int]] = {}
