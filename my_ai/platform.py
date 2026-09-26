@@ -124,7 +124,7 @@ def _hybrid_search_cached(query: str, limit: int, bucket: int) -> list[dict[str,
         qvec = []
     calibration: dict[float, list[int]] = {}
     for item in fetch_all("SELECT score,relevant FROM retrieval_judgments"):
-        bucket=round(float(item["score"] or 0.0),1)
+        score_bucket=round(float(item["score"] or 0.0),1)
         state=calibration.setdefault(bucket,[0,0])
         state[0]+=1
         state[1]+=int(item["relevant"] or 0)
