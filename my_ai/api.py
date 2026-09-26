@@ -30,7 +30,7 @@ from .auth import authenticate, audit, create_account, create_session, current_u
 from .platform import backup_database, choose_model, eval_retrieval, export_database, hybrid_search, import_database, model_health, resource_status, voice_status, web_fetch_policy
 from .self_update import status as self_update_status, apply_confirmed_update as self_update_apply, preview_update
 from .self_repair import diagnose_local, propose_repair, apply_repair, proposal_status
-from .skill_engine import ensure_skill, record_evidence, revalidate, snapshot
+from .skill_engine import ensure_skill, record_evidence, revalidate, snapshot, record_review, review_snapshot
 from .voice import status as voice_engine_status, transcribe, synthesize
 from .metrics import snapshot as metrics_snapshot
 from .platform import import_encrypted_database, restore_encrypted_backup
@@ -558,6 +558,28 @@ def skills_revalidate(r:SkillRevalidateRequest, request:Request):
     result=revalidate(r.skill_id,r.version)
     audit(user,"skill-engine","execute","200",f"revalidate:{r.skill_id}")
     return result
+
+@app.get("/skills/reviews")
+def skills_reviews(request:Request):
+    require_admin(request)
+    return {"items": review_snapshot()}
+
+
+class SkillReviewRequest(BaseModel):
+    skill_id: int
+    outcome: str
+    notes: str = ""
+
+
+@app.post("/skills/reviews")
+def skills_review(r:SkillReviewRequest, request:Request):
+    user=require_admin(request)
+    try:
+        review_id=record_review(r.skill_id, int(user["id"]), r.outcome, r.notes)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    audit(user,"skill-engine","write","200",f"review:{r.skill_id}:{r.outcome}")
+    return {"review_id":review_id,"skill_id":r.skill_id,"outcome":r.outcome}
 
 @app.get("/help",response_class=HTMLResponse)
 def help(): return help_page()
