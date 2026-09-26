@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
@@ -204,7 +205,7 @@ def _ensure_custom_review_schedule(course_id: int) -> None:
            topics_json=excluded.topics_json,sources_json=excluded.sources_json,
            updated_at=CURRENT_TIMESTAMP,
            auto_learn=1""",
-        (str(course["name"]), __import__("json").dumps(topics, ensure_ascii=False), __import__("json").dumps(sources, ensure_ascii=False), next_review),
+        (f"custom_course:{course_id}", json.dumps(topics, ensure_ascii=False), json.dumps(sources, ensure_ascii=False), next_review),
     )
 
 
@@ -521,7 +522,7 @@ def learning_active(request:Request):
     items=[]
     for c in fetch_all("SELECT * FROM custom_courses WHERE active=1 ORDER BY id"):
         summary=_summary(int(c["id"]))
-        review = fetch_all("SELECT next_review_at FROM learning_domains WHERE lower(name)=lower(?) LIMIT 1", (str(c["name"]),))
+        review = fetch_all("SELECT next_review_at FROM learning_domains WHERE name=? LIMIT 1", (f"custom_course:{int(c['id'])}",))
         items.append({
             "course": c,
             "summary": summary,
