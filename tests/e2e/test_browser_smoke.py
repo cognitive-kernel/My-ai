@@ -1,5 +1,7 @@
 import os
 import pytest
+
+pytest.importorskip("playwright.sync_api")
 from playwright.sync_api import Page
 
 @pytest.mark.e2e
