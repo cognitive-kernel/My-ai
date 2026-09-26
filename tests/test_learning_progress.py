@@ -45,6 +45,43 @@ def test_progress_deduplicates_topics_and_clamps_to_curriculum(monkeypatch):
     assert python["progress_percent"] <= 100.0
 
 
+def test_status_reconciles_completed_and_custom_persisted_tracks(monkeypatch):
+    monkeypatch.setattr(
+        learner_module,
+        "LANGUAGE_CURRICULA",
+        {
+            "Python": [
+                {"order": 1, "topic": "A", "goal": ""},
+                {"order": 2, "topic": "B", "goal": ""},
+            ],
+            "Forex": [
+                {"order": 1, "topic": "FX", "goal": ""},
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        learner_module,
+        "fetch_all",
+        lambda *_args, **_kwargs: [
+            {"language": "Python", "topic": "A", "status": "completed", "score": 90, "progress_percent": 100},
+            {"language": "Python", "topic": "B", "status": "started", "score": None, "progress_percent": 25},
+            {"language": "Cisco", "topic": "Cisco", "status": "started", "score": None, "progress_percent": 40},
+            {"language": "Forex", "topic": "FX", "status": "completed", "score": 88, "progress_percent": 100},
+        ],
+    )
+    result = LearningEngine.__new__(LearningEngine).status()
+    summaries = {item["language"]: item for item in result["languages"]}
+
+    assert summaries["Python"]["completed_topics"] == 1
+    assert summaries["Python"]["remaining_topics"] == 1
+    assert summaries["Python"]["progress_percent"] == 62.5
+    assert summaries["Cisco"]["remaining_topics"] == 1
+    assert summaries["Cisco"]["progress_percent"] == 40.0
+    assert summaries["Forex"]["completed_topics"] == 1
+    assert summaries["Forex"]["remaining_topics"] == 0
+    assert summaries["Forex"]["progress_percent"] == 100.0
+    assert "Forex" in result["available_languages"]
+
 def test_half_percent_progress_grid_and_bounds():
     engine = LearningEngine.__new__(LearningEngine)
     assert engine._half_percent(0.49) == 0.5
