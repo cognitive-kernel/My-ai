@@ -3,7 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import re
 import unicodedata
+import json
 from typing import Any, Iterable
+
+from .config import settings
 
 
 @dataclass(frozen=True)
@@ -167,8 +170,46 @@ def _extract_project_path(text: str) -> str | None:
     return None
 
 
+def _llm_classify(text: str, context: str | None = None) -> Intent | None:
+    """Use the configured routing model when deterministic rules are ambiguous."""
+    if getattr(settings, "router_llm_enabled", True) is False:
+        return None
+    try:
+        from .llm import create_llm
+        prompt = (
+            "Classify the user request into one or more intents. Return JSON only. "
+            "Allowed intents: chat, learning, coding, code_execution, security_scan, "
+            "file_analysis, help, self_update, git_write, pentest_external, self_repair. "
+            'Schema: {"primary":"intent","intents":["intent"],"confidence":0.0,'
+            '"language":null,"topic":null,"goal":null}. '
+            "Do not invent intents. Questions about how to do something are not execution commands.\n"
+            f"USER: {text}\nCONTEXT: {context or ''}"
+        )
+        raw = create_llm("routing").chat(prompt, system="You are a strict intent classifier. JSON only.")
+        data = json.loads(raw)
+        allowed = {"chat", "learning", "coding", "code_execution", "security_scan", "file_analysis", "help", "self_update", "git_write", "pentest_external", "self_repair"}
+        intents = tuple(x for x in data.get("intents", []) if x in allowed)
+        primary = data.get("primary")
+        if primary not in allowed:
+            return None
+        if not intents:
+            intents = (primary,)
+        confidence = max(0.0, min(0.99, float(data.get("confidence", 0.5))))
+        args = {}
+        for key in ("language", "topic", "goal"):
+            value = data.get(key)
+            if isinstance(value, str) and value.strip():
+                args[key] = value.strip()[:300]
+        urls = _extract_urls(str(text))
+        if urls:
+            args["urls"] = urls
+        return Intent(primary, round(confidence, 3), primary in HIGH_RISK, args=args, intents=intents)
+    except Exception:
+        return None
+
+
 def classify(text: str, context: str | None = None) -> Intent:
-    """Score normalized rules and preserve secondary intents for multi-intent requests."""
+    """Prefer LLM classification for ambiguous requests and keep deterministic safety fallback."""
     message = _normalize(text)
     context_n = _normalize(context or "")
     scored = []
@@ -183,7 +224,20 @@ def classify(text: str, context: str | None = None) -> Intent:
         scored.append(("code_execution", 3.5, ["context:code"]))
 
     if not scored:
+        llm_intent = _llm_classify(text, context)
+        if llm_intent is not None:
+            return llm_intent
         return Intent("chat", 0.5, False, intents=("chat",))
+
+    # Let the routing model resolve genuine overlap; deterministic rules remain the
+    # authority for high-risk commands so an LLM cannot silently authorize them.
+    scored.sort(key=lambda item: (-item[1], -len(item[2][0]), item[0]))
+    primary_score = scored[0][1]
+    ambiguous = len(scored) > 1 and scored[1][1] >= primary_score * 0.65
+    if ambiguous or primary_score < 2.0:
+        llm_intent = _llm_classify(text, context)
+        if llm_intent is not None and llm_intent.name not in HIGH_RISK:
+            return llm_intent
 
     scored.sort(key=lambda item: (-item[1], -len(item[2][0]), item[0]))
     primary_name, primary_score, _ = scored[0]
