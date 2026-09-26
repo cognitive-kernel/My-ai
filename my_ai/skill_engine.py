@@ -26,7 +26,7 @@ def record_evidence(skill_id: int, kind: str, passed: bool, details: dict[str,An
     eid=execute("INSERT INTO skill_evidence(skill_id,kind,passed,evidence) VALUES(?,?,?,?)",(skill_id,kind,1 if passed else 0,evidence))
     rows=fetch_all("SELECT kind,passed,evidence FROM skill_evidence WHERE skill_id=?",(skill_id,))
     score=sum(int(row["passed"] or 0) for row in rows) / len(rows) * 100 if rows else 0.0
-    metrics={"concept": [], "implementation": [], "source": [], "reliability": []}
+    metrics: dict[str, list[float]] = {"concept": [], "implementation": [], "source": [], "reliability": []}
     for row in rows:
         try:
             details=json.loads(row["evidence"] or "{}")
