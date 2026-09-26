@@ -91,6 +91,8 @@ async def auth_and_audit_middleware(request: Request, call_next):
         if "application/json" in request.headers.get("accept","").lower():
             return JSONResponse({"detail":"Authentication required."},status_code=401)
         return RedirectResponse("/login",status_code=303)
+    if settings.read_only and request.method in {"POST", "PUT", "PATCH", "DELETE"} and path not in {"/auth/login", "/auth/logout"} and not path.startswith("/docs/"):
+        return JSONResponse({"detail":"MYAI_READ_ONLY is enabled; write operation blocked."}, status_code=423)
     if user and user["role"] != "admin":
         for prefix,tool in _TOOL_RULES:
             if path.startswith(prefix) or path == prefix.rstrip("/"):
