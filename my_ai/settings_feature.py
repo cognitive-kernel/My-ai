@@ -238,7 +238,8 @@ def _learn_topic(course_id: int, topic: dict[str, Any]) -> None:
     match = re.search(r"(?<!\d)(100|\d{1,2})(?!\d)", raw)
     score = float(match.group(1)) if match else 0.0
     from .memory import remember
-    remember(topic["title"], f"Custom Course lesson: {topic['title']}", lesson, topic.get("source_url") or None)
+    knowledge_id = remember(topic["title"], f"Custom Course lesson: {topic['title']}", lesson, topic.get("source_url") or None)
+    execute("UPDATE knowledge SET confidence=? WHERE id=?", (max(0.0, min(1.0, score / 100.0)), knowledge_id))
     _set_topic(topic_id, "completed", 100, "completed", score=score)
     audit(None, "learning", "execute", "200", f"custom-course:{course_id}:topic:{topic_id}")
 
