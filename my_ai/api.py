@@ -321,10 +321,19 @@ def knowledge_delete(knowledge_id:int, request:Request):
 @app.post("/memory/knowledge/{knowledge_id}/verify")
 def knowledge_verify(knowledge_id:int, request:Request):
     user=require_admin(request)
-    if not fetch_all("SELECT id FROM knowledge WHERE id=?",(knowledge_id,)): raise HTTPException(404,"Knowledge item not found.")
-    execute("UPDATE knowledge SET verification_status='verified',verified_at=CURRENT_TIMESTAMP,verified_by=? WHERE id=?",(user["id"],knowledge_id))
-    audit(user,"knowledge","verify","200",f"verified:{knowledge_id}")
-    return {"verified":knowledge_id}
+    rows=fetch_all("SELECT id,source_url,content_hash FROM knowledge WHERE id=?",(knowledge_id,))
+    if not rows:
+        raise HTTPException(404,"Knowledge item not found.")
+    item=rows[0]
+    source=str(item.get("source_url") or "").strip()
+    if not source.startswith(("http://","https://")):
+        raise HTTPException(400,"Verified knowledge requires a documented HTTP(S) source URL.")
+    if not item.get("content_hash"):
+        raise HTTPException(400,"Knowledge content hash is missing; save the item again before verification.")
+    execute("UPDATE knowledge SET verification_status='verified',verified_at=CURRENT_TIMESTAMP,verified_by=? WHERE id=?",
+            (user["id"],knowledge_id))
+    audit(user,"knowledge","verify","200",f"verified:{knowledge_id}:source")
+    return {"verified":knowledge_id,"verification_status":"verified","source_url":source}
 
 @app.get("/memory/search/hybrid")
 def memory_hybrid(q:str, request:Request, limit:int=8):
