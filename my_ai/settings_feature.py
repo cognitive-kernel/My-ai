@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS custom_course_progress (
  lesson TEXT,
  score REAL,
  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ last_attempt_at TEXT,
  UNIQUE(course_id,topic_id),
  FOREIGN KEY(course_id) REFERENCES custom_courses(id) ON DELETE CASCADE,
  FOREIGN KEY(topic_id) REFERENCES custom_course_topics(id) ON DELETE CASCADE
@@ -72,6 +73,11 @@ class CourseRequest(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     description: str = Field(default="", max_length=2000)
     topics: list[dict[str, str]] = Field(min_length=1, max_length=100)
+
+class CourseTopicRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    goal: str = Field(default="", max_length=2000)
+    source_url: str = Field(default="", max_length=1000)
 
 class TokenRequest(BaseModel):
     token: str = Field(default="", max_length=10000)
@@ -146,6 +152,10 @@ def _setup() -> None:
                 if tcur.lastrowid is None:
                     raise RuntimeError("Unable to create a Cisco topic")
                 conn.execute("INSERT INTO custom_course_progress(course_id,topic_id) VALUES(?,?)", (course_id, int(tcur.lastrowid)))
+        try:
+            conn.execute("ALTER TABLE custom_course_progress ADD COLUMN last_attempt_at TEXT")
+        except Exception:
+            pass
         conn.commit()
 
 
@@ -157,7 +167,7 @@ def _course(course_id: int) -> dict[str, Any] | None:
 def _progress(course_id: int) -> list[dict[str, Any]]:
     return fetch_all("""SELECT t.id,t.topic_order,t.title,t.goal,t.source_url,
         COALESCE(p.status,'planned') status,COALESCE(p.progress_percent,0) progress_percent,
-        COALESCE(p.phase,'planned') phase,p.lesson,p.score,p.updated_at
+        COALESCE(p.phase,'planned') phase,p.lesson,p.score,p.updated_at,p.last_attempt_at
         FROM custom_course_topics t LEFT JOIN custom_course_progress p ON p.topic_id=t.id
         WHERE t.course_id=? ORDER BY t.topic_order""", (course_id,))
 
@@ -178,6 +188,7 @@ def _set_topic(topic_id: int, status: str, progress: float, phase: str, lesson: 
 
 def _learn_topic(course_id: int, topic: dict[str, Any]) -> None:
     topic_id = int(topic["id"])
+    execute("UPDATE custom_course_progress SET last_attempt_at=CURRENT_TIMESTAMP WHERE topic_id=?", (topic_id,))
     _set_topic(topic_id, "started", 5, "understanding")
     llm = create_llm("general")
     prompt = ("Teach this study unit accurately and practically. Explain prerequisites, concepts, Cisco IOS/IOS XE command examples, verification commands, common mistakes, safe lab exercises, and a short mastery checklist. "
@@ -189,6 +200,8 @@ def _learn_topic(course_id: int, topic: dict[str, Any]) -> None:
     raw = llm.chat("Return only a numeric score from 0 to 100 for whether this lesson adequately covers the stated goal. GOAL:" + topic["goal"] + "\nLESSON:" + lesson)
     match = re.search(r"(?<!\d)(100|\d{1,2})(?!\d)", raw)
     score = float(match.group(1)) if match else 0.0
+    from .memory import remember
+    remember(topic["title"], f"Custom Course lesson: {topic['title']}", lesson, topic.get("source_url") or None)
     _set_topic(topic_id, "completed", 100, "completed", score=score)
     audit(None, "learning", "execute", "200", f"custom-course:{course_id}:topic:{topic_id}")
 
@@ -396,6 +409,27 @@ def create_course(r: CourseRequest, request: Request):
     audit(user,"learning","write","200",f"course-created:{cid}")
     return {"id":cid,"status":"created"}
 
+@router.post("/settings/courses/{course_id}/topics")
+def add_course_topic(course_id: int, r: CourseTopicRequest, request: Request):
+    user = require_admin(request); _setup()
+    if not _course(course_id):
+        raise HTTPException(404, "Course not found.")
+    title = r.title.strip()
+    goal = r.goal.strip()
+    source = r.source_url.strip() or None
+    rows = fetch_all("SELECT COALESCE(MAX(topic_order),0) AS n FROM custom_course_topics WHERE course_id=?", (course_id,))
+    order = int(rows[0]["n"] or 0) + 1
+    try:
+        tid = execute(
+            "INSERT INTO custom_course_topics(course_id,topic_order,title,goal,source_url) VALUES(?,?,?,?,?)",
+            (course_id, order, title, goal, source),
+        )
+        execute("INSERT INTO custom_course_progress(course_id,topic_id) VALUES(?,?)", (course_id, tid))
+    except Exception as exc:
+        raise HTTPException(400, "Unable to add topic.") from exc
+    audit(user, "learning", "write", "200", f"course-topic-added:{course_id}:{tid}")
+    return {"id": tid, "course_id": course_id, "topic_order": order, "status": "planned"}
+
 @router.get("/settings/courses/{course_id}/progress")
 def course_progress(course_id:int,request:Request):
     require_user(request); _setup()
@@ -480,8 +514,9 @@ async function loadPermissions(){var box=byId('permissions');if(!box)return;box.
 async function setPermission(uid,tool,action,allowed){try{await req('/settings/tool-permissions',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,tool_name:tool,action:action,allowed:allowed})})}catch(e){alert('خطا در ذخیره مجوز: '+e.message);loadPermissions()}}
 async function loginGit(){try{var j=await req('/git/login',{method:'POST'});setText('gitout',j.message||'درخواست ورود ارسال شد')}catch(e){setText('gitout',e.message)}}
 async function logoutGit(){try{var j=await req('/git/logout',{method:'POST'});setText('gitout',j.message||'خروج انجام شد');loadSettings()}catch(e){setText('gitout',e.message)}}
-async function createCourse(){try{var lines=byId('ct').value.split(/\n+/).map(function(x){return x.trim()}).filter(Boolean);var topics=lines.map(function(x){var p=x.split('|').map(function(v){return v.trim()});return {title:p[0],goal:p[1]||'',source_url:p[2]||''}});var j=await req('/settings/courses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:byId('cn').value,description:byId('cd').value,topics:topics})});setText('courseout','آموزش ساخته شد: '+j.id);loadCourses()}catch(e){setText('courseout',e.message)}}
+async function createCourse(){try{var lines=byId('ct').value.split(/\n+/).map(function(x){return x.trim()}).filter(Boolean);var topics=lines.map(function(x){var p=x.split('|').map(function(v){return v.trim()});return {title:p[0],goal:p[1]||'',source_url:p[2]||''}});var j=await req('/settings/courses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:byId('cn').value,description:byId('cd').value,topics:topics})});setText('newcourseout','آموزش ساخته شد: '+j.id);loadCourses()}catch(e){setText('courseout',e.message)}}
 async function startCourse(id){try{await req('/settings/courses/'+id+'/start',{method:'POST'});loadCourses()}catch(e){setText('courseout',e.message)}}
+async function addCourseTopic(){try{var id=Number(byId('existing_course_id').value);var p={title:byId('existing_topic').value,goal:byId('existing_goal').value,source_url:byId('existing_source').value};await req('/settings/courses/'+id+'/topics',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});setText('courseout','Topic جدید اضافه شد و برای یادگیری برنامه‌ریزی شد.');loadCourses()}catch(e){setText('courseout',e.message)}}
 async function loadCourses(){var box=byId('courses');if(!box)return;try{var j=await req('/settings/courses');box.innerHTML=(j.items||[]).map(function(c){return '<div class="card"><h3>'+esc(c.name)+'</h3><p>'+esc(c.description)+'</p><div class="bar"><div class="fill" style="width:'+c.progress_percent+'%">'+c.progress_percent+'%</div></div><p class="muted">'+c.completed_topics+' از '+c.total_topics+' سرفصل کامل شده'+(c.current?' · اکنون: '+esc(c.current.title)+' · مرحله: '+esc(c.current.phase):'')+'</p></div>'}).join('')||'آموزشی نیست'}catch(e){box.textContent='خطا در بارگذاری آموزش‌ها: '+e.message}}
 loadSettings();loadUsers();loadPermissions();loadCourses();setInterval(loadCourses,10000)'''
 
@@ -489,7 +524,7 @@ SETTINGS_HTML = """<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8
 <section class='card'><h2>Self-Update</h2><label><input id='su_enabled' type='checkbox'> فعال‌سازی Self-Update برای بررسی و اجرای به‌روزرسانی خودکار</label><label><input id='su_approved' type='checkbox'> اجازه اجرای Update بدون تأیید دستی در مرحله اجرا</label><input id='su_health' placeholder='Health URL محلی، مثلاً http://127.0.0.1:8000/health'><button onclick='saveFeatures()'>ذخیره</button><div id='suout' class='muted'></div></section>
 <section class='card'><h2>Self-Repair</h2><label><input id='sr_enabled' type='checkbox'> فعال‌سازی Self-Repair برای پیشنهاد/اجرای تعمیرات</label><label><input id='sr_approval' type='checkbox' checked> قبل از اعمال تعمیر، تأیید ادمین الزامی باشد</label><button onclick='saveFeatures()'>ذخیره</button><div id='srout' class='muted'></div></section>
 <section class='card'><h2>یادگیری سریع</h2><label><input id='lf_enabled' type='checkbox'> فعال</label><input id='lf_interval' type='number' min='60' max='86400' placeholder='فاصله یادگیری (ثانیه)'><input id='lf_retries' type='number' min='1' max='20' placeholder='حداکثر تلاش منبع'><button onclick='saveFeatures()'>ذخیره</button><div id='lfout' class='muted'></div></section><section class='card'><h2>تولید تصویر کاملاً آفلاین</h2><p class='muted'>فقط Automatic1111 روی همین کامپیوتر استفاده می‌شود و این مسیر هیچ API ابری ندارد. برای کیفیت بالا، checkpoint مناسب Manga/Anime/SDXL را در Automatic1111 نصب کنید.</p><label><input id='img_enabled' type='checkbox'> فعال</label><input id='img_url' placeholder='http://127.0.0.1:7860'><input id='img_model' placeholder='نام checkpoint/مدل نصب‌شده'><input id='img_sampler' placeholder='DPM++ 2M Karras'><div class='grid'><label>Steps<input id='img_steps' type='number' min='1' max='150'></label><label>CFG<input id='img_cfg' type='number' min='1' max='30' step='0.1'></label><label>اندازه<input id='img_size' placeholder='1024x1024'></label><label>Hires Scale<input id='img_hires_scale' type='number' min='1' max='2' step='0.1'></label><label>Denoise<input id='img_denoise' type='number' min='0.1' max='1' step='0.05'></label><input id='img_upscaler' placeholder='Latent'></div><label><input id='img_hires' type='checkbox'> Hires Fix</label><textarea id='img_negative' rows='5' placeholder='Negative prompt پیش‌فرض'></textarea><button onclick='saveImageSettings()'>ذخیره تنظیمات تصویر</button><button onclick='checkImageEngine()'>بررسی موتور محلی</button><div id='imgout' class='muted'></div></section><section class='card'><h2>منابع سخت‌افزاری</h2><p class='muted'>سقف پیش‌فرض اجرای یادگیری: CPU برابر 70٪ با 8 thread، RAM برابر 80٪ و GPU برابر 0 لایه (فقط CPU). این مقادیر قابل تغییر هستند.</p><label>حداکثر CPU (%)<input id='cpu_percent' type='number' min='1' max='100' step='0.5'></label><label>تعداد CPU thread<input id='cpu_threads' type='number' min='1' max='128' step='1'></label><label>حداکثر RAM (%)<input id='ram_percent' type='number' min='1' max='100' step='0.5'></label><label>GPU layers (0 = فقط CPU)<input id='gpu_layers' type='number' min='0' max='128' step='1'></label><button onclick='saveResources()'>ذخیره منابع</button><div id='resourceout' class='muted'></div></section><section class='card'><h2>مدیریت کاربران</h2><div id='users'>در حال بارگذاری...</div><hr><input id='nu' autocomplete='username' placeholder='نام کاربری'><input id='np' type='password' form='settings-form' autocomplete='new-password' placeholder='رمز عبور حداقل ۱۰ کاراکتر'><input id='nd' placeholder='نام نمایشی'><button onclick='addUser()'>ایجاد کاربر</button><div id='userout' class='muted'></div></section></div>
-<section class='card'><h2>مجوز ابزار کاربران</h2><p class='muted'>برای هر کاربر، ابزار و نوع عملیات را مشخص کنید. عدم وجود مجوز یعنی Deny.</p><div id='permissions'>در حال بارگذاری...</div></section><section class='card'><h2>ساخت آموزش جدید</h2><p class='muted'>هر خط یک سرفصل: <code>عنوان | هدف | آدرس منبع رسمی اختیاری</code>. می‌توانی «Cisco» یا هر موضوع دیگری بسازی.</p><input id='cn' placeholder='نام آموزش، مثلاً Cisco'><input id='cd' placeholder='توضیح آموزش'><textarea id='ct' rows='12' placeholder='Cisco IOS CLI | کار با حالت‌های CLI و show/configure | https://www.cisco.com/...\nVLAN | ساخت VLAN و trunk | https://www.cisco.com/...'></textarea><button onclick='createCourse()'>ایجاد آموزش</button><div id='courseout' class='muted'></div></section></div><script src='/settings/script.js?v=20260923-3'></script><script>
+<section class='card'><h2>مجوز ابزار کاربران</h2><p class='muted'>برای هر کاربر، ابزار و نوع عملیات را مشخص کنید. عدم وجود مجوز یعنی Deny.</p><div id='permissions'>در حال بارگذاری...</div></section><section class='card'><h2>افزودن Topic به آموزش موجود</h2><p class='muted'>Topic جدید با وضعیت «برنامه‌ریزی‌شده» اضافه می‌شود و درصد کلی آموزش دوباره محاسبه خواهد شد.</p><input id='existing_course_id' type='number' min='1' placeholder='شناسه آموزش'><input id='existing_topic' placeholder='عنوان Topic جدید'><input id='existing_goal' placeholder='هدف Topic'><input id='existing_source' placeholder='آدرس منبع رسمی اختیاری'><button onclick='addCourseTopic()'>افزودن Topic</button><div id='courseout' class='muted'></div></section><section class='card'><h2>ساخت آموزش جدید</h2><p class='muted'>هر خط یک سرفصل: <code>عنوان | هدف | آدرس منبع رسمی اختیاری</code>. می‌توانی «Cisco» یا هر موضوع دیگری بسازی.</p><input id='cn' placeholder='نام آموزش، مثلاً Cisco'><input id='cd' placeholder='توضیح آموزش'><textarea id='ct' rows='12' placeholder='Cisco IOS CLI | کار با حالت‌های CLI و show/configure | https://www.cisco.com/...\nVLAN | ساخت VLAN و trunk | https://www.cisco.com/...'></textarea><button onclick='createCourse()'>ایجاد آموزش</button><div id='newcourseout' class='muted'></div></section></div><script src='/settings/script.js?v=20260923-3'></script><script>
 (function(){
 async function imageSettingsLoad(){
   try{var j=await req("/settings/config");var x=j.image||{};byId("img_enabled").checked=!!x.enabled;byId("img_url").value=x.url||"";byId("img_model").value=x.model||"";byId("img_sampler").value=x.sampler||"";byId("img_steps").value=x.steps||32;byId("img_cfg").value=x.cfg||7;byId("img_hires").checked=!!x.hires;byId("img_hires_scale").value=x.hires_scale||1.5;byId("img_denoise").value=x.denoise||0.35;byId("img_upscaler").value=x.hr_upscaler||"Latent";byId("img_size").value=x.default_size||"1024x1024";byId("img_negative").value=x.negative_prompt||"";}catch(e){setText("imgout","خطا در بارگذاری تنظیمات تصویر: "+e.message)}
