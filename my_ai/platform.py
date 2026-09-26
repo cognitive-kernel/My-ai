@@ -152,7 +152,8 @@ def _hybrid_search_cached(query: str, limit: int, bucket: int) -> list[dict[str,
             row["confidence"]=None
             row["confidence_basis"]="uncalibrated; fewer than 5 judgments in score bucket"
             row["confidence_calibrated"]=False
-            row["confidence_samples"]=samples[0]    return sorted(rows, key=lambda x:x["hybrid_score"], reverse=True)[:limit]
+            row["confidence_samples"]=samples[0]
+    return sorted(rows, key=lambda x:x["hybrid_score"], reverse=True)[:limit]
 
 
 def invalidate_hybrid_search_cache() -> None:
