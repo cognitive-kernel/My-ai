@@ -183,13 +183,14 @@ class Agent:
             execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
             return answer
 
-        intent = classify(message)
-        task = "coding" if intent.name == "coding" else "general"
-        llm = self.llm if task == "general" else create_llm(task)
         history = fetch_all(
             "SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 20",
             (session_id,),
         )[::-1]
+        context = "\n".join(f"{row['role']}: {row['content']}" for row in history[-8:])
+        intent = classify(message, context)
+        task = "coding" if intent.name == "coding" else "general"
+        llm = self.llm if task == "general" else create_llm(task)
         knowledge = recall(message, 8)
         context_note = (
             "RELEVANT LOCAL KNOWLEDGE (reference only; do not confuse it with the user or assistant identity):\n"
@@ -242,10 +243,11 @@ class Agent:
             execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(session_id,))
             yield web_confirmation
             return
-        intent=classify(message)
+        history=fetch_all("SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 20",(session_id,))[::-1]
+        context="\n".join(f"{row['role']}: {row['content']}" for row in history[-8:])
+        intent=classify(message, context)
         task="coding" if intent.name=="coding" else "general"
         llm=self.llm if task=="general" else create_llm(task)
-        history=fetch_all("SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 20",(session_id,))[::-1]
         knowledge=recall(message,8)
         context_note="RELEVANT LOCAL KNOWLEDGE (reference only; do not confuse it with the user or assistant identity):\n"+json.dumps(knowledge,ensure_ascii=False)
         lesson_note=""
