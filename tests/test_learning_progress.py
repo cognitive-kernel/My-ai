@@ -282,7 +282,7 @@ def test_detailed_status_exposes_every_curriculum_topic(monkeypatch):
     assert all(topic["progress_percent"] == 0 for topic in course["topics"])
 
 
-def test_detailed_status_includes_incomplete_persisted_topics_and_hides_completed(monkeypatch):
+def test_detailed_status_includes_complete_catalog_and_persisted_topics(monkeypatch):
     monkeypatch.setattr(
         learner_module,
         "LANGUAGE_CURRICULA",
@@ -308,10 +308,31 @@ def test_detailed_status_includes_incomplete_persisted_topics_and_hides_complete
     courses = {item["language"]: item for item in result["courses"]}
 
     assert "Python" in courses
-    assert [item["topic"] for item in courses["Python"]["topics"]] == ["Docker"]
+    assert [item["topic"] for item in courses["Python"]["topics"]] == ["A", "Docker"]
+    assert courses["Python"]["topics"][0]["progress_percent"] == 100.0
+    assert courses["Python"]["progress_percent"] == 62.5
     assert "Cisco" in courses
-    assert [item["topic"] for item in courses["Cisco"]["topics"]] == ["Cisco"]
-    assert all(item["progress_percent"] < 100 for course in courses.values() for item in course["topics"])
+    assert [item["topic"] for item in courses["Cisco"]["topics"]] == ["Cisco", "Finished Cisco"]
+    assert courses["Cisco"]["topics"][1]["progress_percent"] == 100.0
+
+def test_detailed_status_canonicalizes_persisted_language(monkeypatch):
+    monkeypatch.setattr(
+        learner_module,
+        "LANGUAGE_CURRICULA",
+        {"Forex": [{"order": 1, "topic": "FX", "goal": ""}]},
+    )
+    monkeypatch.setattr(
+        learner_module,
+        "fetch_all",
+        lambda *_args, **_kwargs: [
+            {"language": "forex", "topic": "FX", "status": "completed", "score": 90, "progress_percent": 100, "phase": "completed", "created_at": "1"},
+        ],
+    )
+    result = LearningEngine.__new__(LearningEngine).detailed_status()
+    courses = {item["language"]: item for item in result["courses"]}
+    assert courses["Forex"]["progress_percent"] == 100.0
+    assert courses["Forex"]["topics"][0]["progress_percent"] == 100.0
+
 
 def test_learning_source_failure_is_recorded_and_does_not_abort(monkeypatch):
     from my_ai.learner import LearningEngine
