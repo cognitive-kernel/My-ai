@@ -44,6 +44,7 @@ class Settings:
     learning_max_concurrent_workers: int = max(1, int(os.getenv("LEARNING_MAX_CONCURRENT_WORKERS", "2")))
     learning_source_timeout_seconds: float = float(os.getenv("LEARNING_SOURCE_TIMEOUT_SECONDS", "8"))
     learning_source_max_chars: int = max(1000, int(os.getenv("LEARNING_SOURCE_MAX_CHARS", "12000")))
+    resource_wait_seconds: float = max(1.0, float(os.getenv("RESOURCE_WAIT_SECONDS", "30")))
 
 settings = Settings()
 
