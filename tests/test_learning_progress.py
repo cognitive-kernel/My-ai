@@ -245,6 +245,37 @@ def test_detailed_status_exposes_every_curriculum_topic(monkeypatch):
     assert all(topic["progress_percent"] == 0 for topic in course["topics"])
 
 
+def test_detailed_status_includes_incomplete_persisted_topics_and_hides_completed(monkeypatch):
+    monkeypatch.setattr(
+        learner_module,
+        "LANGUAGE_CURRICULA",
+        {
+            "Python": [
+                {"order": 1, "topic": "A", "goal": ""},
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        learner_module,
+        "fetch_all",
+        lambda *_args, **_kwargs: [
+            {"language": "Python", "topic": "A", "status": "completed", "score": 90, "progress_percent": 100, "phase": "completed", "created_at": "1"},
+            {"language": "Python", "topic": "Docker", "status": "started", "score": None, "progress_percent": 25, "phase": "lesson", "created_at": "2"},
+            {"language": "Cisco", "topic": "Cisco", "status": "started", "score": None, "progress_percent": 50, "phase": "sources", "created_at": "3"},
+            {"language": "Cisco", "topic": "Finished Cisco", "status": "completed", "score": 95, "progress_percent": 100, "phase": "completed", "created_at": "4"},
+        ],
+    )
+    engine = LearningEngine.__new__(LearningEngine)
+
+    result = engine.detailed_status()
+    courses = {item["language"]: item for item in result["courses"]}
+
+    assert "Python" in courses
+    assert [item["topic"] for item in courses["Python"]["topics"]] == ["Docker"]
+    assert "Cisco" in courses
+    assert [item["topic"] for item in courses["Cisco"]["topics"]] == ["Cisco"]
+    assert all(item["progress_percent"] < 100 for course in courses.values() for item in course["topics"])
+
 def test_learning_source_failure_is_recorded_and_does_not_abort(monkeypatch):
     from my_ai.learner import LearningEngine
 
