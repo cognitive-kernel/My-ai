@@ -87,11 +87,10 @@ def test_execution_question_is_not_execution_command():
 
 def test_llm_router_resolves_ambiguous_request(monkeypatch):
     import my_ai.router as router
-    monkeypatch.setattr(router.settings, "router_llm_enabled", True, raising=False)
     class FakeLLM:
         def chat(self, *args, **kwargs):
             return '{"primary":"coding","intents":["coding"],"confidence":0.91,"language":"python","topic":null,"goal":"build an API"}'
-    monkeypatch.setattr(router, "create_llm", lambda *args, **kwargs: FakeLLM(), raising=False)
+    monkeypatch.setattr("my_ai.llm.create_llm", lambda *args, **kwargs: FakeLLM())
     result = router.classify("یک چیز برای مدیریت داده بساز")
     assert result.name == "coding"
     assert result.confidence == 0.91
