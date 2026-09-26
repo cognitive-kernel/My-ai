@@ -17,7 +17,8 @@ from .config import assert_write_allowed
 
 ROOT = Path(__file__).resolve().parent.parent
 STATE_DIR = ROOT / "self-repair"
-STATE_DIR.mkdir(parents=True, exist_ok=True)
+if os.getenv("MYAI_READ_ONLY", "false").strip().lower() != "true":
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
 LESSONS = STATE_DIR / "lessons.jsonl"
 
 
