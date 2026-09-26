@@ -512,7 +512,7 @@ def settings_script(request: Request):
 @router.get("/learning", response_class=HTMLResponse)
 def learning_page(request: Request):
     require_user(request)
-    return HTMLResponse(LEARNING_HTML)
+    return HTMLResponse(LEARNING_HTML, headers={"Cache-Control":"no-store", "Pragma":"no-cache"})
 
 @router.get("/settings/courses")
 def courses(request: Request):
