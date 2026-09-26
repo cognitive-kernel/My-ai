@@ -195,7 +195,7 @@ def _llm_classify(text: str, context: str | None = None) -> Intent | None:
         if not intents:
             intents = (primary,)
         confidence = max(0.0, min(0.99, float(data.get("confidence", 0.5))))
-        args = {}
+        args: dict[str, Any] = {}
         for key in ("language", "topic", "goal"):
             value = data.get(key)
             if isinstance(value, str) and value.strip():
