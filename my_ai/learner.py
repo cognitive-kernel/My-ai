@@ -3,8 +3,7 @@ import json
 import time
 import logging
 
-from .curriculum import next_topic,canonical_language,source_urls,LANGUAGE_CURRICULA
-from .topic_resources import supplementary_source_urls
+from .curriculum import next_topic,canonical_language,LANGUAGE_CURRICULA
 from .learning_sources import topic_source_urls, mark_sources_learned
 from .advanced_curriculum import seed_for
 from .db import execute,fetch_all,search_knowledge
@@ -79,7 +78,6 @@ class LearningEngine:
         return data.get("prerequisites",[]) if isinstance(data,dict) else []
 
     def _learn_sources_for_topic(self,language,topic,prerequisites,progress_callback=None,stop_event=None):
-        queries=[topic["topic"]]+[p.get("name","") for p in prerequisites[:3]]
         knowledge=[]
         seed=seed_for(language,topic["topic"])
         if seed:
