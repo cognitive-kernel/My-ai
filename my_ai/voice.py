@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+from .config import assert_write_allowed
 
 
 def _whisper_binary() -> str | None:
@@ -78,6 +79,7 @@ def synthesize(text: str, model_path: str, output_path: str) -> str:
     if not binary:
         raise RuntimeError("Piper executable was not found.")
     model = Path(model_path).expanduser().resolve()
+    assert_write_allowed(output_path)
     output = Path(output_path).expanduser().resolve()
     if not model.is_file():
         raise FileNotFoundError("Piper model file not found.")
