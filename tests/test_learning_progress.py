@@ -303,8 +303,15 @@ def test_scheduler_logs_full_worker_exception(monkeypatch, caplog):
     monkeypatch.setattr("my_ai.scheduler.LearningEngine", FakeEngine)
     monkeypatch.setattr("my_ai.scheduler.StudyScheduler._wait_for_resources", staticmethod(lambda stop_event: {}))
     scheduler = StudyScheduler(interval_seconds=1)
-    stop = threading.Event()
-    monkeypatch.setattr(stop, "wait", lambda _timeout: True)
+    class StopOnce:
+        def __init__(self):
+            self.stopped = False
+        def is_set(self):
+            return self.stopped
+        def wait(self, _timeout):
+            self.stopped = True
+            return True
+    stop = StopOnce()
     with caplog.at_level(logging.ERROR, logger="my_ai.scheduler"):
         scheduler._loop("Python", stop)
     assert "learning worker failed" in caplog.text
