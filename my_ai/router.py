@@ -203,6 +203,9 @@ def _llm_classify(text: str, context: str | None = None) -> Intent | None:
         urls = _extract_urls(str(text))
         if urls:
             args["urls"] = urls
+        project_path = _extract_project_path(str(text))
+        if project_path:
+            args["project_path"] = project_path
         return Intent(primary, round(confidence, 3), primary in HIGH_RISK, args=args, intents=intents)
     except Exception:
         return None
