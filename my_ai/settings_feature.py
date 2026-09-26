@@ -159,6 +159,8 @@ def _setup() -> None:
         except Exception:
             pass
         conn.commit()
+    for row in fetch_all("SELECT id FROM custom_courses WHERE active=1"):
+        _ensure_custom_review_schedule(int(row["id"]))
 
 
 def _course(course_id: int) -> dict[str, Any] | None:
