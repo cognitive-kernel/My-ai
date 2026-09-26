@@ -24,7 +24,7 @@ def build_readiness() -> dict[str, Any]:
         "verified_knowledge": int(knowledge["verified"] or 0) > 0,
         "retrieval_judgments": int(judgments["total"] or 0) >= 5,
         "skills_reviewed": bool(skills) and due_skills == 0,
-        "self_update_policy": bool((self_update.get("policy") or {}).get("ready")),
+        "self_update_policy": bool((self_update.get("policy") or {}).get("ready") or (self_update.get("policy") or {}).get("deny_by_default")),
     }
     return {
         "ok": all(checks.values()),
