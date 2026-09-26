@@ -293,75 +293,79 @@ class LearningEngine:
     def _half_percent(value): return max(0.0,min(100.0,round(float(value)*2)/2))
 
     def detailed_status(self,language=None):
-        """Return every curriculum topic with its persisted learning progress."""
+        """Return every incomplete curriculum or persisted learning topic."""
         rows=fetch_all(
             "SELECT id,language,topic,status,score,progress_percent,phase,created_at FROM learning_sessions ORDER BY id DESC"
         )
-        selected = [canonical_language(language)] if language else list(dict.fromkeys(list(LANGUAGE_CURRICULA.keys()) + [str(r["language"]) for r in rows if str(r["language"]).strip()]))
+        selected = [canonical_language(language)] if language else list(dict.fromkeys(
+            list(LANGUAGE_CURRICULA.keys()) +
+            [str(r["language"]) for r in rows if str(r["language"]).strip()]
+        ))
         courses=[]
         for lang in selected:
-            topics=LANGUAGE_CURRICULA.get(lang,[])
-            if not topics:
-                custom_rows=[r for r in rows if str(r["language"])==lang]
-                if custom_rows:
-                    topic_items=[]
-                    seen=set()
-                    for row in custom_rows:
-                        name=str(row["topic"])
-                        if name in seen:
-                            continue
-                        seen.add(name)
-                        topic_items.append({
-                            "order":len(topic_items)+1,
-                            "topic":name,
-                            "goal":f"Learning track for {lang}",
-                            "status":str(row["status"]),
-                            "phase":str(row["phase"]),
-                            "progress_percent":self._half_percent(100.0 if row["status"]=="completed" else float(row["progress_percent"] or 0)),
-                            "score":row["score"] if row["score"] is not None else None,
-                            "updated_at":row["created_at"],
-                        })
-                    completed=sum(1 for x in topic_items if x["status"]=="completed")
-                    active=next((x for x in topic_items if x["status"] not in {"completed","paused"}),None)
-                    courses.append({
-                        "language":lang,
-                        "total_topics":len(topic_items),
-                        "completed_topics":completed,
-                        "remaining_topics":max(0,len(topic_items)-completed),
-                        "progress_percent":self._half_percent(sum(float(x["progress_percent"]) for x in topic_items)/len(topic_items)),
-                        "current":active,
-                        "topics":topic_items,
-                    })
-                continue
-            lang_rows=[r for r in rows if r["language"]==lang]
+            lang_rows=[r for r in rows if str(r["language"])==lang]
             latest={}
             for row in lang_rows:
-                name=str(row["topic"])
-                if name in latest and latest[name]["status"]=="completed":
+                name=str(row["topic"]).strip()
+                if not name or name in latest:
                     continue
                 latest[name]=row
-            topic_items=[]
-            for item in topics:
-                row=latest.get(str(item["topic"]))
-                progress=100.0 if row and row["status"]=="completed" else (float(row["progress_percent"] or 0) if row else 0.0)
-                topic_items.append({
-                    "order": item.get("order"),
-                    "topic": item["topic"],
-                    "goal": item.get("goal",""),
-                    "status": str(row["status"]) if row else "planned",
-                    "phase": str(row["phase"]) if row else "planned",
-                    "progress_percent": self._half_percent(progress),
-                    "score": row["score"] if row and row["score"] is not None else None,
-                    "updated_at": row["created_at"] if row else None,
+
+            curriculum_topics=LANGUAGE_CURRICULA.get(lang,[])
+            topic_defs=[dict(item) for item in curriculum_topics]
+            known={str(item.get("topic") or "").strip() for item in topic_defs}
+            next_order=max([int(item.get("order") or 0) for item in topic_defs] or [0])+1
+
+            # Persisted learning sessions are authoritative for ad-hoc topics too.
+            # This prevents topics such as Cisco from disappearing merely because
+            # they are not part of the fixed curriculum.
+            for row in lang_rows:
+                name=str(row["topic"]).strip()
+                if not name or name in known:
+                    continue
+                topic_defs.append({
+                    "order":next_order,
+                    "topic":name,
+                    "goal":f"Learning track for {lang}",
                 })
-            completed=sum(1 for x in topic_items if x["status"]=="completed")
-            active=next((x for x in topic_items if x["status"] not in {"completed","paused"}),None)
-            overall=self._half_percent(sum(float(x["progress_percent"]) for x in topic_items)/len(topic_items)) if topic_items else 0.0
+                known.add(name)
+                next_order += 1
+
+            topic_items=[]
+            all_progress=[]
+            completed=0
+            for item in topic_defs:
+                name=str(item.get("topic") or "").strip()
+                row=latest.get(name)
+                progress=100.0 if row and row["status"]=="completed" else (
+                    float(row["progress_percent"] or 0) if row else 0.0
+                )
+                progress=self._half_percent(progress)
+                all_progress.append(progress)
+                if progress >= 100.0:
+                    completed += 1
+                    continue
+                topic_items.append({
+                    "order":item.get("order"),
+                    "topic":name,
+                    "goal":item.get("goal",""),
+                    "status":str(row["status"]) if row else "planned",
+                    "phase":str(row["phase"]) if row else "planned",
+                    "progress_percent":progress,
+                    "score":row["score"] if row and row["score"] is not None else None,
+                    "updated_at":row["created_at"] if row else None,
+                })
+
+            if not topic_items:
+                continue
+
+            overall=self._half_percent(sum(all_progress)/len(all_progress)) if all_progress else 0.0
+            active=next((x for x in topic_items if x["status"]!="paused"),topic_items[0])
             courses.append({
                 "language":lang,
-                "total_topics":len(topic_items),
+                "total_topics":len(topic_defs),
                 "completed_topics":completed,
-                "remaining_topics":max(0, len(topic_items) - completed),
+                "remaining_topics":len(topic_items),
                 "progress_percent":overall,
                 "current":active,
                 "topics":topic_items,
