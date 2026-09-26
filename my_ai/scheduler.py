@@ -369,8 +369,13 @@ class StudyScheduler:
                         continue
                     if stop_event.wait(min(self.interval_seconds, 60)):
                         break
-                except InterruptedError:
-                    self._update_worker(language, "idle", status="idle")
+                except InterruptedError as exc:
+                    reason = str(exc) or "stop_event/cancellation"
+                    logger.warning(
+                        "LEARNING_STOPPED: language=%s stage=%s topic=%s reason=%s",
+                        language, self.stage, self.current_topic, reason,
+                    )
+                    self._update_worker(language, "idle", status="idle", error=reason)
                     break
                 except Exception as exc:
                     if stop_event.is_set():
