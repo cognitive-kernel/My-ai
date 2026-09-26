@@ -111,11 +111,8 @@ class LearningEngine:
             except Exception as exc:
                 message=str(exc)
                 logger.warning(
-                    "learning source failed: language=%s topic=%s url=%s error=%s",
-                    language,
-                    topic["topic"],
-                    url,
-                    message,
+                    "LEARNING_SOURCE_FAILURE: language=%s topic=%s url=%s error_type=%s error=%s",
+                    language, topic["topic"], url, type(exc).__name__, message,
                 )
                 knowledge.append({"title":"Source unavailable","url":url,"error":message})
                 if progress_callback:
@@ -188,6 +185,7 @@ class LearningEngine:
         self._set_progress(s["session_id"], 50.0, "lesson")
         if progress_callback: progress_callback("lesson",t["topic"])
         seed=seed_for(language,t["topic"])
+        logger.info("LEARNING_LESSON_START: language=%s topic=%s sources=%s", language, t["topic"], len(sources))
         lesson=self._retry_with_limit(
             lambda: self.llm.chat("Teach the topic as a complete, structured study unit. Include prerequisite lessons first, then the main topic, examples, exercises, tests, common mistakes, security considerations and a mastery checklist. "
                              "Use the model knowledge seed only as an initial layer; reconcile it with supplied official-source knowledge and explicitly correct conflicts. "
@@ -198,6 +196,7 @@ class LearningEngine:
                              f"LEARNED KNOWLEDGE: {json.dumps(search_knowledge(language+' '+t['topic'],12),ensure_ascii=False)}"),
             "lesson",progress_callback,t["topic"],stop_event,
         )
+        logger.info("LEARNING_LESSON_SUCCESS: language=%s topic=%s chars=%s", language, t["topic"], len(lesson))
         remember(language,"Mastery lesson: "+t["topic"],lesson)
         self._set_progress(s["session_id"], 75.0, "assessment")
         if progress_callback: progress_callback("assessment",t["topic"])
