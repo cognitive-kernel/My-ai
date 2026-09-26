@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -170,6 +171,41 @@ def _progress(course_id: int) -> list[dict[str, Any]]:
         COALESCE(p.phase,'planned') phase,p.lesson,p.score,p.updated_at,p.last_attempt_at
         FROM custom_course_topics t LEFT JOIN custom_course_progress p ON p.topic_id=t.id
         WHERE t.course_id=? ORDER BY t.topic_order""", (course_id,))
+
+
+def _ensure_custom_review_schedule(course_id: int) -> None:
+    course = _course(course_id)
+    if not course:
+        return
+    execute("""CREATE TABLE IF NOT EXISTS learning_domains (
+        name TEXT PRIMARY KEY,
+        topics_json TEXT NOT NULL,
+        sources_json TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        last_review_at TEXT,
+        next_review_at TEXT,
+        auto_learn INTEGER NOT NULL DEFAULT 1
+    )""")
+    try:
+        execute("ALTER TABLE learning_domains ADD COLUMN auto_learn INTEGER NOT NULL DEFAULT 1")
+    except Exception:
+        pass
+    topics = [
+        {"order": int(x["topic_order"]), "topic": str(x["title"]), "goal": str(x["goal"] or "")}
+        for x in _progress(course_id)
+    ]
+    sources = [str(x["source_url"]) for x in _progress(course_id) if x.get("source_url")]
+    next_review = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+    execute(
+        """INSERT INTO learning_domains(name,topics_json,sources_json,next_review_at,auto_learn)
+           VALUES(?,?,?,?,1)
+           ON CONFLICT(name) DO UPDATE SET
+           topics_json=excluded.topics_json,sources_json=excluded.sources_json,
+           updated_at=CURRENT_TIMESTAMP,
+           auto_learn=1""",
+        (str(course["name"]), __import__("json").dumps(topics, ensure_ascii=False), __import__("json").dumps(sources, ensure_ascii=False), next_review),
+    )
 
 
 def _summary(course_id: int) -> dict[str, Any]:
@@ -427,6 +463,7 @@ def add_course_topic(course_id: int, r: CourseTopicRequest, request: Request):
         execute("INSERT INTO custom_course_progress(course_id,topic_id) VALUES(?,?)", (course_id, tid))
     except Exception as exc:
         raise HTTPException(400, "Unable to add topic.") from exc
+    _ensure_custom_review_schedule(course_id)
     audit(user, "learning", "write", "200", f"course-topic-added:{course_id}:{tid}")
     return {"id": tid, "course_id": course_id, "topic_order": order, "status": "planned"}
 
@@ -440,6 +477,7 @@ def course_progress(course_id:int,request:Request):
 def course_start(course_id:int,request:Request):
     user=require_user(request); _setup()
     if not _course(course_id): raise HTTPException(404,"Course not found.")
+    _ensure_custom_review_schedule(course_id)
     if course_id not in _running:
         _workers.submit(_run_course,course_id)
     audit(user,"learning","execute","202",f"course-start:{course_id}")
