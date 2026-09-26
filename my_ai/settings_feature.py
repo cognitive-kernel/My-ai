@@ -206,6 +206,7 @@ def _ensure_custom_review_schedule(course_id: int) -> None:
            ON CONFLICT(name) DO UPDATE SET
            topics_json=excluded.topics_json,sources_json=excluded.sources_json,
            updated_at=CURRENT_TIMESTAMP,
+           next_review_at=COALESCE(learning_domains.next_review_at, excluded.next_review_at),
            auto_learn=1""",
         (f"custom_course:{course_id}", json.dumps(topics, ensure_ascii=False), json.dumps(sources, ensure_ascii=False), next_review),
     )
