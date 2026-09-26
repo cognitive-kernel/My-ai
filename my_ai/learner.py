@@ -297,7 +297,7 @@ class LearningEngine:
         rows=fetch_all(
             "SELECT id,language,topic,status,score,progress_percent,phase,created_at FROM learning_sessions ORDER BY id DESC"
         )
-        selected = [canonical_language(language)] if language else list(LANGUAGE_CURRICULA.keys())
+        selected = [canonical_language(language)] if language else list(dict.fromkeys(list(LANGUAGE_CURRICULA.keys()) + [str(r["language"]) for r in rows if str(r["language"]).strip()]))
         courses=[]
         for lang in selected:
             topics=LANGUAGE_CURRICULA.get(lang,[])
