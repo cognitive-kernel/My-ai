@@ -39,7 +39,7 @@ def _system_command(tool):
     if os.name == "nt":
         ids = {"git": "Git.Git", "ffmpeg": "Gyan.FFmpeg", "nmap": "Insecure.Nmap"}
         if shutil.which("winget") and tool in ids:
-            return ["winget", "install", "--id", ids[tool], "-e", "--accept-package-agreements", "--accept-source-agreements"]
+            return ["winget", "install", "--id", ids[tool], "-e", "--source", "winget", "--accept-package-agreements", "--accept-source-agreements"]
         if shutil.which("choco"):
             return ["choco", "install", {"git":"git","ffmpeg":"ffmpeg","nmap":"nmap"}[tool], "-y"]
         return None
