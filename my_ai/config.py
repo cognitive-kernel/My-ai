@@ -35,6 +35,7 @@ class Settings:
     host: str = os.getenv("HOST", "127.0.0.1")
     port: int = int(os.getenv("PORT", "8000"))
     offline_strict: bool = os.getenv("MYAI_OFFLINE_STRICT", "false").strip().lower() == "true"
+    read_only: bool = os.getenv("MYAI_READ_ONLY", "false").strip().lower() == "true"
     decision_log: bool = os.getenv("MYAI_DECISION_LOG", "false").strip().lower() == "true"
     scheduler_interval_seconds: int = int(os.getenv("SCHEDULER_INTERVAL_SECONDS", "3600"))
     scheduler_max_cpu_percent: float = float(os.getenv("SCHEDULER_MAX_CPU_PERCENT", "70"))
