@@ -1,4 +1,7 @@
 name: browser-e2e
+run-name: ${{ github.workflow }} @ ${{ github.sha }}
+permissions:
+  contents: read
 
 on:
   workflow_dispatch:
@@ -9,8 +12,8 @@ jobs:
   browser:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - run: pip install -e .[dev] playwright pytest-playwright
