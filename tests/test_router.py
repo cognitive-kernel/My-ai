@@ -60,3 +60,16 @@ def test_self_repair_variants():
 def test_additional_learning_and_coding_variants():
     assert classify("ادامه یادگیری پایتون").name == "learning"
     assert classify("کد تولید کن").name == "coding"
+
+
+def test_structured_learning_arguments():
+    result = classify("پایتون یاد بگیر درباره async و بعد یک API بساز")
+    assert result.args["language"] == "python"
+    assert "async" in result.args["topic"]
+    assert "goal" in result.args
+
+
+def test_project_path_argument():
+    result = classify("پروژه را در /projects/demo بساز")
+    assert result.args["project_path"] == "/projects/demo"
+    assert "coding" in result.intents
