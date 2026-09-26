@@ -49,3 +49,14 @@ def test_chat_fallback():
     result = classify("امروز هوا چطور است؟")
     assert result.name == "chat"
     assert result.intents == ("chat",)
+
+
+def test_self_repair_variants():
+    assert classify("خودت را تعمیر کن").name == "self_repair"
+    assert classify("fix yourself").name == "self_repair"
+    assert classify("باگ خودتو درست کن").name == "self_repair"
+
+
+def test_additional_learning_and_coding_variants():
+    assert classify("ادامه یادگیری پایتون").name == "learning"
+    assert classify("کد تولید کن").name == "coding"
