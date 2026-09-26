@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import platform
 import subprocess
 import sys
@@ -17,7 +18,19 @@ DEFAULT_INTERVAL_SECONDS = 900
 
 def _run(args: list[str], timeout: int = 120) -> tuple[int, str]:
     try:
-        p = subprocess.run(args, cwd=ROOT, text=True, capture_output=True, timeout=timeout)
+        env = os.environ.copy()
+        # Diagnostics invoke pytest as a subprocess. Disable the diagnostics
+        # monitor inside that child so pytest cannot recursively launch pytest.
+        if "-m" in args and "pytest" in args:
+            env["MYAI_DISABLE_SELF_DIAGNOSTICS"] = "1"
+        p = subprocess.run(
+            args,
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            timeout=timeout,
+            env=env,
+        )
         return p.returncode, (p.stdout + p.stderr).strip()
     except Exception as exc:
         return 1, str(exc)
@@ -147,6 +160,15 @@ class SelfDiagnosticsMonitor:
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
+        # Never start the monitor from a pytest process. The monitor itself
+        # runs pytest, so allowing it to start here would recurse indefinitely.
+        under_pytest = (
+            os.environ.get("MYAI_DISABLE_SELF_DIAGNOSTICS") == "1"
+            or "PYTEST_CURRENT_TEST" in os.environ
+            or any("pytest" in str(arg).lower() for arg in sys.argv)
+        )
+        if under_pytest:
+            return
         if self._thread and self._thread.is_alive():
             return
         self._stop.clear()
