@@ -328,7 +328,10 @@ def knowledge_list(request: Request, status: str | None = None, limit: int = 200
 def knowledge_update(knowledge_id:int, r:KnowledgeUpdateRequest, request:Request):
     user=require_admin(request)
     if not fetch_all("SELECT id FROM knowledge WHERE id=?",(knowledge_id,)): raise HTTPException(404,"Knowledge item not found.")
-    execute("UPDATE knowledge SET title=?,content=?,topic=?,source_url=?,verification_status='unverified',verified_at=NULL,verified_by=NULL WHERE id=?",(r.title,r.content,r.topic,r.source_url,knowledge_id))
+    import hashlib
+    normalized = " ".join(f"{r.topic}\n{r.content}".replace("ي","ی").replace("ى","ی").replace("ك","ک").split()).casefold()
+    content_hash = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    execute("UPDATE knowledge SET title=?,content=?,topic=?,source_url=?,content_hash=?,verification_status='unverified',verified_at=NULL,verified_by=NULL,confidence=NULL WHERE id=?",(r.title,r.content,r.topic,r.source_url,content_hash,knowledge_id))
     audit(user,"knowledge","write","200",f"updated:{knowledge_id}")
     return {"updated":knowledge_id,"verification_status":"unverified"}
 
