@@ -10,7 +10,7 @@ from .platform import resource_status
 from .curriculum import LANGUAGE_CURRICULA, LANGUAGE_SOURCES, canonical_language
 from .db import execute, fetch_all
 from .domain_registry import load_saved_domains
-from .dynamic_learning import REVIEW_DAYS, ensure_domain, resolve_learning_target, due_domains, weekly_review
+from .dynamic_learning import REVIEW_DAYS, ensure_domain, resolve_learning_target, due_domains, weekly_review, review_history
 from .config import settings
 from .settings_store import get_setting
 from .resource_guard import limits as resource_limits
@@ -218,6 +218,7 @@ class StudyScheduler:
                 "weekly_review": {
                     "due_domains": due_domains(),
                     "monitor_running": bool(getattr(self, "_monitor_thread", None) and self._monitor_thread.is_alive()),
+                    "history": review_history(10),
                 },
             }
 
