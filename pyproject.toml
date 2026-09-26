@@ -39,6 +39,7 @@ mysql = ["mysql-connector-python>=9,<27"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["e2e: browser end-to-end smoke tests"]
 
 [tool.setuptools.packages.find]
 include = ["my_ai*"]
