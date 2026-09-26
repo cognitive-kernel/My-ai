@@ -381,6 +381,12 @@ class LearningEngine:
         rows=fetch_all(
             "SELECT id,language,topic,status,score,progress_percent,phase,created_at FROM learning_sessions ORDER BY id DESC"
         )
+        # Custom Course runners have their own progress model and must not
+        # appear in the standard language-learning status response.
+        rows=[
+            row for row in rows
+            if not str(row["language"] or "").strip().lower().startswith("custom_course:")
+        ]
         row_languages=[]
         for row in rows:
             raw=str(row["language"] or "").strip()
