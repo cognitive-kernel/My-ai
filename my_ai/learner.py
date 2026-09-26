@@ -293,34 +293,36 @@ class LearningEngine:
     def _half_percent(value): return max(0.0,min(100.0,round(float(value)*2)/2))
 
     def detailed_status(self,language=None):
-        """Return every incomplete curriculum or persisted learning topic."""
+        """Return the complete learning catalog, including completed topics."""
         rows=fetch_all(
             "SELECT id,language,topic,status,score,progress_percent,phase,created_at FROM learning_sessions ORDER BY id DESC"
         )
+        normalized_rows=[]
+        for row in rows:
+            raw=str(row["language"] or "").strip()
+            if not raw:
+                continue
+            normalized_rows.append((canonical_language(raw),row))
+
         selected = [canonical_language(language)] if language else list(dict.fromkeys(
             list(LANGUAGE_CURRICULA.keys()) +
-            [str(r["language"]) for r in rows if str(r["language"]).strip()]
+            [lang for lang,_row in normalized_rows]
         ))
         courses=[]
         for lang in selected:
-            lang_rows=[r for r in rows if str(r["language"])==lang]
+            lang_rows=[row for row_lang,row in normalized_rows if row_lang==lang]
             latest={}
             for row in lang_rows:
-                name=str(row["topic"]).strip()
+                name=str(row["topic"] or "").strip()
                 if not name or name in latest:
                     continue
                 latest[name]=row
 
-            curriculum_topics=LANGUAGE_CURRICULA.get(lang,[])
-            topic_defs=[dict(item) for item in curriculum_topics]
+            topic_defs=[dict(item) for item in LANGUAGE_CURRICULA.get(lang,[])]
             known={str(item.get("topic") or "").strip() for item in topic_defs}
             next_order=max([int(item.get("order") or 0) for item in topic_defs] or [0])+1
-
-            # Persisted learning sessions are authoritative for ad-hoc topics too.
-            # This prevents topics such as Cisco from disappearing merely because
-            # they are not part of the fixed curriculum.
             for row in lang_rows:
-                name=str(row["topic"]).strip()
+                name=str(row["topic"] or "").strip()
                 if not name or name in known:
                     continue
                 topic_defs.append({
@@ -337,14 +339,13 @@ class LearningEngine:
             for item in topic_defs:
                 name=str(item.get("topic") or "").strip()
                 row=latest.get(name)
-                progress=100.0 if row and row["status"]=="completed" else (
+                progress=100.0 if row and str(row["status"]).lower()=="completed" else (
                     float(row["progress_percent"] or 0) if row else 0.0
                 )
                 progress=self._half_percent(progress)
                 all_progress.append(progress)
                 if progress >= 100.0:
                     completed += 1
-                    continue
                 topic_items.append({
                     "order":item.get("order"),
                     "topic":name,
@@ -356,16 +357,15 @@ class LearningEngine:
                     "updated_at":row["created_at"] if row else None,
                 })
 
-            if not topic_items:
+            if not topic_defs:
                 continue
-
             overall=self._half_percent(sum(all_progress)/len(all_progress)) if all_progress else 0.0
-            active=next((x for x in topic_items if x["status"]!="paused"),topic_items[0])
+            active=next((x for x in topic_items if x["progress_percent"]<100.0),topic_items[0])
             courses.append({
                 "language":lang,
                 "total_topics":len(topic_defs),
                 "completed_topics":completed,
-                "remaining_topics":len(topic_items),
+                "remaining_topics":len(topic_defs)-completed,
                 "progress_percent":overall,
                 "current":active,
                 "topics":topic_items,
