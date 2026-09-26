@@ -113,6 +113,44 @@ def _extract_urls(text: str) -> list[str]:
     return re.findall(r"https?://[^\s<>]+", text)
 
 
+
+def _extract_topic(text: str) -> str | None:
+    for pattern in (
+        r"(?:یاد بگیر|یادگیری|مطالعه کن|study|learn)\s+(?:درباره|در مورد|about)?\s*(.+?)(?:\s+(?:و بعد|بعدش|سپس|then|and then)\s+|$)",
+        r"(?:topic|موضوع)\s*[:=]\s*(.+)$",
+    ):
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            value = match.group(1).strip(" .،,؛;:")
+            if value:
+                return value[:200]
+    return None
+
+
+def _extract_goal(text: str) -> str | None:
+    for pattern in (
+        r"(?:کد بنویس|کدنویسی کن|برنامه بنویس|پروژه بساز|یک پروژه بساز|یه پروژه بساز|api بساز|write code|generate code|build a project|create a project)\s*(?:برای|for)?\s*(.+)$",
+        r"(?:goal|هدف)\s*[:=]\s*(.+)$",
+    ):
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            value = match.group(1).strip(" .،,؛;:")
+            if value:
+                return value[:300]
+    return None
+
+
+def _extract_project_path(text: str) -> str | None:
+    for candidate in re.findall(r"(?<!https?://)(?:(?:[A-Za-z]:[\\/])|/|\\\\)[^\s<>"']+", text):
+        candidate = candidate.rstrip(".,،؛;:)")
+        if candidate not in {"/", "\\"} and any(
+            token in candidate.casefold()
+            for token in ("/projects/", "\\projects\\", "/workspace/", "\\workspace\\")
+        ):
+            return candidate[:500]
+    return None
+
+
 def classify(text: str, context: str | None = None) -> Intent:
     """Score normalized rules and preserve secondary intents for multi-intent requests."""
     message = _normalize(text)
@@ -145,6 +183,15 @@ def classify(text: str, context: str | None = None) -> Intent:
     urls = _extract_urls(str(text))
     if urls:
         args["urls"] = urls
+    topic = _extract_topic(message) if "learning" in ordered else None
+    if topic:
+        args["topic"] = topic
+    goal = _extract_goal(message) if "coding" in ordered else None
+    if goal:
+        args["goal"] = goal
+    project_path = _extract_project_path(str(text))
+    if project_path:
+        args["project_path"] = project_path
 
     return Intent(
         primary_name,
