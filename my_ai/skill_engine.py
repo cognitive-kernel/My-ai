@@ -118,3 +118,30 @@ def review_snapshot() -> list[dict[str, Any]]:
            FROM skills s LEFT JOIN skill_reviews r ON r.skill_id=s.id
            GROUP BY s.id ORDER BY s.id DESC"""
     )
+
+
+def record_review(skill_id: int, reviewer_id: int, outcome: str, notes: str = "") -> int:
+    if outcome not in {"approved", "changes_requested", "rejected"}:
+        raise ValueError("Invalid skill review outcome.")
+    rows = fetch_all("SELECT id FROM skills WHERE id=?", (skill_id,))
+    if not rows:
+        raise ValueError("Skill not found.")
+    review_id = execute(
+        "INSERT INTO skill_reviews(skill_id,reviewer_id,outcome,notes) VALUES(?,?,?,?)",
+        (skill_id, reviewer_id, outcome, str(notes or "")[:4000]),
+    )
+    if outcome != "approved":
+        execute("UPDATE skills SET verified=0 WHERE id=?", (skill_id,))
+    return review_id
+
+
+def review_snapshot() -> list[dict[str, Any]]:
+    return fetch_all(
+        """SELECT s.id,s.name,s.version,s.verified,s.score,s.last_verified,
+                  COUNT(r.id) AS review_count,
+                  MAX(r.created_at) AS last_review_at,
+                  COALESCE((SELECT outcome FROM skill_reviews r2
+                            WHERE r2.skill_id=s.id ORDER BY r2.id DESC LIMIT 1),'none') AS last_review_outcome
+           FROM skills s LEFT JOIN skill_reviews r ON r.skill_id=s.id
+           GROUP BY s.id ORDER BY s.id DESC"""
+    )
