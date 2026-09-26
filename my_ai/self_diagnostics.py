@@ -59,7 +59,7 @@ def _hardware() -> dict[str, object]:
 
 
 def run_diagnostics() -> dict[str, object]:
-    checks: dict[str, object] = {}
+    checks: dict[str, dict[str, object]] = {}
 
     code, output = _run([sys.executable, "-m", "compileall", "-q", "my_ai"], 120)
     checks["compileall"] = {"ok": code == 0, "output": output[-12000:]}
