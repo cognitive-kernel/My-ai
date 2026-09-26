@@ -153,7 +153,7 @@ def apply_confirmed_update(health_url=None, health_timeout=45):
         record_decision("self_update", "activate", {"previous": current, "new": remote, "backup": backup})
         notify("self_update_activated", {"previous": current, "new": remote, "backup": backup})
 
-        command = f'"{sys.executable}" -m uvicorn my_ai.api:app --host 127.0.0.1 --port {os.getenv("MYAI_PORT", "8000")}"
+        command = chr(34) + sys.executable + chr(34) + " -m uvicorn my_ai.api:app --host 127.0.0.1 --port 8000"
         cmd = shlex.split(command, posix=(os.name != "nt"))
         watchdog = [
             sys.executable,
