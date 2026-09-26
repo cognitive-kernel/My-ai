@@ -159,3 +159,42 @@ def audit(
             details[:4000],
         ),
     )
+
+
+TOOL_RULES = (
+    ("/git/", "github"),
+    ("/security/", "security"),
+    ("/code/run", "code-execution"),
+    ("/code/generate", "code-generation"),
+    ("/chat", "chat"),
+    ("/learn/url", "learning"),
+    ("/learning/", "learning"),
+    ("/scheduler/", "scheduler"),
+    ("/backup/", "database"),
+    ("/voice/", "voice"),
+    ("/skills", "skill-engine"),
+    ("/models/", "models"),
+    ("/memory/search", "memory"),
+    ("/web/", "web"),
+    ("/projects/", "projects"),
+    ("/eval/", "eval"),
+    ("/self-update/", "self-update"),
+    ("/self-repair/", "self-repair"),
+    ("/self-diagnostics/", "self-diagnostics"),
+    ("/help/ask", "help"),
+    ("/tools/", "tools"),
+    ("/files/", "files"),
+    ("/image/", "image-generation"),
+)
+PATH_ACTIONS = {"/git/token": "write", "/git/logout": "write"}
+
+
+def permission_for_path(path: str, method: str) -> tuple[str, str] | None:
+    for prefix, tool in TOOL_RULES:
+        if path.startswith(prefix) or path == prefix.rstrip("/"):
+            action = PATH_ACTIONS.get(
+                path,
+                "read" if method == "GET" else "write" if method in {"PUT", "PATCH", "DELETE"} else "execute",
+            )
+            return tool, action
+    return None
