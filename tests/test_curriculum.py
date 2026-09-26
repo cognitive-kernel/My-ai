@@ -11,8 +11,8 @@ def test_curriculum_has_core_topics():
 
 
 def test_advanced_curriculum_is_present():
-    python_topics = {str(item["topic"]) for item in PYTHON_CURRICULUM}
-    sql_topics = {str(item["topic"]) for item in SQLSERVER_CURRICULUM}
+    python_topics = {str(item["topic"]) for item in LANGUAGE_CURRICULA["Python"]}
+    sql_topics = {str(item["topic"]) for item in LANGUAGE_CURRICULA["SQL Server"]}
     assert "Descriptors" in python_topics
     assert "CPython and bytecode" in python_topics
     assert "Execution plans" in sql_topics
