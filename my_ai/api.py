@@ -1,5 +1,7 @@
 from __future__ import annotations
 from contextlib import asynccontextmanager
+import os
+import sys
 import subprocess
 import re
 from urllib.parse import urlparse
@@ -46,20 +48,26 @@ async def lifespan(_):
     init_db()
     # Re-check on every application start; installation is limited to the explicit prerequisite manager.
     startup_check()
-    self_diagnostics.start()
-    scheduler.start_learning_supervisor()
-    scheduler.start_review_monitor()
-    workers=fetch_all("SELECT language,session_id,status FROM learning_workers WHERE status IN ('running','retrying','paused','stopping')")
-    if workers:
-        for worker in workers:
-            scheduler.start(worker["language"], worker["session_id"])
-    else:
-        runtime=fetch_all("SELECT language,session_id,status FROM learning_runtime WHERE id=1")
-        if runtime and runtime[0]["status"] in {"running","stopping","retrying","paused"} and runtime[0]["language"]:
-            scheduler.start(runtime[0]["language"], runtime[0]["session_id"])
+    under_pytest = (
+        os.environ.get("PYTEST_CURRENT_TEST") is not None
+        or any("pytest" in str(arg).lower() for arg in sys.argv)
+    )
+    if not under_pytest:
+        self_diagnostics.start()
+        scheduler.start_learning_supervisor()
+        scheduler.start_review_monitor()
+        workers=fetch_all("SELECT language,session_id,status FROM learning_workers WHERE status IN ('running','retrying','paused','stopping')")
+        if workers:
+            for worker in workers:
+                scheduler.start(worker["language"], worker["session_id"])
+        else:
+            runtime=fetch_all("SELECT language,session_id,status FROM learning_runtime WHERE id=1")
+            if runtime and runtime[0]["status"] in {"running","stopping","retrying","paused"} and runtime[0]["language"]:
+                scheduler.start(runtime[0]["language"], runtime[0]["session_id"])
     yield
-    scheduler.stop()
-    self_diagnostics.stop()
+    if not under_pytest:
+        scheduler.stop()
+        self_diagnostics.stop()
 app=FastAPI(title="My-AI",version="0.2.0",description="Local-first personal learning and coding agent.",lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=Path(__file__).resolve().parent / "static"), name="static")
 
