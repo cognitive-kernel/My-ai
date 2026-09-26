@@ -397,7 +397,7 @@ def eval_retrieval() -> dict[str, Any]:
         "total": len(results),
         "mrr": round(sum(reciprocal_ranks) / len(reciprocal_ranks), 6) if reciprocal_ranks else 0.0,
         "calibration": calibration,
-        "calibration_ready": calibration["samples"] >= 5,
+        "calibration_ready": int(calibration["samples"] or 0) >= 5,
     }
 
 
