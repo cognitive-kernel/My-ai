@@ -21,6 +21,15 @@ def _ensure_storage() -> None:
         last_review_at TEXT,
         next_review_at TEXT
     )""")
+    execute("""CREATE TABLE IF NOT EXISTS learning_review_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        domain TEXT NOT NULL,
+        status TEXT NOT NULL,
+        added_count INTEGER NOT NULL DEFAULT 0,
+        update_count INTEGER NOT NULL DEFAULT 0,
+        details TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )""")
 
 
 def _normalize_topics(items):
@@ -205,6 +214,7 @@ def mark_reviewed(name, topics, sources, now=None):
 def weekly_review(name, web, llm, now=None):
     name = str(name).strip()
     if not name or name not in LANGUAGE_CURRICULA or not web or not llm:
+        execute("INSERT INTO learning_review_runs(domain,status,details) VALUES(?,?,?)", (name,"skipped","domain unavailable"))
         return {"status": "skipped", "reason": "domain unavailable"}
     topics = list(LANGUAGE_CURRICULA.get(name, []))
     sources = list(LANGUAGE_SOURCES.get(name, []))
@@ -237,6 +247,7 @@ def weekly_review(name, web, llm, now=None):
         data = json.loads(llm.chat(prompt, system="You are a conservative technical update reviewer. Return valid JSON only."))
     except (TypeError, ValueError, json.JSONDecodeError):
         mark_reviewed(name, topics, sources, now)
+        execute("INSERT INTO learning_review_runs(domain,status,details) VALUES(?,?,?)", (name,"reviewed","LLM review returned invalid JSON"))
         return {"status": "reviewed", "added": [], "updates": []}
     additions = _normalize_topics(data.get("new_topics", []) if isinstance(data, dict) else [])
     existing = {str(x["topic"]).lower() for x in topics}
@@ -249,4 +260,12 @@ def weekly_review(name, web, llm, now=None):
             added.append(item)
     mark_reviewed(name, topics, sources, now)
     LANGUAGE_CURRICULA[name] = topics
-    return {"status": "reviewed", "added": added, "updates": data.get("updates", []) if isinstance(data, dict) else []}
+    updates = data.get("updates", []) if isinstance(data, dict) else []
+    execute("INSERT INTO learning_review_runs(domain,status,added_count,update_count,details) VALUES(?,?,?,?,?)", (name,"reviewed",len(added),len(updates),json.dumps({"added":added,"updates":updates},ensure_ascii=False)[:8000]))
+    return {"status": "reviewed", "added": added, "updates": updates}
+
+
+def review_history(limit: int = 20) -> list[dict]:
+    _ensure_storage()
+    limit = max(1, min(int(limit), 100))
+    return fetch_all("SELECT * FROM learning_review_runs ORDER BY id DESC LIMIT ?", (limit,))
