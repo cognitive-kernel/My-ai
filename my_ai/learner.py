@@ -92,10 +92,10 @@ class LearningEngine:
         learned_urls=[]
         for url in topic_sources:
             def fetch_and_extract(url=url):
-                title,source=self.web.fetch(url)
+                title,source=self.web.fetch(url, stop_event=stop_event)
                 # Web fetching is optional. Store the source as evidence; the single
                 # lesson call later performs synthesis. This removes one LLM call per URL.
-                compact_source=str(source)[:12000]
+                compact_source=str(source)[:settings.learning_source_max_chars]
                 return title,compact_source
             try:
                 title,note=self._retry_with_limit(
