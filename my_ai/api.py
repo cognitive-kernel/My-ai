@@ -912,6 +912,19 @@ def learning_status(request:Request, language:str|None=None):
     require_user(request)
     summary=learner.status(language)
     summary.update(learner.detailed_status(language))
+    # Custom Course progress is exposed by /learning/active and its own UI;
+    # never leak its internal custom_course:<id> tracks into the standard
+    # learning status response, even if a stale/legacy learner implementation
+    # still reports them.
+    def _standard_track(item):
+        return not str(item.get("language") or "").strip().lower().startswith("custom_course:")
+    summary["languages"]=[item for item in summary.get("languages",[]) if _standard_track(item)]
+    summary["courses"]=[item for item in summary.get("courses",[]) if _standard_track(item)]
+    summary["sessions"]=[item for item in summary.get("sessions",[]) if _standard_track(item)]
+    summary["available_languages"]=[
+        item for item in summary.get("available_languages",[])
+        if not str(item or "").strip().lower().startswith("custom_course:")
+    ]
     return JSONResponse(summary, headers={"Cache-Control":"no-store","Pragma":"no-cache"})
 @app.post("/learning/practice")
 def practice(r:ChatRequest, request:Request):
