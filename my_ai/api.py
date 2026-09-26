@@ -35,7 +35,7 @@ from .self_repair import list_proposals, proposal_diff
 from .self_diagnostics import SelfDiagnosticsMonitor, latest_report, report_history
 from .tooling import catalog as tool_catalog, doctor as tool_doctor, run_project_tool, run_python_snippet, sqlserver_query, sqlserver_schema, mysql_query, mysql_schema, sqlite_query, sqlite_schema
 from .image_generation import generate_image, ImageGenerationError
-from .runtime_prerequisites import startup_check
+from .runtime_prerequisites import startup_check, runtime_status
 
 scheduler=StudyScheduler()
 self_diagnostics=SelfDiagnosticsMonitor()
@@ -361,6 +361,11 @@ def voice_synthesize(r:VoiceSynthesizeRequest, request:Request):
 def voice_status_api(request:Request):
     require_user(request)
     return {**voice_status(), "engine": voice_engine_status()}
+
+@app.get("/runtime/status")
+def runtime_status_api(request: Request):
+    require_user(request)
+    return runtime_status()
 
 @app.get("/scheduler/resources")
 def scheduler_resources(request:Request):
