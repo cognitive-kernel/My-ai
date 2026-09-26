@@ -24,10 +24,23 @@ def record_evidence(skill_id: int, kind: str, passed: bool, details: dict[str,An
     evidence_details.setdefault("skill_version", str(skill_rows[0]["version"]))
     evidence=json.dumps(evidence_details,ensure_ascii=False)
     eid=execute("INSERT INTO skill_evidence(skill_id,kind,passed,evidence) VALUES(?,?,?,?)",(skill_id,kind,1 if passed else 0,evidence))
-    rows=fetch_all("SELECT AVG(passed)*100 AS score,COUNT(*) AS n,COUNT(DISTINCT kind) AS kinds FROM skill_evidence WHERE skill_id=?",(skill_id,))
-    score=float(rows[0]["score"] or 0)
-    verified=score >= 80 and int(rows[0]["n"] or 0) >= 2 and int(rows[0]["kinds"] or 0) >= 2
-    execute("UPDATE skills SET score=?,verified=?,last_verified=CURRENT_TIMESTAMP WHERE id=?",(score,1 if verified else 0,skill_id))
+    rows=fetch_all("SELECT kind,passed,evidence FROM skill_evidence WHERE skill_id=?",(skill_id,))
+    score=sum(int(row["passed"] or 0) for row in rows) / len(rows) * 100 if rows else 0.0
+    metrics={"concept": [], "implementation": [], "source": [], "reliability": []}
+    for row in rows:
+        try:
+            details=json.loads(row["evidence"] or "{}")
+        except (TypeError,json.JSONDecodeError):
+            details={}
+        base=100.0 if int(row["passed"] or 0) else 0.0
+        key={"official_source":"source","test":"implementation","benchmark":"reliability"}.get(row["kind"],"concept")
+        metrics[key].append(float(details.get(f"{key}_score",base)))
+        if row["kind"]=="test":
+            metrics["concept"].append(float(details.get("concept_score",base)))
+    values={key:(sum(vals)/len(vals) if vals else 0.0) for key,vals in metrics.items()}
+    verified=score >= 80 and len(rows) >= 2 and len({row["kind"] for row in rows}) >= 2
+    execute("UPDATE skills SET score=?,concept_score=?,implementation_score=?,source_score=?,reliability_score=?,verified=?,last_verified=CURRENT_TIMESTAMP WHERE id=?",
+            (score,values["concept"],values["implementation"],values["source"],values["reliability"],1 if verified else 0,skill_id))
     return eid
 
 
@@ -54,8 +67,21 @@ def revalidate(skill_id: int, current_version: str) -> dict[str,Any]:
     kinds=len({row["kind"] for row in evidence_rows})
     score=(passed / len(evidence_rows) * 100.0) if evidence_rows else 0.0
     verified=score >= 80.0 and len(evidence_rows) >= 2 and kinds >= 2
-    execute("UPDATE skills SET score=?,verified=?,last_verified=CURRENT_TIMESTAMP WHERE id=?",(score,1 if verified else 0,skill_id))
-    return {"revalidated":True,"verified":verified,"score":score,"evidence_count":len(evidence_rows),"evidence_kinds":kinds}
+    metrics={"concept": [], "implementation": [], "source": [], "reliability": []}
+    for row in evidence_rows:
+        try:
+            details=json.loads(row["evidence"] or "{}")
+        except (TypeError,json.JSONDecodeError):
+            details={}
+        base=100.0 if int(row["passed"] or 0) else 0.0
+        key={"official_source":"source","test":"implementation","benchmark":"reliability"}.get(row["kind"],"concept")
+        metrics[key].append(float(details.get(f"{key}_score",base)))
+        if row["kind"]=="test":
+            metrics["concept"].append(float(details.get("concept_score",base)))
+    values={key:(sum(vals)/len(vals) if vals else 0.0) for key,vals in metrics.items()}
+    execute("UPDATE skills SET score=?,concept_score=?,implementation_score=?,source_score=?,reliability_score=?,verified=?,last_verified=CURRENT_TIMESTAMP WHERE id=?",
+            (score,values["concept"],values["implementation"],values["source"],values["reliability"],1 if verified else 0,skill_id))
+    return {"revalidated":True,"verified":verified,"score":score,"concept_score":values["concept"],"implementation_score":values["implementation"],"source_score":values["source"],"reliability_score":values["reliability"],"evidence_count":len(evidence_rows),"evidence_kinds":kinds}
 
 
 def snapshot() -> list[dict[str,Any]]:
