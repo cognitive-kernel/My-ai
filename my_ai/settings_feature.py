@@ -501,6 +501,17 @@ function topicHtml(t){var cls=t.status==='completed'?'completed':t.status==='pau
 async function load(){try{var a=await req('/learning/status'),j=a.courses||[],custom=await req('/learning/active'),sched=await req('/scheduler/status'),workers=sched.workers||[],seen={},customMap={},html='';(custom.items||[]).forEach(function(x){var c=x.course,s=x.summary,key=String(c.name||'').trim().toLowerCase();if(key)customMap[key]=x});Object.keys(customMap).forEach(function(key){var x=customMap[key],c=x.course,s=x.summary;var done=Number(s.progress_percent||0)>=100;if(done)return;seen[key]=true;html+='<details class="course"><summary>'+esc(c.name)+' — '+Number(s.progress_percent||0)+'% ('+s.completed_topics+'/'+s.total_topics+')</summary><div class="courseBody">'+bar(s.progress_percent)+s.topics.map(topicHtml).join('')+'</div></details>'});j.forEach(function(c){var key=String(c.language||'').trim().toLowerCase();if(!key||customMap[key])return;var done=Number(c.progress_percent||0)>=100;if(done)return;seen[key]=true;html+='<details class="course"><summary>'+esc(c.language)+' — '+Number(c.progress_percent||0)+'% ('+c.completed_topics+'/'+c.total_topics+')</summary><div class="courseBody">'+bar(c.progress_percent)+c.topics.map(topicHtml).join('')+'</div></details>'});workers.forEach(function(w){var key=String(w.language||'').trim().toLowerCase();if(!key||seen[key]||customMap[key])return;html+='<details class="course"><summary>'+esc(w.language)+' — در حال یادگیری</summary><div class="courseBody"><div class="small">مرحله: '+esc(w.stage||w.status||'running')+' · موضوع فعلی: '+esc(w.current_topic||'در حال پردازش')+'</div></div></details>';seen[key]=true});root.innerHTML=html||'<div class="card empty">هنوز مبحث ناتمام ثبت نشده است.</div>'}catch(e){root.textContent='خطا: '+e.message}}
 load();setInterval(function(){var y=window.scrollY;var states=Array.from(root.querySelectorAll('details')).map(function(d){return d.open});load().then(function(){Array.from(root.querySelectorAll('details')).forEach(function(d,i){if(i<states.length)d.open=states[i]});window.scrollTo(0,y)}).catch(function(){});},5000)
 </script></html>"""
+def start_named_course(name: str) -> int | None:
+    """Start a named custom course and return its course id."""
+    _setup()
+    rows = fetch_all("SELECT id FROM custom_courses WHERE lower(name)=lower(?) AND active=1", (str(name).strip(),))
+    if not rows:
+        return None
+    course_id = int(rows[0]["id"])
+    if course_id not in _running:
+        _workers.submit(_run_course, course_id)
+    return course_id
+
 def install(app: Any) -> None:
     _setup()
     if not any(getattr(route, "path", "") == "/settings" for route in app.routes):
@@ -517,45 +528,3 @@ def install(app: Any) -> None:
             return html.replace("<h1>My-AI ", "<h1>My-AI "+link+" ", 1)
         api_module.page = page_with_learning
 
-    if not getattr(app, "_myai_learning_middleware_installed", False):
-        app._myai_learning_middleware_installed = True
-        class CustomLearningMiddleware:
-            def __init__(self, inner: Any): self.inner = inner
-            async def __call__(self, scope: dict[str, Any], receive: Any, send: Any):
-                if scope.get("type") != "http" or scope.get("path") != "/chat" or scope.get("method") != "POST":
-                    return await self.inner(scope, receive, send)
-                body = b""
-                while True:
-                    message = await receive()
-                    body += message.get("body", b"")
-                    if not message.get("more_body", False): break
-                try:
-                    payload=json.loads(body.decode("utf-8")); text=str(payload.get("message","")).strip().lower()
-                except Exception:
-                    text=""
-                is_learn = any(x in text for x in ("یاد بگیر","یادگیری","learn"))
-                if "سیسکو" not in text or not is_learn:
-                    sent=False
-                    async def replay() -> Message:
-                        nonlocal sent
-                        if sent: return {"type":"http.request","body":b"","more_body":False}
-                        sent=True; return {"type":"http.request","body":body,"more_body":False}
-                    return await self.inner(scope, replay, send)
-                async def empty_receive() -> Message:
-                    return {"type":"http.request","body":b"","more_body":False}
-                request=Request(scope, receive=empty_receive)
-                __import__("my_ai.auth", fromlist=["require_user"]).require_user(request)
-                _setup()
-                rows=fetch_all("SELECT id FROM custom_courses WHERE lower(name)=lower(?) AND active=1",("Cisco",))
-                if not rows:
-                    sent=False
-                    async def replay_missing() -> Message:
-                        nonlocal sent
-                        if sent: return {"type":"http.request","body":b"","more_body":False}
-                        sent=True; return {"type":"http.request","body":body,"more_body":False}
-                    return await self.inner(scope, replay_missing, send)
-                cid=int(rows[0]["id"])
-                if cid not in _running: _workers.submit(_run_course,cid)
-                response=JSONResponse({"type":"learning","answer":"یادگیری Cisco در پس‌زمینه شروع/ادامه شد.","data":{"course_id":cid,"status":"started"}})
-                return await response(scope, receive, send)
-        app.add_middleware(CustomLearningMiddleware)
