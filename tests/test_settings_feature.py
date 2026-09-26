@@ -28,7 +28,9 @@ def test_default_cisco_course_is_seeded():
     rows = sf.fetch_all("SELECT id,name FROM custom_courses WHERE lower(name)=lower(?)", ("Cisco",))
     assert rows
     items = sf._progress(int(rows[0]["id"]))
-    assert len(items) == len(sf.DEFAULT_TOPICS)
+    assert len(items) >= len(sf.DEFAULT_TOPICS)
+    seeded_titles = {str(x[0]) for x in sf.DEFAULT_TOPICS}
+    assert seeded_titles.issubset({str(x["title"]) for x in items})
     assert items[0]["status"] in {"planned", "started", "paused", "completed"}
 
 
