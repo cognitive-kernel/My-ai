@@ -2082,7 +2082,7 @@ The chat must not guess. If local knowledge is insufficient it reports that it d
 
 ### Startup prerequisite policy
 
-On every application startup, My-AI checks Python dependencies in `requirements.txt` and selected system prerequisites. Missing Python packages are installed automatically when `MYAI_AUTO_INSTALL_PREREQUISITES=true` (default). Supported system tools are installed through an available OS package manager when possible; unresolved prerequisites are reported.
+On every application startup, My-AI checks Python dependencies in `requirements.txt` and selected system prerequisites. Missing Python packages are installed automatically only when `MYAI_AUTO_INSTALL_PREREQUISITES=true` is explicitly enabled. The default is `false`, so application startup is non-mutating and does not repeatedly invoke package managers; unresolved prerequisites are reported.
 
 This policy is part of the development contract: new features must remain offline by default unless they belong to an explicitly allowed online category above. New network-capable features must document their reason, permission boundary, and user-facing behavior.
 
