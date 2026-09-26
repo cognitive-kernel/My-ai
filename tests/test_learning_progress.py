@@ -325,3 +325,15 @@ def test_status_does_not_return_large_lesson_notes(monkeypatch):
     result = LearningEngine.__new__(LearningEngine).status()
     assert "notes" not in result["sessions"][0]
     assert result["languages"][0]["progress_percent"] == 100.0
+
+
+def test_assessment_is_local_and_does_not_call_llm():
+    class FailingLLM:
+        def chat(self, *_args, **_kwargs):
+            raise AssertionError("assessment must not call the model")
+    engine = LearningEngine.__new__(LearningEngine)
+    engine.llm = FailingLLM()
+    lesson = """Prerequisite\nExample\nExercise\nTest\nCommon mistakes\nSecurity\nMastery checklist\n""" + ("x " * 3000)
+    score = engine.assess("Python", lesson)
+    assert score is not None
+    assert 0.0 <= score <= 100.0
