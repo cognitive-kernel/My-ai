@@ -1,0 +1,33 @@
+name: browser-e2e
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - run: pip install -e .[dev] playwright pytest-playwright
+      - run: playwright install --with-deps chromium
+      - name: Start application
+        env:
+          OLLAMA_BASE_URL: http://127.0.0.1:11434
+          MYAI_OFFLINE_STRICT: "true"
+        run: |
+          nohup uvicorn my_ai.api:app --host 127.0.0.1 --port 8000 > /tmp/my-ai-browser.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8000/health; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/my-ai-browser.log
+          exit 1
+      - name: Browser smoke
+        env:
+          E2E_PASSWORD: test-password
+        run: pytest -q tests/e2e/test_browser_smoke.py --base-url http://127.0.0.1:8000
