@@ -176,6 +176,10 @@ class StudyScheduler:
                 "workers": workers,
                 "active_workers": active,
                 "resources": {**live, **cfg},
+                "weekly_review": {
+                    "due_domains": due_domains(),
+                    "monitor_running": bool(self._monitor_thread and self._monitor_thread.is_alive()),
+                },
             }
 
     @staticmethod
