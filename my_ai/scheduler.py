@@ -56,7 +56,7 @@ class StudyScheduler:
         while not self._supervisor_stop.is_set():
             try:
                 rows = fetch_all(
-                    "SELECT language,session_id,status FROM learning_workers WHERE status IN ('running','retrying','paused')"
+                    "SELECT language,session_id,status FROM learning_workers WHERE status IN ('running','retrying')"
                 )
                 for row in rows:
                     language = str(row["language"] or "").strip()
