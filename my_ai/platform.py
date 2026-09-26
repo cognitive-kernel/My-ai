@@ -135,7 +135,10 @@ def _hybrid_search_cached(query: str, limit: int, bucket: int) -> list[dict[str,
         row["lexical_score"] = round(lexical_score, 6)
         row["hybrid_score"] = round(0.65*semantic + 0.35*lexical_score, 6)
         row["relevance"] = row["hybrid_score"]
-        row["confidence"] = None
+        verification = 0.15 if row.get("verification_status") == "verified" else 0.0
+        provenance = 0.05 if row.get("source_url") else 0.0
+        row["confidence"] = round(min(0.99, 0.8 * row["hybrid_score"] + verification + provenance), 6)
+        row["confidence_basis"] = "hybrid retrieval score + verification + provenance; heuristic, not calibrated probability"
     return sorted(rows, key=lambda x:x["hybrid_score"], reverse=True)[:limit]
 
 
