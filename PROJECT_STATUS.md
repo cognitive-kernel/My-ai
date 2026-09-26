@@ -314,3 +314,19 @@ The repository changes above are implemented and covered by regression tests, bu
 - Voice is now a complete local pipeline in code, but actual hardware/model availability must be verified on the target machine.
 - Multi-session server isolation is covered by existing authorization logic; a browser-level UI E2E suite remains optional future work.
 - Self-update remains deny-by-default and requires explicit approval plus the runtime enable flag.
+
+
+## 14. 2026-09-26 — Learning runtime hardening follow-up
+
+Implemented in the current main branch:
+- learning prerequisite discovery no longer consumes a second LLM call; prerequisites are derived from curriculum order;
+- per-source web extraction no longer invokes an LLM for every URL; fetched source text is stored as evidence for the single lesson synthesis call;
+- lesson assessment is deterministic/local and therefore cannot fail because of a second model call;
+- web-source fetches have bounded timeouts, bounded payload size, per-host rate limiting, and cancellation propagation;
+- model/resource waits are bounded instead of potentially waiting forever;
+- scheduler learning concurrency is capped by LEARNING_MAX_CONCURRENT_WORKERS;
+- skill evidence now tracks independent concept/implementation/source/reliability metrics;
+- Ollama CI startup/model-pull diagnostics and retries were hardened;
+- authenticated browser smoke coverage was added for learning, scheduler, voice, knowledge, skills, self-update and self-repair surfaces.
+
+Verification boundary: GitHub-side code and test changes are committed, but a claim of 100% runtime closure still requires the target machine's local test suite and actual Whisper/Piper/Ollama installations to execute successfully.
