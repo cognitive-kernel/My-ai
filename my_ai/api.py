@@ -35,7 +35,7 @@ from .voice import status as voice_engine_status, transcribe, synthesize
 from .metrics import snapshot as metrics_snapshot
 from .platform import import_encrypted_database, restore_encrypted_backup
 from .self_repair import list_proposals, proposal_diff
-from .self_diagnostics import SelfDiagnosticsMonitor, latest_report, report_history
+from .self_diagnostics import SelfDiagnosticsMonitor, latest_report, report_history, paginated_report_history
 from .tooling import catalog as tool_catalog, doctor as tool_doctor, run_project_tool, run_python_snippet, sqlserver_query, sqlserver_schema, mysql_query, mysql_schema, sqlite_query, sqlite_schema
 from .image_generation import generate_image, ImageGenerationError
 from .runtime_prerequisites import startup_check, runtime_status
@@ -663,17 +663,47 @@ def help_reject(update_id:int,request:Request):
 def self_diagnostics_page(request: Request):
     require_user(request)
     return HTMLResponse("""<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>گزارش خودپایش | My-AI</title>
-<style>body{font-family:Tahoma,system-ui;background:#f3f4f6;margin:0;color:#17202a}main{max-width:1100px;margin:auto;padding:22px}.hero{background:linear-gradient(135deg,#111827,#1e3a8a);color:white;padding:24px;border-radius:20px}.card{background:white;padding:18px;border-radius:14px;margin:14px 0;box-shadow:0 5px 20px #0000000b}.ok{border-right:6px solid #22c55e;background:#f0fdf4}.bad{border-right:6px solid #ef4444;background:#fef2f2}.fixed{border-right:6px solid #22c55e;background:#dcfce7}.meta{color:#64748b;font-size:13px}.back{display:inline-block;margin-top:12px;color:white}.row{padding:9px;border-bottom:1px solid #e5e7eb}</style>
-<main><div class='hero'><h1>گزارش خودپایش و سلامت پروژه</h1><p>بررسی مداوم کد، تست‌ها، Git و سخت‌افزار</p><a class='back' href='/'>← بازگشت به صفحه اصلی</a></div><div id='out'><div class='card'>در حال دریافت گزارش...</div></div>
+<style>body{font-family:Tahoma,system-ui;background:#f3f4f6;margin:0;color:#17202a}main{max-width:1100px;margin:auto;padding:22px}.hero{background:linear-gradient(135deg,#111827,#1e3a8a);color:white;padding:24px;border-radius:20px}.card{background:white;padding:18px;border-radius:14px;margin:14px 0;box-shadow:0 5px 20px #0000000b}.ok{border-right:6px solid #22c55e;background:#f0fdf4}.bad{border-right:6px solid #ef4444;background:#fef2f2}.fixed{border-right:6px solid #22c55e;background:#dcfce7}.meta{color:#64748b;font-size:13px}.back{display:inline-block;margin-top:12px;color:white}.row{padding:9px;border-bottom:1px solid #e5e7eb}.pager{display:flex;gap:8px;align-items:center;justify-content:center;margin:20px 0}.pager button{padding:9px 14px;border:1px solid #cbd5e1;border-radius:8px;background:white;cursor:pointer}.pager button:disabled{opacity:.45;cursor:not-allowed}.page-info{font-weight:bold}</style>
+<main><div class='hero'><h1>گزارش خودپایش و سلامت پروژه</h1><p>بررسی مداوم کد، تست‌ها، Git و سخت‌افزار</p><a class='back' href='/'>← بازگشت به صفحه اصلی</a></div><div id='out'><div class='card'>در حال دریافت گزارش...</div></div><div id='pager' class='pager' hidden><button id='prev' onclick='changePage(-1)'>قبلی</button><span id='pageInfo' class='page-info'></span><button id='next' onclick='changePage(1)'>بعدی</button></div>
 <script>
-async function load(){let r=await fetch('/self-diagnostics/history?limit=20');let j=await r.json();let rows=j.reports||[];let out=document.getElementById('out');if(!rows.length){out.innerHTML='<div class="card">هنوز گزارشی ثبت نشده است.</div>';return}
-let html='';
-let seenErrors={};
-rows.forEach(function(rep,i){let checks=rep.checks||{};let previous=rows[i+1];let fixed=[];if(previous){Object.keys(checks).forEach(function(k){if(previous.checks&&previous.checks[k]&&!previous.checks[k].ok&&checks[k].ok)fixed.push(k)})}
-html+='<div class="card '+(rep.healthy?'ok':'bad')+'"><h2>'+(rep.healthy?'✓ وضعیت سالم':'⚠ نیازمند بررسی')+'</h2><div class="meta">'+(rep.timestamp||rep.created_at||'')+'</div>';
-if(fixed.length)html+='<div class="card fixed"><b>✓ باگ/خطای برطرف‌شده در این بررسی</b><p>'+fixed.map(function(x){return x+' — برطرف شده'}).join('<br>')+'</p></div>';
-Object.keys(checks).forEach(function(k){let x=checks[k]||{};let out=String(x.output||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');let errorKey=!x.ok?k+'|'+String(x.output||''):'';if(errorKey&&seenErrors[errorKey])return;if(errorKey)seenErrors[errorKey]=true;html+='<details class="row"><summary style="cursor:pointer">'+(x.ok?'🟢':'🔴')+' <b>'+k+'</b> — '+(x.ok?'سالم':'خطا / نیازمند بررسی')+'</summary>'+(x.output?'<pre style="direction:ltr;text-align:left;white-space:pre-wrap;overflow:auto;background:#111827;color:#f8fafc;padding:12px;border-radius:8px;margin-top:9px">'+out+'</pre>':'<div class="meta">جزئیات خطا ثبت نشده است.</div>')+'</details>'});
-html+='</div>'});out.innerHTML=html}load();setInterval(load,30000);
+let currentPage=1;
+function localDateTime(value){
+  if(!value)return '';
+  const d=new Date(value);
+  if(Number.isNaN(d.getTime()))return value;
+  try{return new Intl.DateTimeFormat('fa-IR-u-ca-persian',{dateStyle:'short',timeStyle:'medium',hourCycle:'h23'}).format(d)}
+  catch(e){return d.toLocaleString('fa-IR')}
+}
+async function load(page=currentPage){
+  const r=await fetch('/self-diagnostics/history?page='+page+'&page_size=10');
+  const j=await r.json();
+  const rows=j.reports||[],out=document.getElementById('out');
+  currentPage=j.page||page;
+  if(!r.ok){out.innerHTML='<div class="card bad">'+(j.detail||'خطا در دریافت گزارش‌ها')+'</div>';return}
+  if(!rows.length){
+    out.innerHTML='<div class="card">هنوز گزارشی ثبت نشده است.</div>';
+    document.getElementById('pager').hidden=true;
+    return;
+  }
+  let html='';
+  let seenErrors={};
+  rows.forEach(function(rep,i){
+    let checks=rep.checks||{},previous=rows[i+1],fixed=[];
+    if(previous){Object.keys(checks).forEach(function(k){if(previous.checks&&previous.checks[k]&&!previous.checks[k].ok&&checks[k].ok)fixed.push(k)})}
+    html+='<div class="card '+(rep.healthy?'ok':'bad')+'"><h2>'+(rep.healthy?'✓ وضعیت سالم':'⚠ نیازمند بررسی')+'</h2><div class="meta">'+localDateTime(rep.timestamp||rep.created_at)+'</div>';
+    if(fixed.length)html+='<div class="card fixed"><b>✓ باگ/خطای برطرف‌شده در این بررسی</b><p>'+fixed.map(function(x){return x+' — برطرف شده'}).join('<br>')+'</p></div>';
+    Object.keys(checks).forEach(function(k){let x=checks[k]||{},outText=String(x.output||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');let errorKey=!x.ok?k+'|'+String(x.output||''):'';if(errorKey&&seenErrors[errorKey])return;if(errorKey)seenErrors[errorKey]=true;html+='<details class="row"><summary style="cursor:pointer">'+(x.ok?'🟢':'🔴')+' <b>'+k+'</b> — '+(x.ok?'سالم':'خطا / نیازمند بررسی')+'</summary>'+(x.output?'<pre style="direction:ltr;text-align:left;white-space:pre-wrap;overflow:auto;background:#111827;color:#f8fafc;padding:12px;border-radius:8px;margin-top:9px">'+outText+'</pre>':'<div class="meta">جزئیات خطا ثبت نشده است.</div>')+'</details>'});
+    html+='</div>';
+  });
+  out.innerHTML=html;
+  const pager=document.getElementById('pager');
+  pager.hidden=(j.total_pages||1)<=1;
+  document.getElementById('pageInfo').textContent='صفحه '+currentPage+' از '+(j.total_pages||1);
+  document.getElementById('prev').disabled=currentPage<=1;
+  document.getElementById('next').disabled=currentPage>=(j.total_pages||1);
+}
+function changePage(delta){const next=currentPage+delta;if(next<1)return;load(next).catch(()=>{})}
+load();setInterval(function(){load(currentPage).catch(()=>{})},30000);
 </script></main></html>""")
 
 @app.get("/self-diagnostics/report")
@@ -682,9 +712,11 @@ def self_diagnostics_report(request: Request):
     return latest_report() or {"status": "pending"}
 
 @app.get("/self-diagnostics/history")
-def self_diagnostics_history(request: Request, limit: int = 20):
+def self_diagnostics_history(request: Request, page: int = 1, page_size: int = 10, limit: int | None = None):
     require_user(request)
-    return {"reports": report_history(limit)}
+    if limit is not None:
+        return {"reports": report_history(limit)}
+    return paginated_report_history(page, page_size)
 
 @app.get("/health")
 def health(): return {"status":"ok","model":settings.ollama_model,"executor_mode":settings.exec_mode,"offline_strict":settings.offline_strict}
