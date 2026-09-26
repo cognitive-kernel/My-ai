@@ -160,7 +160,20 @@ class LearningEngine:
         t=s["topic"]
         self._set_progress(s["session_id"], 0.5, "prerequisites")
         if progress_callback: progress_callback("prerequisites",t["topic"])
-        prerequisites=self._discover_prerequisites(language,t,progress_callback,stop_event)
+        try:
+            prerequisites=self._discover_prerequisites(language,t,progress_callback,stop_event)
+        except InterruptedError:
+            raise
+        except Exception as exc:
+            # Prerequisite discovery is an enrichment step, not a hard dependency.
+            # A temporary routing/model failure must not kill the learning worker.
+            logger.warning(
+                "prerequisite discovery failed; continuing without prerequisites: language=%s topic=%s error=%s",
+                language,
+                t["topic"],
+                exc,
+            )
+            prerequisites=[]
         self._set_progress(s["session_id"], 25.0, "sources")
         if progress_callback: progress_callback("sources",t["topic"])
         sources=self._learn_sources_for_topic(language,t,prerequisites,progress_callback,stop_event)
@@ -180,7 +193,26 @@ class LearningEngine:
         remember(language,"Mastery lesson: "+t["topic"],lesson)
         self._set_progress(s["session_id"], 75.0, "assessment")
         if progress_callback: progress_callback("assessment",t["topic"])
-        score=self._retry_with_limit(lambda: self.assess(t["topic"],lesson,allow_retry=False),"assessment",progress_callback,t["topic"],stop_event)
+        try:
+            score=self._retry_with_limit(
+                lambda: self.assess(t["topic"],lesson,allow_retry=False),
+                "assessment",
+                progress_callback,
+                t["topic"],
+                stop_event,
+            )
+        except InterruptedError:
+            raise
+        except Exception as exc:
+            # Assessment must never erase a successfully generated lesson.
+            # Keep the score nullable and let the next review re-assess it.
+            logger.warning(
+                "learning assessment unavailable; completing lesson without score: language=%s topic=%s error=%s",
+                language,
+                t["topic"],
+                exc,
+            )
+            score=None
         execute("UPDATE learning_sessions SET status='completed',score=?,notes=?,progress_percent=100.0,phase='completed' WHERE id=?",(score,lesson,s["session_id"]))
         if progress_callback: progress_callback("completed",t["topic"])
         return {"status":"completed","session_id":s["session_id"],"language":language,"topic":t,"prerequisites":prerequisites,"score":score,"sources":sources,"seeded":bool(seed)}
