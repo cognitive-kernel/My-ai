@@ -126,7 +126,7 @@ def init_db() -> None:
         cols_learning=[r[1] for r in conn.execute("PRAGMA table_info(learning_sessions)").fetchall()]
         if "progress_percent" not in cols_learning: conn.execute("ALTER TABLE learning_sessions ADD COLUMN progress_percent REAL NOT NULL DEFAULT 0")
         if "phase" not in cols_learning: conn.execute("ALTER TABLE learning_sessions ADD COLUMN phase TEXT NOT NULL DEFAULT 'starting'")
-        cols_knowledge=[r[1] for r in conn.execute("PRAGMA table_info(knowledge)").fetchall()]
+        cols_skills=[r[1] for r in conn.execute("PRAGMA table_info(skills)").fetchall()]\n        for column in ("concept_score","implementation_score","source_score","reliability_score"):\n            if column not in cols_skills:\n                conn.execute(f"ALTER TABLE skills ADD COLUMN {column} REAL NOT NULL DEFAULT 0")\n        cols_knowledge=[r[1] for r in conn.execute("PRAGMA table_info(knowledge)").fetchall()]
         if "content_hash" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN content_hash TEXT")
         if "verification_status" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN verification_status TEXT NOT NULL DEFAULT 'unverified'")
         if "verified_at" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN verified_at TEXT")
