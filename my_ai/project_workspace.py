@@ -8,8 +8,9 @@ ROOT = Path(__file__).resolve().parent.parent
 PROJECTS_ROOT = ROOT / "projects"
 SELF_REPAIR_ROOT = ROOT / "self-repair"
 
-PROJECTS_ROOT.mkdir(parents=True, exist_ok=True)
-SELF_REPAIR_ROOT.mkdir(parents=True, exist_ok=True)
+if not __import__("os").getenv("MYAI_READ_ONLY", "false").strip().lower() == "true":
+    PROJECTS_ROOT.mkdir(parents=True, exist_ok=True)
+    SELF_REPAIR_ROOT.mkdir(parents=True, exist_ok=True)
 
 
 def project_slug(name: str) -> str:
