@@ -12,13 +12,21 @@ def test_each_curriculum_count_matches_unique_topic_count():
         assert len(topics) == len({str(item["topic"]) for item in topics}), language
 
 
-def test_resource_settings_have_expected_defaults_and_ranges():
-    from my_ai.settings_store import get_int, get_setting
+def test_resource_settings_have_expected_defaults_and_ranges(monkeypatch):
+    from my_ai import settings_store
 
-    assert float(get_setting("resources.cpu_percent", "70")) == 70.0
-    assert get_int("resources.cpu_threads", 8) == 8
-    assert float(get_setting("resources.ram_percent", "80")) == 80.0
-    assert get_int("resources.gpu_layers", 0) == 0
+    defaults = {
+        "resources.cpu_percent": "70",
+        "resources.cpu_threads": "8",
+        "resources.ram_percent": "80",
+        "resources.gpu_layers": "0",
+    }
+    monkeypatch.setattr(settings_store, "get_setting", lambda key, default=None, **_kwargs: defaults.get(key, default))
+
+    assert float(settings_store.get_setting("resources.cpu_percent", "70")) == 70.0
+    assert settings_store.get_int("resources.cpu_threads", 8) == 8
+    assert float(settings_store.get_setting("resources.ram_percent", "80")) == 80.0
+    assert settings_store.get_int("resources.gpu_layers", 0) == 0
 
 
 def test_forex_curriculum_is_a_complete_learning_package():

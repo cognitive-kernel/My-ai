@@ -6,7 +6,7 @@ from .db import execute, fetch_all
 
 def topic_source_urls(language: str, topic: str) -> list[str]:
     urls = supplementary_source_urls(language, topic) + source_urls(language)
-    return list(dict.fromkeys(str(url) for str in urls if str(url).startswith(("http://", "https://"))))
+    return list(dict.fromkeys(str(url) for url in urls if str(url).startswith(("http://", "https://"))))
 
 def ensure_source_tracking() -> None:
     execute("""CREATE TABLE IF NOT EXISTS learning_source_history (
