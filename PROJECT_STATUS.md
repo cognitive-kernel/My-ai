@@ -302,6 +302,7 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 - f3b4ec8f — CI now cancels stale runs for the same ref instead of accumulating unnecessary queued runs.
 - efcb75c0 — duplicate tests.yml workflow removed; CI checks are centralized in ci.yml.
 - 225bd321 — Ollama E2E now includes an authenticated /learning/status smoke test.
+- 06fdcaf3 — ROUTER_LLM_ENABLED is documented in .env.example.
 
 ### Current verification boundary
 
