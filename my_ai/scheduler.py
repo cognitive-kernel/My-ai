@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
+import logging
 from datetime import datetime, timedelta, timezone
 
 from .learner import LearningEngine
@@ -14,6 +15,8 @@ from .config import settings
 from .settings_store import get_setting
 from .resource_guard import limits as resource_limits
 from .learning_sources import find_unlearned_new_sources
+
+logger = logging.getLogger(__name__)
 
 
 class StudyScheduler:
@@ -364,6 +367,12 @@ class StudyScheduler:
                     if stop_event.is_set():
                         break
                     consecutive_errors += 1
+                    logger.exception(
+                        "learning worker failed: language=%s stage=%s consecutive_errors=%s",
+                        language,
+                        self.stage,
+                        consecutive_errors,
+                    )
                     result = {
                         "status": "error",
                         "error": str(exc),
