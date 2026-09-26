@@ -23,7 +23,7 @@ from .learning_resilience import install as install_learning_resilience
 from .ui_extensions import install_ui_extensions
 from .help import page as help_page, ask_help, local_help_html, apply_help_update
 from .git_connector import GitHubConnector
-from .auth import authenticate, audit, create_account, create_session, current_user, require_admin, revoke_session, require_user, tool_allowed
+from .auth import authenticate, audit, create_account, create_session, current_user, require_admin, revoke_session, require_user, tool_allowed, TOOL_RULES as AUTH_TOOL_RULES, PATH_ACTIONS as AUTH_PATH_ACTIONS
 from .platform import backup_database, choose_model, eval_retrieval, export_database, hybrid_search, import_database, model_health, resource_status, voice_status, web_fetch_policy
 from .self_update import status as self_update_status, apply_confirmed_update as self_update_apply, preview_update
 from .self_repair import diagnose_local, propose_repair, apply_repair, proposal_status
@@ -64,15 +64,8 @@ install_learning_resilience()
 install_ui_extensions(app)
 
 _PUBLIC_PATHS = {"/", "/login", "/register", "/auth/register", "/auth/login", "/auth/logout", "/auth/register/status", "/health", "/health/metrics", "/openapi.json", "/docs", "/redoc"}
-_TOOL_RULES = (
-    ("/git/","github"),("/security/","security"),("/code/run","code-execution"),
-    ("/code/generate","code-generation"),("/chat","chat"),("/learn/url","learning"),
-    ("/learning/","learning"),("/scheduler/","scheduler"),("/backup/","database"),
-    ("/voice/","voice"),("/skills","skill-engine"),("/models/","models"),
-    ("/memory/search","memory"),("/web/","web"),("/projects/","projects"),
-    ("/eval/","eval"),("/self-update/","self-update"),("/self-repair/","self-repair"),("/self-diagnostics/","self-diagnostics"),("/help/ask","help"),("/tools/","tools"),("/files/","files"),("/image/","image-generation"),
-)
-_PATH_ACTIONS = {"/git/token": "write", "/git/logout": "write"}
+_TOOL_RULES = AUTH_TOOL_RULES
+_PATH_ACTIONS = AUTH_PATH_ACTIONS
 _LOGIN_FAILURES: dict[str, tuple[int, float]] = {}
 _LOGIN_FAILURE_LIMIT = 5
 _LOGIN_FAILURE_WINDOW = 300.0
