@@ -166,3 +166,12 @@ def test_backup_path_rejects_external_path(tmp_path):
     from my_ai import platform
     with pytest.raises(ValueError):
         platform._safe_backup_path(str(tmp_path / "other.json"))
+
+
+def test_backup_import_rejects_newer_format(tmp_path):
+    from my_ai import platform
+    import json
+    path = tmp_path / "future.json"
+    path.write_text(json.dumps({"metadata": {"format_version": 999}, "tables": {}}), encoding="utf-8")
+    with pytest.raises(ValueError):
+        platform.import_database(str(path))
