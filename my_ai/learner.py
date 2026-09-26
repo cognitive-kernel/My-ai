@@ -98,6 +98,17 @@ class LearningEngine:
                 continue
             remember(language,title,note,url); knowledge.append({"title":title,"url":url}); learned_urls.append(url)
         mark_sources_learned(language, topic["topic"], learned_urls)
+        failed_sources = [item for item in knowledge if item.get("error")]
+        if failed_sources:
+            if progress_callback:
+                progress_callback("source_fallback", topic["topic"])
+            local = search_knowledge(language + " " + topic["topic"], 12)
+            if local:
+                knowledge.extend(
+                    {"title": str(item.get("title") or "Local knowledge"),
+                     "url": str(item.get("source_url") or "memory://knowledge")}
+                    for item in local
+                )
         return knowledge
 
     def study_url(self,url,topic="Python"):
@@ -139,7 +150,7 @@ class LearningEngine:
         self._set_progress(s["session_id"], 50.0, "lesson")
         if progress_callback: progress_callback("lesson",t["topic"])
         seed=seed_for(language,t["topic"])
-        lesson=self._retry_forever(
+        lesson=self._retry_with_limit(
             lambda: self.llm.chat("Teach the topic as a complete, structured study unit. Include prerequisite lessons first, then the main topic, examples, exercises, tests, common mistakes, security considerations and a mastery checklist. "
                              "Use the model knowledge seed only as an initial layer; reconcile it with supplied official-source knowledge and explicitly correct conflicts. "
                              "Do not claim mastery unless supported by the supplied knowledge. Return clear sections.\n"
@@ -152,7 +163,7 @@ class LearningEngine:
         remember(language,"Mastery lesson: "+t["topic"],lesson)
         self._set_progress(s["session_id"], 75.0, "assessment")
         if progress_callback: progress_callback("assessment",t["topic"])
-        score=self._retry_forever(lambda: self.assess(t["topic"],lesson,allow_retry=False),"assessment",progress_callback,t["topic"],stop_event)
+        score=self._retry_with_limit(lambda: self.assess(t["topic"],lesson,allow_retry=False),"assessment",progress_callback,t["topic"],stop_event)
         execute("UPDATE learning_sessions SET status='completed',score=?,notes=?,progress_percent=100.0,phase='completed' WHERE id=?",(score,lesson,s["session_id"]))
         if progress_callback: progress_callback("completed",t["topic"])
         return {"status":"completed","session_id":s["session_id"],"language":language,"topic":t,"prerequisites":prerequisites,"score":score,"sources":sources,"seeded":bool(seed)}
