@@ -142,7 +142,7 @@ def _hybrid_search_cached(query: str, limit: int, bucket: int) -> list[dict[str,
         row["hybrid_score"] = round(0.65*semantic + 0.35*lexical_score, 6)
         row["relevance"] = row["hybrid_score"]
         score_bucket=round(float(row["hybrid_score"]),1)
-        samples=calibration.get(bucket, (0,0))
+        samples=calibration.get(score_bucket, (0,0))
         if samples[0] >= 5:
             row["confidence"]=round((samples[1]+1)/(samples[0]+2),6)
             row["confidence_basis"]="empirical score-bucket calibration with Laplace smoothing"
