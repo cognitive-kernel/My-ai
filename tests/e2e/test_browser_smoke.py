@@ -35,7 +35,7 @@ def test_browser_authenticated_surface(page: Page, base_url: str):
     readiness = page.request.get(f"{base_url}/admin/readiness")
     assert readiness.ok
     readiness_body = readiness.json()
-    assert set(("checks", "runtime", "knowledge", "skills", "self_update_policy")) <= set(readiness_body["checks"].keys())
+    assert set(("runtime_dependencies", "verified_knowledge", "retrieval_judgments", "skills_reviewed", "self_update_policy")) <= set(readiness_body["checks"].keys())
 
     retrieval = page.request.get(f"{base_url}/eval/retrieval")
     assert retrieval.ok
