@@ -32,6 +32,7 @@ class StudyScheduler:
         self.error = None
         self._lock = threading.RLock()
         self._worker_slots = threading.BoundedSemaphore(max(1, settings.learning_max_concurrent_workers))
+        self._restart_lock = threading.Lock()
         try:
             load_saved_domains()
         except Exception as exc:
@@ -330,6 +331,23 @@ class StudyScheduler:
             except Exception as exc:
                 self.error = str(exc)
             self._review_stop.wait(min(self.interval_seconds, 3600))
+
+    def _schedule_worker_recovery(self, language, stop_event):
+        if stop_event.is_set():
+            return
+        def recover():
+            if stop_event.is_set():
+                return
+            try:
+                rows = fetch_all("SELECT session_id,status FROM learning_workers WHERE language=? LIMIT 1", (language,))
+                if rows and rows[0]["status"] in {"stopping", "completed"}:
+                    return
+                session_id = rows[0]["session_id"] if rows else None
+                logger.warning("LEARNING_WORKER_RECOVER: language=%s session_id=%s reason=unexpected_worker_exit", language, session_id)
+                self.start(language, session_id)
+            except Exception:
+                logger.exception("LEARNING_WORKER_RECOVERY_FAILURE: language=%s", language)
+        threading.Timer(2.0, recover).start()
 
     def _loop(self, language, stop_event):
         engine = LearningEngine()
