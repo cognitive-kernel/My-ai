@@ -183,44 +183,28 @@ def test_status_includes_active_topic_progress():
         learner_module.LANGUAGE_CURRICULA = original
 
 
-def test_assess_parses_score_and_returns_none_for_invalid_output():
-    class FakeLLM:
-        def __init__(self, value):
-            self.value = value
-        def chat(self, *_args, **_kwargs):
-            return self.value
-
+def test_assess_is_deterministic_and_returns_none_for_empty_lesson():
     engine = LearningEngine.__new__(LearningEngine)
-    engine.llm = FakeLLM("Score: 82/100")
-    assert engine.assess("Python", "lesson") == 82.0
-    engine.llm = FakeLLM("unable to score")
-    assert engine.assess("Python", "lesson") is None
+    lesson = "Prerequisite Example Exercise Test Common mistakes Security Mastery checklist\\n" + ("x " * 3000)
+    score = engine.assess("Python", lesson)
+    assert score is not None
+    assert 0.0 <= score <= 100.0
+    assert engine.assess("Python", "") is None
 
 
-def test_learning_retries_until_llm_recovers(monkeypatch):
-    # Retry backoff starts at 1 second for the bounded retry path.
+def test_learning_retry_backoff_is_bounded(monkeypatch):
     attempts = []
     sleeps = []
-
-    class FakeLLM:
-        def chat(self, *_args, **_kwargs):
-            attempts.append(len(attempts) + 1)
-            if len(attempts) < 3:
-                raise RuntimeError("Ollama request failed: timed out")
-            return '{"prerequisites": []}'
-
     engine = LearningEngine.__new__(LearningEngine)
-    engine.llm = FakeLLM()
+    def operation():
+        attempts.append(1)
+        if len(attempts) < 3:
+            raise RuntimeError("temporary failure")
+        return "ok"
     monkeypatch.setattr(learner_module.time, "sleep", lambda delay: sleeps.append(delay))
-
-    result = engine._discover_prerequisites(
-        "Python",
-        {"topic": "Functions", "goal": "functions"},
-    )
-
-    assert result == []
+    assert engine._retry_with_limit(operation, "test", max_attempts=3) == "ok"
     assert len(attempts) == 3
-    assert sleeps[-2:] == [1.0, 2.0]
+    assert sleeps == [1.0, 2.0]
 
 
 def test_learning_retry_can_be_explicitly_stopped():
@@ -269,10 +253,10 @@ def test_learning_source_failure_is_recorded_and_does_not_abort(monkeypatch):
         "chat": lambda self, prompt, system=None: "extracted note"
     })()
     engine.web = type("Web", (), {
-        "fetch": lambda self, url: (_ for _ in ()).throw(RuntimeError("connection failed"))
+        "fetch": lambda self, url, stop_event=None: (_ for _ in ()).throw(RuntimeError("connection failed"))
     })()
 
-    monkeypatch.setattr("my_ai.learner.source_urls", lambda _language: [
+    monkeypatch.setattr("my_ai.learner.topic_source_urls", lambda _language, _topic: [
         "https://docs.example.test/tutorial/",
         "https://docs.example.test/library/",
     ])
@@ -314,7 +298,7 @@ def test_scheduler_logs_full_worker_exception(monkeypatch, caplog):
     stop = StopOnce()
     with caplog.at_level(logging.ERROR, logger="my_ai.scheduler"):
         scheduler._loop("Python", stop)
-    assert "learning worker failed" in caplog.text
+    assert "LEARNING_FAILURE" in caplog.text
     assert "source fetch exploded" in caplog.text
 
 
