@@ -343,13 +343,18 @@ def test_scheduler_supervisor_does_not_resume_paused_worker(monkeypatch):
     scheduler._workers = {}
     calls = []
     scheduler.start = lambda language, session_id=None: calls.append((language, session_id))
-    monkeypatch.setattr(
-        "my_ai.scheduler.fetch_all",
-        lambda *_args, **_kwargs: [],
-    )
+    queries = []
+
+    def fake_fetch_all(query, *_args, **_kwargs):
+        queries.append(query)
+        return []
+
+    monkeypatch.setattr("my_ai.scheduler.fetch_all", fake_fetch_all)
     scheduler._supervisor_stop.set()
     scheduler._supervisor_loop()
     assert calls == []
+    assert "status IN ('running','retrying')" in queries[0]
+    assert "'paused'" not in queries[0]
 
 def test_scheduler_recovers_unexpected_worker_exit(monkeypatch):
     scheduler = StudyScheduler.__new__(StudyScheduler)
