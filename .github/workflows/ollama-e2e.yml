@@ -17,10 +17,25 @@ jobs:
         run: curl -fsSL https://ollama.com/install.sh | sh
       - name: Start Ollama
         run: |
-          OLLAMA_HOST=0.0.0.0:11434 nohup ollama serve > /tmp/ollama.log 2>&1 &
-          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:11434/api/tags && break || sleep 2; done
+          OLLAMA_HOST=0.0.0.0:11434 OLLAMA_KEEP_ALIVE=5m nohup ollama serve > /tmp/ollama.log 2>&1 &
+          ready=false
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:11434/api/tags >/tmp/ollama-tags.json; then ready=true; break; fi
+            sleep 2
+          done
+          if [ "$ready" != "true" ]; then
+            cat /tmp/ollama.log || true
+            exit 1
+          fi
       - name: Pull small E2E model
-        run: ollama pull qwen2.5:0.5b
+        run: |
+          for attempt in 1 2 3; do
+            if ollama pull qwen2.5:0.5b; then exit 0; fi
+            sleep $((attempt * 5))
+          done
+          ollama list
+          cat /tmp/ollama.log || true
+          exit 1
       - name: Install project
         run: pip install -e .[dev]
       - name: Run Ollama smoke test
@@ -33,6 +48,8 @@ jobs:
           ROUTER_MODEL: qwen2.5:0.5b
           CODING_MODEL: qwen2.5:0.5b
           FALLBACK_MODEL: qwen2.5:0.5b
+          RESOURCE_WAIT_SECONDS: 15
+          LEARNING_MAX_CONCURRENT_WORKERS: 1
         run: |
           nohup uvicorn my_ai.api:app --host 127.0.0.1 --port 8001 > /tmp/my-ai.log 2>&1 &
           echo $! > /tmp/my-ai.pid
