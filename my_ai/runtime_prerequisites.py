@@ -82,7 +82,7 @@ def ensure_runtime_prerequisites(*, auto_install=True):
     return result
 
 def startup_check():
-    enabled = os.getenv("MYAI_AUTO_INSTALL_PREREQUISITES", "true").strip().lower() in {"1","true","yes","on"}
+    enabled = os.getenv("MYAI_AUTO_INSTALL_PREREQUISITES", "false").strip().lower() in {"1","true","yes","on"}
     return ensure_runtime_prerequisites(auto_install=enabled)
 
 
