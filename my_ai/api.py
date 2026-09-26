@@ -135,15 +135,15 @@ class VoiceTranscribeRequest(BaseModel): audio_path:str; model_path:str; languag
 class VoiceSynthesizeRequest(BaseModel): text:str; model_path:str; output_path:str
 class URLRequest(BaseModel): url:HttpUrl; topic:str="Python"
 class ProjectRequest(BaseModel): goal:str
-class CodeRequest(BaseModel): code:str
+class CodeRequest(BaseModel): code:str; confirmed:bool=False
 class ProgramRequest(BaseModel): request:str; language:str="Python"
 class LanguageRequest(BaseModel): language:str="Python"
 class SecurityRequest(BaseModel): project_path:str|None=None; target_url:str|None=None; code:str|None=None; language:str="Python"; fix:bool=False; headers:dict[str,str]=Field(default_factory=dict)
 class GitRequest(BaseModel): repository:str; path:str|None=None; ref:str|None=None; branch:str|None=None; content:str|None=None; message:str|None=None; allow_write:bool=False
 class SchedulerRequest(BaseModel): language:str="Python"; interval_seconds:int=settings.scheduler_interval_seconds
 class LearnRequest(BaseModel): language:str="Python"; interval_seconds:int=settings.scheduler_interval_seconds
-class ToolRequest(BaseModel): language:str="Python"; operation:str="test"; cwd:str|None=None; timeout:int=120
-class PythonToolRequest(BaseModel): code:str
+class ToolRequest(BaseModel): language:str="Python"; operation:str="test"; cwd:str|None=None; timeout:int=120; confirmed:bool=False
+class PythonToolRequest(BaseModel): code:str; confirmed:bool=False
 class SQLQueryRequest(BaseModel): sql:str; limit:int=1000
 class SQLiteQueryRequest(BaseModel): path:str; sql:str; limit:int=1000
 
@@ -629,11 +629,13 @@ def chat(r:ChatRequest, request:Request):
     try:
         msg=r.message.strip(); low=msg.lower()
         intent=classify(msg)
-        required_by_intent={"pentest_external":("security","execute"),"git_write":("github","write"),"self_update":("self-update","write"),"database_import":("database","write"),"code_execution":("code-execution","execute"),"learning":("learning","execute"),"coding":("code-generation","execute")}
+        required_by_intent={"pentest_external":("security","execute"),"git_write":("github","write"),"self_update":("self-update","write"),"database_import":("database","write"),"code_execution":("code-execution","execute"),"self_repair":("self-repair","execute"),"learning":("learning","execute"),"coding":("code-generation","execute")}
         if intent.name in required_by_intent:
             tool,action=required_by_intent[intent.name]
             if not tool_allowed(user,tool,action):
                 raise HTTPException(403,f"Tool permission denied: {tool}:{action}")
+            if intent.name in {"code_execution","self_repair","self_update","git_write","database_import"} and not any(token in low for token in ("confirm","approve","approved")):
+                raise HTTPException(409,"Explicit confirmation required for high-risk intent: "+intent.name)
         aliases={"sql server":"SQL Server","sqlserver":"SQL Server","mssql":"SQL Server","mysql":"MySQL","sqlite":"SQLite","sql lite":"SQLite","android":"Android","اندروید":"Android","ios":"iOS","آی او اس":"iOS","python":"Python","پایتون":"Python","php":"PHP","javascript":"JavaScript","js":"JavaScript","pentest":"Pentest","pen test":"Pentest","penetration testing":"Pentest","penetration test":"Pentest","پنتست":"Pentest","پن تست":"Pentest","تست نفوذ":"Pentest","امنیت":"Pentest"}
         requested=None
         for key,name in sorted(aliases.items(),key=lambda x:len(x[0]),reverse=True):
@@ -751,10 +753,14 @@ def tools_doctor(request:Request,language:str|None=None):
 @app.post("/tools/project")
 def tools_project(r:ToolRequest,request:Request):
     require_user(request)
+    if r.operation.strip().lower() != "test" and not r.confirmed:
+        raise HTTPException(409,"Explicit confirmation is required for project tool operations.")
     return run_project_tool(r.language,r.operation,r.cwd,r.timeout)
 @app.post("/tools/python")
 def tools_python(r:PythonToolRequest,request:Request):
     require_user(request)
+    if not r.confirmed:
+        raise HTTPException(409,"Explicit confirmation is required for Python execution.")
     return run_python_snippet(r.code)
 @app.get("/tools/sqlserver/schema")
 def tools_sqlserver_schema(request:Request,limit:int=500):
@@ -796,6 +802,8 @@ def practice(r:ChatRequest, request:Request):
 @app.post("/code/run")
 def code_run(r:CodeRequest, request:Request):
     require_user(request)
+    if not r.confirmed:
+        raise HTTPException(409,"Explicit confirmation is required for code execution.")
     return learner.validate_code(r.code)
 @app.post("/code/generate")
 def code_generate(r:ProgramRequest, request:Request):
