@@ -217,6 +217,7 @@ class StudyScheduler:
                 "resources": {**live, **cfg},
                 "weekly_review": {
                     "due_domains": due_domains(),
+                    "next_reviews": fetch_all("SELECT name,next_review_at FROM learning_domains WHERE next_review_at IS NOT NULL ORDER BY next_review_at"),
                     "monitor_running": bool(getattr(self, "_monitor_thread", None) and self._monitor_thread.is_alive()),
                     "history": review_history(10),
                 },
