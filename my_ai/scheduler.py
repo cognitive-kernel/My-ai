@@ -78,6 +78,10 @@ class StudyScheduler:
                 rows = fetch_all("SELECT topic FROM learning_sessions WHERE id=?", (session_id,))
                 if rows:
                     current_topic = rows[0]["topic"]
+            try:
+                execute("UPDATE learning_domains SET auto_learn=1 WHERE lower(name)=?", (key,))
+            except Exception:
+                pass
             execute(
                 """INSERT INTO learning_workers(language,session_id,status,stage,current_topic,started_at,updated_at)
                    VALUES(?,?,?,'starting',?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
