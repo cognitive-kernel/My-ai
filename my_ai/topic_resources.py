@@ -230,12 +230,12 @@ def supplementary_source_urls(language: str, topic: str) -> List[str]:
     lang = str(language or "").strip()
     topic_text = str(topic or "").casefold()
     if lang == "Forex":
-        matches = list(FOREX_TOPIC_SOURCES.get(str(topic), []))
+        forex_matches = list(FOREX_TOPIC_SOURCES.get(str(topic), []))
         for keywords, urls in FOREX_RULES:
             if any(k.casefold() in topic_text for k in keywords):
-                matches.extend(urls)
-        matches.extend(FOREX_SOURCES)
-        return list(dict.fromkeys(matches))
+                forex_matches.extend(urls)
+        forex_matches.extend(FOREX_SOURCES)
+        return list(dict.fromkeys(forex_matches))
 
     matches: List[str] = []
     for keywords, urls in DOMAIN_RULES.get(lang, []):
