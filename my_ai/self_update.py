@@ -76,13 +76,20 @@ def _tests(cwd):
     return True, "compileall passed; no tests directory present"
 
 
+def _policy_flag(env_name: str, setting_key: str) -> bool:
+    env_value = os.getenv(env_name)
+    if env_value is not None:
+        return env_value.strip().lower() in {"1", "true", "yes", "on"}
+    return get_bool(setting_key, False)
+
+
 def status():
     try:
         branch = _git("branch", "--show-current")
         head = _git("rev-parse", "HEAD")
         dirty = bool(_git("status", "--porcelain"))
-        enabled = get_bool("self_update.enabled", False)
-        approved = get_bool("self_update.approved", False)
+        enabled = _policy_flag("MYAI_SELF_UPDATE_ENABLED", "self_update.enabled")
+        approved = _policy_flag("MYAI_SELF_UPDATE_APPROVED", "self_update.approved")
         return {
             "ok": True,
             "branch": branch,
@@ -137,9 +144,9 @@ def apply_confirmed_update(health_url=None, health_timeout=45):
     health_url = _validate_health_url(health_url)
     if _git("status", "--porcelain"):
         raise RuntimeError("Self-update متوقف شد: ابتدا تغییرات محلی را commit کنید یا در جای امن نگه دارید.")
-    if not get_bool("self_update.enabled", False):
+    if not _policy_flag("MYAI_SELF_UPDATE_ENABLED", "self_update.enabled"):
         raise RuntimeError("Self-update is deny-by-default. Set MYAI_SELF_UPDATE_ENABLED=true only after explicit user approval and policy review.")
-    if not get_bool("self_update.approved", False):
+    if not _policy_flag("MYAI_SELF_UPDATE_APPROVED", "self_update.approved"):
         raise RuntimeError("Self-update requires an explicit approval gate.")
     if os.getenv("MYAI_OFFLINE_STRICT", "false").strip().lower() == "true":
         raise RuntimeError("Self-update is disabled in offline strict mode.")
