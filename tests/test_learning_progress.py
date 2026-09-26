@@ -334,3 +334,20 @@ def test_scheduler_worker_slot_limit(monkeypatch):
     assert scheduler._worker_slots.acquire(blocking=False)
     assert scheduler._worker_slots.acquire(blocking=False) is False
     scheduler._worker_slots.release()
+
+def test_scheduler_recovers_unexpected_worker_exit(monkeypatch):
+    scheduler = StudyScheduler.__new__(StudyScheduler)
+    calls = []
+    scheduler.start = lambda language, session_id=None: calls.append((language, session_id))
+    monkeypatch.setattr("my_ai.scheduler.fetch_all", lambda *_args, **_kwargs: [{"session_id": 7, "status": "running"}])
+
+    class ImmediateTimer:
+        def __init__(self, _delay, callback):
+            self.callback = callback
+        def start(self):
+            self.callback()
+
+    monkeypatch.setattr("my_ai.scheduler.threading.Timer", ImmediateTimer)
+    stop_event = threading.Event()
+    scheduler._schedule_worker_recovery("Python", stop_event)
+    assert calls == [("Python", 7)]
