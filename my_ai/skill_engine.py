@@ -67,7 +67,7 @@ def revalidate(skill_id: int, current_version: str) -> dict[str,Any]:
     kinds=len({row["kind"] for row in evidence_rows})
     score=(passed / len(evidence_rows) * 100.0) if evidence_rows else 0.0
     verified=score >= 80.0 and len(evidence_rows) >= 2 and kinds >= 2
-    metrics={"concept": [], "implementation": [], "source": [], "reliability": []}
+    metrics: dict[str, list[float]] = {"concept": [], "implementation": [], "source": [], "reliability": []}
     for row in evidence_rows:
         try:
             details=json.loads(row["evidence"] or "{}")
