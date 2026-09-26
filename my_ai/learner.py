@@ -299,7 +299,7 @@ class LearningEngine:
         )
         # Custom Course runners have their own progress model and must not
         # appear as standard language-learning tracks.
-        rows=[row for row in rows if not str(row["language"] or "").strip().lower().startsWith("custom_course:")]
+        rows=[row for row in rows if not str(row["language"] or "").strip().lower().startswith("custom_course:")]
         normalized_rows=[]
         for row in rows:
             raw=str(row["language"] or "").strip()
