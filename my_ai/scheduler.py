@@ -150,7 +150,10 @@ class StudyScheduler:
                     and getattr(self, "_workers", {}).get(str(item["language"]).casefold())[0].is_alive()
                 )
                 workers.append(item)
-            # Only workers owned by this scheduler instance are live. Persisted\n            # rows from a previous process must remain visible in `workers`, but\n            # must not be counted as active workers after a restart.\n            active = [x for x in workers if x["running"]]
+            # Only workers owned by this scheduler instance are live. Persisted
+            # rows from a previous process must remain visible in `workers`, but
+            # must not be counted as active workers after a restart.
+            active = [x for x in workers if x["running"]]
             primary = active[0] if active else (workers[-1] if workers else None)
             live = resource_status()
             cfg = resource_limits()
