@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from .db import execute, fetch_all
 from .dynamic_learning import _normalize_topics, _persist, ensure_domain
-from .curriculum import LANGUAGE_CURRICULA, LANGUAGE_SOURCES, canonical_language
+from .curriculum import LANGUAGE_CURRICULA, LANGUAGE_SOURCES
 from .memory import remember
 from .web_learner import WebLearner
 
