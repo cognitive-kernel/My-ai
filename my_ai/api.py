@@ -60,6 +60,15 @@ async def lifespan(_):
         workers=fetch_all("SELECT language,session_id,status FROM learning_workers WHERE status IN ('running','retrying','paused','stopping')")
         if workers:
             for worker in workers:
+                # Custom courses have their own course runner and must not be
+                # restarted as standard Scheduler language workers.
+                if str(worker["language"]).strip().casefold() == "cisco":
+                    custom = fetch_all(
+                        "SELECT id FROM custom_courses WHERE active=1 AND lower(name)=lower(?) LIMIT 1",
+                        (worker["language"],),
+                    )
+                    if custom:
+                        continue
                 scheduler.start(worker["language"], worker["session_id"])
         else:
             runtime=fetch_all("SELECT language,session_id,status FROM learning_runtime WHERE id=1")
