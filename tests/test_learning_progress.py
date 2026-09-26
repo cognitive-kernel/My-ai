@@ -262,7 +262,7 @@ def test_learning_source_failure_is_recorded_and_does_not_abort(monkeypatch):
     ])
     monkeypatch.setattr("my_ai.learner.seed_for", lambda *_args: "seed")
     monkeypatch.setattr("my_ai.learner.remember", lambda *args, **kwargs: None)
-    monkeypatch.setattr("my_ai.learner.settings", type("Settings", (), {"learning_max_retries": 1})())
+    monkeypatch.setattr("my_ai.learner.settings", type("Settings", (), {"learning_max_retries": 1, "learning_source_max_chars": 1000})())
 
     result = engine._learn_sources_for_topic(
         "Python",
