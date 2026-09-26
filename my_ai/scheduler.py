@@ -353,7 +353,7 @@ class StudyScheduler:
             from .settings_feature import _course, _workers, _running
             rows = fetch_all(
                 "SELECT c.id,c.name,d.next_review_at FROM custom_courses c "
-                "JOIN learning_domains d ON lower(d.name)=lower(c.name) "
+                "JOIN learning_domains d ON d.name=('custom_course:' || c.id) "
                 "WHERE c.active=1 AND d.next_review_at IS NOT NULL"
             )
             now = datetime.now(timezone.utc)
@@ -376,13 +376,15 @@ class StudyScheduler:
             return False
         _workers.submit(__import__("my_ai.settings_feature", fromlist=["_run_course"])._run_course, course_id)
         next_review = (datetime.now(timezone.utc) + timedelta(days=REVIEW_DAYS)).isoformat()
-        execute("UPDATE learning_domains SET last_review_at=CURRENT_TIMESTAMP,next_review_at=? WHERE lower(name)=lower(?)", (next_review, name))
+        execute("UPDATE learning_domains SET last_review_at=CURRENT_TIMESTAMP,next_review_at=? WHERE name=?", (next_review, f"custom_course:{course_id}"))
         return True
 
     def _review_loop(self):
         while not self._review_stop.is_set():
             try:
                 for name in due_domains():
+                    if str(name).startswith("custom_course:"):
+                        continue
                     if self._review_stop.is_set():
                         break
                     if not ensure_domain(name):
