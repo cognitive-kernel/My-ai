@@ -422,10 +422,13 @@ class StudyScheduler:
                     self._worker_slots.release()
                 except ValueError:
                     pass
+            unexpected_exit = not stop_event.is_set()
             with self._lock:
                 self._workers.pop(language.casefold(), None)
                 execute(
                     "UPDATE learning_workers SET status='idle',stage='idle',updated_at=CURRENT_TIMESTAMP WHERE language=? AND status='stopping'",
                     (language,),
                 )
+            if unexpected_exit:
+                self._schedule_worker_recovery(language, stop_event)
 
