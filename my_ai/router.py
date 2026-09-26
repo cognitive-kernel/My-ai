@@ -15,7 +15,7 @@ class Intent:
     intents: tuple[str, ...] = ()
 
 
-HIGH_RISK = {"pentest_external", "git_write", "self_update", "database_import", "code_execution"}
+HIGH_RISK = {"pentest_external", "git_write", "self_update", "database_import", "code_execution", "self_repair"}
 
 _INTENT_PATTERNS: dict[str, tuple[tuple[str, float], ...]] = {
     "self_update": (
@@ -34,8 +34,16 @@ _INTENT_PATTERNS: dict[str, tuple[tuple[str, float], ...]] = {
         ("پن تست", 1.8), ("پنتست", 1.8), ("pentest", 1.8),
         ("تست نفوذ", 1.8), ("آسیب پذیری آدرس", 1.6), ("اسکن امنیتی آدرس", 1.5),
     ),
+    "self_repair": (
+        ("خودت را تعمیر کن", 1.9), ("خودتو تعمیر کن", 1.9), ("خودت رو تعمیر کن", 1.9),
+        ("تعمیر خودت", 1.8), ("باگ خودت را درست کن", 1.9), ("باگ خودتو درست کن", 1.9),
+        ("خودت را درست کن", 1.9), ("self repair", 1.8), ("self-repair", 1.8),
+        ("repair yourself", 1.8), ("fix yourself", 1.8), ("fix your own bugs", 1.8),
+    ),
     "learning": (
         ("یاد بگیر", 1.5), ("یادگیری", 1.3), ("یاد بده", 1.4),
+        ("یاد بگیرش", 1.5), ("شروع به یادگیری", 1.5), ("ادامه یادگیری", 1.5),
+        ("مطالعه", 1.2), ("study this", 1.4), ("learn this", 1.4),
         ("آموزش بده", 1.5), ("آموزش", 1.1), ("درس", 1.0),
         ("مطالعه کن", 1.4), ("یاد بگیرم", 1.5), ("learn", 1.4),
         ("study", 1.3), ("teach me", 1.5),
@@ -48,10 +56,12 @@ _INTENT_PATTERNS: dict[str, tuple[tuple[str, float], ...]] = {
         ("execute this", 1.7), ("execute it", 1.6),
     ),
     "coding": (
-        ("کد بنویس", 1.6), ("برنامه بنویس", 1.6), ("یک برنامه بساز", 1.5),
+        ("کد بنویس", 1.6), ("کد تولید کن", 1.6), ("کدنویسی کن", 1.5),
+        ("برنامه بنویس", 1.6), ("یک برنامه بساز", 1.5),
         ("یه برنامه بساز", 1.5), ("یک پروژه بساز", 1.6), ("یه پروژه بساز", 1.6),
         ("پروژه بساز", 1.5), ("api بساز", 1.6), ("ای پی آی بساز", 1.6),
-        ("write code", 1.5), ("build", 1.2), ("implement", 1.3),
+        ("write code", 1.5), ("generate code", 1.5), ("build", 1.2), ("implement", 1.3),
+        ("create code", 1.5),
         ("create a project", 1.5), ("build a project", 1.5),
     ),
 }
