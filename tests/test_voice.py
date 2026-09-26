@@ -14,3 +14,12 @@ def test_voice_uses_configured_binary(monkeypatch, tmp_path):
     binary.chmod(0o755)
     monkeypatch.setenv("WHISPER_CPP_BIN", str(binary))
     assert voice._whisper_binary() == str(binary.resolve())
+
+
+def test_offline_roundtrip_composes_stt_and_tts(monkeypatch, tmp_path):
+    import my_ai.voice as voice
+    monkeypatch.setattr(voice, "transcribe", lambda *args, **kwargs: "سلام")
+    monkeypatch.setattr(voice, "synthesize", lambda text, model, output: str(output))
+    result = voice.offline_roundtrip("audio.wav", "whisper.bin", "piper.onnx", str(tmp_path / "out.wav"))
+    assert result["text"] == "سلام"
+    assert result["audio_path"].endswith("out.wav")
