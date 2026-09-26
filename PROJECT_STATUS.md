@@ -330,3 +330,5 @@ Implemented in the current main branch:
 - authenticated browser smoke coverage was added for learning, scheduler, voice, knowledge, skills, self-update and self-repair surfaces.
 
 Verification boundary: GitHub-side code and test changes are committed, but a claim of 100% runtime closure still requires the target machine's local test suite and actual Whisper/Piper/Ollama installations to execute successfully.
+- retrieval confidence now has an empirical calibration path: admin judgments are persisted and confidence is only emitted as calibrated after sufficient same-score-bucket judgments; otherwise it is explicitly marked uncalibrated;
+- application read-only mode now blocks key project, voice-output, and self-update writes and avoids import-time directory creation in read-only mode.
