@@ -99,7 +99,7 @@ _LANGUAGE_ALIASES = {
 def _normalize(text: str) -> str:
     text = unicodedata.normalize("NFKC", str(text)).casefold()
     text = text.replace("\u200c", " ").replace("\u200d", " ")
-    text = text.translate(str.maketrans({"ي": "ی", "ى": "ی", "ك": "ک"}))
+    text = text.replace("ي", "ی").replace("ى", "ی").replace("ك", "ک")
     text = re.sub(r"[\u064b-\u065f\u0670]", "", text)
     text = re.sub(r"[^\w\s:/.-]+", " ", text, flags=re.UNICODE)
     return re.sub(r"\s+", " ", text).strip()
