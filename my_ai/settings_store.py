@@ -8,7 +8,7 @@ from typing import Any
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from .db import connect, init_db
+from .db import connect
 
 ROOT = Path(__file__).resolve().parent.parent
 KEY_PATH = ROOT / "data" / ".settings_key"
@@ -49,7 +49,9 @@ def _decrypt(value: str) -> str:
     return AESGCM(_key()).decrypt(blob[:12], blob[12:], b"my-ai-app-settings-v1").decode("utf-8")
 
 def ensure_schema() -> None:
-    init_db()
+    # Settings access is on a hot path, including the learning scheduler.
+    # Do not run the full DB migration on every read: init_db() performs
+    # multiple writes and can contend with learning/background transactions.
     with connect() as conn:
         conn.executescript(SCHEMA)
         conn.commit()
