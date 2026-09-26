@@ -221,6 +221,94 @@ def _summary(course_id: int) -> dict[str, Any]:
     return {"course_id": course_id, "total_topics": len(items), "completed_topics": completed, "progress_percent": overall, "current": current, "topics": items}
 
 
+def _review_custom_course(course_id: int, web, llm) -> dict[str, Any]:
+    """Weekly web review for custom courses: discover new topics and refresh changed topics."""
+    course = _course(course_id)
+    if not course or not course["active"]:
+        return {"status": "skipped", "added": [], "updated": []}
+    rows = _progress(course_id)
+    topics = [{"topic": str(x["title"]), "goal": str(x["goal"] or "")} for x in rows]
+    evidence = []
+    seen_urls: set[str] = set()
+    candidates: list[str] = []
+    for row in rows[:12]:
+        url = str(row.get("source_url") or "").strip()
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            candidates.append(url)
+    try:
+        search_results = web.search(
+            f"{course['name']} latest documentation updates new topics",
+            limit=8,
+        )
+        for item in search_results:
+            url = str(item.get("url") or "").strip()
+            if url.startswith(("http://", "https://")) and url not in seen_urls:
+                seen_urls.add(url)
+                candidates.append(url)
+    except Exception:
+        pass
+    for url in candidates[:16]:
+        try:
+            title, source = web.fetch(url)
+            evidence.append({"title": title, "url": url, "text": str(source)[:5000]})
+        except Exception as exc:
+            evidence.append({"url": url, "error": str(exc)})
+    if not evidence:
+        return {"status": "reviewed", "added": [], "updated": []}
+    prompt = (
+        "Review current web evidence for a custom learning course. Identify only genuinely new "
+        "learning topics or substantive changes to existing topics. Do not invent facts. Prefer "
+        "official documentation, standards, maintainers, universities, regulators, exchanges, or "
+        "other authoritative sources. Return JSON only with keys new_topics and updated_topics. "
+        "new_topics: objects with title, goal, source_url. updated_topics: objects with title, "
+        "reason, source_url. Only include an updated topic when the evidence shows a substantive "
+        "change or important new material that should trigger relearning.\n"
+        f"COURSE: {course['name']}\nCURRENT TOPICS: {json.dumps(topics, ensure_ascii=False)}\n"
+        f"WEB EVIDENCE: {json.dumps(evidence, ensure_ascii=False)[:30000]}"
+    )
+    try:
+        data = json.loads(llm.chat(prompt, system="You are a conservative technical curriculum reviewer. Return valid JSON only."))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {"status": "reviewed", "added": [], "updated": []}
+    existing = {str(x["title"]).strip().casefold(): x for x in rows}
+    added = []
+    updated = []
+    next_order = max([int(x["topic_order"]) for x in rows] or [0]) + 1
+    for item in data.get("new_topics", []) if isinstance(data, dict) else []:
+        title = str(item.get("title") or "").strip()
+        goal = str(item.get("goal") or "").strip()
+        source_url = str(item.get("source_url") or "").strip()
+        if not title or title.casefold() in existing:
+            continue
+        cur = execute(
+            "INSERT INTO custom_course_topics(course_id,topic_order,title,goal,source_url) VALUES(?,?,?,?,?)",
+            (course_id, next_order, title, goal, source_url or None),
+        )
+        if cur:
+            execute("INSERT INTO custom_course_progress(course_id,topic_id,status,progress_percent,phase) VALUES(?,?,?,?,?)",
+                    (course_id, cur, "planned", 0, "planned"))
+            added.append({"title": title, "goal": goal, "source_url": source_url})
+            existing[title.casefold()] = {"id": cur}
+            next_order += 1
+    for item in data.get("updated_topics", []) if isinstance(data, dict) else []:
+        title = str(item.get("title") or "").strip()
+        current = existing.get(title.casefold())
+        if not current:
+            continue
+        source_url = str(item.get("source_url") or "").strip()
+        if source_url:
+            execute("UPDATE custom_course_topics SET source_url=? WHERE id=?", (source_url, int(current["id"])))
+        execute(
+            "UPDATE custom_course_progress SET status='planned',progress_percent=0,phase='planned',updated_at=CURRENT_TIMESTAMP WHERE topic_id=?",
+            (int(current["id"]),),
+        )
+        updated.append({"title": title, "reason": str(item.get("reason") or ""), "source_url": source_url})
+    if added or updated:
+        _ensure_custom_review_schedule(course_id)
+    return {"status": "reviewed", "added": added, "updated": updated}
+
+
 def _set_topic(topic_id: int, status: str, progress: float, phase: str, lesson: str | None = None, score: float | None = None) -> None:
     execute("UPDATE custom_course_progress SET status=?,progress_percent=?,phase=?,lesson=COALESCE(?,lesson),score=COALESCE(?,score),updated_at=CURRENT_TIMESTAMP WHERE topic_id=?", (status, max(0,min(100,float(progress))), phase, lesson, score, topic_id))
 
@@ -232,7 +320,7 @@ def _learn_topic(course_id: int, topic: dict[str, Any]) -> None:
     llm = create_llm("general")
     prompt = ("Teach this study unit accurately and practically. Explain prerequisites, concepts, Cisco IOS/IOS XE command examples, verification commands, common mistakes, safe lab exercises, and a short mastery checklist. "
               "Do not claim a command is valid for every Cisco platform/version; state platform/version uncertainty. Prefer official Cisco documentation when supplied.\n"
-              f"COURSE: Cisco\nTOPIC: {topic['title']}\nGOAL: {topic['goal']}\nOFFICIAL SOURCE: {topic.get('source_url') or 'none'}")
+              f"COURSE: {(_course(course_id) or {}).get('name', 'Custom Course')}\nTOPIC: {topic['title']}\nGOAL: {topic['goal']}\nOFFICIAL SOURCE: {topic.get('source_url') or 'none'}")
     _set_topic(topic_id, "started", 25, "lesson")
     lesson = llm.chat(prompt, system="You are a rigorous Cisco networking instructor. Return a concise but technically precise lesson.")
     _set_topic(topic_id, "started", 70, "assessment", lesson=lesson)
