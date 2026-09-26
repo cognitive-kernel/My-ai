@@ -19,7 +19,7 @@ def _requirements():
             if x.strip() and not x.lstrip().startswith(("#", "-"))]
 
 def _dist_name(spec):
-    return re.split(r"[<>=!~;\[]", spec, 1)[0].strip()
+    return re.split(r"[<>=!~;\[]", spec, maxsplit=1)[0].strip()
 
 def _missing_python():
     missing = []
@@ -119,5 +119,5 @@ def runtime_status() -> dict[str, object]:
         "voice": voice,
         "platform": sys.platform,
         "python": sys.version.split()[0],
-        "auto_install_enabled": os.getenv("MYAI_AUTO_INSTALL_PREREQUISITES", "true").strip().lower() in {"1","true","yes","on"},
+        "auto_install_enabled": os.getenv("MYAI_AUTO_INSTALL_PREREQUISITES", "false").strip().lower() in {"1","true","yes","on"},
     }
