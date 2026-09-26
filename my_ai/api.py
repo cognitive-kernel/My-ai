@@ -912,7 +912,7 @@ def learning_status(request:Request, language:str|None=None):
     require_user(request)
     summary=learner.status(language)
     summary.update(learner.detailed_status(language))
-    return summary
+    return JSONResponse(summary, headers={"Cache-Control":"no-store","Pragma":"no-cache"})
 @app.post("/learning/practice")
 def practice(r:ChatRequest, request:Request):
     require_user(request)
