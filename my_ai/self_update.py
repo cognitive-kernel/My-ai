@@ -81,7 +81,20 @@ def status():
         branch = _git("branch", "--show-current")
         head = _git("rev-parse", "HEAD")
         dirty = bool(_git("status", "--porcelain"))
-        return {"ok": True, "branch": branch, "head": head, "dirty": dirty}
+        enabled = get_bool("self_update.enabled", False)
+        approved = get_bool("self_update.approved", False)
+        return {
+            "ok": True,
+            "branch": branch,
+            "head": head,
+            "dirty": dirty,
+            "policy": {
+                "enabled": enabled,
+                "approved": approved,
+                "ready": bool(enabled and approved and not dirty),
+                "deny_by_default": not enabled,
+            },
+        }
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
 
