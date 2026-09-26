@@ -355,6 +355,7 @@ class LearningEngine:
                     "progress_percent":progress,
                     "score":row["score"] if row and row["score"] is not None else None,
                     "updated_at":row["created_at"] if row else None,
+                    "last_attempt_at":row["created_at"] if row else None,
                 })
 
             if not topic_defs:
