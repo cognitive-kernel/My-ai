@@ -599,7 +599,7 @@ let html='';
 rows.forEach(function(rep,i){let checks=rep.checks||{};let previous=rows[i+1];let fixed=[];if(previous){Object.keys(checks).forEach(function(k){if(previous.checks&&previous.checks[k]&&!previous.checks[k].ok&&checks[k].ok)fixed.push(k)})}
 html+='<div class="card '+(rep.healthy?'ok':'bad')+'"><h2>'+(rep.healthy?'✓ وضعیت سالم':'⚠ نیازمند بررسی')+'</h2><div class="meta">'+(rep.timestamp||rep.created_at||'')+'</div>';
 if(fixed.length)html+='<div class="card fixed"><b>✓ باگ/خطای برطرف‌شده در این بررسی</b><p>'+fixed.map(function(x){return x+' — برطرف شده'}).join('<br>')+'</p></div>';
-Object.keys(checks).forEach(function(k){let x=checks[k]||{};html+='<div class="row">'+(x.ok?'🟢':'🔴')+' <b>'+k+'</b> — '+(x.ok?'سالم':'خطا / نیازمند بررسی')+'</div>'});
+Object.keys(checks).forEach(function(k){let x=checks[k]||{};let out=String(x.output||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');html+='<details class="row"><summary style="cursor:pointer">'+(x.ok?'🟢':'🔴')+' <b>'+k+'</b> — '+(x.ok?'سالم':'خطا / نیازمند بررسی')+'</summary>'+(x.output?'<pre style="direction:ltr;text-align:left;white-space:pre-wrap;overflow:auto;background:#111827;color:#f8fafc;padding:12px;border-radius:8px;margin-top:9px">'+out+'</pre>':'<div class="meta">جزئیات خطا ثبت نشده است.</div>')+'</details>'});
 html+='</div>'});out.innerHTML=html}load();setInterval(load,30000);
 </script></main></html>""")
 
