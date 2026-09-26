@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -83,3 +84,40 @@ def ensure_runtime_prerequisites(*, auto_install=True):
 def startup_check():
     enabled = os.getenv("MYAI_AUTO_INSTALL_PREREQUISITES", "true").strip().lower() in {"1","true","yes","on"}
     return ensure_runtime_prerequisites(auto_install=enabled)
+
+
+def _ollama_status() -> dict[str, object]:
+    base = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
+    try:
+        with urllib.request.urlopen(base + "/api/tags", timeout=3) as response:
+            return {"ok": response.status == 200, "url": base, "status": response.status}
+    except Exception as exc:
+        return {"ok": False, "url": base, "error": str(exc)}
+
+
+def runtime_status() -> dict[str, object]:
+    """Return a non-mutating readiness report for local end-to-end verification."""
+    voice = {
+        "whisper_binary": shutil.which("whisper-cli"),
+        "piper_binary": shutil.which("piper"),
+    }
+    ollama = _ollama_status()
+    missing_python = _missing_python()
+    missing_system = _command_missing()
+    checks = {
+        "python_dependencies": not missing_python,
+        "system_dependencies": not missing_system,
+        "ollama": bool(ollama["ok"]),
+        "voice_tools": bool(voice["whisper_binary"] and voice["piper_binary"]),
+    }
+    return {
+        "ok": all(checks.values()),
+        "checks": checks,
+        "python_missing": missing_python,
+        "system_missing": missing_system,
+        "ollama": ollama,
+        "voice": voice,
+        "platform": sys.platform,
+        "python": sys.version.split()[0],
+        "auto_install_enabled": os.getenv("MYAI_AUTO_INSTALL_PREREQUISITES", "true").strip().lower() in {"1","true","yes","on"},
+    }
