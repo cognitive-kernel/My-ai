@@ -53,8 +53,13 @@ class StudyScheduler:
         with self._lock:
             existing = self._workers.get(key)
             if existing and existing[0].is_alive():
+                # Resume must clear the cancellation flag. Otherwise a worker that
+                # was stopped just before Resume will exit immediately.
+                existing[1].clear()
                 if session_id:
-                    execute("UPDATE learning_workers SET session_id=?,status='running',updated_at=CURRENT_TIMESTAMP WHERE language=?", (session_id, language))
+                    execute("UPDATE learning_workers SET session_id=?,status='running',stage='starting',updated_at=CURRENT_TIMESTAMP WHERE language=?", (session_id, language))
+                else:
+                    execute("UPDATE learning_workers SET status='running',stage='starting',updated_at=CURRENT_TIMESTAMP WHERE language=?", (language,))
                 try:
                     execute("UPDATE learning_domains SET auto_learn=1 WHERE lower(name)=?", (key,))
                 except Exception:
