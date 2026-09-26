@@ -175,3 +175,13 @@ def test_backup_import_rejects_newer_format(tmp_path):
     path.write_text(json.dumps({"metadata": {"format_version": 999}, "tables": {}}), encoding="utf-8")
     with pytest.raises(ValueError):
         platform.import_database(str(path))
+
+
+def test_code_execution_requires_explicit_confirmation(client_db, monkeypatch):
+    client = client_db
+    owner = auth.create_account("owner", "a-secure-password")
+    monkeypatch.setattr("my_ai.api.learner.validate_code", lambda code: {"ok": True})
+    response = client.post("/code/run", json={"code": "print(1)"}, cookies=login_cookie(owner))
+    assert response.status_code == 409
+    response = client.post("/code/run", json={"code": "print(1)", "confirmed": True}, cookies=login_cookie(owner))
+    assert response.status_code == 200
