@@ -161,14 +161,13 @@ def _extract_goal(text: str) -> str | None:
 
 def _extract_project_path(text: str) -> str | None:
     raw = str(text)
-    candidates = re.findall(r"(?:(?:[A-Za-z]:[\\/])|/|\\\\)[^\\s<>]+", raw)
-    candidates.extend(re.findall(r"(?:/projects/|/workspace/)[^\\s<>]+", raw, re.IGNORECASE))
+    direct = re.findall(r"(?:/projects/|/workspace/)[A-Za-z0-9._~/-]+", raw, re.IGNORECASE)
+    if direct:
+        return direct[0][:500]
+    candidates = re.findall(r"(?:(?:[A-Za-z]:[\\/])|\\\\)[^\\s<>]+", raw)
     for candidate in candidates:
         candidate = candidate.rstrip(".,،؛;:)\"'")
-        if candidate not in {"/", "\\"} and any(
-            token in candidate.casefold()
-            for token in ("/projects/", "\\projects\\", "/workspace/", "\\workspace\\")
-        ):
+        if candidate and any(token in candidate.casefold() for token in ("\\projects\\", "\\workspace\\")):
             return candidate[:500]
     return None
 
