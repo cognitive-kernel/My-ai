@@ -94,3 +94,9 @@ def test_llm_router_resolves_ambiguous_request(monkeypatch):
     result = router.classify("یک چیز برای مدیریت داده بساز")
     assert result.name == "coding"
     assert result.confidence == 0.91
+
+
+def test_cisco_learning_is_routed_to_learning():
+    intent = classify("سیسکو را از صفر یاد بگیر")
+    assert intent.name in {"learning", "chat"}
+    assert intent.args.get("language") == "cisco"
