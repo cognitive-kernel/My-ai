@@ -677,7 +677,7 @@ def learning_start_public(course_id:int,request:Request):
     return course_start(course_id,request)
 
 SETTINGS_JS = '''function byId(id){return document.getElementById(id)}
-async function req(url,opt){var r=await fetch(url,opt||{});var text=await r.text();if(!r.ok){var msg=text;try{var e=JSON.parse(text);msg=e.detail||e.message||text}catch(_){ }throw Error(msg||('HTTP '+r.status))}try{return JSON.parse(text)}catch(e){throw Error('پاسخ نامعتبر از سرور: '+text.slice(0,500))}}
+async function req(url,opt){var r;try{r=await fetch(url,opt||{});}catch(e){throw Error('ارتباط با سرور برقرار نشد: '+(e&&e.message?e.message:'Failed to fetch'))}var text=await r.text();if(!r.ok){var msg=text;try{var e=JSON.parse(text);msg=e.detail||e.message||text}catch(_){ }throw Error(msg||('HTTP '+r.status))}try{return JSON.parse(text)}catch(e){throw Error('پاسخ نامعتبر از سرور: '+text.slice(0,500))}}
 function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function setText(id,value){var e=byId(id);if(e)e.textContent=value}
 async function loadUsers(){var box=byId('users');if(!box)return;box.textContent='در حال بارگذاری...';try{var j=await req('/settings/users');var items=j.items||[];box.innerHTML=items.map(function(u){return '<div class="topic"><b>'+esc(u.username)+'</b> — '+esc(u.display_name||'بدون نام')+' — نقش: '+esc(u.role)+' — '+(u.active?'فعال':'غیرفعال')+(u.role==='admin'?'':' <button type="button" onclick="toggleUser('+u.id+','+(!u.active)+')">'+(u.active?'غیرفعال‌کردن':'فعال‌کردن')+'</button>')+'</div>'}).join('')||'کاربری ثبت نشده است'}catch(e){box.textContent='خطا در بارگذاری کاربران: '+e.message}}
