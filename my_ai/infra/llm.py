@@ -6,9 +6,13 @@ import httpx
 import ipaddress
 import urllib.parse
 import time
-from .config import settings
 from .metrics import record_inference, record_error
 from .resource_guard import limits, wait_until_available
+
+def _settings():
+    from .. import llm as legacy_llm
+    return legacy_llm.settings
+
 
 class LLMError(RuntimeError):
     pass
@@ -16,7 +20,7 @@ HistoryMessage = dict[str, str]
 
 class OllamaClient:
     def __init__(self, task: str | None = None) -> None:
-        self.base_url = getattr(settings, "ollama_base_url", "http://127.0.0.1:11434").rstrip("/")
+        self.base_url = getattr(_settings(), "ollama_base_url", "http://127.0.0.1:11434").rstrip("/")
         if getattr(settings, "offline_strict", False):
             host = urllib.parse.urlparse(self.base_url).hostname
             try:
@@ -32,7 +36,7 @@ class OllamaClient:
         if any(x in low for x in ("route","routing","classify","intent","simple","ساده","دسته")): return getattr(settings, "routing_model", self.default_model)
         return self.default_model
     def _options(self) -> dict[str, int]:
-        cfg=limits(); return {"num_ctx":int(settings.ollama_num_ctx),"num_thread":int(cfg["cpu_threads"]),"num_gpu":int(cfg["gpu_layers"])}
+        cfg=limits(); return {"num_ctx":int(_settings().ollama_num_ctx),"num_thread":int(cfg["cpu_threads"]),"num_gpu":int(cfg["gpu_layers"])}
     def stream_chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None,stop_event=None)->Iterator[str]:
         wait_until_available(stop_event, max_wait=settings.resource_wait_seconds); messages: list[HistoryMessage] = []; payload={"model":self.model,"stream":True,"options":self._options(),"keep_alive":settings.ollama_keep_alive,"messages":messages}
         if system: messages.append({"role":"system","content":system})
