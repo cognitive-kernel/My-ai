@@ -67,6 +67,32 @@ def missing_system_prerequisites(kind: str) -> list[str]:
     return [name for name in required if shutil.which(name) is None]
 
 
+def system_prerequisite_status(names: list[str] | None = None) -> dict[str, bool]:
+    requested = [str(name).strip().lower() for name in (names or SYSTEM_PREREQUISITES) if str(name).strip()]
+    unknown = sorted(set(requested) - set(SYSTEM_PREREQUISITES))
+    if unknown:
+        raise ValueError("Unsupported system prerequisites: " + ", ".join(unknown))
+    return {name: bool(shutil.which(SYSTEM_PREREQUISITES[name])) for name in requested}
+
+
+def install_system_prerequisites(names: list[str], *, confirmed: bool = False) -> dict[str, object]:
+    assert_mutation_allowed("install-system-prerequisites")
+    if not confirmed:
+        raise PermissionError("Explicit confirmation is required for system prerequisite installation.")
+    before = system_prerequisite_status(names)
+    installed: list[str] = []
+    for name, present in before.items():
+        if present:
+            continue
+        command = _system_install_command(name)
+        if command is None:
+            raise RuntimeError(f"No supported package manager was found for {name}.")
+        subprocess.run(command, check=True, timeout=900)
+        if shutil.which(SYSTEM_PREREQUISITES[name]):
+            installed.append(name)
+    return {"before": before, "installed": installed, "after": system_prerequisite_status(names)}
+
+
 def _system_install_command(package: str) -> list[str] | None:
     package = str(package).strip().lower()
     if package not in {"git", "ffmpeg", "nmap"}:
