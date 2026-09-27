@@ -1269,7 +1269,6 @@ Supported learning paths:
 - Android / Kotlin
 - iOS / Swift
 - Pentest / Security Testing
-- Cisco networking / IOS
 - Forex
 
 ### Rust
@@ -1320,7 +1319,6 @@ POST /learning/practice
 - progress tracking
 - start/resume
 - pause
-- default Cisco course
 
 ```text
 GET  /settings/courses
@@ -1883,7 +1881,6 @@ This section is intentional: it distinguishes **module exists**, **feature imple
 - [x] SQL Server/MySQL/SQLite curricula
 - [x] Android/Kotlin and iOS/Swift curricula
 - [x] Pentest curriculum
-- [x] Cisco curriculum
 - [x] Forex 121-topic curriculum
 - [x] Custom courses
 - [x] Code generation
