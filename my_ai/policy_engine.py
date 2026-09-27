@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from fastapi import HTTPException
 
-from .access_policy import permission_for_path, read_only_blocked
+from .access_policy import permission_for_path, read_only_blocked, is_public_path
 from .auth import tool_allowed
 
 @dataclass(frozen=True)
@@ -16,10 +16,12 @@ class PolicyDecision:
 class PolicyEngine:
     """Single deny-by-default route policy for all API mutations and executions."""
     def decide(self, *, user, method: str, path: str, read_only: bool) -> PolicyDecision:
+        if is_public_path(path):
+            return PolicyDecision(True)
         if read_only_blocked(read_only, method, path):
             return PolicyDecision(False, reason="read_only")
         permission = permission_for_path(path, method)
-        if permission is None and method.upper() != "GET":
+        if permission is None and method.upper() != "GET" and user is not None and user.get("role") != "admin":
             return PolicyDecision(False, reason="unmapped_write_or_execute_route")
         if permission is None:
             return PolicyDecision(True)
