@@ -88,8 +88,8 @@ def status():
         branch = _git("branch", "--show-current")
         head = _git("rev-parse", "HEAD")
         dirty = bool(_git("status", "--porcelain"))
-        enabled = _policy_flag("MYAI_SELF_UPDATE_ENABLED", "self_update.enabled")
-        approved = _policy_flag("MYAI_SELF_UPDATE_APPROVED", "self_update.approved")
+        enabled = get_bool("self_update.enabled", False)
+        approved = get_bool("self_update.approved", False)
         return {
             "ok": True,
             "branch": branch,
