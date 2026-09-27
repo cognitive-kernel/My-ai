@@ -16,6 +16,12 @@ class FilePathRequest(BaseModel):
     path: str
 
 
+class PrerequisiteRequest(BaseModel):
+    path: str
+    install_system: bool = False
+    confirmed: bool = False
+
+
 class GenerateDocxRequest(BaseModel):
     filename: str
     title: str
@@ -175,11 +181,13 @@ def register_routes(app, scheduler, require_user, audit):
         return result
 
     @router.post("/files/prerequisites")
-    def files_prerequisites(payload: FilePathRequest, request: Request, install_system: bool = False):
-        require_user(request)
+    def files_prerequisites(payload: PrerequisiteRequest, request: Request):
+        user = require_admin(request) if payload.install_system else require_user(request)
         kind = detect_type(payload.path)["kind"]
-        result = install_known_prerequisites(kind, install_system=install_system)
-        return {"kind": kind, "missing_before": missing_prerequisites(kind), **result}
+        if payload.install_system and not payload.confirmed:
+            raise HTTPException(409, "System prerequisite installation requires explicit confirmation.")
+        result = install_known_prerequisites(kind, install_system=payload.install_system)
+        return {"kind": kind, "missing_before": missing_prerequisites(kind), **result, "actor": user.get("username")}
 
     @router.post("/files/generate/docx")
     def files_generate_docx(payload: GenerateDocxRequest, request: Request):
