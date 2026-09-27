@@ -24,6 +24,7 @@ def test_settings_feature_can_register_directly():
 
 
 def test_legacy_cisco_course_is_purged():
+    sf.execute("DELETE FROM app_settings WHERE key=?", ("migration.legacy_cisco_cleanup_v1",))
     sf.execute("INSERT OR IGNORE INTO custom_courses(name,description) VALUES(?,?)", ("Cisco", "legacy"))
     sf._setup()
     assert not sf.fetch_all("SELECT id FROM custom_courses WHERE lower(name)=lower(?)", ("Cisco",))
