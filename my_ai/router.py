@@ -58,7 +58,7 @@ def _parse_router_payload(raw: str) -> dict[str, Any]:
     data = json.loads(raw)
     if not isinstance(data, dict):
         raise ValueError("Router output must be a JSON object.")
-    required = ROUTER_TOOL_SCHEMA["parameters"]["required"]
+    required: list[str] = list(ROUTER_TOOL_SCHEMA["parameters"]["required"])
     if any(key not in data for key in required):
         raise ValueError("Router output is missing required fields.")
     return data
