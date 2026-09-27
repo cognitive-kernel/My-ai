@@ -45,7 +45,9 @@ jobs:
           cat /tmp/ollama.log || true
           exit 1
       - name: Install project
-        run: pip install -e .[dev]
+        run: |
+          pip install -r requirements.lock
+          pip install -e .[dev] --no-deps
       - name: Run Ollama smoke test
         env:
           OLLAMA_MODEL: qwen2.5:0.5b
