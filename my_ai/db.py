@@ -17,7 +17,13 @@ fetch_all = _persistence.fetch_all
 _write_blocked = _persistence._write_blocked
 init_db = _persistence.init_db
 _normalize_search_text = _persistence._normalize_search_text
-remember_knowledge = _persistence.remember_knowledge
-search_knowledge = _persistence.search_knowledge
+def remember_knowledge(*args, **kwargs):
+    _persistence.connect = connect
+    return _persistence.remember_knowledge(*args, **kwargs)
+
+
+def search_knowledge(*args, **kwargs):
+    _persistence.connect = connect
+    return _persistence.search_knowledge(*args, **kwargs)
 
 __all__ = ["SCHEMA", "connect", "execute", "fetch_all", "init_db", "_normalize_search_text", "remember_knowledge", "search_knowledge"]
