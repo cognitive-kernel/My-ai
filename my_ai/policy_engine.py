@@ -24,7 +24,12 @@ class PolicyEngine:
         if permission is None:
             if user is not None and user.get("role") == "admin":
                 return PolicyDecision(True)
-            return PolicyDecision(False, reason="unmapped_route")
+            reason = (
+                "unmapped_write_or_execute_route"
+                if method.upper() != "GET"
+                else "unmapped_route"
+            )
+            return PolicyDecision(False, reason=reason)
         tool, action = permission
         if user is None:
             return PolicyDecision(False, tool, action, "authentication_required")
