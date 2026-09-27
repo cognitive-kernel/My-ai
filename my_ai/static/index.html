@@ -50,10 +50,12 @@ fetch('/scheduler/status',{cache:'no-store'}),
 fetch('/learning/active',{cache:'no-store'})
 ]);
 var j=await rr[0].json(),s=await rr[1].json(),ac=await rr[2].json();
-var courses=j.courses||[],workers=s.workers||[],workerMap={},items=[];
+var courses=j.courses||[],workers=s.workers||[],workerMap={},customMap={},items=[];
+(ac.items||[]).forEach(function(x){var c=x.course||{},key=String(c.name||'').trim().toLowerCase();if(key)customMap[key]=x});
 workers.forEach(function(w){workerMap[String(w.language||'').toLowerCase()]=w});
 courses.forEach(function(x){
-var language=String(x.language||x.name||'').trim();
+var language=String(x.language||x.name||'').trim(),custom=customMap[language.toLowerCase()];
+if(custom){var cs=custom.summary||{};x={language:language,progress_percent:Number(cs.progress_percent||0),total_topics:Number(cs.total_topics||0),completed_topics:Number(cs.completed_topics||0),remaining_topics:Math.max(0,Number(cs.total_topics||0)-Number(cs.completed_topics||0)),current:cs.current?{topic:cs.current.title||cs.current.topic}:null,topics:cs.topics||[]};}
 if(!language||Number(x.progress_percent||0)>=100)return;
 items.push(x);
 });
@@ -85,10 +87,12 @@ var activeCount=workers.filter(function(w){return w.running||['running','retryin
 html+='<div class="small" style="margin-bottom:10px"><b>موضوعات آموزشی:</b> '+items.length+' مورد'+(activeCount?' · <b>در حال یادگیری:</b> '+activeCount+' مورد':'')+'</div>';
 items.forEach(function(summary){
 var language=summary.language||summary.name||'آموزش';
-var w=workerMap[String(language).toLowerCase()]||null;
-var status=w?(w.status||'stopped'):'stopped';
+var custom=customMap[String(language).toLowerCase()]||null;
+var w=custom?null:(workerMap[String(language).toLowerCase()]||null);
+var customRunning=!!(custom&&custom.course&&Array.isArray(ac.running)&&ac.running.indexOf(Number(custom.course.id))>=0);
+var status=custom?(customRunning?'running':'stopped'):(w?(w.status||'stopped'):'stopped');
 var current=w&&w.current_topic||((summary.current||{}).topic)||'در انتظار ادامه';
-var stage=w&&w.stage||'paused';
+var stage=w&&w.stage||(customRunning?'learning':'paused');
 var pct=Number(summary.progress_percent||0);
 var cardClass=status==='stopping'?'learning-stopping':(status==='running'||status==='retrying'?'learning-running':'learning-stopped');
 var stateText=status==='stopping'?'در حال توقف…':(status==='running'||status==='retrying'?'در حال اجرا':'متوقف شده');
@@ -97,7 +101,7 @@ html+='<div class="learningMeta"><span class="pill '+(status==='running'||status
 if(w&&w.error)html+='<div>خطا: '+escHtml(w.error)+'</div>';
 html+='<div class="bar"><div class="fill" style="width:'+pct+'%">'+pct+'%</div></div>';
 html+='<p class="small">مسیر یادگیری '+escHtml(language)+' — برای مشاهده سرفصل‌ها روی همین بخش کلیک کنید.</p>';
-html+='<button type="button" data-learning-action="stop" data-learning-language="'+escHtml(language)+'" '+(status!=='running'&&status!=='retrying'?'disabled':'')+'>متوقف کردن</button>';
+html+='<button type="button" data-learning-action="stop" data-learning-language="'+escHtml(language)+'" '+(custom|| (status!=='running'&&status!=='retrying')?'disabled':'')+'>متوقف کردن</button>';
 html+='<button type="button" data-learning-action="resume" data-learning-language="'+escHtml(language)+'" '+(status==='running'||status==='retrying'||status==='stopping'?'disabled':'')+'>ادامه</button>';
 (summary.topics||[]).forEach(function(t){
 html+='<div class="small" style="margin-top:10px"><b>'+escHtml(t.order||t.topic_order)+'. '+escHtml(t.topic||t.title)+'</b> — '+Number(t.progress_percent||0)+'%</div>';
