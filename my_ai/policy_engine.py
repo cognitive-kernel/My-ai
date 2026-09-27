@@ -22,8 +22,6 @@ class PolicyEngine:
             return PolicyDecision(False, reason="read_only")
         permission = permission_for_path(path, method)
         if permission is None:
-            if user is not None and user.get("role") == "admin":
-                return PolicyDecision(True)
             reason = (
                 "unmapped_write_or_execute_route"
                 if method.upper() != "GET"
