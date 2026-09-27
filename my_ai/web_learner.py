@@ -24,6 +24,7 @@ class WebLearner:
             previous = cls._last_fetch.get(host, 0.0)
             wait = cls._min_interval - (now - previous)
             if wait > 0:
+                logger.info("web fetch rate limit wait", extra={"host": host, "wait": round(wait, 3)})
                 if stop_event is not None:
                     if stop_event.wait(wait):
                         raise InterruptedError("learning stopped")
