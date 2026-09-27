@@ -7,6 +7,11 @@ from typing import Any
 
 from .config import settings
 
+
+def _write_blocked() -> bool:
+    return bool(getattr(settings, "read_only", False))
+
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS chat_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,kind TEXT NOT NULL DEFAULT 'chat',language TEXT,pinned INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS conversations (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
@@ -176,6 +181,8 @@ def init_db() -> None:
             conn.execute("INSERT INTO schema_meta(key,value) VALUES('knowledge_fts_rebuilt_v1','done')")
 
 def execute(sql: str, params: tuple[Any, ...] = ()) -> int:
+    if _write_blocked() and sql.lstrip().split(None, 1)[0].upper() in {"INSERT", "UPDATE", "DELETE", "REPLACE", "ALTER", "DROP", "CREATE"}:
+        raise PermissionError("MYAI_READ_ONLY blocks database mutation.")
     with connect() as conn:
         cur = conn.execute(sql, params)
         conn.commit()
