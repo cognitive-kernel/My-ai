@@ -10,6 +10,7 @@ from .config import settings
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS chat_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,kind TEXT NOT NULL DEFAULT 'chat',language TEXT,pinned INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS conversations (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS chat_attachments (id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id INTEGER, session_id INTEGER NOT NULL, name TEXT NOT NULL, path TEXT NOT NULL, size INTEGER NOT NULL DEFAULT 0, mime_type TEXT NOT NULL DEFAULT 'application/octet-stream', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE, FOREIGN KEY(session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS knowledge (id INTEGER PRIMARY KEY AUTOINCREMENT, topic TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL, source_url TEXT, content_hash TEXT, verification_status TEXT NOT NULL DEFAULT 'unverified', verified_at TEXT, verified_by INTEGER, confidence REAL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS knowledge_embeddings (knowledge_id INTEGER NOT NULL, content_hash TEXT NOT NULL, model TEXT NOT NULL, embedding TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(knowledge_id,model), FOREIGN KEY(knowledge_id) REFERENCES knowledge(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS learning_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, language TEXT NOT NULL, topic TEXT NOT NULL, status TEXT NOT NULL, score REAL, notes TEXT, progress_percent REAL NOT NULL DEFAULT 0, phase TEXT NOT NULL DEFAULT 'starting', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
@@ -120,6 +121,8 @@ def _deduplicate_knowledge(conn: sqlite3.Connection) -> None:
 def init_db() -> None:
     with connect() as conn:
         conn.executescript(SCHEMA)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_attachments_session ON chat_attachments(session_id, id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_attachments_conversation ON chat_attachments(conversation_id, id)")
         cols=[r[1] for r in conn.execute("PRAGMA table_info(conversations)").fetchall()]
         if "session_id" not in cols: conn.execute("ALTER TABLE conversations ADD COLUMN session_id INTEGER")
         cols_sessions=[r[1] for r in conn.execute("PRAGMA table_info(chat_sessions)").fetchall()]
