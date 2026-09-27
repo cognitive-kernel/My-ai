@@ -25,6 +25,8 @@ def _piper_binary() -> str | None:
 def status(transcription_model: str | None = None, synthesis_model: str | None = None) -> dict[str, object]:
     whisper = _whisper_binary()
     piper = _piper_binary()
+    transcription_model = transcription_model or os.getenv("WHISPER_MODEL_PATH", "").strip() or None
+    synthesis_model = synthesis_model or os.getenv("PIPER_MODEL_PATH", "").strip() or None
     whisper_model_ok = bool(transcription_model and Path(transcription_model).expanduser().is_file())
     piper_model_ok = bool(synthesis_model and Path(synthesis_model).expanduser().is_file())
     probes = {}
