@@ -2054,11 +2054,11 @@ This policy is part of the development contract: new features must remain offlin
 
 این موارد در نسخه فعلی دیگر به‌عنوان backlog کدنویسی ثبت نمی‌شوند:
 
-- Unified API policy + deny-by-default route handling + application/database read-only enforcement.
+- Unified API policy + deny-by-default route handling + process-wide OS/database read-only enforcement برای writerهای اصلی.
 - Structured semantic router with schema validation and regression coverage؛ deterministic matching فقط safety fallback است وقتی classifier در دسترس نیست.
 - Hybrid FTS5 + local embedding retrieval با provenance، verification state و confidence calibration بر اساس retrieval judgments.
-- Knowledge management UI در /admin/knowledge با verify/audit workflow.
-- Skill evidence، sandbox benchmark، score مستقل و version-aware revalidation.
+- Knowledge management UI در /admin/knowledge با create/edit/verify/audit workflow و نمایش provenance/confidence.
+- Skill Engine UI در /admin/skills؛ جداسازی knowledge coverage از verified skill، evidence قابل مشاهده، sandbox benchmark و version-aware revalidation.
 - Streaming/multi-session، backup/export/import با versioning و SHA-256 integrity metadata.
 - Model health با availability per role و fallback readiness.
 - Local whisper.cpp/Piper health checks و semantic audio/video analysis.
