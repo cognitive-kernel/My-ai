@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import threading
 import logging
+import time
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from .learner import LearningEngine
@@ -34,6 +36,8 @@ class StudyScheduler:
         self._restart_lock = threading.Lock()
         self._supervisor_stop = threading.Event()
         self._supervisor_thread = None
+        self._lease_owner = uuid.uuid4().hex
+        self._lease_seconds = 30.0
 
     def start_learning_supervisor(self):
         if self._supervisor_thread and self._supervisor_thread.is_alive():
@@ -89,9 +93,49 @@ class StudyScheduler:
         known = canonical_language(language)
         return known if known in LANGUAGE_CURRICULA else language
 
+    def _ensure_lease_table(self):
+        execute(
+            "CREATE TABLE IF NOT EXISTS learning_worker_leases (language TEXT PRIMARY KEY, owner TEXT NOT NULL, lease_until REAL NOT NULL)"
+        )
+
+    def _acquire_lease(self, language):
+        self._ensure_lease_table()
+        now = time.time()
+        lease_until = now + self._lease_seconds
+        with self._lock:
+            rows = fetch_all(
+                "SELECT owner,lease_until FROM learning_worker_leases WHERE language=?",
+                (language,),
+            )
+            if rows and float(rows[0]["lease_until"]) > now and rows[0]["owner"] != self._lease_owner:
+                return False
+            execute(
+                """INSERT INTO learning_worker_leases(language,owner,lease_until)
+                   VALUES(?,?,?)
+                   ON CONFLICT(language) DO UPDATE SET owner=excluded.owner,lease_until=excluded.lease_until""",
+                (language, self._lease_owner, lease_until),
+            )
+            return True
+
+    def _renew_lease(self, language):
+        updated = execute(
+            "UPDATE learning_worker_leases SET lease_until=? WHERE language=? AND owner=?",
+            (time.time() + self._lease_seconds, language, self._lease_owner),
+        )
+        return bool(updated)
+
+    def _release_lease(self, language):
+        execute(
+            "DELETE FROM learning_worker_leases WHERE language=? AND owner=?",
+            (language, self._lease_owner),
+        )
+
     def start(self, language="Python", session_id=None):
         language = self._normalize_language(language)
         key = language.casefold()
+        if not self._acquire_lease(language):
+            logger.info("LEARNING_WORKER_LEASE_HELD: language=%s", language)
+            return
         with self._lock:
             existing = self._workers.get(key)
             if existing and existing[0].is_alive():
@@ -447,7 +491,13 @@ class StudyScheduler:
         consecutive_errors = 0
         slot_acquired = False
         try:
+            lease_renew_at = 0.0
             while not stop_event.is_set():
+                if time.time() >= lease_renew_at:
+                    if not self._renew_lease(language):
+                        logger.error("LEARNING_WORKER_LEASE_LOST: language=%s", language)
+                        break
+                    lease_renew_at = time.time() + (self._lease_seconds / 3.0)
                 if not slot_acquired:
                     slot_acquired = self._worker_slots.acquire(timeout=0.5)
                     if not slot_acquired:
@@ -517,6 +567,7 @@ class StudyScheduler:
                     self._worker_slots.release()
                 except ValueError:
                     pass
+            self._release_lease(language)
             unexpected_exit = not stop_event.is_set()
             with self._lock:
                 self._workers.pop(language.casefold(), None)
