@@ -84,11 +84,15 @@ class StudyScheduler:
         self._monitor_thread.start()
 
     def _normalize_language(self, language):
+        """Normalize the requested worker language without cross-worker inference.
+
+        A scheduler worker must keep the identity selected by its caller. Falling
+        back to the latest learning message can silently turn e.g. a PHP worker
+        into an Android worker when another chat mentions Android.
+        """
         language = str(language or "Python").strip() or "Python"
         known = canonical_language(language)
-        if known in LANGUAGE_CURRICULA:
-            return known
-        return resolve_learning_target(self._latest_learning_message(), language)
+        return known if known in LANGUAGE_CURRICULA else language
 
     def start(self, language="Python", session_id=None):
         language = self._normalize_language(language)
@@ -457,6 +461,8 @@ class StudyScheduler:
                         continue
                 try:
                     if language not in LANGUAGE_CURRICULA:
+                        # Custom domains are created for this worker only; never
+                        # resolve the worker to another language from chat history.
                         language = ensure_domain(language, getattr(engine, "llm", None)) or language
                     resources = self._wait_for_resources(stop_event)
                     self._update_worker(language, "starting", status="running")
