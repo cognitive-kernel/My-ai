@@ -26,7 +26,7 @@ from .learning_resilience import install as install_learning_resilience
 from .ui_extensions import install_ui_extensions
 from .help import page as help_page, ask_help, local_help_html, apply_help_update
 from .git_connector import GitHubConnector
-from .auth import authenticate, audit, create_account, create_session, current_user, require_admin, revoke_session, require_user, tool_allowed, TOOL_RULES as AUTH_TOOL_RULES, PATH_ACTIONS as AUTH_PATH_ACTIONS
+from .auth import authenticate, audit, create_account, create_session, current_user, require_admin, revoke_session, require_user, tool_allowed
 from .platform import backup_database, choose_model, eval_retrieval, export_database, hybrid_search, import_database, model_health, resource_status, voice_status, web_fetch_policy
 from .self_update import status as self_update_status, apply_confirmed_update as self_update_apply, preview_update
 from .self_repair import diagnose_local, propose_repair, apply_repair, proposal_status
@@ -41,6 +41,7 @@ from .image_generation import generate_image, ImageGenerationError
 from .runtime_prerequisites import startup_check, runtime_status
 from .local_files import WORKSPACE_ROOT
 from .settings_feature import start_named_course, shutdown_course_workers
+from .access_policy import PUBLIC_PATHS, TOOL_RULES, PATH_ACTIONS, is_public_path, permission_for_path, read_only_blocked
 from .readiness import build_readiness
 
 scheduler=StudyScheduler()
@@ -87,9 +88,6 @@ register_routes(app, scheduler, require_user, audit)
 install_learning_resilience()
 install_ui_extensions(app)
 
-_PUBLIC_PATHS = {"/", "/login", "/register", "/auth/register", "/auth/login", "/auth/logout", "/auth/register/status", "/health", "/health/metrics", "/openapi.json", "/docs", "/redoc"}
-_TOOL_RULES = AUTH_TOOL_RULES
-_PATH_ACTIONS = AUTH_PATH_ACTIONS
 _LOGIN_FAILURES: dict[str, tuple[int, float]] = {}
 _LOGIN_FAILURE_LIMIT = 5
 _LOGIN_FAILURE_WINDOW = 300.0
@@ -111,28 +109,22 @@ def _cleanup_login_failures(now: float) -> None:
 async def auth_and_audit_middleware(request: Request, call_next):
     path=request.url.path
     user=current_user(request)
-    if path not in _PUBLIC_PATHS and not path.startswith("/docs/") and not user:
+    if not is_public_path(path) and not user:
         if "application/json" in request.headers.get("accept","").lower():
-            return JSONResponse({"detail":"Authentication required."},status_code=401)
-        return RedirectResponse("/login",status_code=303)
-    if settings.read_only and request.method in {"POST", "PUT", "PATCH", "DELETE"} and path not in {"/auth/login", "/auth/logout"} and not path.startswith("/docs/"):
+            return JSONResponse({"detail":"Authentication required."}, status_code=401)
+        return RedirectResponse("/login", status_code=303)
+    if read_only_blocked(settings.read_only, request.method, path):
         return JSONResponse({"detail":"MYAI_READ_ONLY is enabled; write operation blocked."}, status_code=423)
     if user and user["role"] != "admin":
-        permission = None
-        for prefix,tool in _TOOL_RULES:
-            if path.startswith(prefix) or path == prefix.rstrip("/"):
-                action=_PATH_ACTIONS.get(path, "read" if request.method=="GET" else "write" if request.method in {"PUT","PATCH","DELETE"} else "execute")
-                permission = (tool, action)
-                break
+        permission = permission_for_path(path, request.method)
         if permission is None:
-            # Legacy routes without an explicit tool mapping are read-only for
-            # ordinary users. New write/execute routes must opt into a rule.
-            if request.method != "GET" and path not in {"/auth/login", "/auth/logout", "/auth/register", "/auth/register/status"}:
+            # Every non-GET route must be explicitly registered in the central policy.
+            if request.method != "GET":
                 return JSONResponse({"detail":"Tool permission denied: unmapped write/execute route."}, status_code=403)
         else:
             tool, action = permission
-            if not tool_allowed(user,tool,action):
-                return JSONResponse({"detail":f"Tool permission denied: {tool}:{action}"},status_code=403)
+            if not tool_allowed(user, tool, action):
+                return JSONResponse({"detail":f"Tool permission denied: {tool}:{action}"}, status_code=403)
     response=await call_next(request)
     if user and path!="/auth/logout":
         action={"GET":"read","POST":"execute","PUT":"write","PATCH":"write","DELETE":"write"}.get(request.method,request.method.lower())
