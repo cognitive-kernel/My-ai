@@ -55,6 +55,25 @@ class Agent:
         self.llm = llm or create_llm("general")
 
     @staticmethod
+    def _required_citations(knowledge: list[dict]) -> str:
+        citations: list[str] = []
+        for item in knowledge[:4]:
+            provenance = item.get("provenance") or {}
+            if not isinstance(provenance, dict):
+                provenance = {"source_url": str(provenance)}
+            citation_id = str(provenance.get("citation_id") or f"K{item.get('id')}")
+            title = str(provenance.get("title") or item.get("title") or "local knowledge")
+            source = str(provenance.get("source_url") or f"local://knowledge/{item.get('id')}")
+            confidence = item.get("confidence")
+            confidence_text = (
+                f"{float(confidence):.3f}"
+                if confidence is not None and item.get("confidence_calibrated")
+                else "uncalibrated"
+            )
+            citations.append(f"- [{citation_id}] {title} — {source} (confidence: {confidence_text})")
+        return "\n\nSources (mandatory provenance):\n" + "\n".join(citations) if citations else ""
+
+    @staticmethod
     def _is_identity_question(message: str) -> bool:
         text = re.sub(r"\s+", " ", message.strip().lower())
         patterns = (
@@ -256,14 +275,9 @@ class Agent:
         )
         answer = self._handle_unknown(answer, message, session_id)
         if knowledge and "__MYAI_UNKNOWN__" not in str(answer):
-            citations = []
-            for item in enriched_knowledge[:4]:
-                source = str(item.get("provenance") or "").strip()
-                if source and source != "local-knowledge":
-                    confidence = item.get("confidence_label")
-                    citations.append(f"- {source} (confidence: {confidence})")
-            if citations and "Sources:" not in answer:
-                answer = answer.rstrip() + "\n\nSources:\n" + "\n".join(citations)
+            citation_block = self._required_citations(enriched_knowledge)
+            if citation_block and not any(f"[K{item.get('id')}]" in str(answer) for item in enriched_knowledge[:4]):
+                answer = answer.rstrip() + citation_block
         execute(
             "INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",
             (session_id, "user", message),
@@ -322,6 +336,11 @@ class Agent:
             chunks.append(text_chunk)
             yield text_chunk
         answer=self._handle_unknown("".join(chunks),message,session_id)
+        if knowledge and "__MYAI_UNKNOWN__" not in str(answer):
+            citation_block = self._required_citations(enriched_knowledge)
+            if citation_block and not any(f"[K{item.get('id')}]" in str(answer) for item in enriched_knowledge[:4]):
+                answer = answer.rstrip() + citation_block
+                yield citation_block
         execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(session_id,"assistant",answer))
         execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(session_id,))
 
