@@ -802,20 +802,23 @@ POST /files/generate/pptx
 
 ماژول: `voice.py`
 
-Browser APIs:
+Voice کاملاً local/offline است:
 
-- `SpeechRecognition`
-- `webkitSpeechRecognition`
-- `speechSynthesis`
+- ضبط صدا با MediaRecorder در مرورگر؛ هیچ SpeechRecognition/`webkitSpeechRecognition` یا speechSynthesis ابری استفاده نمی‌شود.
+- STT با whisper.cpp.
+- TTS با Piper.
+- ضبط‌های browser مانند WebM قبل از STT با FFmpeg به WAV نرمال می‌شوند.
+- مدل‌های local از `WHISPER_MODEL_PATH` و `PIPER_MODEL_PATH` خوانده می‌شوند.
+- Voice API فقط به مسیر `data/voice` دسترسی می‌دهد.
 
-زبان‌ها:
+زبان‌های UI فعلی:
 
 ```text
 fa-IR
- en-US
+en-US
 ```
 
-Voice input به browser support و microphone permission وابسته است.
+در نبود engine/model محلی، Voice fail-closed می‌شود و fallback ابری ندارد.
 
 ## 27. Backup / Restore و رمزنگاری
 
@@ -1185,18 +1188,18 @@ python -m compileall -q my_ai tests
 
 CI روی push و pull request اجرا می‌شود و تست‌ها، compile، security checks، dependency checks و Docker build را پوشش می‌دهد.
 
-## 45. وضعیت و مرزهای فعلی
+## 45. وضعیت implementation و مرزهای واقعی
 
-برای جلوگیری از ادعای بیش از implementation واقعی:
+- File access برای read/list/inspect/read read-only است؛ upload و generation فقط عملیات write صریح هستند.
+- prerequisite manager هم dependencyهای Python و هم prerequisiteهای system مانند Git/FFmpeg/Nmap را با allowlist و package-manager شناخته‌شده بررسی/نصب می‌کند؛ نصب خودکار پیش‌فرض خاموش است.
+- audio/video علاوه بر metadata، transcription محلی، semantic transcript analysis و برای video تحلیل frame و summary ترکیبی دارند.
+- Chat-to-document برای DOCX/XLSX/PDF/PPTX ساختار heading/list/paragraph را حفظ می‌کند و خروجی workspace-safe تولید می‌کند.
+- policy سراسری API deny-by-default است و mutation guard در database، workspace، voice و self-update نیز اعمال می‌شود؛ `MYAI_READ_ONLY=true` برای processهای خارجیِ خارج از My-AI ذاتاً قابل اعمال نیست.
+- اجرای `python -m my_ai` و `uvicorn my_ai.api:app` از همان FastAPI application و startup path استفاده می‌کنند.
+- Browser E2E در workflow جداگانه روی pull request نیز اجرا می‌شود.
+- self-update همچنان deny-by-default است و activation فقط با enable + explicit approval انجام می‌شود.
 
-- File access جدید برای read/list/inspect/read read-only است؛ write در upload/generation صریح انجام می‌شود.
-- prerequisite auto-install فعلاً برای dependencyهای Python شناخته‌شده است؛ نصب خودکار نرم‌افزارهای سیستم‌عاملی مانند FFmpeg/LibreOffice عمومی نیست.
-- audio/video در implementation فعلی عمدتاً metadata را از `ffprobe` می‌گیرند؛ semantic transcription کامل نیازمند integration مربوطه است.
-- file generation endpointها وجود دارند؛ تبدیل دستور طبیعی Chat به workflow کامل تولید هر نوع سند ممکن است به توسعه routing/agent بیشتری نیاز داشته باشد.
-- extended feature routes در مسیر اجرای `python -m my_ai` ثبت می‌شوند.
-- قابلیت‌های قدیمی project/self-update/code-generation ممکن است policy نوشتن مخصوص خود را داشته باشند؛ policy سراسری «کل سیستم read-only تا فرمان صریح» هنوز یک refactor واحد و سراسری نیست.
-
-این بخش عمداً در README باقی مانده تا تفاوت بین «ماژول موجود»، «قابلیت پیاده‌سازی‌شده» و «قابلیت کامل end-to-end» مشخص باشد.
+این بخش عمداً فقط محدودیت‌هایی را نگه می‌دارد که واقعاً خارج از مرز کنترل application هستند.
 
 ---
 
