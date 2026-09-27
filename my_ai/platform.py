@@ -168,21 +168,37 @@ def hybrid_search(query: str, limit: int = 8, verified_only: bool = False) -> li
 
 
 def model_health() -> dict[str, Any]:
-    models = []
+    configured = {
+        "default": settings.ollama_model,
+        "routing": settings.routing_model,
+        "coding": settings.coding_model,
+        "fallback": settings.fallback_model,
+        "embedding": settings.embedding_model,
+    }
     try:
         r = httpx.get(_ollama_url("/api/tags"), timeout=10)
         r.raise_for_status()
-        models = [m.get("name") for m in r.json().get("models", [])]
+        available = {str(m.get("name")) for m in r.json().get("models", []) if m.get("name")}
+        models = {}
+        for role, name in configured.items():
+            models[role] = {"name": name, "available": name in available}
+        healthy = bool(models["default"]["available"] and models["fallback"]["available"])
+        return {
+            "healthy": healthy,
+            "provider": "ollama",
+            "models": models,
+            "available": sorted(available),
+            "fallback_ready": models["fallback"]["available"],
+        }
     except Exception as exc:
-        return {"healthy": False, "provider": "ollama", "error": str(exc), "models": models}
-    return {
-        "healthy": settings.ollama_model in models,
-        "provider": "ollama",
-        "routing_model": os.getenv("ROUTER_MODEL", settings.ollama_model),
-        "coding_model": os.getenv("CODING_MODEL", settings.ollama_model),
-        "fallback_model": os.getenv("FALLBACK_MODEL", settings.ollama_model),
-        "models": models,
-    }
+        return {
+            "healthy": False,
+            "provider": "ollama",
+            "models": {role: {"name": name, "available": False} for role, name in configured.items()},
+            "available": [],
+            "fallback_ready": False,
+            "error": str(exc),
+        }
 
 
 def choose_model(task: str) -> str:
