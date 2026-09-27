@@ -151,6 +151,7 @@ def generic_inspection(path: str, *, max_hash_bytes: int = 16 * 1024 * 1024) -> 
 
 
 def create_docx(path: str, title: str, paragraphs: list[str]) -> str:
+    assert_mutation_allowed("document generation")
     from docx import Document
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
