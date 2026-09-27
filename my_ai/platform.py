@@ -426,6 +426,14 @@ class sqlite3_backup:
 def export_database(destination: str, password: str | None = None) -> str:
     assert_mutation_allowed("database export")
     dst = _safe_backup_path(destination)
+    tables = BACKUP_CORE_TABLES + (BACKUP_SENSITIVE_TABLES if password else ())
+    data: dict[str, list[dict[str, Any]]] = {}
+    with connect() as conn:
+        for table in tables:
+            try:
+                data[table] = [dict(x) for x in conn.execute(f"SELECT * FROM {table}").fetchall()]
+            except Exception:
+                data[table] = []
     metadata = _backup_manifest(data, encrypted=bool(password))
     payload = {"metadata": metadata, "tables": data}
     raw = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
@@ -433,7 +441,6 @@ def export_database(destination: str, password: str | None = None) -> str:
         from .backup_crypto import encrypt_bytes
         raw = encrypt_bytes(raw, password)
     return _atomic_replace_bytes(dst, raw)
-
 
 def _import_data(data: dict[str, Any]) -> dict[str, Any]:
     assert_mutation_allowed("database import")
