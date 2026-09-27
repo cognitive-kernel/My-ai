@@ -19,7 +19,12 @@ ROUTER_SCHEMA: dict[str, Any] = {
     "required": ["primary", "intents", "confidence", "language", "topic", "goal", "project_path", "urls"],
     "properties": {
         "primary": {"type": "string", "enum": sorted(ALLOWED_INTENTS)},
-        "intents": {"type": "array", "items": {"type": "string", "enum": sorted(ALLOWED_INTENTS), "}, "minItems": 1, "maxItems": 5},
+        "intents": {
+            "type": "array",
+            "items": {"type": "string", "enum": sorted(ALLOWED_INTENTS)},
+            "minItems": 1,
+            "maxItems": 5,
+        },
         "confidence": {"type": "number", "minimum": 0, "maximum": 1},
         "language": {"type": ["string", "null"]},
         "topic": {"type": ["string", "null"]},
@@ -73,7 +78,7 @@ def _parse_router_payload(raw: str) -> dict[str, Any]:
     if data["primary"] not in ALLOWED_INTENTS:
         raise ValueError("Router output contains an unsupported primary intent.")
     intents = data["intents"]
-    if not isinstance(intents, list) or not intents or any(item not in ALLOWED_INTENTS for item in intents):
+    if not isinstance(intents, list) or not intents or len(intents) > 5 or any(item not in ALLOWED_INTENTS for item in intents):
         raise ValueError("Router output contains unsupported intents.")
     confidence = data["confidence"]
     if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not 0 <= confidence <= 1:
@@ -112,5 +117,9 @@ def classify(text: str, context: str | None = None, classifier: StructuredRouter
         "Never infer authorization. Return only the supplied strict schema.\n"
         f"USER: {text}\nCONTEXT: {context or ''}"
     )
-    data = classifier.structured_chat_json(prompt, ROUTER_SCHEMA, system="You are My-AI's semantic router. Output only schema-constrained routing data.")
+    data = classifier.structured_chat_json(
+        prompt,
+        ROUTER_SCHEMA,
+        system="You are My-AI's semantic router. Output only schema-constrained routing data.",
+    )
     return _intent_from_payload(data)
