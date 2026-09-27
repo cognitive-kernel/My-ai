@@ -6,6 +6,7 @@ import subprocess
 import re
 import time
 import logging
+import uuid
 from urllib.parse import urlparse
 from pathlib import Path
 from fastapi import FastAPI,HTTPException,Request
@@ -44,6 +45,7 @@ from .runtime_prerequisites import startup_check, runtime_status
 from .local_files import WORKSPACE_ROOT
 from .settings_feature import start_named_course, shutdown_course_workers
 from .access_policy import is_public_path, permission_for_path, read_only_blocked, TOOL_RULES, PATH_ACTIONS
+from .policy_engine import policy, audit_payload
 _TOOL_RULES = TOOL_RULES
 _PATH_ACTIONS = PATH_ACTIONS
 from .api_models import (
@@ -120,41 +122,40 @@ def _cleanup_login_failures(now: float) -> None:
 
 @app.middleware("http")
 async def auth_and_audit_middleware(request: Request, call_next):
-    path=request.url.path
-    user=current_user(request)
+    path = request.url.path
+    request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
+    request.state.request_id = request_id
+    user = current_user(request)
     if not is_public_path(path) and not user:
-        if "application/json" in request.headers.get("accept","").lower():
-            return JSONResponse({"detail":"Authentication required."}, status_code=401)
-        return RedirectResponse("/login", status_code=303)
-    if read_only_blocked(settings.read_only, request.method, path):
-        return JSONResponse({"detail":"MYAI_READ_ONLY is enabled; write operation blocked."}, status_code=423)
-    if user and user["role"] != "admin":
-        permission = permission_for_path(path, request.method)
-        if permission is None:
-            # Every non-GET route must be explicitly registered in the central policy.
-            if request.method != "GET":
-                return JSONResponse({"detail":"Tool permission denied: unmapped write/execute route."}, status_code=403)
+        if "application/json" in request.headers.get("accept", "").lower():
+            response = JSONResponse({"detail": "Authentication required.", "request_id": request_id}, status_code=401)
         else:
-            tool, action = permission
-            if not tool_allowed(user, tool, action):
-                return JSONResponse({"detail":f"Tool permission denied: {tool}:{action}"}, status_code=403)
+            response = RedirectResponse("/login", status_code=303)
+        response.headers["X-Request-ID"] = request_id
+        return response
+    decision = policy.decide(user=user, method=request.method, path=path, read_only=settings.read_only)
+    if not decision.allowed:
+        status = 423 if decision.reason == "read_only" else 403
+        audit(user, decision.tool or "policy", decision.action or request.method.lower(), str(status), audit_payload(request_id, request.method, path, status))
+        response = JSONResponse({"detail": f"Policy denied: {decision.reason}", "request_id": request_id}, status_code=status)
+        response.headers["X-Request-ID"] = request_id
+        return response
     started = time.perf_counter()
     try:
         response = await call_next(request)
     except Exception:
         record_http_error(path)
-        logger.exception("Unhandled request error", extra={"method": request.method, "path": path})
+        logger.exception("Unhandled request error", extra={"request_id": request_id, "method": request.method, "path": path})
         raise
     finally:
-        # Metrics are recorded even when downstream middleware raises.
         duration = time.perf_counter() - started
         status = locals().get("response")
         record_http_request(request.method, path, getattr(status, "status_code", 500), duration)
-    if user and path!="/auth/logout":
-        action={"GET":"read","POST":"execute","PUT":"write","PATCH":"write","DELETE":"write"}.get(request.method,request.method.lower())
-        audit(user,path,action,str(response.status_code))
+    response.headers["X-Request-ID"] = request_id
+    if user and path != "/auth/logout":
+        action = decision.action or {"GET": "read", "POST": "execute", "PUT": "write", "PATCH": "write", "DELETE": "write"}.get(request.method, request.method.lower())
+        audit(user, decision.tool or path, action, str(response.status_code), audit_payload(request_id, request.method, path, response.status_code))
     return response
-
 agent=Agent(); learner=LearningEngine()
 VOICE_ROOT=Path("data/voice").resolve()
 def _voice_path(value:str, must_exist:bool=False) -> str:
