@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 from pathlib import Path
 from fastapi import FastAPI,HTTPException,Request
 from pydantic import BaseModel
-from fastapi.responses import HTMLResponse,JSONResponse,RedirectResponse,StreamingResponse
+from fastapi.responses import HTMLResponse,JSONResponse,RedirectResponse,StreamingResponse,Response
 from fastapi.staticfiles import StaticFiles
 from .agent import Agent
 from .command_policy import parse_command
@@ -126,6 +126,7 @@ async def auth_and_audit_middleware(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
     request.state.request_id = request_id
     user = current_user(request)
+    response: Response | None = None
     if not is_public_path(path) and not user:
         if "application/json" in request.headers.get("accept", "").lower():
             response = JSONResponse({"detail": "Authentication required.", "request_id": request_id}, status_code=401)
@@ -149,8 +150,7 @@ async def auth_and_audit_middleware(request: Request, call_next):
         raise
     finally:
         duration = time.perf_counter() - started
-        status = locals().get("response")
-        record_http_request(request.method, path, getattr(status, "status_code", 500), duration)
+        record_http_request(request.method, path, response.status_code if response is not None else 500, duration)
     response.headers["X-Request-ID"] = request_id
     if user and path != "/auth/logout":
         action = decision.action or {"GET": "read", "POST": "execute", "PUT": "write", "PATCH": "write", "DELETE": "write"}.get(request.method, request.method.lower())
