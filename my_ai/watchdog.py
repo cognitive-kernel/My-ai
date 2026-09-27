@@ -38,6 +38,8 @@ def main():
     p.add_argument("--timeout", type=int, default=45)
     p.add_argument("--url", default="http://127.0.0.1:8000/health")
     p.add_argument("--command", required=True)
+    p.add_argument("--db-snapshot")
+    p.add_argument("--db-path")
     args = p.parse_args()
 
     # Give the parent a moment to exit/restart after the update.
@@ -82,6 +84,16 @@ def main():
             pass
 
     failed_tag = f"myai-failed-activation-{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}"
+    if args.db_snapshot and args.db_path:
+        snapshot = Path(args.db_snapshot)
+        db_path = Path(args.db_path)
+        try:
+            if snapshot.is_file():
+                db_path.parent.mkdir(parents=True, exist_ok=True)
+                os.replace(snapshot, db_path)
+        except OSError as exc:
+            _record_lesson("database_rollback_failed", rollback=args.rollback, error=str(exc))
+            return 2
     _git("tag", "-a", failed_tag, "-m", "My-AI failed activation snapshot")
     rollback = _git("reset", "--hard", args.rollback)
     if rollback.returncode:

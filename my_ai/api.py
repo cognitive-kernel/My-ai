@@ -10,7 +10,7 @@ import logging
 import uuid
 from urllib.parse import urlparse
 from pathlib import Path
-from fastapi import FastAPI,HTTPException,Request
+from fastapi import FastAPI,HTTPException,Request,UploadFile
 from pydantic import BaseModel
 from fastapi.responses import HTMLResponse,JSONResponse,RedirectResponse,StreamingResponse,Response
 from fastapi.staticfiles import StaticFiles
@@ -31,7 +31,7 @@ from .learning_resilience import install as install_learning_resilience
 from .ui_extensions import install_ui_extensions
 from .help import page as help_page, ask_help, local_help_html, apply_help_update
 from .git_connector import GitHubConnector
-from .auth import authenticate, audit, create_account, create_session, current_user, require_admin, revoke_session, require_user, tool_allowed
+from .auth import authenticate, audit, audit_event, create_account, create_session, current_user, require_admin, revoke_session, require_user, tool_allowed
 from .platform import backup_database, choose_model, eval_retrieval, export_database, hybrid_search, import_database, model_health, resource_status, voice_status, web_fetch_policy
 from .self_update import status as self_update_status, apply_confirmed_update as self_update_apply, preview_update
 from .self_repair import diagnose_local, propose_repair, apply_repair, proposal_status
@@ -45,9 +45,10 @@ from .tooling import catalog as tool_catalog, doctor as tool_doctor, run_project
 from .image_generation import generate_image, ImageGenerationError
 from .runtime_prerequisites import startup_check, runtime_status
 from .local_files import WORKSPACE_ROOT
-from .settings_feature import start_named_course, shutdown_course_workers
+from .settings_feature import shutdown_course_workers
 from .access_policy import is_public_path, TOOL_RULES, PATH_ACTIONS
-from .policy_engine import policy, audit_payload
+from .config import assert_write_allowed
+from .policy_engine import policy
 _TOOL_RULES = TOOL_RULES
 _PATH_ACTIONS = PATH_ACTIONS
 from .api_models import (
@@ -122,17 +123,20 @@ async def auth_and_audit_middleware(request: Request, call_next):
     request.state.request_id = request_id
     user = current_user(request)
     response: Response | None = None
+    request_body = await request.body()
     if not is_public_path(path) and not user:
         if "application/json" in request.headers.get("accept", "").lower():
             response = JSONResponse({"detail": "Authentication required.", "request_id": request_id}, status_code=401)
         else:
             response = RedirectResponse("/login", status_code=303)
         response.headers["X-Request-ID"] = request_id
+        audit_event(None, "auth", "authenticate", "401", request_id=request_id, input_data=request_body, extra={"method": request.method, "path": path})
         return response
-    decision = policy.decide(user=user, method=request.method, path=path, read_only=settings.read_only)
+    read_only = os.getenv("MYAI_READ_ONLY", "false").strip().lower() == "true"
+    decision = policy.decide(user=user, method=request.method, path=path, read_only=read_only)
     if not decision.allowed:
         status = 423 if decision.reason == "read_only" else 403
-        audit(user, decision.tool or "policy", decision.action or request.method.lower(), str(status), audit_payload(request_id, request.method, path, status))
+        audit_event(user, decision.tool or "policy", decision.action or request.method.lower(), str(status), request_id=request_id, input_data=request_body, extra={"method": request.method, "path": path, "reason": decision.reason})
         response = JSONResponse({"detail": f"Policy denied: {decision.reason}", "request_id": request_id}, status_code=status)
         response.headers["X-Request-ID"] = request_id
         return response
@@ -141,6 +145,7 @@ async def auth_and_audit_middleware(request: Request, call_next):
         response = await call_next(request)
     except Exception:
         record_http_error(path)
+        audit_event(user, decision.tool or path, decision.action or request.method.lower(), "500", request_id=request_id, input_data=request_body, error="unhandled_request_exception", extra={"method": request.method, "path": path})
         logger.exception("Unhandled request error", extra={"request_id": request_id, "method": request.method, "path": path})
         raise
     finally:
@@ -151,7 +156,21 @@ async def auth_and_audit_middleware(request: Request, call_next):
     response.headers["X-Request-ID"] = request_id
     if user and path != "/auth/logout":
         action = decision.action or {"GET": "read", "POST": "execute", "PUT": "write", "PATCH": "write", "DELETE": "write"}.get(request.method, request.method.lower())
-        audit(user, decision.tool or path, action, str(response.status_code), audit_payload(request_id, request.method, path, response.status_code))
+        audit_event(
+            user,
+            decision.tool or path,
+            action,
+            str(response.status_code),
+            request_id=request_id,
+            input_data=request_body,
+            output_data=getattr(response, "body", None),
+            extra={
+                "method": request.method,
+                "path": path,
+                "content_type": response.headers.get("content-type"),
+                "streaming": isinstance(response, StreamingResponse),
+            },
+        )
     return response
 agent=Agent(); learner=LearningEngine()
 VOICE_ROOT=Path("data/voice").resolve()
@@ -210,8 +229,14 @@ def home(request: Request):
 LOGIN_HTML="""<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>ورود | My-AI</title><style>body{font-family:Tahoma;background:#f3f4f6;margin:0}.box{max-width:420px;margin:10vh auto;background:#fff;padding:28px;border-radius:16px}input,button{width:100%;box-sizing:border-box;padding:12px;margin:7px 0;border-radius:9px;border:1px solid #ccc}button{cursor:pointer;background:#111827;color:#fff}.err{color:#b91c1c}</style><div class='box'><h1>ورود به My-AI</h1><input id='u' placeholder='نام کاربری'><input id='p' type='password' placeholder='رمز عبور'><button onclick='login()'>ورود</button><p id='e' class='err'></p><a id='register-link' href='/register'>ساخت اولین حساب</a></div><script>fetch('/auth/register/status').then(r=>r.json()).then(x=>{if(x.open===false)document.getElementById('register-link').remove()}).catch(()=>{});async function login(){e.textContent='';let r=await fetch('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u.value,password:p.value})});let j=await r.json();if(!r.ok){e.textContent=j.detail||'خطا';return}location.href='/'}</script>"""
 REGISTER_HTML="""<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>ساخت حساب | My-AI</title><style>body{font-family:Tahoma;background:#f3f4f6;margin:0}.box{max-width:420px;margin:10vh auto;background:#fff;padding:28px;border-radius:16px}input,button{width:100%;box-sizing:border-box;padding:12px;margin:7px 0;border-radius:9px;border:1px solid #ccc}button{cursor:pointer;background:#111827;color:#fff}.err{color:#b91c1c}.note{background:#ecfdf5;padding:10px;border-radius:8px}</style><div class='box'><h1>ساخت حساب My-AI</h1><p class='note'>اگر هنوز هیچ حسابی ساخته نشده باشد، این حساب به‌صورت خودکار <b>ادمین اصلی</b> می‌شود و به همه ابزارها دسترسی خواهد داشت.</p><input id='n' placeholder='نام نمایشی'><input id='u' placeholder='نام کاربری'><input id='p' type='password' placeholder='رمز عبور (حداقل ۱۰ کاراکتر)'><button onclick='reg()'>ساخت حساب</button><p id='e' class='err'></p><a href='/login'>بازگشت به ورود</a></div><script>async function reg(){e.textContent='';let r=await fetch('/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u.value,password:p.value,display_name:n.value})});let j=await r.json();if(!r.ok){e.textContent=j.detail||'خطا';return}location.href='/'}</script>"""
 
-KNOWLEDGE_ADMIN_HTML="""<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>مدیریت دانش | My-AI</title><style>body{font-family:Tahoma;background:#f3f4f6;margin:0}.wrap{max-width:1100px;margin:30px auto;padding:20px}.card{background:#fff;padding:18px;border-radius:12px;margin:10px 0}textarea,input{width:100%;box-sizing:border-box;padding:9px;margin:5px 0}button{padding:8px 12px;margin:3px}.u{background:#fef3c7}.v{background:#dcfce7}</style><div class='wrap'><h1>مدیریت دانش</h1><p>دانش جدید تا زمان تأیید، «تأییدنشده» است.</p><div id='list'>در حال بارگذاری...</div></div><script>
-async function load(){let r=await fetch('/memory/knowledge?limit=200'),j=await r.json();if(!r.ok){list.textContent=j.detail||'خطا';return}list.innerHTML=(j.items||[]).map(x=>'<div class="card '+(x.verification_status==='verified'?'v':'u')+'"><b>'+esc(x.title)+'</b><div>'+esc(x.topic)+' | '+esc(x.verification_status)+'</div><input id="t'+x.id+'" value="'+esc(x.title)+'"><textarea id="c'+x.id+'">'+esc(x.content)+'</textarea><input id="s'+x.id+'" value="'+esc(x.source_url||'')+'"><button onclick="save('+x.id+')">ذخیره</button><button onclick="verify('+x.id+')">تأیید</button><button onclick="del('+x.id+')">حذف</button></div>').join('')||'دانشی ثبت نشده است'}function esc(v){return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}async function save(id){let r=await fetch('/memory/knowledge/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:document.getElementById('t'+id).value,content:document.getElementById('c'+id).value,topic:'manual',source_url:document.getElementById('s'+id).value||null})});if(!r.ok)alert((await r.json()).detail||'خطا');load()}async function verify(id){let r=await fetch('/memory/knowledge/'+id+'/verify',{method:'POST'});if(!r.ok)alert((await r.json()).detail||'خطا');load()}async function del(id){if(!confirm('حذف شود؟'))return;let r=await fetch('/memory/knowledge/'+id,{method:'DELETE'});if(!r.ok)alert((await r.json()).detail||'خطا');load()}load()</script>"""
+KNOWLEDGE_ADMIN_HTML="""<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>مدیریت دانش | My-AI</title><style>body{font-family:Tahoma;background:#f3f4f6;margin:0}.wrap{max-width:1200px;margin:24px auto;padding:20px}.card{background:#fff;padding:16px;border-radius:12px;margin:10px 0;box-shadow:0 1px 3px #0001}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}textarea,input,select{width:100%;box-sizing:border-box;padding:9px;margin:5px 0}button{padding:8px 12px;margin:3px;cursor:pointer}.u{border-right:5px solid #f59e0b}.v{border-right:5px solid #16a34a}.meta{font-size:12px;color:#555}.sources{background:#f8fafc;padding:8px;border-radius:8px;margin-top:8px}.danger{color:#b91c1c}</style><div class='wrap'><h1>مدیریت دانش</h1><p>هر رکورد قبل از استفاده در retrieval باید provenance و وضعیت verification مشخص داشته باشد.</p><div class='card'><h3>افزودن دانش</h3><div class='grid'><input id='nt' placeholder='عنوان'><input id='topic' placeholder='موضوع'><input id='src' placeholder='منبع HTTP(S)'></div><textarea id='nc' placeholder='محتوا'></textarea><button onclick='add()'>افزودن</button></div><div id='list'>در حال بارگذاری...</div></div><script>
+function esc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+async function load(){let r=await fetch('/memory/knowledge?limit=200'),j=await r.json();if(!r.ok){list.textContent=j.detail||'خطا';return}list.innerHTML=(j.items||[]).map(x=>'<div class="card '+(x.verification_status==='verified'?'v':'u')+'"><h3>'+esc(x.title)+'</h3><div>'+esc(x.topic)+' | وضعیت: '+esc(x.verification_status)+'</div><div class="meta">hash: '+esc(x.content_hash)+' | confidence: '+esc(x.confidence??'—')+' | verified_by: '+esc(x.verified_by??'—')+'</div><input id="t'+x.id+'" value="'+esc(x.title)+'"><textarea id="c'+x.id+'">'+esc(x.content)+'</textarea><input id="s'+x.id+'" value="'+esc(x.source_url||'')+'"><button onclick="save('+x.id+')">ذخیره و invalidate verification</button><button onclick="verify('+x.id+')">تأیید منبع</button><button onclick="audit('+x.id+')">Audit</button><button onclick="del('+x.id+')">حذف منطقی</button><div id="a'+x.id+'" class="sources"></div></div>').join('')||'دانشی ثبت نشده است'}
+async function add(){let r=await fetch('/memory/knowledge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:nt.value,content:nc.value,topic:topic.value,source_url:src.value||null})});if(!r.ok)alert((await r.json()).detail||'خطا');else{nt.value=topic.value=src.value=nc.value='';load()}}
+async function save(id){let r=await fetch('/memory/knowledge/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:document.getElementById('t'+id).value,content:document.getElementById('c'+id).value,topic:'manual',source_url:document.getElementById('s'+id).value||null})});if(!r.ok)alert((await r.json()).detail||'خطا');load()}
+async function verify(id){let r=await fetch('/memory/knowledge/'+id+'/verify',{method:'POST'});if(!r.ok)alert((await r.json()).detail||'خطا');load()}
+async function audit(id){let r=await fetch('/memory/knowledge/'+id+'/audit');let j=await r.json();document.getElementById('a'+id).innerHTML='<b>Audit</b><pre>'+esc(JSON.stringify(j.items||[],null,2))+'</pre>'}
+async function del(id){if(!confirm('حذف شود؟'))return;let r=await fetch('/memory/knowledge/'+id,{method:'DELETE'});if(!r.ok)alert((await r.json()).detail||'خطا');load()}load()</script>"""
 
 @app.get("/admin/knowledge", response_class=HTMLResponse)
 def admin_knowledge_page(request: Request):
@@ -342,6 +367,22 @@ def chat_stream(r:ChatRequest, request:Request):
             raise
     return StreamingResponse(generate(),media_type="text/plain; charset=utf-8")
 
+@app.post("/memory/knowledge")
+def knowledge_create(r:KnowledgeUpdateRequest, request:Request):
+    user=require_admin(request)
+    import hashlib
+    if not r.title.strip() or not r.content.strip() or not r.topic.strip():
+        raise HTTPException(400,"title, topic and content are required.")
+    normalized = " ".join(f"{r.topic}\n{r.content}".replace("ي","ی").replace("ى","ی").replace("ك","ک").split()).casefold()
+    content_hash = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    knowledge_id = execute(
+        "INSERT INTO knowledge(topic,title,content,source_url,content_hash,verification_status) VALUES(?,?,?,?,?,'unverified')",
+        (r.topic,r.title,r.content,r.source_url,content_hash),
+    )
+    execute("INSERT INTO knowledge_audit(knowledge_id,user_id,action,details) VALUES(?,?,?,?)",(knowledge_id,user["id"],"create",f"source_url={r.source_url or ''}"))
+    audit(user,"knowledge","write","201",f"created:{knowledge_id}")
+    return {"id":knowledge_id,"verification_status":"unverified","content_hash":content_hash}
+
 @app.get("/memory/knowledge")
 def knowledge_list(request: Request, status: str | None = None, limit: int = 200):
     user=require_user(request)
@@ -417,19 +458,61 @@ def models_select(task:str, request:Request):
 @app.post("/voice/transcribe")
 def voice_transcribe(r:VoiceTranscribeRequest, request:Request):
     user=require_user(request)
-    result=transcribe(_voice_path(r.audio_path,True),_voice_path(r.model_path,True),r.language)
+    model_path = r.model_path.strip() or os.getenv("WHISPER_MODEL_PATH", "").strip()
+    if not model_path:
+        raise HTTPException(503, "WHISPER_MODEL_PATH is not configured.")
+    result=transcribe(_voice_path(r.audio_path,True),_voice_path(model_path,True),r.language)
     audit(user,"voice","execute","200")
     return {"text":result}
 
 @app.post("/voice/synthesize")
 def voice_synthesize(r:VoiceSynthesizeRequest, request:Request):
     user=require_user(request)
+    model_path = r.model_path.strip() or os.getenv("PIPER_MODEL_PATH", "").strip()
+    if not model_path:
+        raise HTTPException(503, "PIPER_MODEL_PATH is not configured.")
     VOICE_ROOT.mkdir(parents=True,exist_ok=True)
     output_path=_voice_path(r.output_path,False)
     Path(output_path).parent.mkdir(parents=True,exist_ok=True)
-    result=synthesize(r.text,_voice_path(r.model_path,True),output_path)
+    result=synthesize(r.text,_voice_path(model_path,True),output_path)
     audit(user,"voice","execute","200")
     return {"path":result}
+
+@app.post("/voice/upload")
+def voice_upload(file:UploadFile, request:Request):
+    user=require_user(request)
+    if not file.filename:
+        raise HTTPException(400, "Voice file name is required.")
+    safe_name = Path(file.filename).name
+    suffix = Path(safe_name).suffix.lower()
+    if suffix not in {".wav",".webm",".ogg",".mp3",".m4a",".mp4"}:
+        raise HTTPException(400, "Unsupported voice recording format.")
+    VOICE_ROOT.mkdir(parents=True,exist_ok=True)
+    target = (VOICE_ROOT / f"recording-{uuid.uuid4().hex}{suffix}").resolve()
+    try:
+        target.relative_to(VOICE_ROOT)
+    except ValueError:
+        raise HTTPException(400, "Invalid voice path.")
+    data = file.file.read(25 * 1024 * 1024 + 1)
+    if len(data) > 25 * 1024 * 1024:
+        raise HTTPException(413, "Voice recording is limited to 25 MiB.")
+    assert_write_allowed(str(target))
+    target.write_bytes(data)
+    audit(user,"voice","write","201",str(target))
+    return {"path":str(target),"local_path":str(target)}
+
+@app.get("/voice/file")
+def voice_file(path:str, request:Request):
+    require_user(request)
+    candidate = Path(path).expanduser().resolve()
+    try:
+        candidate.relative_to(VOICE_ROOT)
+    except ValueError:
+        raise HTTPException(400, "Voice paths must stay under data/voice.")
+    if not candidate.is_file():
+        raise HTTPException(404, "Voice file not found.")
+    from fastapi.responses import FileResponse
+    return FileResponse(candidate)
 
 @app.get("/voice/status")
 def voice_status_api(request:Request):
@@ -570,6 +653,16 @@ def set_tool_permission(r:PermissionRequest, request:Request):
     return {"ok":True}
 
 
+SKILLS_ADMIN_HTML="""<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Skill Engine | My-AI</title><style>body{font-family:Tahoma;background:#f3f4f6}.wrap{max-width:1200px;margin:24px auto}.card{background:#fff;padding:16px;border-radius:12px;margin:10px 0}.score{display:inline-block;padding:5px 9px;border-radius:8px;background:#eef2ff}.ev{background:#f8fafc;padding:8px;margin:6px 0;border-radius:8px}button{padding:7px 11px;margin:3px}</style><div class='wrap'><h1>Skill Engine</h1><p>Knowledge coverage و verified skill score مستقل‌اند؛ verification فقط با evidence معتبر انجام می‌شود.</p><div id='list'>در حال بارگذاری...</div></div><script>
+function esc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+async function load(){let r=await fetch('/skills'),j=await r.json();if(!r.ok){list.textContent=j.detail||'خطا';return}list.innerHTML=(j.items||[]).map(x=>'<div class="card"><h2>'+esc(x.name)+' <small>v'+esc(x.version)+'</small></h2><span class="score">Knowledge coverage: '+esc(x.knowledge_coverage_score)+'</span> <span class="score">Verified skill: '+esc(x.verified_skill_score)+'</span><p>State: '+esc(x.verification_state)+' | review due: '+esc(x.review_due)+'</p><button onclick="rev('+x.id+')">Revalidate</button><details><summary>Evidence ('+esc(x.evidence_count)+')</summary>'+((x.evidence||[]).map(e=>'<div class="ev"><b>'+esc(e.kind)+'</b> | passed='+esc(e.passed)+' | '+esc(e.created_at)+'<pre>'+esc(JSON.stringify(e.details,null,2))+'</pre></div>').join('')||'بدون evidence')+'</details></div>').join('')||'Skill ثبت نشده است'}
+async function rev(id){let version=prompt('نسخه فعلی skill را وارد کنید:','current');if(version===null)return;let r=await fetch('/skills/revalidate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({skill_id:Number(id),current_version:version})});let j=await r.json();if(!r.ok)alert(j.detail||'خطا');load()}load()</script>"""
+
+@app.get("/admin/skills", response_class=HTMLResponse)
+def admin_skills_page(request:Request):
+    require_admin(request)
+    return HTMLResponse(SKILLS_ADMIN_HTML)
+
 @app.get("/skills")
 def skills_list(request:Request):
     require_user(request)
@@ -585,8 +678,12 @@ def skills_evidence(r:SkillEvidenceRequest, request:Request):
     user=require_admin(request)
     if r.kind not in {"test","benchmark","official_source"}:
         raise HTTPException(400,"Skill evidence must come from an executed test, benchmark, or official source.")
-    if not r.details or not any(k in r.details for k in ("command","source_url","test_id","artifact")):
-        raise HTTPException(400,"Evidence requires a command, source_url, test_id, or artifact reference.")
+    if not r.details:
+        raise HTTPException(400,"Evidence details are required.")
+    if r.kind == "official_source" and not str(r.details.get("source_url") or "").strip():
+        raise HTTPException(400,"Official-source evidence requires a non-empty source_url.")
+    if r.kind in {"test","benchmark"} and (not str(r.details.get("command") or "").strip() or "artifact" not in r.details):
+        raise HTTPException(400,"Executed evidence requires a command and artifact.")
     eid=record_evidence(r.skill_id,r.kind,r.passed,r.details)
     audit(user,"skill-engine","execute","200",f"evidence:{r.skill_id}")
     return {"evidence_id":eid}
@@ -603,11 +700,24 @@ def skill_sandbox_test(skill_id:int, r:PythonToolRequest, request:Request):
     user=require_admin(request)
     if not r.confirmed:
         raise HTTPException(409,"Explicit confirmation is required for a skill sandbox test.")
+    if settings.exec_mode not in {"container", "remote"}:
+        raise HTTPException(409,"Skill verification requires the container or remote sandbox executor; subprocess mode is not accepted as verification evidence.")
     if not fetch_all("SELECT id FROM skills WHERE id=?",(skill_id,)):
         raise HTTPException(404,"Skill not found.")
     result=run_python_snippet(r.code)
-    passed=result.get("return_code")==0 and not result.get("timed_out")
-    evidence=record_evidence(skill_id,"benchmark",bool(passed),{"command":"sandbox:python","artifact":json.dumps(result,ensure_ascii=False)[:12000],"sandbox_mode":result.get("sandbox_mode","unknown")})
+    passed=result.get("return_code")==0 and not result.get("timed_out") and result.get("sandbox_mode") in {"container", "remote-container"}
+    evidence=record_evidence(
+        skill_id,
+        "benchmark",
+        bool(passed),
+        {
+            "command":"sandbox:python",
+            "artifact":json.dumps(result,ensure_ascii=False)[:12000],
+            "sandbox_mode":result.get("sandbox_mode","unknown"),
+            "skill_score": 100.0 if passed else 0.0,
+            "reliability_score": 100.0 if passed else 0.0,
+        },
+    )
     audit(user,"skill-engine","execute", "200" if passed else "422", f"sandbox:{skill_id}:passed={passed}")
     return {"passed":passed,"evidence_id":evidence,"result":result}
 @app.get("/skills/reviews")
@@ -790,32 +900,26 @@ def chat(r:ChatRequest, request:Request):
         msg=r.message.strip(); low=msg.lower()
         attachments=_validate_chat_attachments(r.attachments)
         intent=classify(msg)
-        required_by_intent={"pentest_external":("security","execute"),"git_write":("github","write"),"self_update":("self-update","write"),"database_import":("database","write"),"code_execution":("code-execution","execute"),"self_repair":("self-repair","execute"),"learning":("learning","execute"),"coding":("code-generation","execute")}
+        required_by_intent={"pentest_external":("security","execute"),"git_write":("github","write"),"self_update":("self-update","write"),"database_import":("database","write"),"code_execution":("code-execution","execute"),"self_repair":("self-repair","execute"),"learning":("learning","execute"),"coding":("code-generation","execute"),"image_generation":("image-generation","execute")}
         if intent.name in required_by_intent:
             tool,action=required_by_intent[intent.name]
             if not tool_allowed(user,tool,action):
                 raise HTTPException(403,f"Tool permission denied: {tool}:{action}")
             if intent.name in {"code_execution","self_repair","self_update","git_write","database_import"} and not any(token in low for token in ("confirm","approve","approved","تایید","تأیید")):
                 raise HTTPException(409,"Explicit confirmation required for high-risk intent: "+intent.name)
-        aliases={"sql server":"SQL Server","sqlserver":"SQL Server","mssql":"SQL Server","mysql":"MySQL","sqlite":"SQLite","sql lite":"SQLite","android":"Android","اندروید":"Android","ios":"iOS","آی او اس":"iOS","python":"Python","پایتون":"Python","php":"PHP","javascript":"JavaScript","js":"JavaScript","pentest":"Pentest","pen test":"Pentest","penetration testing":"Pentest","penetration test":"Pentest","پنتست":"Pentest","پن تست":"Pentest","تست نفوذ":"Pentest","امنیت":"Pentest"}
-        requested=None
-        for key,name in sorted(aliases.items(),key=lambda x:len(x[0]),reverse=True):
-            if key.isascii():
-                if re.search(r"(?<![a-z0-9])"+re.escape(key)+r"(?![a-z0-9])",low): requested=name; break
-            elif re.search(r"(?<!\w)"+re.escape(key)+r"(?!\w)",low,re.UNICODE):
-                requested=name; break
-        learn_intent=("یاد بگیر" in low or "یادگیری" in low or "learn" in low or "go learn" in low or "start learning" in low); sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language,user_id) VALUES(?,?,?,?)",(msg[:60] or "گفتگوی جدید","learning" if learn_intent else "chat",requested,user["id"])); _save_chat_attachments(sid,attachments); policy=parse_command(msg); security_words=policy.security; fix_requested=policy.security_action=="fix"
+        requested=intent.args.get("language") if isinstance(intent.args, dict) else None
+        requested=canonical_language(requested) if requested else None
+        learn_intent=intent.name == "learning"; sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language,user_id) VALUES(?,?,?,?)",(msg[:60] or "گفتگوی جدید","learning" if learn_intent else "chat",requested,user["id"])); sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language,user_id) VALUES(?,?,?,?)",(msg[:60] or "گفتگوی جدید","learning" if learn_intent else "chat",requested,user["id"])); _save_chat_attachments(sid,attachments); policy=parse_command(msg); security_words=policy.security; fix_requested=policy.security_action=="fix"
         if security_words:
             if not tool_allowed(user,"security","execute"):
                 raise HTTPException(403,"Tool permission denied: security:execute")
             if fix_requested and user["role"]!="admin":
                 raise HTTPException(403,"Security remediation requires administrator approval.")
-        help_intent=("راهنما" in low or "چطور وصل" in low or "چطور استفاده" in low or "how do i" in low or "how to" in low or "setup" in low)
+        help_intent=intent.name == "help"
         if help_intent:
             component="git" if any(x in low for x in ("git","github","گیت","گیت‌هاب")) else ("security" if any(x in low for x in ("امنیت","پن‌تست","pentest")) else ("docker" if "docker" in low else ("python" if "python" in low or "پایتون" in low else "general")))
             return {"type":"help","answer":"راهنمای هوشمند آماده شد.","data":ask_help(msg,component,agent.llm,learner.web)}
-        image_words=("تصویر بساز","عکس بساز","عکس طراحی کن","تصویر طراحی کن","تصویر ایجاد کن","عکس ایجاد کن","مانگا","مانگا طراحی","کمیک","comic","manga","draw an image","generate an image","create an image","design an image")
-        image_intent=any(x in low for x in image_words)
+        image_intent=intent.name == "image_generation"
         if image_intent:
             if not tool_allowed(user,"image-generation","execute"):
                 raise HTTPException(403,"Tool permission denied: image-generation:execute")
@@ -831,7 +935,7 @@ def chat(r:ChatRequest, request:Request):
             execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(sid,))
             return {"type":"image","answer":answer,"data":{**image_result,"url":image_url},"session_id":sid}
 
-        code_words=("برنامه بنویس","کد بنویس","برام برنامه","write a program","write code","program","build an app","create an app"); code_intent=any(x in low for x in code_words)
+        code_intent=intent.name == "coding"
         if security_words:
             if code_intent:
                 language=requested or "Python"; generated=learner.generate_program(msg,language); result=learner.security_assessment_code(generated["code"],language,fix_requested); result["generated_project"]=generated; result["mode"]="pentest_and_fix" if fix_requested else "pentest_report"
@@ -856,23 +960,10 @@ def chat(r:ChatRequest, request:Request):
             language=canonical_language(language)
             execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"user",msg))
             scheduler.interval_seconds=settings.scheduler_interval_seconds
-            requested_languages=[]
-            for key,name in sorted(aliases.items(),key=lambda x:len(x[0]),reverse=True):
-                matched = bool(
-                    re.search(r"(?<![a-z0-9])"+re.escape(key)+r"(?![a-z0-9])",low)
-                    if key.isascii() else re.search(r"(?<!\w)"+re.escape(key)+r"(?!\w)",low,re.UNICODE)
-                )
-                if matched and name not in requested_languages:
-                    requested_languages.append(name)
-            if not requested_languages:
-                requested_languages=[requested or "Python"]
-            languages=[]
-            custom_courses=[]
-            for target in requested_languages:
-                target_language=canonical_language(resolve_learning_target(msg,target))
-                if target_language not in languages:
-                    languages.append(target_language)
-                    scheduler.start(target_language, sid)
+            target_language=canonical_language(requested or "Python")
+            languages: list[str] = [target_language]
+            custom_courses: list[dict[str, object]] = []
+            scheduler.start(target_language, sid)
             label="، ".join(languages)
             answer=f"یادگیری {label} در پس‌زمینه شروع شد." if len(languages)==1 else f"یادگیری همزمان {label} در پس‌زمینه شروع شد."
             execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"assistant",answer)); execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(sid,))
@@ -958,7 +1049,7 @@ def tools_sqlite_query(r:SQLiteQueryRequest,request:Request):
 def learning_status(request:Request, language:str|None=None):
     require_user(request)
     summary=learner.status(language)
-    summary.update(learner.detailed_status(language, include_lessons=False))
+    summary.update(learner.detailed_status(language))
     # Custom Course progress is exposed by /learning/active and its own UI;
     # never leak its internal custom_course:<id> tracks into the standard
     # learning status response, even if a stale/legacy learner implementation
@@ -967,24 +1058,6 @@ def learning_status(request:Request, language:str|None=None):
         return not str(item.get("language") or "").strip().lower().startswith("custom_course:")
     summary["languages"]=[item for item in summary.get("languages",[]) if _standard_track(item)]
     summary["courses"]=[item for item in summary.get("courses",[]) if _standard_track(item)]
-    return summary
-
-@app.get("/learning/lesson")
-def learning_lesson(request:Request, language:str, topic:str):
-    require_user(request)
-    rows=fetch_all(
-        "SELECT id,language,topic,status,score,progress_percent,phase,notes,created_at FROM learning_sessions WHERE language=? AND topic=? ORDER BY id DESC LIMIT 1",
-        (canonical_language(language), topic),
-    )
-    if not rows:
-        raise HTTPException(404, "Learning topic not found.")
-    row=rows[0]
-    return {
-        "id":row["id"], "language":canonical_language(str(row["language"] or "")),
-        "topic":row["topic"], "status":row["status"], "score":row["score"],
-        "progress_percent":row["progress_percent"], "phase":row["phase"],
-        "lesson":str(row.get("notes") or ""), "created_at":row["created_at"],
-    }
     summary["sessions"]=[item for item in summary.get("sessions",[]) if _standard_track(item)]
     summary["available_languages"]=[
         item for item in summary.get("available_languages",[])

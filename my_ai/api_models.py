@@ -78,13 +78,13 @@ class SkillRevalidateRequest(BaseModel):
 
 class VoiceTranscribeRequest(BaseModel):
     audio_path: str
-    model_path: str
+    model_path: str = ""
     language: str = "fa"
 
 
 class VoiceSynthesizeRequest(BaseModel):
     text: str
-    model_path: str
+    model_path: str = ""
     output_path: str
 
 
@@ -162,3 +162,8 @@ class SQLiteQueryRequest(BaseModel):
     path: str
     sql: str
     limit: int = 1000
+
+
+class SystemPrerequisiteRequest(BaseModel):
+    names: list[str] = Field(default_factory=list)
+    confirmed: bool = False

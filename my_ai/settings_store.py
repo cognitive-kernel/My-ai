@@ -9,6 +9,7 @@ from typing import Any
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from .db import connect
+from .access_policy import assert_mutation_allowed
 
 ROOT = Path(__file__).resolve().parent.parent
 KEY_PATH = ROOT / "data" / ".settings_key"
@@ -65,6 +66,7 @@ def get_setting(key: str, default: Any = None, *, secret: bool = False) -> Any:
     return _decrypt(str(row["value"])) if int(row["secret"]) else str(row["value"])
 
 def set_setting(key: str, value: Any, *, secret: bool = False) -> None:
+    assert_mutation_allowed(f"setting:{key}")
     ensure_schema()
     text = "" if value is None else str(value)
     stored = _encrypt(text) if secret and text else text
@@ -77,6 +79,7 @@ def set_setting(key: str, value: Any, *, secret: bool = False) -> None:
         conn.commit()
 
 def delete_setting(key: str) -> None:
+    assert_mutation_allowed(f"setting-delete:{key}")
     ensure_schema()
     with connect() as conn:
         conn.execute("DELETE FROM app_settings WHERE key=?", (key,))

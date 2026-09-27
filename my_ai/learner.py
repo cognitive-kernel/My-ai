@@ -37,6 +37,16 @@ class LearningEngine:
             except Exception as exc:
                 if stop_event is not None and stop_event.is_set():
                     raise InterruptedError("learning stopped") from exc
+
+                # Do not retry permanent HTTP client errors such as 401/403/404.
+                # Retrying an access-denied source only amplifies load and log
+                # noise. Explicitly transient client statuses remain retryable.
+                response = getattr(exc, "response", None)
+                status = int(getattr(response, "status_code", 0) or 0)
+                permanent_client_error = 400 <= status < 500 and status not in {408, 409, 425, 429}
+                if permanent_client_error:
+                    raise RuntimeError(f"{label} permanently unavailable (HTTP {status}): {exc}") from exc
+
                 if attempt >= max_attempts:
                     raise RuntimeError(f"{label} failed after {max_attempts} attempts: {exc}") from exc
                 if progress_callback:
@@ -77,7 +87,7 @@ class LearningEngine:
         data=json.loads(raw)
         return data.get("prerequisites",[]) if isinstance(data,dict) else []
 
-    def _learn_sources_for_topic(self,language,topic,prerequisites,progress_callback=None,stop_event=None,session_id=None):
+    def _learn_sources_for_topic(self,language,topic,prerequisites,progress_callback=None,stop_event=None):
         knowledge=[]
         seed=seed_for(language,topic["topic"])
         if seed:
@@ -88,8 +98,7 @@ class LearningEngine:
         # replacing topic-specific learning material.
         topic_sources = topic_source_urls(language, topic["topic"])[:12]
         learned_urls=[]
-        total_sources=len(topic_sources)
-        for index,url in enumerate(topic_sources,1):
+        for url in topic_sources:
             def fetch_and_extract(url=url):
                 title,source=self.web.fetch(url, stop_event=stop_event)
                 # Web fetching is optional. Store the source as evidence; the single
@@ -116,12 +125,8 @@ class LearningEngine:
                 knowledge.append({"title":"Source unavailable","url":url,"error":message})
                 if progress_callback:
                     progress_callback("source_unavailable",topic["topic"])
-                if session_id is not None:
-                    self._set_progress(session_id, 25.0 + 25.0 * (index / max(1,total_sources)), "sources")
                 continue
             remember(language,title,note,url); knowledge.append({"title":title,"url":url}); learned_urls.append(url)
-            if session_id is not None:
-                self._set_progress(session_id, 25.0 + 25.0 * (index / max(1,total_sources)), "sources")
         mark_sources_learned(language, topic["topic"], learned_urls)
         failed_sources = [item for item in knowledge if item.get("error")]
         if failed_sources:
@@ -187,20 +192,19 @@ class LearningEngine:
             prerequisites=[]
         self._set_progress(s["session_id"], 25.0, "sources")
         if progress_callback: progress_callback("sources",t["topic"])
-        sources=self._learn_sources_for_topic(language,t,prerequisites,progress_callback,stop_event,s["session_id"])
+        sources=self._learn_sources_for_topic(language,t,prerequisites,progress_callback,stop_event)
         self._set_progress(s["session_id"], 50.0, "lesson")
         if progress_callback: progress_callback("lesson",t["topic"])
         seed=seed_for(language,t["topic"])
         logger.info("LEARNING_LESSON_START: language=%s topic=%s sources=%s", language, t["topic"], len(sources))
-        lesson_prompt=("Teach the topic as a complete, structured study unit. Include prerequisite lessons first, then the main topic, examples, exercises, tests, common mistakes, security considerations and a mastery checklist. "
+        lesson=self._retry_with_limit(
+            lambda: self.llm.chat("Teach the topic as a complete, structured study unit. Include prerequisite lessons first, then the main topic, examples, exercises, tests, common mistakes, security considerations and a mastery checklist. "
                              "Use the model knowledge seed only as an initial layer; reconcile it with supplied official-source knowledge and explicitly correct conflicts. "
                              "Do not claim mastery unless supported by the supplied knowledge. Return clear sections.\n"
                              f"LANGUAGE: {language}\nTOPIC: {t['topic']}\nGOAL: {t['goal']}\n"
                              f"MODEL KNOWLEDGE SEED: {seed}\n"
                              f"DISCOVERED PREREQUISITES: {json.dumps(prerequisites,ensure_ascii=False)}\n"
-                             f"LEARNED KNOWLEDGE: {json.dumps(search_knowledge(language+' '+t['topic'],12),ensure_ascii=False)}")
-        lesson=self._retry_with_limit(
-            lambda: self._generate_lesson_with_progress(lesson_prompt, progress_callback, stop_event, s["session_id"], t["topic"]),
+                             f"LEARNED KNOWLEDGE: {json.dumps(search_knowledge(language+' '+t['topic'],12),ensure_ascii=False)}"),
             "lesson",progress_callback,t["topic"],stop_event,
         )
         logger.info("LEARNING_LESSON_SUCCESS: language=%s topic=%s chars=%s", language, t["topic"], len(lesson))
@@ -230,29 +234,6 @@ class LearningEngine:
         execute("UPDATE learning_sessions SET status='completed',score=?,notes=?,progress_percent=100.0,phase='completed' WHERE id=?",(score,lesson,s["session_id"]))
         if progress_callback: progress_callback("completed",t["topic"])
         return {"status":"completed","session_id":s["session_id"],"language":language,"topic":t,"prerequisites":prerequisites,"score":score,"sources":sources,"seeded":bool(seed)}
-
-    def _generate_lesson_with_progress(self, prompt, progress_callback=None, stop_event=None, session_id=None, topic=None):
-        """Generate a lesson while reporting incremental progress from streamed output."""
-        if not hasattr(self.llm, "stream_chat"):
-            return self.llm.chat(prompt, stop_event=stop_event)
-        chunks=[]
-        generated_chars=0
-        for chunk in self.llm.stream_chat(prompt, stop_event=stop_event):
-            if chunk:
-                chunks.append(str(chunk))
-                generated_chars += len(str(chunk))
-                if progress_callback:
-                    # The exact final length is unknown, so approach 74.5% as
-                    # output grows and reserve 75% for the completed generation.
-                    import math
-                    progress = 50.0 + 24.5 * (1.0 - math.exp(-generated_chars / 6000.0))
-                    if session_id is not None:
-                        self._set_progress(session_id, progress, "lesson_generating")
-                    if progress_callback:
-                        progress_callback("lesson_generating", topic)
-            if stop_event is not None and stop_event.is_set():
-                raise InterruptedError("learning stopped")
-        return "".join(chunks).strip()
 
     def autonomous_step(self,language="Python"): return self.learn_next(language)
 
@@ -321,11 +302,10 @@ class LearningEngine:
     @staticmethod
     def _half_percent(value): return max(0.0,min(100.0,round(float(value)*2)/2))
 
-    def detailed_status(self,language=None,include_lessons=True):
+    def detailed_status(self,language=None):
         """Return the complete learning catalog, including completed topics."""
-        columns="id,language,topic,status,score,progress_percent,phase,created_at"+(",notes" if include_lessons else "")
         rows=fetch_all(
-            f"SELECT {columns} FROM learning_sessions ORDER BY id DESC"
+            "SELECT id,language,topic,status,score,progress_percent,phase,notes,created_at FROM learning_sessions ORDER BY id DESC"
         )
         # Custom Course runners have their own progress model and must not
         # appear as standard language-learning tracks.
@@ -387,14 +367,14 @@ class LearningEngine:
                     "phase":str(row["phase"]) if row else "planned",
                     "progress_percent":progress,
                     "score":row["score"] if row and row["score"] is not None else None,
-                    "lesson":str(row.get("notes") or "") if row and include_lessons else "",
+                    "lesson":str(row.get("notes") or "") if row else "",
                     "updated_at":row["created_at"] if row else None,
                     "last_attempt_at":row["created_at"] if row else None,
                 })
 
             if not topic_defs:
                 continue
-            overall=round(max(0.0,min(100.0,(sum(all_progress)/len(all_progress)) if all_progress else 0.0)),2)
+            overall=self._half_percent(sum(all_progress)/len(all_progress)) if all_progress else 0.0
             active=next((x for x in topic_items if x["progress_percent"]<100.0),topic_items[0])
             courses.append({
                 "language":lang,
@@ -476,7 +456,7 @@ class LearningEngine:
                 "completed_topics":completed,
                 "remaining_topics":max(0,total-completed),
                 "total_topics":total,
-                "progress_percent":round(max(0.0,min(100.0,raw)),2),
+                "progress_percent":self._half_percent(raw),
                 "progress_step":"0.5%",
                 "average_score":round(sum(scores)/len(scores),1) if scores else 0,
             })

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shlex
+import sqlite3
 import subprocess
 import sys
 import ipaddress
@@ -39,6 +40,24 @@ def _validate_health_url(value: str | None) -> str | None:
     except ValueError as exc:
         raise ValueError("Self-update health_url must target loopback.") from exc
     return value
+
+
+def _snapshot_database(destination: Path) -> Path | None:
+    db_path = Path(os.getenv("DB_PATH", "data/myai.db")).expanduser().resolve()
+    if not db_path.exists():
+        return None
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    tmp = destination.with_suffix(destination.suffix + ".tmp")
+    source = sqlite3.connect(db_path)
+    target = sqlite3.connect(tmp)
+    try:
+        source.backup(target)
+        target.commit()
+    finally:
+        target.close()
+        source.close()
+    os.replace(tmp, destination)
+    return destination
 
 
 def _stamp():
@@ -88,8 +107,8 @@ def status():
         branch = _git("branch", "--show-current")
         head = _git("rev-parse", "HEAD")
         dirty = bool(_git("status", "--porcelain"))
-        enabled = _policy_flag("MYAI_SELF_UPDATE_ENABLED", "self_update.enabled")
-        approved = _policy_flag("MYAI_SELF_UPDATE_APPROVED", "self_update.approved")
+        enabled = get_bool("self_update.enabled", False)
+        approved = get_bool("self_update.approved", False)
         return {
             "ok": True,
             "branch": branch,
@@ -160,6 +179,7 @@ def apply_confirmed_update(health_url=None, health_timeout=45):
     stamp = _stamp()
     backup = f"myai-preupdate-{stamp}"
     candidate = STATE_DIR / f"candidate-{stamp}"
+    db_snapshot = _snapshot_database(STATE_DIR / f"db-preupdate-{stamp}.sqlite")
     _git("tag", "-a", backup, "-m", "My-AI automatic pre-update snapshot")
 
     try:
@@ -193,6 +213,8 @@ def apply_confirmed_update(health_url=None, health_timeout=45):
         ]
         if health_url:
             watchdog += ["--url", health_url]
+        if db_snapshot:
+            watchdog += ["--db-snapshot", str(db_snapshot), "--db-path", str(Path(get_setting("db.path", os.getenv("DB_PATH", "data/myai.db"))).expanduser().resolve())]
         subprocess.Popen(
             watchdog,
             cwd=ROOT,

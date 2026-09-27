@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from my_ai.feature_routes import register_routes
+from my_ai.feature_routes import register_routes, _chat_content
 
 
 class FakeScheduler:
@@ -55,3 +55,12 @@ def test_chat_file_generation_rejects_unknown_format():
     )
     assert response.status_code == 400
     assert "format must be" in response.json()["detail"]
+
+
+def test_chat_content_preserves_headings_and_lists():
+    title, paragraphs, slides = _chat_content("# Project Plan\n\n## Goal\nBuild the API\n- auth\n- tests", "pptx")
+    assert title == "Project Plan"
+    assert "• auth" in paragraphs
+    assert slides
+    assert slides[0]["title"] == "Goal"
+    assert "Build the API" in slides[0]["body"]

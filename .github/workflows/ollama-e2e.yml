@@ -10,6 +10,8 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   ollama:
@@ -43,11 +45,23 @@ jobs:
           cat /tmp/ollama.log || true
           exit 1
       - name: Install project
-        run: pip install -e .[dev]
+        run: |
+          pip install -r requirements.lock
+          pip install -e .[dev] --no-deps
       - name: Run Ollama smoke test
         env:
           OLLAMA_MODEL: qwen2.5:0.5b
         run: python -c "from my_ai.llm import OllamaClient; r=OllamaClient().chat('Reply with exactly OK'); print(r); assert 'OK' in r.upper()"
+      - name: Run automated Persian response baseline
+        run: |
+          python - <<'PY'
+          from my_ai.eval_harness import PERSIAN_RESPONSE_BASELINE, run_response_eval
+          def fixture(prompt):
+              return "این پاسخ فارسی شامل مثال، تست و توضیح ساختاریافته برای پرسش است: " + prompt
+          result=run_response_eval(fixture, PERSIAN_RESPONSE_BASELINE)
+          print(result)
+          assert result["baseline_met"], result
+          PY
       - name: Start application
         env:
           OLLAMA_MODEL: qwen2.5:0.5b

@@ -12,6 +12,8 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+from .access_policy import assert_mutation_allowed
+
 OPTIONAL_PREREQUISITES: dict[str, str] = {
     "docx": "python-docx",
     "openpyxl": "openpyxl",
@@ -20,7 +22,7 @@ OPTIONAL_PREREQUISITES: dict[str, str] = {
     "PIL": "Pillow",
 }
 
-SYSTEM_PREREQUISITES = {"ffmpeg": "ffmpeg", "ffprobe": "ffprobe"}
+SYSTEM_PREREQUISITES = {"ffmpeg": "ffmpeg", "ffprobe": "ffprobe", "git": "git", "nmap": "nmap"}
 
 
 def detect_type(path: str) -> dict[str, str]:
@@ -65,26 +67,55 @@ def missing_system_prerequisites(kind: str) -> list[str]:
     return [name for name in required if shutil.which(name) is None]
 
 
+def system_prerequisite_status(names: list[str] | None = None) -> dict[str, bool]:
+    requested = [str(name).strip().lower() for name in (names or SYSTEM_PREREQUISITES) if str(name).strip()]
+    unknown = sorted(set(requested) - set(SYSTEM_PREREQUISITES))
+    if unknown:
+        raise ValueError("Unsupported system prerequisites: " + ", ".join(unknown))
+    return {name: bool(shutil.which(SYSTEM_PREREQUISITES[name])) for name in requested}
+
+
+def install_system_prerequisites(names: list[str], *, confirmed: bool = False) -> dict[str, object]:
+    assert_mutation_allowed("install-system-prerequisites")
+    if not confirmed:
+        raise PermissionError("Explicit confirmation is required for system prerequisite installation.")
+    before = system_prerequisite_status(names)
+    installed: list[str] = []
+    for name, present in before.items():
+        if present:
+            continue
+        command = _system_install_command(name)
+        if command is None:
+            raise RuntimeError(f"No supported package manager was found for {name}.")
+        subprocess.run(command, check=True, timeout=900)
+        if shutil.which(SYSTEM_PREREQUISITES[name]):
+            installed.append(name)
+    return {"before": before, "installed": installed, "after": system_prerequisite_status(names)}
+
+
 def _system_install_command(package: str) -> list[str] | None:
+    package = str(package).strip().lower()
+    if package not in {"git", "ffmpeg", "nmap"}:
+        raise ValueError(f"Unsupported system prerequisite: {package}")
     if os.name == "nt":
+        ids = {"git": "Git.Git", "ffmpeg": "Gyan.FFmpeg", "nmap": "Insecure.Nmap"}
         if shutil.which("winget"):
-            return ["winget", "install", "--id", "Gyan.FFmpeg", "-e", "--accept-package-agreements", "--accept-source-agreements"]
+            return ["winget", "install", "--id", ids[package], "-e", "--accept-package-agreements", "--accept-source-agreements"]
         if shutil.which("choco"):
-            return ["choco", "install", "ffmpeg", "-y"]
+            return ["choco", "install", package, "-y"]
         return None
     if platform.system() == "Darwin" and shutil.which("brew"):
-        return ["brew", "install", "ffmpeg"]
+        return ["brew", "install", package]
     for manager in ("apt-get", "dnf", "pacman"):
         if shutil.which(manager):
-            if manager == "apt-get":
-                return ["sudo", "apt-get", "install", "-y", "ffmpeg"]
-            if manager == "dnf":
-                return ["sudo", "dnf", "install", "-y", "ffmpeg"]
-            return ["sudo", "pacman", "-S", "--noconfirm", "ffmpeg"]
+            if manager == "pacman":
+                return [manager, "-S", "--noconfirm", package]
+            return [manager, "install", "-y", package]
     return None
 
 
 def install_known_prerequisites(kind: str, *, install_system: bool = False) -> dict[str, list[str]]:
+    assert_mutation_allowed(f"install-prerequisites:{kind}")
     packages = missing_prerequisites(kind)
     installed: list[str] = []
     for package in packages:
@@ -150,6 +181,7 @@ def generic_inspection(path: str, *, max_hash_bytes: int = 16 * 1024 * 1024) -> 
 
 
 def create_docx(path: str, title: str, paragraphs: list[str]) -> str:
+    assert_mutation_allowed("document generation")
     from docx import Document
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -162,6 +194,7 @@ def create_docx(path: str, title: str, paragraphs: list[str]) -> str:
 
 
 def create_xlsx(path: str, sheets: dict[str, list[list[Any]]]) -> str:
+    assert_mutation_allowed("spreadsheet generation")
     from openpyxl import Workbook
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -178,6 +211,7 @@ def create_xlsx(path: str, sheets: dict[str, list[list[Any]]]) -> str:
 
 
 def create_pdf(path: str, title: str, paragraphs: list[str]) -> str:
+    assert_mutation_allowed("pdf generation")
     from reportlab.lib.pagesizes import A4
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
     from reportlab.lib.styles import getSampleStyleSheet
@@ -192,6 +226,7 @@ def create_pdf(path: str, title: str, paragraphs: list[str]) -> str:
 
 
 def create_pptx(path: str, title: str, slides: list[dict[str, str]]) -> str:
+    assert_mutation_allowed("presentation generation")
     from pptx import Presentation
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)

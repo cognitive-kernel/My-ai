@@ -9,6 +9,7 @@ from .llm import create_llm
 from .capabilities import system_context
 from .self_update import check_for_update, apply_confirmed_update, recent_lessons
 from .router import classify
+from .application.router import build_router_service
 from .web_learner import WebLearner
 from .web_learning import create_pending, pending, learn_confirmed
 from .local_files import inspect_file, read_text
@@ -51,8 +52,37 @@ Self-maintenance rules:
 
 
 class Agent:
-    def __init__(self, llm=None):
+    def __init__(self, llm=None, router=None):
         self.llm = llm or create_llm("general")
+        self.router = router or (build_router_service(None) if llm is not None else None)
+
+    def _classify(self, message: str, context: str | None = None):
+        return self.router.classify(message, context) if self.router is not None else classify(message, context)
+
+    @staticmethod
+    def _required_citations(knowledge: list[dict]) -> str:
+        citations: list[str] = []
+        for item in knowledge[:4]:
+            raw_provenance = item.get("provenance")
+            item_id = item.get("id")
+            if raw_provenance is None and item_id is None:
+                continue
+            provenance = raw_provenance or {}
+            if not isinstance(provenance, dict):
+                provenance = {"source_url": str(provenance)}
+            if item_id is None and not provenance.get("citation_id"):
+                continue
+            citation_id = str(provenance.get("citation_id") or f"K{item_id}")
+            title = str(provenance.get("title") or item.get("title") or "local knowledge")
+            source = str(provenance.get("source_url") or f"local://knowledge/{item_id}")
+            confidence = item.get("confidence")
+            confidence_text = (
+                f"{float(confidence):.3f}"
+                if confidence is not None and item.get("confidence_calibrated")
+                else "uncalibrated"
+            )
+            citations.append(f"- [{citation_id}] {title} — {source} (confidence: {confidence_text})")
+        return "\n\nSources (mandatory provenance):\n" + "\n".join(citations) if citations else ""
 
     @staticmethod
     def _is_identity_question(message: str) -> bool:
@@ -220,7 +250,7 @@ class Agent:
         )[::-1]
         attachment_context = self._attachment_context(attachments)
         context = "\n".join(f"{row['role']}: {row['content']}" for row in history[-8:])
-        intent = classify(message, context)
+        intent = self._classify(message, context)
         llm_message = message + ("\n\n" + attachment_context if attachment_context else "")
         task = "coding" if intent.name == "coding" else "general"
         llm = self.llm if task == "general" else create_llm(task)
@@ -228,10 +258,18 @@ class Agent:
         enriched_knowledge = []
         for item in knowledge:
             item = dict(item)
-            item["provenance"] = item.get("source_url") or "local-knowledge"
+            provenance = item.get("provenance")
+            if not isinstance(provenance, dict) and item.get("id") is not None:
+                provenance = {
+                    "citation_id": f"K{item.get('id')}",
+                    "source_url": item.get("source_url") or f"local://knowledge/{item.get('id')}",
+                    "title": item.get("title") or "local knowledge",
+                }
+            item["provenance"] = provenance
             item["confidence_label"] = (
                 round(float(item["confidence"]), 3)
-                if item.get("confidence") is not None else "uncalibrated"
+                if item.get("confidence") is not None and item.get("confidence_calibrated")
+                else "uncalibrated"
             )
             enriched_knowledge.append(item)
         context_note = (
@@ -256,14 +294,9 @@ class Agent:
         )
         answer = self._handle_unknown(answer, message, session_id)
         if knowledge and "__MYAI_UNKNOWN__" not in str(answer):
-            citations = []
-            for item in enriched_knowledge[:4]:
-                source = str(item.get("provenance") or "").strip()
-                if source and source != "local-knowledge":
-                    confidence = item.get("confidence_label")
-                    citations.append(f"- {source} (confidence: {confidence})")
-            if citations and "Sources:" not in answer:
-                answer = answer.rstrip() + "\n\nSources:\n" + "\n".join(citations)
+            citation_block = self._required_citations(enriched_knowledge)
+            if citation_block and not any(f"[K{item.get('id')}]" in str(answer) for item in enriched_knowledge[:4]):
+                answer = answer.rstrip() + citation_block
         execute(
             "INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",
             (session_id, "user", message),
@@ -299,7 +332,7 @@ class Agent:
             return
         history=fetch_all("SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 20",(session_id,))[::-1]
         context="\n".join(f"{row['role']}: {row['content']}" for row in history[-8:])
-        intent=classify(message, context)
+        intent=self._classify(message, context)
         task="coding" if intent.name=="coding" else "general"
         llm=self.llm if task=="general" else create_llm(task)
         knowledge=recall(message,8)
@@ -322,6 +355,11 @@ class Agent:
             chunks.append(text_chunk)
             yield text_chunk
         answer=self._handle_unknown("".join(chunks),message,session_id)
+        if knowledge and "__MYAI_UNKNOWN__" not in str(answer):
+            citation_block = self._required_citations(enriched_knowledge)
+            if citation_block and not any(f"[K{item.get('id')}]" in str(answer) for item in enriched_knowledge[:4]):
+                answer = answer.rstrip() + citation_block
+                yield citation_block
         execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(session_id,"assistant",answer))
         execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(session_id,))
 

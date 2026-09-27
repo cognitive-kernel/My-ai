@@ -3,14 +3,15 @@ from __future__ import annotations
 import json
 import threading
 import logging
+import time
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from .learner import LearningEngine
 from .platform import resource_status
 from .curriculum import LANGUAGE_CURRICULA, LANGUAGE_SOURCES, canonical_language
-from .db import execute, fetch_all
-from .domain_registry import load_saved_domains
-from .dynamic_learning import REVIEW_DAYS, ensure_domain, resolve_learning_target, due_domains, weekly_review, review_history
+from .db import connect, execute, fetch_all
+from .dynamic_learning import REVIEW_DAYS, ensure_domain, due_domains, weekly_review, review_history
 from .config import settings
 from .settings_store import get_setting
 from .resource_guard import limits as resource_limits
@@ -35,10 +36,8 @@ class StudyScheduler:
         self._restart_lock = threading.Lock()
         self._supervisor_stop = threading.Event()
         self._supervisor_thread = None
-        try:
-            load_saved_domains()
-        except Exception as exc:
-            self.error = str(exc)
+        self._lease_owner = uuid.uuid4().hex
+        self._lease_seconds = 30.0
 
     def start_learning_supervisor(self):
         if self._supervisor_thread and self._supervisor_thread.is_alive():
@@ -84,15 +83,61 @@ class StudyScheduler:
         self._monitor_thread.start()
 
     def _normalize_language(self, language):
+        """Normalize the requested worker language without cross-worker inference.
+
+        A scheduler worker must keep the identity selected by its caller. Falling
+        back to the latest learning message can silently turn e.g. a PHP worker
+        into an Android worker when another chat mentions Android.
+        """
         language = str(language or "Python").strip() or "Python"
         known = canonical_language(language)
-        if known in LANGUAGE_CURRICULA:
-            return known
-        return resolve_learning_target(self._latest_learning_message(), language)
+        return known if known in LANGUAGE_CURRICULA else language
+
+    def _ensure_lease_table(self):
+        execute(
+            "CREATE TABLE IF NOT EXISTS learning_worker_leases (language TEXT PRIMARY KEY, owner TEXT NOT NULL, lease_until REAL NOT NULL)"
+        )
+
+    def _acquire_lease(self, language):
+        self._ensure_lease_table()
+        now = time.time()
+        lease_until = now + self._lease_seconds
+        with self._lock:
+            rows = fetch_all(
+                "SELECT owner,lease_until FROM learning_worker_leases WHERE language=?",
+                (language,),
+            )
+            if rows and float(rows[0]["lease_until"]) > now and rows[0]["owner"] != self._lease_owner:
+                return False
+            execute(
+                """INSERT INTO learning_worker_leases(language,owner,lease_until)
+                   VALUES(?,?,?)
+                   ON CONFLICT(language) DO UPDATE SET owner=excluded.owner,lease_until=excluded.lease_until""",
+                (language, self._lease_owner, lease_until),
+            )
+            return True
+
+    def _renew_lease(self, language):
+        with connect() as conn:
+            cursor = conn.execute(
+                "UPDATE learning_worker_leases SET lease_until=? WHERE language=? AND owner=?",
+                (time.time() + self._lease_seconds, language, self._lease_owner),
+            )
+            conn.commit()
+            return cursor.rowcount == 1
+
+    def _release_lease(self, language):
+        execute(
+            "DELETE FROM learning_worker_leases WHERE language=? AND owner=?",
+            (language, self._lease_owner),
+        )
 
     def start(self, language="Python", session_id=None):
         language = self._normalize_language(language)
         key = language.casefold()
+        if not self._acquire_lease(language):
+            logger.info("LEARNING_WORKER_LEASE_HELD: language=%s", language)
+            return
         with self._lock:
             existing = self._workers.get(key)
             if existing and existing[0].is_alive():
@@ -444,11 +489,20 @@ class StudyScheduler:
         threading.Timer(2.0, recover).start()
 
     def _loop(self, language, stop_event):
+        if not self._acquire_lease(language):
+            logger.error("LEARNING_WORKER_LEASE_HELD: language=%s", language)
+            return
         engine = LearningEngine()
         consecutive_errors = 0
         slot_acquired = False
         try:
+            lease_renew_at = 0.0
             while not stop_event.is_set():
+                if time.time() >= lease_renew_at:
+                    if not self._renew_lease(language):
+                        logger.error("LEARNING_WORKER_LEASE_LOST: language=%s", language)
+                        break
+                    lease_renew_at = time.time() + (self._lease_seconds / 3.0)
                 if not slot_acquired:
                     slot_acquired = self._worker_slots.acquire(timeout=0.5)
                     if not slot_acquired:
@@ -457,10 +511,12 @@ class StudyScheduler:
                         continue
                 try:
                     if language not in LANGUAGE_CURRICULA:
+                        # Custom domains are created for this worker only; never
+                        # resolve the worker to another language from chat history.
                         language = ensure_domain(language, getattr(engine, "llm", None)) or language
                     resources = self._wait_for_resources(stop_event)
                     self._update_worker(language, "starting", status="running")
-                    logger.info("LEARNING_CYCLE_START: language=%s current_topic=%s", language, self.current_topic)
+                    logger.debug("LEARNING_CYCLE_START: language=%s current_topic=%s", language, self.current_topic)
                     result = engine.learn_next(
                         language,
                         progress_callback=lambda stage, topic=None: self._update_worker(language, stage, topic),
@@ -516,6 +572,7 @@ class StudyScheduler:
                     self._worker_slots.release()
                 except ValueError:
                     pass
+            self._release_lease(language)
             unexpected_exit = not stop_event.is_set()
             with self._lock:
                 self._workers.pop(language.casefold(), None)

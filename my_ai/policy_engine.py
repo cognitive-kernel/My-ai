@@ -21,10 +21,13 @@ class PolicyEngine:
         if read_only_blocked(read_only, method, path):
             return PolicyDecision(False, reason="read_only")
         permission = permission_for_path(path, method)
-        if permission is None and method.upper() != "GET" and user is not None and user.get("role") != "admin":
-            return PolicyDecision(False, reason="unmapped_write_or_execute_route")
         if permission is None:
-            return PolicyDecision(True)
+            reason = (
+                "unmapped_write_or_execute_route"
+                if method.upper() != "GET"
+                else "unmapped_route"
+            )
+            return PolicyDecision(False, reason=reason)
         tool, action = permission
         if user is None:
             return PolicyDecision(False, tool, action, "authentication_required")

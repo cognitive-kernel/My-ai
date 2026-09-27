@@ -10,6 +10,8 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   browser:
@@ -19,7 +21,9 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-      - run: pip install -e .[dev] playwright pytest-playwright
+      - run: pip install -r requirements.lock
+      - run: pip install -e .[dev] --no-deps
+      - run: pip install playwright pytest-playwright
       - run: playwright install --with-deps chromium
       - name: Start application
         env:
