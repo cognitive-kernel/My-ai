@@ -24,6 +24,7 @@ from .learner import LearningEngine
 from .dynamic_learning import resolve_learning_target
 from .router import classify
 from .observability import configure_logging, request_log
+from .runtime_prerequisites import startup_check
 from .scheduler import StudyScheduler
 from .ui import page
 from .feature_routes import register_routes
@@ -99,6 +100,7 @@ async def lifespan(_):
         self_diagnostics.stop()
     shutdown_course_workers()
 configure_logging()
+startup_check()
 app=FastAPI(title="My-AI",version="0.2.0",description="Local-first personal learning and coding agent.",lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=Path(__file__).resolve().parent / "static"), name="static")
 
