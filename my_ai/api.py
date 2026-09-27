@@ -782,7 +782,7 @@ def health(): return {"status":"ok","model":settings.ollama_model,"executor_mode
 
 @app.get("/health/metrics")
 def health_metrics():
-    return {"status":"ok","offline_strict":settings.offline_strict,"inference":metrics_snapshot()["inference"]}
+    return {"status":"ok","offline_strict":settings.offline_strict,"metrics":metrics_snapshot()}
 
 @app.post("/chat")
 def chat(r:ChatRequest, request:Request):
