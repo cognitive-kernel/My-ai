@@ -31,7 +31,7 @@ from .learning_resilience import install as install_learning_resilience
 from .ui_extensions import install_ui_extensions
 from .help import page as help_page, ask_help, local_help_html, apply_help_update
 from .git_connector import GitHubConnector
-from .auth import authenticate, audit, create_account, create_session, current_user, require_admin, revoke_session, require_user, tool_allowed
+from .auth import authenticate, audit, audit_event, create_account, create_session, current_user, require_admin, revoke_session, require_user, tool_allowed
 from .platform import backup_database, choose_model, eval_retrieval, export_database, hybrid_search, import_database, model_health, resource_status, voice_status, web_fetch_policy
 from .self_update import status as self_update_status, apply_confirmed_update as self_update_apply, preview_update
 from .self_repair import diagnose_local, propose_repair, apply_repair, proposal_status
@@ -123,18 +123,19 @@ async def auth_and_audit_middleware(request: Request, call_next):
     request.state.request_id = request_id
     user = current_user(request)
     response: Response | None = None
+    request_body = await request.body()
     if not is_public_path(path) and not user:
         if "application/json" in request.headers.get("accept", "").lower():
             response = JSONResponse({"detail": "Authentication required.", "request_id": request_id}, status_code=401)
         else:
             response = RedirectResponse("/login", status_code=303)
         response.headers["X-Request-ID"] = request_id
-        audit(None, "auth", "authenticate", "401", audit_payload(request_id, request.method, path, 401))
+        audit_event(None, "auth", "authenticate", "401", request_id=request_id, input_data=request_body, extra={"method": request.method, "path": path})
         return response
     decision = policy.decide(user=user, method=request.method, path=path, read_only=settings.read_only)
     if not decision.allowed:
         status = 423 if decision.reason == "read_only" else 403
-        audit(user, decision.tool or "policy", decision.action or request.method.lower(), str(status), audit_payload(request_id, request.method, path, status))
+        audit_event(user, decision.tool or "policy", decision.action or request.method.lower(), str(status), request_id=request_id, input_data=request_body, extra={"method": request.method, "path": path, "reason": decision.reason})
         response = JSONResponse({"detail": f"Policy denied: {decision.reason}", "request_id": request_id}, status_code=status)
         response.headers["X-Request-ID"] = request_id
         return response
@@ -143,7 +144,7 @@ async def auth_and_audit_middleware(request: Request, call_next):
         response = await call_next(request)
     except Exception:
         record_http_error(path)
-        audit(user, decision.tool or path, decision.action or request.method.lower(), "500", audit_payload(request_id, request.method, path, 500))
+        audit_event(user, decision.tool or path, decision.action or request.method.lower(), "500", request_id=request_id, input_data=request_body, error="unhandled_request_exception", extra={"method": request.method, "path": path})
         logger.exception("Unhandled request error", extra={"request_id": request_id, "method": request.method, "path": path})
         raise
     finally:
