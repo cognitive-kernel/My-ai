@@ -2099,3 +2099,13 @@ These are the areas most likely to need a dedicated implementation pass rather t
 7. Direct `uvicorn my_ai.api:app` startup parity with the `python -m my_ai` registration path.
 
 این موارد عمداً در انتهای README آمده‌اند تا در توسعه بعدی به‌عنوان checklist کارهای باقی‌مانده قابل پیگیری باشند.
+
+
+## Engineering governance
+
+- Architecture: `docs/ARCHITECTURE.md`
+- Product scope and feature-creep guardrails: `PROJECT_SCOPE.md`
+- Contribution rules: `CONTRIBUTING.md`
+- Security policy: `SECURITY.md`
+- Dependency source of truth: `pyproject.toml`; `requirements.txt` is a compatibility entry point only.
+- Central API/tool authorization and global read-only enforcement: `my_ai/access_policy.py`.
