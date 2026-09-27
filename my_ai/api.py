@@ -23,6 +23,7 @@ from .db import fetch_all,init_db,execute
 from .learner import LearningEngine
 from .dynamic_learning import resolve_learning_target
 from .router import classify
+from .observability import configure_logging, request_log
 from .scheduler import StudyScheduler
 from .ui import page
 from .feature_routes import register_routes
@@ -97,6 +98,7 @@ async def lifespan(_):
         scheduler.stop()
         self_diagnostics.stop()
     shutdown_course_workers()
+configure_logging()
 app=FastAPI(title="My-AI",version="0.2.0",description="Local-first personal learning and coding agent.",lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=Path(__file__).resolve().parent / "static"), name="static")
 
@@ -151,7 +153,9 @@ async def auth_and_audit_middleware(request: Request, call_next):
         raise
     finally:
         duration = time.perf_counter() - started
-        record_http_request(request.method, path, response.status_code if response is not None else 500, duration)
+        status_code = response.status_code if response is not None else 500
+        record_http_request(request.method, path, status_code, duration)
+        logging.getLogger("my_ai.http").info("request", extra=request_log(request_id=request_id, method=request.method, path=path, status=status_code, duration_ms=duration * 1000, user_id=(user or {}).get("id")))
     response.headers["X-Request-ID"] = request_id
     if user and path != "/auth/logout":
         action = decision.action or {"GET": "read", "POST": "execute", "PUT": "write", "PATCH": "write", "DELETE": "write"}.get(request.method, request.method.lower())
