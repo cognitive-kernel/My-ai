@@ -136,6 +136,7 @@ _LANGUAGE_ALIASES = {
     "php": ("php", "پی اچ پی"), "sql": ("sql", "اس کیو ال"),
     "mysql": ("mysql", "مای اس کیو ال"), "sqlite": ("sqlite", "اس کیو لایت"),
     "android": ("android", "اندروید"), "ios": ("ios", "آی او اس"),
+    "cisco": ("cisco", "سیسکو", "ccna", "cisco networking", "شبکه سیسکو"),
 }
 
 
