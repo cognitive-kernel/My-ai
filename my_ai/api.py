@@ -43,7 +43,9 @@ from .image_generation import generate_image, ImageGenerationError
 from .runtime_prerequisites import startup_check, runtime_status
 from .local_files import WORKSPACE_ROOT
 from .settings_feature import start_named_course, shutdown_course_workers
-from .access_policy import is_public_path, permission_for_path, read_only_blocked
+from .access_policy import is_public_path, permission_for_path, read_only_blocked, TOOL_RULES, PATH_ACTIONS
+_TOOL_RULES = TOOL_RULES
+_PATH_ACTIONS = PATH_ACTIONS
 from .api_models import (
     AdminUserRequest, AuthLoginRequest, AuthRegisterRequest, BackupRequest, ChatRequest,
     CodeRequest, GitRequest, ImportRequest, KnowledgeUpdateRequest, LanguageRequest,
