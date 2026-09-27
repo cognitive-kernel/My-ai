@@ -357,6 +357,7 @@ class LearningEngine:
                     "phase":str(row["phase"]) if row else "planned",
                     "progress_percent":progress,
                     "score":row["score"] if row and row["score"] is not None else None,
+                    "lesson":str(row["notes"] or "") if row else "",
                     "updated_at":row["created_at"] if row else None,
                     "last_attempt_at":row["created_at"] if row else None,
                 })
