@@ -36,3 +36,19 @@ def test_encrypted_export_is_verifiable(tmp_path, monkeypatch):
     assert result["type"] == "encrypted-json"
     with pytest.raises(Exception):
         platform.verify_backup(path, password="wrong-password")
+
+
+def test_encrypted_export_contains_security_and_learning_state(tmp_path, monkeypatch):
+    from my_ai import platform
+    monkeypatch.setattr(platform, "BACKUP_ROOT", tmp_path / "backups")
+    platform.init_db()
+    path = platform.export_database(
+        str(tmp_path / "backups" / "complete.json"),
+        password="complete-backup-password",
+    )
+    raw = platform.decrypt_bytes((tmp_path / "backups" / "complete.json").read_bytes(), "complete-backup-password")
+    import json
+    payload = json.loads(raw.decode("utf-8"))
+    assert payload["metadata"]["format_version"] >= 4
+    assert payload["metadata"]["encrypted"] is True
+    assert {"users", "tool_permissions", "audit_log", "skills", "skill_evidence"}.issubset(payload["tables"])
