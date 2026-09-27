@@ -401,16 +401,19 @@ def _import_data(data: dict[str, Any]) -> dict[str, Any]:
                 if not rows:
                     continue
                 columns = [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+                inserted_count = 0
                 for row in rows:
                     cols = [col for col in columns if col in row and col != "id"]
                     if not cols:
                         continue
                     marks = ",".join("?" for _ in cols)
-                    conn.execute(
+                    cursor = conn.execute(
                         f"INSERT OR IGNORE INTO {table} ({','.join(cols)}) VALUES ({marks})",
                         tuple(row[col] for col in cols),
                     )
-                inserted[table] = len(rows)
+                    inserted_count += max(cursor.rowcount, 0)
+                if inserted_count:
+                    inserted[table] = inserted_count
             conn.commit()
         except Exception:
             conn.rollback()
