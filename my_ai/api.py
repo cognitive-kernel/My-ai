@@ -601,6 +601,18 @@ def skills_revalidate(r:SkillRevalidateRequest, request:Request):
     audit(user,"skill-engine","execute","200",f"revalidate:{r.skill_id}")
     return result
 
+@app.post("/skills/{skill_id}/sandbox-test")
+def skill_sandbox_test(skill_id:int, r:PythonToolRequest, request:Request):
+    user=require_admin(request)
+    if not r.confirmed:
+        raise HTTPException(409,"Explicit confirmation is required for a skill sandbox test.")
+    if not fetch_all("SELECT id FROM skills WHERE id=?",(skill_id,)):
+        raise HTTPException(404,"Skill not found.")
+    result=run_python_snippet(r.code)
+    passed=result.get("return_code")==0 and not result.get("timed_out")
+    evidence=record_evidence(skill_id,"benchmark",bool(passed),{"command":"sandbox:python","artifact":json.dumps(result,ensure_ascii=False)[:12000],"sandbox_mode":result.get("sandbox_mode","unknown")})
+    audit(user,"skill-engine","execute", "200" if passed else "422", f"sandbox:{skill_id}:passed={passed}")
+    return {"passed":passed,"evidence_id":evidence,"result":result}
 @app.get("/skills/reviews")
 def skills_reviews(request:Request):
     require_admin(request)
