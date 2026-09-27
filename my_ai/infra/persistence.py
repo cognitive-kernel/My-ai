@@ -130,6 +130,8 @@ def _deduplicate_knowledge(conn: sqlite3.Connection) -> None:
             conn.execute("UPDATE knowledge SET content_hash=? WHERE id=?", (digest, row["id"]))
 
 def init_db() -> None:
+    if _write_blocked():
+        return
     with connect() as conn:
         conn.executescript(SCHEMA)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_attachments_session ON chat_attachments(session_id, id)")
@@ -198,6 +200,8 @@ def fetch_all(sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
         return [dict(row) for row in conn.execute(sql, params).fetchall()]
 
 def remember_knowledge(topic: str, title: str, content: str, source_url: str | None = None) -> int:
+    if _write_blocked():
+        raise PermissionError("MYAI_READ_ONLY blocks database mutation.")
     digest = _knowledge_hash(topic, content)
     with connect() as conn:
         row = conn.execute("SELECT id,source_url FROM knowledge WHERE content_hash=?", (digest,)).fetchone()
