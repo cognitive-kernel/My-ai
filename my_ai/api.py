@@ -899,7 +899,7 @@ def chat(r:ChatRequest, request:Request):
         msg=r.message.strip(); low=msg.lower()
         attachments=_validate_chat_attachments(r.attachments)
         intent=classify(msg)
-        required_by_intent={"pentest_external":("security","execute"),"git_write":("github","write"),"self_update":("self-update","write"),"database_import":("database","write"),"code_execution":("code-execution","execute"),"self_repair":("self-repair","execute"),"learning":("learning","execute"),"coding":("code-generation","execute")}
+        required_by_intent={"pentest_external":("security","execute"),"git_write":("github","write"),"self_update":("self-update","write"),"database_import":("database","write"),"code_execution":("code-execution","execute"),"self_repair":("self-repair","execute"),"learning":("learning","execute"),"coding":("code-generation","execute"),"image_generation":("image-generation","execute")}
         if intent.name in required_by_intent:
             tool,action=required_by_intent[intent.name]
             if not tool_allowed(user,tool,action):
