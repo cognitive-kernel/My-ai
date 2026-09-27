@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from .learner import LearningEngine
 from .platform import resource_status
 from .curriculum import LANGUAGE_CURRICULA, LANGUAGE_SOURCES, canonical_language
-from .db import execute, fetch_all
+from .db import connect, execute, fetch_all
 from .dynamic_learning import REVIEW_DAYS, ensure_domain, due_domains, weekly_review, review_history
 from .config import settings
 from .settings_store import get_setting
@@ -118,11 +118,13 @@ class StudyScheduler:
             return True
 
     def _renew_lease(self, language):
-        updated = execute(
-            "UPDATE learning_worker_leases SET lease_until=? WHERE language=? AND owner=?",
-            (time.time() + self._lease_seconds, language, self._lease_owner),
-        )
-        return bool(updated)
+        with connect() as conn:
+            cursor = conn.execute(
+                "UPDATE learning_worker_leases SET lease_until=? WHERE language=? AND owner=?",
+                (time.time() + self._lease_seconds, language, self._lease_owner),
+            )
+            conn.commit()
+            return cursor.rowcount == 1
 
     def _release_lease(self, language):
         execute(
