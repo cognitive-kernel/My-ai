@@ -113,8 +113,8 @@ html+='<p class="small">مسیر یادگیری '+escHtml(language)+' — برا
 html+='<button type="button" data-learning-action="stop" data-learning-language="'+escHtml(language)+'" '+(custom|| (status!=='running'&&status!=='retrying')?'disabled':'')+'>متوقف کردن</button>';
 html+='<button type="button" data-learning-action="resume" data-learning-language="'+escHtml(language)+'" '+(status==='running'||status==='retrying'||status==='stopping'?'disabled':'')+'>ادامه</button>';
 (summary.topics||[]).forEach(function(t){
-html+='<div class="small" style="margin-top:10px"><b>'+escHtml(t.order||t.topic_order)+'. '+escHtml(t.topic||t.title)+'</b> — '+Number(t.progress_percent||0)+'%</div>';
-html+='<div class="bar"><div class="fill" style="width:'+Number(t.progress_percent||0)+'%">'+Number(t.progress_percent||0)+'%</div></div>';
+html+='<div class="small" style="margin-top:10px"><b>'+escHtml(t.order||t.topic_order)+'. '+escHtml(t.topic||t.title)+'</b> — '+Math.max(0,Math.min(100,Math.round(Number(t.progress_percent||0)*2)/2))+'%</div>';
+html+='<div class="bar"><div class="fill" style="width:'+Math.max(0,Math.min(100,Math.round(Number(t.progress_percent||0)*2)/2))+'%">'+Math.max(0,Math.min(100,Math.round(Number(t.progress_percent||0)*2)/2))+'%</div></div>';
 });
 html+='</details>';
 });
