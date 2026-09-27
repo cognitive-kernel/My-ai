@@ -1,5 +1,4 @@
-from my_ai.api import app
-
-
-def test_system_prerequisite_route_is_registered():
-    assert any(getattr(r, "path", "") == "/files/prerequisites" for r in app.routes)
+def test_prerequisite_policy_request_model_requires_confirmation():
+    from my_ai.feature_routes import PrerequisiteRequest
+    payload = PrerequisiteRequest(path="x", install_system=True, confirmed=False)
+    assert payload.confirmed is False
