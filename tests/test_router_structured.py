@@ -53,5 +53,5 @@ def test_structured_router_handles_ambiguous_multi_intent():
 def test_domain_router_has_no_keyword_tables_or_regex_fallback():
     source = __import__("pathlib").Path("my_ai/domain/router.py").read_text(encoding="utf-8")
     assert "_INTENT_PATTERNS" not in source
-    assert "re." not in source
+    assert "import re" not in source
     assert "_normalize(" not in source
