@@ -95,14 +95,39 @@ class StudyScheduler:
         key = language.casefold()
         with self._lock:
             existing = self._workers.get(key)
+
+            # A Resume action must continue the persisted lesson instead of
+            # creating/choosing a different session. This is especially
+            # important after a process restart, where the in-memory worker
+            # does not exist but learning_workers still has the session id.
+            if session_id is None:
+                persisted = fetch_all(
+                    "SELECT session_id FROM learning_workers WHERE lower(language)=? LIMIT 1",
+                    (key,),
+                )
+                if persisted:
+                    session_id = persisted[0]["session_id"]
+
+            if session_id:
+                try:
+                    execute(
+                        """UPDATE learning_sessions
+                           SET status='started',
+                               phase=CASE WHEN phase='completed' THEN 'starting' ELSE phase END
+                           WHERE id=? AND status!='completed'""",
+                        (session_id,),
+                    )
+                except Exception:
+                    pass
+
             if existing and existing[0].is_alive():
                 # Resume must clear the cancellation flag. Otherwise a worker that
                 # was stopped just before Resume will exit immediately.
                 existing[1].clear()
-                if session_id:
-                    execute("UPDATE learning_workers SET session_id=?,status='running',stage='starting',updated_at=CURRENT_TIMESTAMP WHERE language=?", (session_id, language))
-                else:
-                    execute("UPDATE learning_workers SET status='running',stage='starting',updated_at=CURRENT_TIMESTAMP WHERE language=?", (language,))
+                execute(
+                    "UPDATE learning_workers SET session_id=?,status='running',stage='starting',updated_at=CURRENT_TIMESTAMP WHERE language=?",
+                    (session_id, language),
+                )
                 try:
                     execute("UPDATE learning_domains SET auto_learn=1 WHERE lower(name)=?", (key,))
                 except Exception:
