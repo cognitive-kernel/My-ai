@@ -1,12 +1,6 @@
 from __future__ import annotations
 
 import uvicorn
-
-from .runtime_prerequisites import startup_check
-
-# Check/install runtime prerequisites before importing optional application modules.
-startup_check()
-
 from .api import app
 from .config import settings
 
