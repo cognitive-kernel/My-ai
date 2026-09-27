@@ -37,7 +37,7 @@ def test_settings_requires_authentication():
 
 def test_adding_topic_reduces_completed_course_progress():
     sf._setup()
-    course_id = int(sf.fetch_all("SELECT id FROM custom_courses WHERE lower(name)=lower(?)", ("Python",))[0]["id"])
+    course_id = sf.execute("INSERT INTO custom_courses(name,description) VALUES(?,?)", ("Test Course", "test"))
     rows = sf._progress(course_id)
     for row in rows:
         sf._set_topic(int(row["id"]), "completed", 100, "completed")
@@ -56,7 +56,9 @@ def test_adding_topic_reduces_completed_course_progress():
 
 def test_custom_course_progress_tracks_last_attempt_column():
     sf._setup()
-    course_id = int(sf.fetch_all("SELECT id FROM custom_courses WHERE lower(name)=lower(?)", ("Cisco",))[0]["id"])
+    course_id = sf.execute("INSERT INTO custom_courses(name,description) VALUES(?,?)", ("Attempt Course", "test"))
+    topic_id = sf.execute("INSERT INTO custom_course_topics(course_id,topic_order,title,goal) VALUES(?,?,?,?)", (course_id, 1, "Topic", "Goal"))
+    sf.execute("INSERT INTO custom_course_progress(course_id,topic_id) VALUES(?,?)", (course_id, topic_id))
     topic = sf._progress(course_id)[0]
     sf.execute("UPDATE custom_course_progress SET last_attempt_at=CURRENT_TIMESTAMP WHERE topic_id=?", (int(topic["id"]),))
     updated = sf._progress(course_id)[0]
