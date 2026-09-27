@@ -377,3 +377,20 @@ Verification boundary: GitHub-side code and test changes are committed, but a cl
 - Chat-to-document conversion preserves headings, paragraphs and lists for DOCX/XLSX/PDF/PPTX.
 - Retrieval confidence calibration uses isotonic empirical calibration rather than per-bucket Laplace smoothing.
 - Dependency tests now require every runtime dependency declared in `pyproject.toml` to be pinned in `requirements.lock`.
+
+
+## 15. 2026-09-27 — Hardening completion pass in progress
+
+Repository-level fixes added on the layered branch:
+- policy actions are now method-specific, parameterized routes are matched centrally, and unmapped routes are denied for administrators as well as regular users;
+- central HTTP audit records actor identity, request correlation, input/output hashes and sizes, status, content type and streaming metadata without storing raw request secrets;
+- chat intent routing no longer uses keyword tables for learning/coding/help/image intent selection; structured router arguments provide the requested language;
+- backup format v4 exports the complete application state; sensitive identity/permission/audit tables are included only in encrypted exports and import rejects plaintext sensitive payloads;
+- scheduler workers use a persisted cross-process lease with renewal/release so multiple application processes cannot independently run the same language worker;
+- skill evidence expires after 30 days and version changes invalidate verification;
+- voice health now includes FFmpeg readiness because browser recordings may require local container normalization;
+- the eval harness now contains a fixed Persian response baseline and the Ollama E2E workflow executes a live semantic-router/response-quality baseline on pull requests;
+- browser smoke coverage includes the knowledge-management and Skill Engine UI pages;
+- self-update creates a SQLite database snapshot before activation and the watchdog restores that snapshot together with the tagged source revision on failed health activation.
+
+These changes are not considered final until CI, browser E2E, Ollama E2E and the target Windows test suite are green after this pass.
