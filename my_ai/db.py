@@ -12,9 +12,15 @@ else:
 settings = _persistence.settings
 SCHEMA = _persistence.SCHEMA
 connect = _persistence.connect
-execute = _persistence.execute
-fetch_all = _persistence.fetch_all
 _write_blocked = _persistence._write_blocked
+
+
+def execute(*args, **kwargs):
+    _persistence._write_blocked = _write_blocked
+    return _persistence.execute(*args, **kwargs)
+
+
+fetch_all = _persistence.fetch_all
 init_db = _persistence.init_db
 _normalize_search_text = _persistence._normalize_search_text
 def remember_knowledge(*args, **kwargs):
