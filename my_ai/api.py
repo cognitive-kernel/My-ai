@@ -41,7 +41,14 @@ from .runtime_prerequisites import startup_check, runtime_status
 from .local_files import WORKSPACE_ROOT
 from .settings_feature import start_named_course, shutdown_course_workers
 from .access_policy import is_public_path, permission_for_path, read_only_blocked
-from .api_models import *
+from .api_models import (
+    AdminUserRequest, AuthLoginRequest, AuthRegisterRequest, BackupRequest, ChatRequest,
+    CodeRequest, GitRequest, ImportRequest, KnowledgeUpdateRequest, LanguageRequest,
+    LearnRequest, PermissionRequest, ProjectRequest, ProgramRequest, PythonToolRequest,
+    RepairRequest, SchedulerRequest, SecurityRequest, SelfUpdateRequest, SkillEvidenceRequest,
+    SkillRevalidateRequest, SQLQueryRequest, SQLiteQueryRequest, ToolRequest, URLRequest,
+    VoiceSynthesizeRequest, VoiceTranscribeRequest,
+)
 from .readiness import build_readiness
 
 scheduler=StudyScheduler()
