@@ -1174,7 +1174,7 @@ docker compose up --build
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -e .[dev]
 ollama pull qwen2.5:7b
 python -m my_ai
 ```
@@ -1184,7 +1184,7 @@ python -m my_ai
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e .[dev]
 ollama pull qwen2.5:7b
 python -m my_ai
 ```
@@ -1659,7 +1659,7 @@ Known Python prerequisites can be installed automatically with pip when missing:
 - `PyMuPDF`
 - `Pillow`
 
-This is an allowlisted Python-package mechanism; it is not a generic system-package installer.
+System prerequisite installation uses explicit, platform-specific package-manager commands and requires explicit administrator confirmation for system changes. It is not an unrestricted arbitrary shell installer.
 
 ## 24. Document Generation
 
@@ -1806,7 +1806,7 @@ Windows:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -e .[dev]
 ollama pull qwen2.5:7b
 python -m my_ai
 ```
@@ -1816,7 +1816,7 @@ Linux/macOS:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e .[dev]
 ollama pull qwen2.5:7b
 python -m my_ai
 ```
@@ -1837,10 +1837,10 @@ The following are documented explicitly so the inventory does not overstate impl
 
 - New local-file read/list/inspect/read routes are read-only; writes happen only through explicit upload/generation operations in that feature layer.
 - Automatic prerequisite installation currently targets known Python dependencies rather than arbitrary operating-system packages such as FFmpeg or LibreOffice.
-- Audio/video processing currently provides metadata through `ffprobe`; full semantic transcription requires the configured voice/transcription integration.
-- Document-generation endpoints exist, but fully natural-language-driven generation of every document type through Chat may require additional agent/routing integration.
-- Extended feature routes are registered by the `python -m my_ai` startup path.
-- Existing project/self-update/code-generation capabilities may have their own write behavior; a single global OS-wide read-only policy has not yet been refactored across every legacy capability.
+- Audio/video processing includes local transcription when whisper.cpp is configured, local semantic transcript analysis, and video frame/combined semantic analysis when a local Ollama model is available. Missing local engines are reported instead of falling back to cloud services.
+- Chat-to-document generation is integrated for DOCX, XLSX, PDF and PPTX through /files/generate/from-chat, with explicit format selection and workspace-safe output.
+- Startup prerequisite checks are centralized in my_ai.api, so both python -m my_ai and direct uvicorn my_ai.api:app use the same registration/startup path.
+- Application-wide mutation policy is enforced centrally by the API policy engine and database mutation boundary. MYAI_READ_ONLY=true blocks API mutations and runtime SQLite writes; Docker deployments can additionally use a read-only root filesystem. Writes performed by unrelated external processes outside the My-AI process are intentionally outside application control.
 
 This section is intentional: it distinguishes **module exists**, **feature implemented**, and **fully end-to-end integrated** so the next development pass can target missing pieces precisely.
 
@@ -1853,11 +1853,11 @@ This section is intentional: it distinguishes **module exists**, **feature imple
 | `__main__.py` | Application startup and runtime feature registration |
 | `api.py` | Main FastAPI application and API routes |
 | `agent.py` | Agent orchestration and request workflows |
-| `router.py` | Command routing |
+| `router.py` | Compatibility facade for layered command routing |
 | `llm.py` | Ollama/LLM abstraction |
-| `db.py` | SQLite database layer |
+| `db.py` | SQLite database layer + mutation guard |
 | `memory.py` | Persistent memory helpers |
-| `metrics.py` | Runtime metrics |
+| `metrics.py` | Runtime metrics |\n| `observability.py` | Structured JSON logging and correlation fields |\n| `core/` | Stable core protocols/contracts |\n| `domain/` | Layered domain services including canonical router |
 | `learner.py` | Learning engine |
 | `dynamic_learning.py` | Dynamic topic/language resolution and learning behavior |
 | `learning_resilience.py` | Retry-until-stop resilience patch |
@@ -2082,24 +2082,28 @@ The chat must not guess. If local knowledge is insufficient it reports that it d
 
 ### Startup prerequisite policy
 
-On every application startup, My-AI checks Python dependencies in `requirements.txt` and selected system prerequisites. Missing Python packages are installed automatically only when `MYAI_AUTO_INSTALL_PREREQUISITES=true` is explicitly enabled. The default is `false`, so application startup is non-mutating and does not repeatedly invoke package managers; unresolved prerequisites are reported.
+On every application startup, My-AI checks Python dependencies declared in `pyproject.toml` and selected system prerequisites. Missing Python packages are installed automatically only when `MYAI_AUTO_INSTALL_PREREQUISITES=true` is explicitly enabled. The default is `false`, so application startup is non-mutating and does not repeatedly invoke package managers; unresolved prerequisites are reported.
 
 This policy is part of the development contract: new features must remain offline by default unless they belong to an explicitly allowed online category above. New network-capable features must document their reason, permission boundary, and user-facing behavior.
 
-## Deliberately visible follow-up gaps
+## Implementation verification / وضعیت تکمیل
 
-These are the areas most likely to need a dedicated implementation pass rather than only documentation:
+این موارد در نسخه فعلی دیگر به‌عنوان backlog کدنویسی ثبت نمی‌شوند:
 
-1. True OS-wide read-only policy enforcement across every legacy write-capable subsystem.
-2. Full semantic audio/video transcription and analysis.
-3. Generic operating-system prerequisite installation, not only allowlisted Python packages.
-4. Full Chat-to-document natural-language generation workflow for every requested file type.
-5. A single unified permission/policy layer across every old and new tool.
-6. Full end-to-end UI testing of all file, voice, learning, GitHub and self-update workflows.
-7. Direct `uvicorn my_ai.api:app` startup parity with the `python -m my_ai` registration path.
+- Unified API policy + deny-by-default route handling + application/database read-only enforcement.
+- Structured semantic router with schema validation and regression coverage؛ deterministic matching فقط safety fallback است وقتی classifier در دسترس نیست.
+- Hybrid FTS5 + local embedding retrieval با provenance، verification state و confidence calibration بر اساس retrieval judgments.
+- Knowledge management UI در /admin/knowledge با verify/audit workflow.
+- Skill evidence، sandbox benchmark، score مستقل و version-aware revalidation.
+- Streaming/multi-session، backup/export/import با versioning و SHA-256 integrity metadata.
+- Model health با availability per role و fallback readiness.
+- Local whisper.cpp/Piper health checks و semantic audio/video analysis.
+- System prerequisite installation با package-managerهای پشتیبانی‌شده و تأیید صریح admin.
+- Chat-to-document برای DOCX/XLSX/PDF/PPTX و مسیر browser E2E.
+- Structured JSON observability و correlation ID در HTTP requests.
+- Direct uvicorn my_ai.api:app و python -m my_ai از startup gate یکسان استفاده می‌کنند.
 
-این موارد عمداً در انتهای README آمده‌اند تا در توسعه بعدی به‌عنوان checklist کارهای باقی‌مانده قابل پیگیری باشند.
-
+دو محدودیت ذاتی همچنان صریح هستند: «OS-wide» به معنی کنترل writeهای فرآیندهای خارجی سیستم‌عامل نیست، و uv.lock در محیط بدون دسترسی شبکه تولید نشده است؛ dependency source of truth خود pyproject.toml است و requirements.lock یک compatibility snapshot است.
 
 ## Engineering governance
 
