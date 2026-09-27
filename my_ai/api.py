@@ -4,6 +4,8 @@ import os
 import sys
 import subprocess
 import re
+import time
+import logging
 from urllib.parse import urlparse
 from pathlib import Path
 from fastapi import FastAPI,HTTPException,Request
@@ -31,7 +33,7 @@ from .self_update import status as self_update_status, apply_confirmed_update as
 from .self_repair import diagnose_local, propose_repair, apply_repair, proposal_status
 from .skill_engine import ensure_skill, record_evidence, revalidate, snapshot, record_review, review_snapshot
 from .voice import status as voice_engine_status, transcribe, synthesize
-from .metrics import snapshot as metrics_snapshot
+from .metrics import snapshot as metrics_snapshot, record_http_request, record_http_error
 from .platform import import_encrypted_database, restore_encrypted_backup
 from .self_repair import list_proposals, proposal_diff
 from .self_diagnostics import SelfDiagnosticsMonitor, latest_report, report_history, paginated_report_history
@@ -51,6 +53,7 @@ from .api_models import (
 )
 from .readiness import build_readiness
 
+logger = logging.getLogger("my_ai.api")
 scheduler=StudyScheduler()
 self_diagnostics=SelfDiagnosticsMonitor()
 @asynccontextmanager
@@ -132,7 +135,18 @@ async def auth_and_audit_middleware(request: Request, call_next):
             tool, action = permission
             if not tool_allowed(user, tool, action):
                 return JSONResponse({"detail":f"Tool permission denied: {tool}:{action}"}, status_code=403)
-    response=await call_next(request)
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        record_http_error(path)
+        logger.exception("Unhandled request error", extra={"method": request.method, "path": path})
+        raise
+    finally:
+        # Metrics are recorded even when downstream middleware raises.
+        duration = time.perf_counter() - started
+        status = locals().get("response")
+        record_http_request(request.method, path, getattr(status, "status_code", 500), duration)
     if user and path!="/auth/logout":
         action={"GET":"read","POST":"execute","PUT":"write","PATCH":"write","DELETE":"write"}.get(request.method,request.method.lower())
         audit(user,path,action,str(response.status_code))
