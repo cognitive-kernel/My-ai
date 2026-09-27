@@ -484,6 +484,19 @@ def voice_upload(file:UploadFile, request:Request):
     audit(user,"voice","write","201",str(target))
     return {"path":str(target),"local_path":str(target)}
 
+@app.get("/voice/file")
+def voice_file(path:str, request:Request):
+    require_user(request)
+    candidate = Path(path).expanduser().resolve()
+    try:
+        candidate.relative_to(VOICE_ROOT)
+    except ValueError:
+        raise HTTPException(400, "Voice paths must stay under data/voice.")
+    if not candidate.is_file():
+        raise HTTPException(404, "Voice file not found.")
+    from fastapi.responses import FileResponse
+    return FileResponse(candidate)
+
 @app.get("/voice/status")
 def voice_status_api(request:Request):
     require_user(request)
