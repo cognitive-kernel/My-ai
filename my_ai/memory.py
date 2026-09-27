@@ -10,7 +10,7 @@ from .platform import hybrid_search, invalidate_hybrid_search_cache
 
 @lru_cache(maxsize=128)
 def _recall_cached(query: str, limit: int, bucket: int):
-    return hybrid_search(query, limit)
+    return hybrid_search(query, limit, verified_only=True)
 
 
 def remember(topic, title, content, source_url=None):
