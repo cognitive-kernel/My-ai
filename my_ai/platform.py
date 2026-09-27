@@ -81,9 +81,14 @@ def _isotonic_calibration(judgments: list[dict[str, Any]]) -> list[tuple[float, 
         (max(0.0, min(1.0, float(row["score"] or 0.0))), int(bool(row["relevant"])))
         for row in judgments
     )
-    groups: list[list[float | int]] = []
+    grouped: list[list[float | int]] = []
     for score, label in points:
-        groups.append([score, score, 1, label])
+        if grouped and grouped[-1][0] == score:
+            grouped[-1][2] = int(grouped[-1][2]) + 1
+            grouped[-1][3] = int(grouped[-1][3]) + label
+        else:
+            grouped.append([score, score, 1, label])
+    groups: list[list[float | int]] = grouped
         while len(groups) >= 2:
             left, right = groups[-2], groups[-1]
             left_mean = float(left[3]) / int(left[2])
