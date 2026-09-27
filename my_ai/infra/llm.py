@@ -27,13 +27,13 @@ class OllamaClient:
                 if not host or not ipaddress.ip_address(host).is_loopback: raise ValueError
             except ValueError as exc: raise LLMError("Offline strict mode permits only loopback Ollama endpoints.") from exc
         self.default_model = getattr(_settings(), "ollama_model", "qwen2.5:7b")
-        self.fallback_model = getattr(settings, "fallback_model", self.default_model)
+        self.fallback_model = getattr(_settings(), "fallback_model", self.default_model)
         self.model = self._select_model(task)
     def _select_model(self, task: str | None) -> str:
         if not task: return self.default_model
         low = task.lower()
-        if any(x in low for x in ("code","python","sql","debug","coding","patch","کد","برنامه","پروژه","رفع باگ")): return getattr(settings, "coding_model", self.default_model)
-        if any(x in low for x in ("route","routing","classify","intent","simple","ساده","دسته")): return getattr(settings, "routing_model", self.default_model)
+        if any(x in low for x in ("code","python","sql","debug","coding","patch","کد","برنامه","پروژه","رفع باگ")): return getattr(_settings(), "coding_model", self.default_model)
+        if any(x in low for x in ("route","routing","classify","intent","simple","ساده","دسته")): return getattr(_settings(), "routing_model", self.default_model)
         return self.default_model
     def _options(self) -> dict[str, int]:
         cfg=limits(); return {"num_ctx":int(_settings().ollama_num_ctx),"num_thread":int(cfg["cpu_threads"]),"num_gpu":int(cfg["gpu_layers"])}
@@ -54,7 +54,7 @@ class OllamaClient:
         except (httpx.HTTPError,json.JSONDecodeError) as exc:
             record_error("ollama",self.model)
             if not yielded and self.model!=self.fallback_model:
-                wait_until_available(stop_event, max_wait=settings.resource_wait_seconds); fallback_payload=dict(payload); fallback_payload["model"]=self.fallback_model; fallback_payload["options"]=self._options()
+                wait_until_available(stop_event, max_wait=_settings().resource_wait_seconds); fallback_payload=dict(payload); fallback_payload["model"]=self.fallback_model; fallback_payload["options"]=self._options()
                 try:
                     with httpx.stream("POST",f"{self.base_url}/api/chat",json=fallback_payload,timeout=300) as response:
                         response.raise_for_status(); self.model=self.fallback_model
@@ -78,7 +78,7 @@ class OllamaClient:
             "stream": False,
             "format": schema,
             "options": self._options(),
-            "keep_alive": settings.ollama_keep_alive,
+            "keep_alive": _settings().ollama_keep_alive,
             "messages": messages,
         }
         started = time.perf_counter()
@@ -100,7 +100,7 @@ class OllamaClient:
             raise LLMError(f"Structured Ollama request failed: {exc}") from exc
 
     def chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None,stop_event=None)->str:
-        wait_until_available(stop_event); messages: list[HistoryMessage] = []; payload={"model":self.model,"stream":False,"options":self._options(),"keep_alive":settings.ollama_keep_alive,"messages":messages}
+        wait_until_available(stop_event); messages: list[HistoryMessage] = []; payload={"model":self.model,"stream":False,"options":self._options(),"keep_alive":_settings().ollama_keep_alive,"messages":messages}
         if system: messages.append({"role":"system","content":system})
         for item in history or ():
             role=item.get("role"); content=item.get("content")
@@ -122,8 +122,8 @@ class OllamaClient:
 class OpenAICompatibleClient:
     """OpenAI Responses API backend, also usable with compatible gateways."""
     def __init__(self)->None:
-        if getattr(settings,"offline_strict",False): raise LLMError("OpenAI is disabled in offline strict mode.")
-        self.base_url=settings.openai_base_url; self.model=settings.openai_model; self.api_key=settings.openai_api_key
+        if getattr(_settings(),"offline_strict",False): raise LLMError("OpenAI is disabled in offline strict mode.")
+        self.base_url=_settings().openai_base_url; self.model=_settings().openai_model; self.api_key=_settings().openai_api_key
         if not self.api_key: raise LLMError("OPENAI_API_KEY is required when LLM_PROVIDER=openai")
     def stream_chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None)->Iterator[str]:
         input_items: list[HistoryMessage] = []
