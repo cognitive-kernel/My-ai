@@ -209,7 +209,7 @@ def extend_curricula(curricula):
         _extend(curricula["SQL Server"], SQLSERVER_ADVANCED)
     if "Rust" in curricula:
         _extend_rust(curricula["Rust"])
-    explicit = {"Python", "SQL Server", "Rust", "Forex"}
+    explicit = {"Python", "SQL Server", "Rust", "Forex", "Cisco"}
     advanced_map = {
         "C": C_ADVANCED, "PHP": PHP_ADVANCED, "JavaScript": JAVASCRIPT_ADVANCED,
         "MySQL": MYSQL_ADVANCED, "SQLite": SQLITE_ADVANCED, "Android": ANDROID_ADVANCED,
