@@ -10,7 +10,7 @@ IDENTITY = {
         "conversation and persistent memory",
         "continuous curriculum-based learning",
         "Python/code generation and validation",
-        "multi-language toolchains for Python, C, PHP, JavaScript, Rust, Kotlin, Swift, Android and iOS projects",
+        "multi-language toolchains for Python, C, PHP, JavaScript, Rust, Kotlin, Swift, Android, iOS and Cisco networking projects",
         "project build, lint and test execution inside approved project workspaces",
         "read-only SQL Server, MySQL and SQLite schema inspection and query analysis",
         "project planning",
