@@ -1,4 +1,3 @@
-from types import SimpleNamespace
 import json
 
 from my_ai.infra.router_llm import OpenAIStructuredRouterClient

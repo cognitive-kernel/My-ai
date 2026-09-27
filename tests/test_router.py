@@ -1,4 +1,3 @@
-from my_ai.router import classify
 from my_ai.application.router import build_router_service
 
 
@@ -20,14 +19,9 @@ def route(payload, text, context=None):
 
 def payload(primary="chat", intents=None, confidence=0.9, language=None, topic=None, goal=None, project_path=None, urls=None):
     return {
-        "primary": primary,
-        "intents": intents or [primary],
-        "confidence": confidence,
-        "language": language,
-        "topic": topic,
-        "goal": goal,
-        "project_path": project_path,
-        "urls": urls or [],
+        "primary": primary, "intents": intents or [primary], "confidence": confidence,
+        "language": language, "topic": topic, "goal": goal,
+        "project_path": project_path, "urls": urls or [],
     }
 
 
@@ -40,10 +34,7 @@ def test_semantic_router_distinguishes_question_from_command():
 
 
 def test_ambiguous_multi_intent_request_preserves_all_intents():
-    result, fake = route(
-        payload("learning", ["learning", "coding"], 0.91, "fa", "Python", "learn then implement"),
-        "پایتون را یاد بگیر و بعد یک API بساز",
-    )
+    result, fake = route(payload("learning", ["learning", "coding"], 0.91, "fa", "Python", "learn then implement"), "پایتون را یاد بگیر و بعد یک API بساز")
     assert result.name == "learning"
     assert result.intents == ("learning", "coding")
     assert result.args["language"] == "fa"
@@ -57,15 +48,10 @@ def test_high_risk_confirmation_is_derived_outside_model_authorization():
 
 
 def test_structured_arguments_are_preserved():
-    result, _ = route(
-        payload("coding", ["coding"], 0.93, "python", None, "build API", "/projects/demo", ["https://example.com/spec"]),
-        "پروژه را بساز",
-    )
+    result, _ = route(payload("coding", ["coding"], 0.93, "python", None, "build API", "/projects/demo", ["https://example.com/spec"]), "پروژه را بساز")
     assert result.args == {
-        "language": "python",
-        "goal": "build API",
-        "project_path": "/projects/demo",
-        "urls": ["https://example.com/spec"],
+        "language": "python", "goal": "build API",
+        "project_path": "/projects/demo", "urls": ["https://example.com/spec"],
     }
 
 
