@@ -31,7 +31,16 @@ def configure_logging() -> None:
         handler.setFormatter(JsonLogFormatter())
         root.addHandler(handler)
 
-    log_level = getattr(logging, os.getenv("MYAI_LOG_LEVEL", "INFO").upper(), logging.INFO)
+    # Persistent Settings UI value takes precedence over the environment variable.
+    # Import lazily to avoid making logging configuration depend on DB initialization
+    # during module import.
+    try:
+        from .settings_store import get_setting
+        configured_level = str(get_setting("logging.level", "")).strip().upper()
+    except Exception:
+        configured_level = ""
+    level_name = configured_level or os.getenv("MYAI_LOG_LEVEL", "INFO").upper()
+    log_level = getattr(logging, level_name, logging.INFO)
     root.setLevel(log_level)
     # Keep application logger filtering explicit because Uvicorn may reconfigure
     # the root logger after application import.
