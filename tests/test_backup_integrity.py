@@ -46,7 +46,8 @@ def test_encrypted_export_contains_security_and_learning_state(tmp_path, monkeyp
         str(tmp_path / "backups" / "complete.json"),
         password="complete-backup-password",
     )
-    raw = platform.decrypt_bytes((tmp_path / "backups" / "complete.json").read_bytes(), "complete-backup-password")
+    from my_ai.backup_crypto import decrypt_bytes
+    raw = decrypt_bytes((tmp_path / "backups" / "complete.json").read_bytes(), "complete-backup-password")
     import json
     payload = json.loads(raw.decode("utf-8"))
     assert payload["metadata"]["format_version"] >= 4
