@@ -301,7 +301,13 @@ class Agent:
         task="coding" if intent.name=="coding" else "general"
         llm=self.llm if task=="general" else create_llm(task)
         knowledge=recall(message,8)
-        context_note="RELEVANT LOCAL KNOWLEDGE (reference only; do not confuse it with the user or assistant identity):\n"+json.dumps(knowledge,ensure_ascii=False)
+        enriched_knowledge = []
+        for item in knowledge:
+            item = dict(item)
+            item["provenance"] = item.get("source_url") or "local-knowledge"
+            item["confidence_label"] = round(float(item["confidence"]), 3) if item.get("confidence") is not None else "uncalibrated"
+            enriched_knowledge.append(item)
+        context_note="RELEVANT VERIFIED LOCAL KNOWLEDGE. Cite provenance and do not treat uncalibrated retrieval as high confidence.\n"+json.dumps(enriched_knowledge,ensure_ascii=False)
         lesson_note=""
         if intent.name in {"coding","code_execution","git_write","self_update"}:
             lessons=recent_lessons(12)
