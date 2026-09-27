@@ -212,7 +212,7 @@ def evidence_snapshot(skill_id: int) -> list[dict[str, Any]]:
                 "id": int(row["id"]),
                 "kind": row["kind"],
                 "passed": bool(row["passed"]),
-                "created_at": row["created_at"],
+                "created_at": row.get("created_at"),
                 "details": _parse_evidence(row["evidence"]),
             }
         )
