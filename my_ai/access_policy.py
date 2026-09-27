@@ -68,3 +68,10 @@ def is_mutation(method: str) -> bool:
 
 def read_only_blocked(read_only: bool, method: str, path: str) -> bool:
     return bool(read_only and is_mutation(method) and not is_auth_exception(path) and not path.startswith("/docs/"))
+
+
+def assert_mutation_allowed(operation: str) -> None:
+    """Process-wide mutation guard used by non-HTTP subsystems too."""
+    import os
+    if os.getenv("MYAI_READ_ONLY", "false").strip().lower() == "true":
+        raise PermissionError(f"MYAI_READ_ONLY blocks mutation: {operation}")
