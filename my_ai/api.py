@@ -9,6 +9,7 @@ import logging
 from urllib.parse import urlparse
 from pathlib import Path
 from fastapi import FastAPI,HTTPException,Request
+from pydantic import BaseModel
 from fastapi.responses import HTMLResponse,JSONResponse,RedirectResponse,StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from .agent import Agent
