@@ -26,6 +26,14 @@ def classify(text: str, context: str | None = None) -> Intent:
     return _default_service.classify(text, context)
 
 
+class _SafeNoopRouter:
+    def structured_chat_json(self, message, schema, system=None):
+        return {
+            "primary": "chat", "intents": ["chat"], "confidence": 0.0,
+            "language": None, "topic": None, "goal": None, "project_path": None, "urls": [],
+        }
+
+
 def build_router_service(classifier: StructuredRouter | None = None) -> RouterService:
-    """Composition-root helper used by tests and future application entry points."""
-    return RouterService(classifier)
+    """Explicitly injected service; None means deterministic safe-chat test adapter."""
+    return RouterService(_SafeNoopRouter() if classifier is None else classifier)
