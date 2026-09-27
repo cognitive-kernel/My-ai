@@ -121,7 +121,7 @@ class OpenAICompatibleClient:
         if getattr(settings,"offline_strict",False): raise LLMError("OpenAI is disabled in offline strict mode.")
         self.base_url=settings.openai_base_url; self.model=settings.openai_model; self.api_key=settings.openai_api_key
         if not self.api_key: raise LLMError("OPENAI_API_KEY is required when LLM_PROVIDER=openai")
-    def stream_chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None)->Iterator[str]:
+    def stream_chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None,stop_event=None)->Iterator[str]:
         input_items: list[HistoryMessage] = []
         for item in history or ():
             role=item.get("role"); content=item.get("content")
