@@ -3,7 +3,23 @@ body{font-family:Tahoma,system-ui;margin:0;background:#f3f4f6;color:#17202a}main
 <div class='layout'><aside class='card sidebar'><button id='newChat' type='button'>+ گفتگوی جدید</button><h3>چت‌های اخیر</h3><div id='chatList'></div><hr><div class='githubBox'><b>GitHub</b><p class='small'>اتصال گرافیکی به مخزن</p><p class='small'>مخزن و تنظیمات API فقط از بخش تنظیمات خوانده می‌شوند.</p><div style='margin-top:8px'><button id='githubLogin' type='button'>ورود با GitHub</button><button id='githubLogout' type='button'>خروج از GitHub</button><button id='githubConnect' type='button'>بررسی اتصال</button></div><div class='githubHelp'><b>اتصال امن GitHub</b><br>MY-AI در صورت وجود GitHub CLI از آن استفاده می‌کند؛ در غیر این صورت از OAuth داخلی GitHub با کد یک‌بارمصرف استفاده می‌کند. لازم نیست Personal Access Token را داخل برنامه وارد کنید.<br><a href='/help#git' target='_blank'>راهنمای آفلاین GitHub</a> · <a href='/help#github-online' target='_blank'>بررسی آنلاین راهنما</a></div><div id='githubStatus' class='small'></div></div></aside><section><div class='sectionTitle'><div style='display:flex;align-items:center;gap:10px;flex-wrap:wrap'><h1>مرکز کنترل</h1><a class='helpBtn' href='/settings'>تنظیمات</a><a class='helpBtn' href='/self-diagnostics'>گزارش سلامت و باگ‌ها</a><a class='helpBtn' href='/learning'>پیشرفت یادگیری</a><a class='helpBtn' href='/help#chat' target='_blank'>راهنمای کامل</a></div></div><p id='subtitle'>دستیار محلی برای یادگیری، برنامه‌نویسی و بررسی امنیتی</p>
 <div class='card'><button id='faBtn' type='button'>فارسی</button><button id='enBtn' type='button'>English</button><select id='voiceLang'><option value='fa-IR'>صدای فارسی</option><option value='en-US'>English voice</option></select></div>
 <div class='card chatCard' id='chatCard'><h2 id='chatTitle'>دستور به دستیار <a class='helpBtn' href='/help#chat' target='_blank'>راهنما</a></h2><div id='messages'></div><div class='chatComposer' id='chatComposer'><div class='composerDrop' id='composerDrop'><div id='filePreview' class='filePreview'></div><div class='composerRow'><button type='button' id='attachBtn' class='iconBtn' title='افزودن فایل'>📎</button><textarea id='msg' rows='1' placeholder='پیام خود را بنویسید...'></textarea><button type='button' id='voiceBtn' class='iconBtn' title='گفتار'>🎙</button><button type='button' id='sendBtn' class='sendCircle' title='ارسال'>➤</button></div><input id='chatFile' type='file' multiple hidden><div class='small' id='fileStatus'>Enter برای ارسال · Shift+Enter برای خط جدید · فایل را اینجا رها کنید</div></div></div><div style='display:flex;gap:6px;flex-wrap:wrap;margin-top:4px'><button type='button' id='stopBtn'>توقف صدا</button></div><p class='small' id='policy'>پیش‌فرض پن‌تست: فقط گزارش. برای اصلاح باید صریحاً درخواست رفع/اصلاح بدهید؛ «فقط گزارش بده» یا «فقط تست بگیر» همیشه بدون تغییر فایل اجرا می‌شود.</p></div>
-<div class='card'><h2 id='progressTitle'>پیشرفت یادگیری <a class='helpBtn' href='/help#learning' target='_blank'>راهنما</a></h2><div id='dashboard'>در حال بارگذاری...</div></div>
+<div class='card'><h2 id='progressTitle'>پیشرفت یادگیری <a class='helpBtn' href='/help#learning' target='_blank'>راهنما</a></h2><div id='dashboard'>در حال بارگذاری...</div></div><script>
+(function(){
+var box=document.getElementById('dashboard');
+if(!box)return;
+fetch('/learning/status?x='+Date.now(),{cache:'no-store',credentials:'same-origin'})
+.then(function(r){return r.text().then(function(t){if(!r.ok)throw Error('HTTP '+r.status+': '+t.slice(0,200));return JSON.parse(t)})})
+.then(function(j){
+var courses=j.courses||[];
+if(!courses.length){box.textContent='هنوز داده‌ای برای پیشرفت یادگیری وجود ندارد.';return}
+box.innerHTML=courses.map(function(x){
+var p=Math.max(0,Math.min(100,Number(x.progress_percent||0)));
+return '<div style="margin:8px 0"><b>'+String(x.language||x.name||'آموزش').replace(/</g,'&lt;')+'</b> · '+p+'%</div><progress max="100" value="'+p+'" style="width:100%"></progress>';
+}).join('');
+})
+.catch(function(e){box.textContent='خطا در بارگذاری پیشرفت یادگیری: '+e.message;console.error('learning dashboard bootstrap',e)});
+})();
+</script>
 <div class='card'><h2 id='securityTitle'>گزارش امنیتی <a class='helpBtn' href='/help#security' target='_blank'>راهنما</a></h2><div class='grid'><div class='card ok'><b>اصلاح خودکار</b><p>با درخواست صریح شما فعال می‌شود یا طبق پیش‌فرض پن‌تست.</p></div><div class='card danger'><b>گزارش فقط</b><p>با «فقط تست بگیر» یا «فقط گزارش بده» هیچ تغییری در پروژه ایجاد نمی‌شود.</p></div></div></div>
 
 <script>
