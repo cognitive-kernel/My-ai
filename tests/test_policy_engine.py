@@ -22,3 +22,10 @@ def test_policy_denies_unmapped_reads_for_non_admin():
     decision = policy.decide(user=user, method="GET", path="/unregistered-read-route", read_only=False)
     assert not decision.allowed
     assert decision.reason == "unmapped_route"
+
+
+def test_policy_denies_unmapped_routes_for_admin_too():
+    user = {"id": 1, "username": "admin", "role": "admin"}
+    decision = policy.decide(user=user, method="GET", path="/future-unmapped-route", read_only=False)
+    assert not decision.allowed
+    assert decision.reason == "unmapped_route"
