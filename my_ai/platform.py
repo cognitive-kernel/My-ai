@@ -122,7 +122,7 @@ def _hybrid_search_cached(query: str, limit: int, bucket: int, verified_only: bo
             missing_texts.append(f'{row.get("title","")}\n{row.get("content","")}\n{row.get("topic","")}')
 
     embedding_error: str | None = None
-    if missing_rows and not settings.read_only:
+    if missing_rows and os.getenv("MYAI_READ_ONLY", "false").strip().lower() != "true":
         try:
             vectors = ollama_embed_batch(missing_texts, settings.embedding_model)
             with connect() as conn:
