@@ -7,16 +7,20 @@ import shutil
 import subprocess
 import sys
 import urllib.request
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-REQUIREMENTS = ROOT / "requirements.txt"
+PYPROJECT = ROOT / "pyproject.toml"
 
 def _requirements():
-    if not REQUIREMENTS.is_file():
+    if not PYPROJECT.is_file():
         return []
-    return [x.strip() for x in REQUIREMENTS.read_text(encoding="utf-8").splitlines()
-            if x.strip() and not x.lstrip().startswith(("#", "-"))]
+    try:
+        data = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
+        return list(data.get("project", {}).get("dependencies", []))
+    except (OSError, tomllib.TOMLDecodeError):
+        return []
 
 def _dist_name(spec):
     return re.split(r"[<>=!~;\[]", spec, maxsplit=1)[0].strip()
