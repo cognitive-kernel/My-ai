@@ -24,3 +24,15 @@ def test_import_backup_rejects_tampering(tmp_path, monkeypatch):
     (tmp_path / "backups" / "tamper.json").write_text(json.dumps(raw), encoding="utf-8")
     with pytest.raises(ValueError, match="integrity"):
         platform.import_database(path)
+
+
+def test_encrypted_export_is_verifiable(tmp_path, monkeypatch):
+    from my_ai import platform
+    monkeypatch.setattr(platform, "BACKUP_ROOT", tmp_path / "backups")
+    db.init_db()
+    path = platform.export_database(str(tmp_path / "backups" / "encrypted.json"), password="strong-backup-password")
+    result = platform.verify_backup(path, password="strong-backup-password")
+    assert result["valid"] is True
+    assert result["type"] == "encrypted-json"
+    with pytest.raises(Exception):
+        platform.verify_backup(path, password="wrong-password")
