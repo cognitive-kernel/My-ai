@@ -9,7 +9,6 @@ from .learner import LearningEngine
 from .platform import resource_status
 from .curriculum import LANGUAGE_CURRICULA, LANGUAGE_SOURCES, canonical_language
 from .db import execute, fetch_all
-from .domain_registry import load_saved_domains
 from .dynamic_learning import REVIEW_DAYS, ensure_domain, due_domains, weekly_review, review_history
 from .config import settings
 from .settings_store import get_setting
@@ -35,10 +34,6 @@ class StudyScheduler:
         self._restart_lock = threading.Lock()
         self._supervisor_stop = threading.Event()
         self._supervisor_thread = None
-        try:
-            load_saved_domains()
-        except Exception as exc:
-            self.error = str(exc)
 
     def start_learning_supervisor(self):
         if self._supervisor_thread and self._supervisor_thread.is_alive():
