@@ -87,6 +87,13 @@ def _ollama_vision(path: Path, prompt: str) -> str:
     return str(data["message"]["content"])
 
 
+
+def _ollama_text(prompt: str) -> str:
+    payload = {"model": getattr(settings, "ollama_model", "qwen2.5:7b"), "stream": False, "messages": [{"role": "user", "content": prompt}]}
+    response = httpx.post(f"{getattr(settings, 'ollama_base_url', 'http://127.0.0.1:11434').rstrip('/')}/api/chat", json=payload, timeout=300)
+    response.raise_for_status()
+    return str(response.json()["message"]["content"])
+
 def _transcribe_media(path: Path, kind: str) -> dict[str, Any]:
     model_path = os.getenv("WHISPER_MODEL_PATH", "").strip()
     language = os.getenv("WHISPER_LANGUAGE", "fa").strip() or "fa"
@@ -129,6 +136,12 @@ def analyze(path: str, prompt: str = "Analyze this file and describe useful find
     elif kind in {"audio", "video"}:
         result["media"] = _ffprobe(target)
         result["transcription"] = _transcribe_media(target, kind)
+        transcript = str((result["transcription"] or {}).get("text") or "")
+        if transcript:
+            try:
+                result["semantic_analysis"] = _ollama_text("Analyze the meaning and actionable content of this local media transcript. Return a concise structured summary with topics, entities, key events, claims, and uncertainties. Do not invent facts.\\nTRANSCRIPT:\\n" + transcript[:30000])
+            except Exception as exc:
+                result["semantic_analysis_error"] = str(exc)
         if kind == "video":
             with tempfile.TemporaryDirectory(prefix="myai-video-frames-") as temp:
                 frames = _video_frames(target, Path(temp))
@@ -139,6 +152,11 @@ def analyze(path: str, prompt: str = "Analyze this file and describe useful find
                     except Exception as exc:
                         frame_results.append(f"frame analysis error: {exc}")
                 result["frame_analysis"] = frame_results
+                if frame_results or transcript:
+                    try:
+                        result["video_semantic_summary"] = _ollama_text("Combine the transcript and visual frame observations into a grounded semantic video summary. Separate observed facts from uncertain inferences.\\nTRANSCRIPT:\\n" + transcript[:18000] + "\\nVISUAL OBSERVATIONS:\\n" + json.dumps(frame_results, ensure_ascii=False)[:18000])
+                    except Exception as exc:
+                        result["video_semantic_summary_error"] = str(exc)
     else:
         result["generic"] = generic_inspection(str(target))
         result["message"] = "Generic metadata, hash, and archive inspection completed; no unsafe execution is performed for unknown file types."
