@@ -75,6 +75,50 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     return dot / (na * nb) if na and nb else 0.0
 
 
+def _isotonic_calibration(judgments: list[dict[str, Any]]) -> list[tuple[float, float, int]]:
+    """Fit a monotonic empirical P(relevant | retrieval score) without extra dependencies."""
+    points = sorted(
+        (max(0.0, min(1.0, float(row["score"] or 0.0))), int(bool(row["relevant"])))
+        for row in judgments
+    )
+    groups: list[list[float | int]] = []
+    for score, label in points:
+        groups.append([score, score, 1, label])
+        while len(groups) >= 2:
+            left, right = groups[-2], groups[-1]
+            left_mean = float(left[3]) / int(left[2])
+            right_mean = float(right[3]) / int(right[2])
+            if left_mean <= right_mean:
+                break
+            left[1] = right[1]
+            left[2] = int(left[2]) + int(right[2])
+            left[3] = int(left[3]) + int(right[3])
+            groups.pop()
+    return [
+        (float((group[0] + group[1]) / 2.0), float(group[3]) / int(group[2]), int(group[2]))
+        for group in groups
+    ]
+
+
+def _calibrated_confidence(score: float, judgments: list[dict[str, Any]]) -> tuple[float | None, int]:
+    if len(judgments) < 5:
+        return None, 0
+    curve = _isotonic_calibration(judgments)
+    if not curve:
+        return None, 0
+    if score <= curve[0][0]:
+        return round(curve[0][1], 6), curve[0][2]
+    if score >= curve[-1][0]:
+        return round(curve[-1][1], 6), curve[-1][2]
+    for left, right in zip(curve, curve[1:]):
+        if left[0] <= score <= right[0]:
+            span = right[0] - left[0]
+            ratio = (score - left[0]) / span if span else 0.0
+            value = left[1] + ratio * (right[1] - left[1])
+            return round(max(0.0, min(1.0, value)), 6), left[2] + right[2]
+    return None, 0
+
+
 @lru_cache(maxsize=128)
 def _hybrid_search_cached(query: str, limit: int, bucket: int, verified_only: bool) -> list[dict[str, Any]]:
     limit = max(1, min(limit, 50))
@@ -153,14 +197,7 @@ def _hybrid_search_cached(query: str, limit: int, bucket: int, verified_only: bo
     except Exception as exc:
         embedding_error = embedding_error or str(exc)
 
-    calibration: dict[float, tuple[int, int]] = {}
-    for judgment in fetch_all("SELECT score,relevant FROM retrieval_judgments"):
-        score = max(0.0, min(1.0, float(judgment["score"] or 0.0)))
-        score_bucket = float(f"{score:.1f}")
-        count: int
-        relevant_count: int
-        count, relevant_count = calibration.get(score_bucket, (0, 0))
-        calibration[score_bucket] = (count + 1, relevant_count + int(bool(judgment["relevant"])))
+    judgments = [dict(row) for row in fetch_all("SELECT score,relevant FROM retrieval_judgments")]
 
     for row in rows:
         semantic = 0.0
@@ -194,18 +231,15 @@ def _hybrid_search_cached(query: str, limit: int, bucket: int, verified_only: bo
         }
         row["citation_required"] = True
 
-        score_bucket = round(float(row["hybrid_score"]), 1)
-        samples, relevant = calibration.get(score_bucket, (0, 0))
-        if samples >= 5:
-            row["confidence"] = round((relevant + 1) / (samples + 2), 6)
-            row["confidence_basis"] = "empirical retrieval-judgment calibration with Laplace smoothing"
-            row["confidence_calibrated"] = True
-            row["confidence_samples"] = samples
-        else:
-            row["confidence"] = None
-            row["confidence_basis"] = "uncalibrated; fewer than 5 retrieval judgments in this score bucket"
-            row["confidence_calibrated"] = False
-            row["confidence_samples"] = samples
+        confidence, samples = _calibrated_confidence(float(row["hybrid_score"]), judgments)
+        row["confidence"] = confidence
+        row["confidence_calibrated"] = confidence is not None
+        row["confidence_samples"] = samples
+        row["confidence_basis"] = (
+            "isotonic empirical calibration over persisted retrieval judgments"
+            if confidence is not None
+            else "uncalibrated; fewer than 5 persisted retrieval judgments"
+        )
 
         row["embedding_model"] = settings.embedding_model
         row["semantic_available"] = bool(qvec)
