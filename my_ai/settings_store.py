@@ -79,6 +79,7 @@ def set_setting(key: str, value: Any, *, secret: bool = False) -> None:
         conn.commit()
 
 def delete_setting(key: str) -> None:
+    assert_mutation_allowed(f"setting-delete:{key}")
     ensure_schema()
     with connect() as conn:
         conn.execute("DELETE FROM app_settings WHERE key=?", (key,))
