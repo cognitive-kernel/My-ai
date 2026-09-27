@@ -239,7 +239,9 @@ def register_routes(app, scheduler, require_user, audit):
             result = install_os_packages([str(x) for x in packages], confirmed=confirmed)
         except (PermissionError, ValueError, RuntimeError) as exc:
             raise HTTPException(400, str(exc))
-        audit(user, "system-prerequisites", "write", "200", f"installed:{len(result['packages'])}")
+        installed = result.get("packages", [])
+        installed_count = len(installed) if isinstance(installed, list) else 0
+        audit(user, "system-prerequisites", "write", "200", f"installed:{installed_count}")
         return result
 
     @router.post("/files/prerequisites")
