@@ -1,11 +1,13 @@
 import hashlib
 import json
+from datetime import datetime, timezone
 
 import my_ai.skill_engine as skill_engine
 
 
 def evidence(details):
     value = dict(details)
+    value.setdefault("observed_at", datetime.now(timezone.utc).isoformat())
     canonical = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     value["evidence_hash"] = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return json.dumps(value, ensure_ascii=False, sort_keys=True)
@@ -77,3 +79,14 @@ def test_evidence_snapshot_is_visible(monkeypatch):
     result = skill_engine.evidence_snapshot(1)
     assert result[0]["id"] == 7
     assert result[0]["details"]["artifact"] == "run-7"
+
+
+def test_expired_evidence_invalidates_verification(monkeypatch):
+    old = (datetime.now(timezone.utc) - __import__("datetime").timedelta(days=31)).isoformat()
+    rows = [
+        {"kind": "official_source", "passed": 1, "evidence": evidence({"coverage_score": 100, "skill_version": "1", "observed_at": old})},
+        {"kind": "test", "passed": 1, "evidence": evidence({"skill_score": 100, "skill_version": "1", "observed_at": old})},
+        {"kind": "benchmark", "passed": 1, "evidence": evidence({"skill_score": 100, "skill_version": "1", "observed_at": old})},
+    ]
+    result = skill_engine._verification_state({"id": 1, "version": "1"}, rows, "1")
+    assert result == (False, "evidence_expired")
