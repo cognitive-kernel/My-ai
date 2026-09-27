@@ -225,9 +225,19 @@ class Agent:
         task = "coding" if intent.name == "coding" else "general"
         llm = self.llm if task == "general" else create_llm(task)
         knowledge = recall(message, 8)
+        enriched_knowledge = []
+        for item in knowledge:
+            item = dict(item)
+            item["provenance"] = item.get("source_url") or "local-knowledge"
+            item["confidence_label"] = (
+                round(float(item["confidence"]), 3)
+                if item.get("confidence") is not None else "uncalibrated"
+            )
+            enriched_knowledge.append(item)
         context_note = (
-            "RELEVANT LOCAL KNOWLEDGE (reference only; do not confuse it with the user or assistant identity):\n"
-            + json.dumps(knowledge, ensure_ascii=False)
+            "RELEVANT VERIFIED LOCAL KNOWLEDGE. Cite provenance when making factual claims. "
+            "Do not present uncalibrated retrieval as high confidence.\n"
+            + json.dumps(enriched_knowledge, ensure_ascii=False)
         )
         lesson_note = ""
         if intent.name in {"coding", "code_execution", "git_write", "self_update"}:
@@ -243,6 +253,15 @@ class Agent:
             history=history,
         )
         answer = self._handle_unknown(answer, message, session_id)
+        if knowledge and "__MYAI_UNKNOWN__" not in str(answer):
+            citations = []
+            for item in enriched_knowledge[:4]:
+                source = str(item.get("provenance") or "").strip()
+                if source and source != "local-knowledge":
+                    confidence = item.get("confidence_label")
+                    citations.append(f"- {source} (confidence: {confidence})")
+            if citations and "Sources:" not in answer:
+                answer = answer.rstrip() + "\n\nSources:\n" + "\n".join(citations)
         execute(
             "INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",
             (session_id, "user", message),
