@@ -78,8 +78,22 @@ def transcribe(audio_path: str, model_path: str, language: str = "fa") -> str:
     if not source.is_file() or not model.is_file():
         raise FileNotFoundError("Audio input and Whisper model must both be existing files.")
     with tempfile.TemporaryDirectory(prefix="myai-whisper-") as temp:
-        output_base = str(Path(temp) / "transcript")
-        args = [binary, "-m", str(model), "-f", str(source), "-l", language, "-otxt", "-of", output_base]
+        temp_dir = Path(temp)
+        input_path = source
+        if source.suffix.lower() not in {".wav", ".mp3", ".m4a", ".flac"}:
+            ffmpeg = shutil.which("ffmpeg")
+            if not ffmpeg:
+                raise RuntimeError("FFmpeg is required to transcribe this recording format.")
+            normalized = temp_dir / "audio.wav"
+            converted = subprocess.run(
+                [ffmpeg, "-y", "-i", str(source), "-vn", "-ac", "1", "-ar", "16000", str(normalized)],
+                capture_output=True, text=True, timeout=120, check=False,
+            )
+            if converted.returncode:
+                raise RuntimeError(converted.stderr.strip() or "FFmpeg audio conversion failed.")
+            input_path = normalized
+        output_base = str(temp_dir / "transcript")
+        args = [binary, "-m", str(model), "-f", str(input_path), "-l", language, "-otxt", "-of", output_base]
         result = subprocess.run(args, capture_output=True, text=True, timeout=300, check=False)
         if result.returncode:
             raise RuntimeError(result.stderr.strip() or "whisper.cpp failed")
