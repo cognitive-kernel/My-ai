@@ -65,7 +65,7 @@ def test_status_reconciles_completed_and_custom_persisted_tracks(monkeypatch):
         lambda *_args, **_kwargs: [
             {"language": "Python", "topic": "A", "status": "completed", "score": 90, "progress_percent": 100},
             {"language": "Python", "topic": "B", "status": "started", "score": None, "progress_percent": 25},
-            {"language": "Cisco", "topic": "Cisco", "status": "started", "score": None, "progress_percent": 40},
+            {"language": "LegacyDynamicCourse", "topic": "LegacyDynamicCourse", "status": "started", "score": None, "progress_percent": 40},
             {"language": "Forex", "topic": "FX", "status": "completed", "score": 88, "progress_percent": 100},
         ],
     )
@@ -75,8 +75,8 @@ def test_status_reconciles_completed_and_custom_persisted_tracks(monkeypatch):
     assert summaries["Python"]["completed_topics"] == 1
     assert summaries["Python"]["remaining_topics"] == 1
     assert summaries["Python"]["progress_percent"] == 62.5
-    assert summaries["Cisco"]["remaining_topics"] == 1
-    assert summaries["Cisco"]["progress_percent"] == 40.0
+    assert summaries["LegacyDynamicCourse"]["remaining_topics"] == 1
+    assert summaries["LegacyDynamicCourse"]["progress_percent"] == 40.0
     assert summaries["Forex"]["completed_topics"] == 1
     assert summaries["Forex"]["remaining_topics"] == 0
     assert summaries["Forex"]["progress_percent"] == 100.0
@@ -298,8 +298,8 @@ def test_detailed_status_includes_complete_catalog_and_persisted_topics(monkeypa
         lambda *_args, **_kwargs: [
             {"language": "Python", "topic": "A", "status": "completed", "score": 90, "progress_percent": 100, "phase": "completed", "created_at": "1"},
             {"language": "Python", "topic": "Docker", "status": "started", "score": None, "progress_percent": 25, "phase": "lesson", "created_at": "2"},
-            {"language": "Cisco", "topic": "Cisco", "status": "started", "score": None, "progress_percent": 50, "phase": "sources", "created_at": "3"},
-            {"language": "Cisco", "topic": "Finished Cisco", "status": "completed", "score": 95, "progress_percent": 100, "phase": "completed", "created_at": "4"},
+            {"language": "LegacyDynamicCourse", "topic": "LegacyDynamicCourse", "status": "started", "score": None, "progress_percent": 50, "phase": "sources", "created_at": "3"},
+            {"language": "LegacyDynamicCourse", "topic": "Finished LegacyDynamicCourse", "status": "completed", "score": 95, "progress_percent": 100, "phase": "completed", "created_at": "4"},
         ],
     )
     engine = LearningEngine.__new__(LearningEngine)
@@ -311,9 +311,9 @@ def test_detailed_status_includes_complete_catalog_and_persisted_topics(monkeypa
     assert [item["topic"] for item in courses["Python"]["topics"]] == ["A", "Docker"]
     assert courses["Python"]["topics"][0]["progress_percent"] == 100.0
     assert courses["Python"]["progress_percent"] == 62.5
-    assert "Cisco" in courses
-    assert [item["topic"] for item in courses["Cisco"]["topics"]] == ["Cisco", "Finished Cisco"]
-    assert courses["Cisco"]["topics"][1]["progress_percent"] == 100.0
+    assert "LegacyDynamicCourse" in courses
+    assert [item["topic"] for item in courses["LegacyDynamicCourse"]["topics"]] == ["LegacyDynamicCourse", "Finished LegacyDynamicCourse"]
+    assert courses["LegacyDynamicCourse"]["topics"][1]["progress_percent"] == 100.0
 
 def test_detailed_status_canonicalizes_persisted_language(monkeypatch):
     monkeypatch.setattr(
