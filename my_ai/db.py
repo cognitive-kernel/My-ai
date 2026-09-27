@@ -13,7 +13,9 @@ SCHEMA = _persistence.SCHEMA
 connect = _persistence.connect
 execute = _persistence.execute
 fetch_all = _persistence.fetch_all
+init_db = _persistence.init_db
+_normalize_search_text = _persistence._normalize_search_text
 remember_knowledge = _persistence.remember_knowledge
 search_knowledge = _persistence.search_knowledge
 
-__all__ = ["SCHEMA", "connect", "execute", "fetch_all", "remember_knowledge", "search_knowledge"]
+__all__ = ["SCHEMA", "connect", "execute", "fetch_all", "init_db", "_normalize_search_text", "remember_knowledge", "search_knowledge"]
