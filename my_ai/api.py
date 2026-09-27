@@ -366,12 +366,19 @@ def knowledge_update(knowledge_id:int, r:KnowledgeUpdateRequest, request:Request
     normalized = " ".join(f"{r.topic}\n{r.content}".replace("ي","ی").replace("ى","ی").replace("ك","ک").split()).casefold()
     content_hash = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
     execute("UPDATE knowledge SET title=?,content=?,topic=?,source_url=?,content_hash=?,verification_status='unverified',verified_at=NULL,verified_by=NULL,confidence=NULL WHERE id=?",(r.title,r.content,r.topic,r.source_url,content_hash,knowledge_id))
+    execute("INSERT INTO knowledge_audit(knowledge_id,user_id,action,details) VALUES(?,?,?,?)",(knowledge_id,user["id"],"update",f"source_url={r.source_url or ''}"))
     audit(user,"knowledge","write","200",f"updated:{knowledge_id}")
     return {"updated":knowledge_id,"verification_status":"unverified"}
 
+
+@app.get("/memory/knowledge/{knowledge_id}/audit")
+def knowledge_audit(knowledge_id:int, request:Request, limit:int=50):
+    require_admin(request)
+    return {"items":fetch_all("SELECT id,knowledge_id,user_id,action,details,created_at FROM knowledge_audit WHERE knowledge_id=? ORDER BY id DESC LIMIT ?",(knowledge_id,max(1,min(limit,200))))}
 @app.delete("/memory/knowledge/{knowledge_id}")
 def knowledge_delete(knowledge_id:int, request:Request):
     user=require_admin(request)
+    execute("INSERT INTO knowledge_audit(knowledge_id,user_id,action,details) VALUES(?,?,?,?)",(knowledge_id,user["id"],"delete","knowledge item deleted"))
     execute("DELETE FROM knowledge WHERE id=?",(knowledge_id,))
     audit(user,"knowledge","delete","200",f"deleted:{knowledge_id}")
     return {"deleted":knowledge_id}
@@ -390,6 +397,7 @@ def knowledge_verify(knowledge_id:int, request:Request):
         raise HTTPException(400,"Knowledge content hash is missing; save the item again before verification.")
     execute("UPDATE knowledge SET verification_status='verified',verified_at=CURRENT_TIMESTAMP,verified_by=? WHERE id=?",
             (user["id"],knowledge_id))
+    execute("INSERT INTO knowledge_audit(knowledge_id,user_id,action,details) VALUES(?,?,?,?)",(knowledge_id,user["id"],"verify",f"source_url={source}"))
     audit(user,"knowledge","verify","200",f"verified:{knowledge_id}:source")
     return {"verified":knowledge_id,"verification_status":"verified","source_url":source}
 
