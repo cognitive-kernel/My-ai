@@ -34,6 +34,7 @@ TOOL_RULES = (
     ("/runtime/", "runtime"),
     ("/languages", "learning"),
     ("/admin/", "admin"),
+    ("/settings/", "admin"),
     ("/tools/", "tools"),
     ("/files/", "files"),
     ("/image/", "image-generation"),
