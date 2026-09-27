@@ -74,16 +74,17 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
 
 
 @lru_cache(maxsize=128)
-def _hybrid_search_cached(query: str, limit: int, bucket: int) -> list[dict[str, Any]]:
+def _hybrid_search_cached(query: str, limit: int, bucket: int, verified_only: bool) -> list[dict[str, Any]]:
     limit = max(1, min(limit, 50))
     from .db import _normalize_search_text
     normalized = _normalize_search_text(query)
     tokens = [t for t in normalized.replace('"', ' ').split() if t][:12]
     match = " ".join(f'"{t}"' for t in tokens) if tokens else '""'
+    verification_clause = " AND k.verification_status IN ('verified','approved')" if verified_only else ""
     lexical = fetch_all(
-        """SELECT k.id, bm25(knowledge_fts) AS fts_rank
+        f"""SELECT k.id, bm25(knowledge_fts) AS fts_rank
            FROM knowledge_fts JOIN knowledge k ON k.id=knowledge_fts.rowid
-           WHERE knowledge_fts MATCH ? ORDER BY fts_rank""",
+           WHERE knowledge_fts MATCH ?{verification_clause} ORDER BY fts_rank""",
         (match,),
     ) if tokens else []
     lexical_scores = {}
@@ -92,7 +93,7 @@ def _hybrid_search_cached(query: str, limit: int, bucket: int) -> list[dict[str,
         best, worst = min(ranks), max(ranks)
         span = worst - best
         lexical_scores = {int(r["id"]):(1.0 if span == 0 else (worst-float(r["fts_rank"]))/span) for r in lexical}
-    rows = fetch_all("SELECT * FROM knowledge ORDER BY id DESC")
+    rows = fetch_all("SELECT * FROM knowledge WHERE verification_status IN ('verified','approved') ORDER BY id DESC" if verified_only else "SELECT * FROM knowledge ORDER BY id DESC")
     cached = fetch_all("SELECT knowledge_id,content_hash,embedding FROM knowledge_embeddings WHERE model=?", (settings.embedding_model,))
     cache = {int(r["knowledge_id"]): r for r in cached}
     missing = []
@@ -160,10 +161,10 @@ def invalidate_hybrid_search_cache() -> None:
     _hybrid_search_cached.cache_clear()
 
 
-def hybrid_search(query: str, limit: int = 8) -> list[dict[str, Any]]:
+def hybrid_search(query: str, limit: int = 8, verified_only: bool = False) -> list[dict[str, Any]]:
     limit=max(1,min(limit,50))
     bucket=int(time.monotonic() // max(1,settings.cache_ttl_seconds))
-    return _hybrid_search_cached(query.strip(),limit,bucket)
+    return _hybrid_search_cached(query.strip(),limit,bucket,bool(verified_only))
 
 
 def model_health() -> dict[str, Any]:
