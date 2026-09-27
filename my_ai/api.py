@@ -959,23 +959,10 @@ def chat(r:ChatRequest, request:Request):
             language=canonical_language(language)
             execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"user",msg))
             scheduler.interval_seconds=settings.scheduler_interval_seconds
-            requested_languages=[]
-            for key,name in sorted(aliases.items(),key=lambda x:len(x[0]),reverse=True):
-                matched = bool(
-                    re.search(r"(?<![a-z0-9])"+re.escape(key)+r"(?![a-z0-9])",low)
-                    if key.isascii() else re.search(r"(?<!\w)"+re.escape(key)+r"(?!\w)",low,re.UNICODE)
-                )
-                if matched and name not in requested_languages:
-                    requested_languages.append(name)
-            if not requested_languages:
-                requested_languages=[requested or "Python"]
-            languages: list[str] = []
+            target_language=canonical_language(requested or "Python")
+            languages: list[str] = [target_language]
             custom_courses: list[dict[str, object]] = []
-            for target in requested_languages:
-                target_language=canonical_language(resolve_learning_target(msg,target))
-                if target_language not in languages:
-                    languages.append(target_language)
-                    scheduler.start(target_language, sid)
+            scheduler.start(target_language, sid)
             label="، ".join(languages)
             answer=f"یادگیری {label} در پس‌زمینه شروع شد." if len(languages)==1 else f"یادگیری همزمان {label} در پس‌زمینه شروع شد."
             execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"assistant",answer)); execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(sid,))
