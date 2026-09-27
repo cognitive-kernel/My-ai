@@ -603,11 +603,24 @@ def skill_sandbox_test(skill_id:int, r:PythonToolRequest, request:Request):
     user=require_admin(request)
     if not r.confirmed:
         raise HTTPException(409,"Explicit confirmation is required for a skill sandbox test.")
+    if settings.exec_mode not in {"container", "remote"}:
+        raise HTTPException(409,"Skill verification requires the container or remote sandbox executor; subprocess mode is not accepted as verification evidence.")
     if not fetch_all("SELECT id FROM skills WHERE id=?",(skill_id,)):
         raise HTTPException(404,"Skill not found.")
     result=run_python_snippet(r.code)
-    passed=result.get("return_code")==0 and not result.get("timed_out")
-    evidence=record_evidence(skill_id,"benchmark",bool(passed),{"command":"sandbox:python","artifact":json.dumps(result,ensure_ascii=False)[:12000],"sandbox_mode":result.get("sandbox_mode","unknown")})
+    passed=result.get("return_code")==0 and not result.get("timed_out") and result.get("sandbox_mode") in {"container", "remote-container"}
+    evidence=record_evidence(
+        skill_id,
+        "benchmark",
+        bool(passed),
+        {
+            "command":"sandbox:python",
+            "artifact":json.dumps(result,ensure_ascii=False)[:12000],
+            "sandbox_mode":result.get("sandbox_mode","unknown"),
+            "skill_score": 100.0 if passed else 0.0,
+            "reliability_score": 100.0 if passed else 0.0,
+        },
+    )
     audit(user,"skill-engine","execute", "200" if passed else "422", f"sandbox:{skill_id}:passed={passed}")
     return {"passed":passed,"evidence_id":evidence,"result":result}
 @app.get("/skills/reviews")
