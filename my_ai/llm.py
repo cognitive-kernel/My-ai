@@ -62,6 +62,39 @@ class OllamaClient:
                         return
                 except (httpx.HTTPError,json.JSONDecodeError) as fallback_exc: raise LLMError(f"Ollama streaming request failed for primary and fallback models: {exc}; {fallback_exc}") from fallback_exc
             raise LLMError(f"Ollama streaming request failed: {exc}") from exc
+    def structured_chat_json(self, message: str, schema: dict, system: str | None = None) -> dict:
+        """Return schema-constrained JSON from Ollama; used for routing/tool selection."""
+        wait_until_available(None)
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": message})
+        payload = {
+            "model": self.model,
+            "stream": False,
+            "format": schema,
+            "options": self._options(),
+            "keep_alive": settings.ollama_keep_alive,
+            "messages": messages,
+        }
+        started = time.perf_counter()
+        try:
+            response = httpx.post(f"{self.base_url}/api/chat", json=payload, timeout=120)
+            response.raise_for_status()
+            data = response.json()
+            record_inference("ollama", self.model, time.perf_counter() - started,
+                             prompt_tokens=data.get("prompt_eval_count"), output_tokens=data.get("eval_count"))
+            raw = ((data.get("message") or {}).get("content"))
+            if not isinstance(raw, str):
+                raise LLMError("Structured Ollama response has no message content.")
+            parsed = json.loads(raw)
+            if not isinstance(parsed, dict):
+                raise LLMError("Structured Ollama response is not an object.")
+            return parsed
+        except (httpx.HTTPError, json.JSONDecodeError, LLMError) as exc:
+            record_error("ollama", self.model)
+            raise LLMError(f"Structured Ollama request failed: {exc}") from exc
+
     def chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None,stop_event=None)->str:
         wait_until_available(stop_event); messages: list[HistoryMessage] = []; payload={"model":self.model,"stream":False,"options":self._options(),"keep_alive":settings.ollama_keep_alive,"messages":messages}
         if system: messages.append({"role":"system","content":system})
