@@ -27,6 +27,16 @@ def status(transcription_model: str | None = None, synthesis_model: str | None =
     piper = _piper_binary()
     whisper_model_ok = bool(transcription_model and Path(transcription_model).expanduser().is_file())
     piper_model_ok = bool(synthesis_model and Path(synthesis_model).expanduser().is_file())
+    probes = {}
+    for name, binary in (("whisper_cpp", whisper), ("piper", piper)):
+        if not binary:
+            probes[name] = {"available": False, "healthy": False, "error": "binary_not_found"}
+            continue
+        try:
+            probe = subprocess.run([binary, "--help"], capture_output=True, text=True, timeout=5, check=False)
+            probes[name] = {"available": True, "healthy": probe.returncode in (0, 1, 2), "returncode": probe.returncode}
+        except Exception as exc:
+            probes[name] = {"available": True, "healthy": False, "error": str(exc)}
     return {
         "whisper_cpp": whisper,
         "piper": piper,
@@ -34,7 +44,10 @@ def status(transcription_model: str | None = None, synthesis_model: str | None =
         "piper_model": synthesis_model,
         "whisper_model_ready": whisper_model_ok,
         "piper_model_ready": piper_model_ok,
-        "offline_ready": bool(whisper and piper and whisper_model_ok and piper_model_ok),
+        "probes": probes,
+        "offline_ready": bool(whisper and piper and whisper_model_ok and piper_model_ok
+                               and probes.get("whisper_cpp", {}).get("healthy")
+                               and probes.get("piper", {}).get("healthy")),
     }
 
 
