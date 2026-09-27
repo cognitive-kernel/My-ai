@@ -47,3 +47,61 @@ BASELINE_CASES = (
     EvalCase("C pointer memory", ("C",), "en"),
     EvalCase("Kotlin Android activity", ("Android",), "en"),
 )
+
+
+@dataclass(frozen=True)
+class ResponseEvalCase:
+    prompt: str
+    required_markers: tuple[str, ...]
+    language: str = "fa"
+
+
+PERSIAN_RESPONSE_BASELINE = (
+    ResponseEvalCase("تفاوت list و tuple در پایتون چیست؟", ("list", "tuple"), "fa"),
+    ResponseEvalCase("چطور در پایتون تست واحد بنویسم؟", ("تست", "pytest"), "fa"),
+    ResponseEvalCase("ایندکس در SQL Server چه کاربردی دارد؟", ("ایندکس",), "fa"),
+    ResponseEvalCase("امنیت API را چگونه بررسی کنم؟", ("امنیت", "API"), "fa"),
+)
+
+
+def _persian_ratio(text: str) -> float:
+    letters = [ch for ch in text if ch.isalpha()]
+    if not letters:
+        return 0.0
+    persian = sum("؀" <= ch <= "ۿ" for ch in letters)
+    return persian / len(letters)
+
+
+def score_response(response: str, case: ResponseEvalCase) -> dict:
+    text = str(response or "").strip()
+    folded = text.casefold()
+    marker_hits = sum(1 for marker in case.required_markers if marker.casefold() in folded)
+    marker_score = marker_hits / len(case.required_markers) if case.required_markers else 1.0
+    language_score = min(1.0, _persian_ratio(text) / 0.35) if case.language == "fa" else 1.0
+    structure_score = 1.0 if len(text) >= 40 and ("." in text or "؟" in text or "\n" in text) else 0.0
+    unknown_penalty = 0.35 if "__MYAI_UNKNOWN__" in text else 0.0
+    score = max(0.0, min(1.0, 0.65 * marker_score + 0.25 * language_score + 0.10 * structure_score - unknown_penalty))
+    return {
+        "prompt": case.prompt,
+        "language": case.language,
+        "marker_score": round(marker_score, 4),
+        "language_score": round(language_score, 4),
+        "structure_score": round(structure_score, 4),
+        "score": round(score, 4),
+        "passed": score >= 0.70 and unknown_penalty == 0.0,
+    }
+
+
+def run_response_eval(responder: Callable[[str], str], cases: Iterable[ResponseEvalCase] = PERSIAN_RESPONSE_BASELINE, baseline: float = 0.70) -> dict:
+    cases = tuple(cases)
+    results = [score_response(responder(case.prompt), case) for case in cases]
+    mean_score = sum(item["score"] for item in results) / len(results) if results else 0.0
+    passed = sum(1 for item in results if item["passed"])
+    return {
+        "cases": results,
+        "mean_score": round(mean_score, 4),
+        "pass_rate": passed / len(results) if results else 0.0,
+        "baseline": float(baseline),
+        "baseline_met": mean_score >= float(baseline),
+        "case_count": len(results),
+    }
