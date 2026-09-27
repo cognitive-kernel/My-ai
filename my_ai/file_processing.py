@@ -164,6 +164,7 @@ def create_docx(path: str, title: str, paragraphs: list[str]) -> str:
 
 
 def create_xlsx(path: str, sheets: dict[str, list[list[Any]]]) -> str:
+    assert_mutation_allowed("spreadsheet generation")
     from openpyxl import Workbook
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
