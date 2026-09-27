@@ -2,23 +2,37 @@
 
 ## Runtime layers
 
-1. **API/UI** — FastAPI routes, authentication, static UI and streaming.
-2. **Policy** — centralized route/tool authorization and global read-only enforcement.
-3. **Agent/Router** — structured intent classification; routing never grants permission.
-4. **Capabilities** — domain services such as learning, memory, coding, files, voice, GitHub and security analysis.
-5. **Persistence** — SQLite today, with explicit repository boundaries for knowledge, sessions, audit and learning state.
-6. **Execution** — sandboxed Python/project tooling and the remote executor service.
-7. **Maintenance** — diagnostics, self-repair proposals and deny-by-default self-update.
+1. API/UI — FastAPI routes, authentication, static UI and streaming.
+2. Application — use-case composition and dependency injection.
+3. Domain — pure intent/business decisions with no infrastructure imports.
+4. Core — protocols and stable contracts.
+5. Infrastructure — LLM, persistence and host/network adapters.
+6. Capabilities — learning, memory, coding, files, voice, GitHub and security services.
+7. Execution — sandboxed Python/project tooling and the remote executor service.
+8. Maintenance — diagnostics, self-repair proposals and deny-by-default self-update.
 
 ## Request flow
 
-HTTP request -> authentication -> central access policy -> route/service -> audit -> persistence
+HTTP request -> authentication -> central access policy -> application service -> domain/capability -> persistence -> audit
 
 Chat follows:
 
-message -> history/attachments -> structured router -> hybrid memory retrieval -> selected LLM -> response
+message -> history/attachments -> application router service -> domain structured intent -> policy -> hybrid memory retrieval -> selected LLM -> response
 
-Routing is advisory. High-risk actions still require the permission layer and explicit confirmation where configured.
+The router is advisory and never grants permission.
+
+## Dependency rules
+
+- Domain imports only core contracts and standard-library code.
+- Application depends on domain/core and injects infrastructure adapters through protocols.
+- Infrastructure never depends on application or API layers.
+- API is the composition/transport boundary and may call application services and capabilities.
+- Legacy top-level router.py, llm.py and db.py are compatibility facades only.
+- tests/test_architecture_boundaries.py statically enforces these rules on every CI run.
+
+## Structured routing
+
+Routing is provider-backed structured output with a strict JSON Schema. Ollama uses its schema-constrained format; OpenAI-compatible Responses uses strict text.format.type=json_schema. No keyword/regex classifier or free-form JSON fallback is used.
 
 ## Security boundaries
 
@@ -27,11 +41,3 @@ Routing is advisory. High-risk actions still require the permission layer and ex
 - Code execution is sandboxed/remote when configured.
 - External security operations are policy constrained.
 - Self-update is deny-by-default and requires isolated tests, approval, snapshot and health/rollback supervision.
-
-## Extension rule
-
-New write or execution endpoints must be registered in `my_ai/access_policy.py` and covered by a permission regression test. This prevents silent privilege expansion.
-
-## Dependency source
-
-`pyproject.toml` is the dependency source of truth. `requirements.txt` is only a compatibility entry point that installs the local project.

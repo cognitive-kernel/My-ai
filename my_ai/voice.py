@@ -25,6 +25,8 @@ def _piper_binary() -> str | None:
 def status(transcription_model: str | None = None, synthesis_model: str | None = None) -> dict[str, object]:
     whisper = _whisper_binary()
     piper = _piper_binary()
+    transcription_model = transcription_model or os.getenv("WHISPER_MODEL_PATH", "").strip() or None
+    synthesis_model = synthesis_model or os.getenv("PIPER_MODEL_PATH", "").strip() or None
     whisper_model_ok = bool(transcription_model and Path(transcription_model).expanduser().is_file())
     piper_model_ok = bool(synthesis_model and Path(synthesis_model).expanduser().is_file())
     probes = {}
@@ -37,13 +39,24 @@ def status(transcription_model: str | None = None, synthesis_model: str | None =
             probes[name] = {"available": True, "healthy": probe.returncode in (0, 1, 2), "returncode": probe.returncode}
         except Exception as exc:
             probes[name] = {"available": True, "healthy": False, "error": str(exc)}
+    ffmpeg = shutil.which("ffmpeg")
+    ffmpeg_probe = False
+    if ffmpeg:
+        try:
+            probe = subprocess.run([ffmpeg, "-version"], capture_output=True, text=True, timeout=5, check=False)
+            ffmpeg_probe = probe.returncode == 0
+        except Exception:
+            ffmpeg_probe = False
     return {
         "whisper_cpp": whisper,
         "piper": piper,
+        "ffmpeg": ffmpeg,
         "whisper_model": transcription_model,
         "piper_model": synthesis_model,
         "whisper_model_ready": whisper_model_ok,
         "piper_model_ready": piper_model_ok,
+        "ffmpeg_ready": ffmpeg_probe,
+        "media_container_ready": bool(ffmpeg and ffmpeg_probe),
         "probes": probes,
         "offline_ready": bool(whisper and piper and whisper_model_ok and piper_model_ok
                                and probes.get("whisper_cpp", {}).get("healthy")
@@ -76,8 +89,22 @@ def transcribe(audio_path: str, model_path: str, language: str = "fa") -> str:
     if not source.is_file() or not model.is_file():
         raise FileNotFoundError("Audio input and Whisper model must both be existing files.")
     with tempfile.TemporaryDirectory(prefix="myai-whisper-") as temp:
-        output_base = str(Path(temp) / "transcript")
-        args = [binary, "-m", str(model), "-f", str(source), "-l", language, "-otxt", "-of", output_base]
+        temp_dir = Path(temp)
+        input_path = source
+        if source.suffix.lower() not in {".wav", ".mp3", ".m4a", ".flac"}:
+            ffmpeg = shutil.which("ffmpeg")
+            if not ffmpeg:
+                raise RuntimeError("FFmpeg is required to transcribe this recording format.")
+            normalized = temp_dir / "audio.wav"
+            converted = subprocess.run(
+                [ffmpeg, "-y", "-i", str(source), "-vn", "-ac", "1", "-ar", "16000", str(normalized)],
+                capture_output=True, text=True, timeout=120, check=False,
+            )
+            if converted.returncode:
+                raise RuntimeError(converted.stderr.strip() or "FFmpeg audio conversion failed.")
+            input_path = normalized
+        output_base = str(temp_dir / "transcript")
+        args = [binary, "-m", str(model), "-f", str(input_path), "-l", language, "-otxt", "-of", output_base]
         result = subprocess.run(args, capture_output=True, text=True, timeout=300, check=False)
         if result.returncode:
             raise RuntimeError(result.stderr.strip() or "whisper.cpp failed")

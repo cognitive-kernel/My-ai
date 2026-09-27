@@ -6,6 +6,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
+from .access_policy import assert_mutation_allowed
 from .db import execute, fetch_all
 from .llm import OllamaClient
 
@@ -60,6 +61,7 @@ class SecurityEngine:
         return root,files
 
     def scan_path(self,project_path:str,fix:bool=False):
+        if fix: assert_mutation_allowed("security remediation")
         root,files=self._files(project_path)
         findings=[]
         for path in files:
@@ -81,6 +83,7 @@ class SecurityEngine:
         return result
 
     def scan_code(self,code:str,language:str="Python",fix:bool=False):
+        if fix: assert_mutation_allowed("security remediation")
         findings=[]
         for severity,title,rule_id,pattern,remediation in _COMPILED_RULES:
             for no,line in enumerate(code.splitlines(),1):
@@ -119,6 +122,7 @@ class SecurityEngine:
         return {"fixed":True,"fixed_code":fixed,"post_scan":self.scan_code(fixed,language,False)}
 
     def _fix_path(self,root,findings):
+        assert_mutation_allowed("security remediation")
         backup=root.parent/(root.name+".myai-backup")
         if backup.exists(): shutil.rmtree(backup)
         shutil.copytree(root,backup)

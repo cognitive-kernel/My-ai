@@ -16,10 +16,21 @@ from .config import settings
 from .db import connect, fetch_all
 from .network import assert_public_hostname, pinned_client
 from .backup_crypto import encrypt_file, decrypt_file
+from .access_policy import assert_mutation_allowed
 from functools import lru_cache
 import time
 
-BACKUP_FORMAT_VERSION = 2
+BACKUP_FORMAT_VERSION = 4
+BACKUP_CORE_TABLES = (
+    "chat_sessions", "conversations", "chat_attachments", "knowledge",
+    "knowledge_embeddings", "learning_sessions", "learning_runtime",
+    "learning_workers", "experiments", "project_tasks", "agent_runs",
+    "generated_projects", "help_updates", "security_scans",
+    "learning_review_runs", "schema_meta", "fix_attempts", "retrieval_judgments",
+    "knowledge_audit", "skills", "skill_reviews", "skill_evidence",
+    "learning_domains", "learning_source_history", "custom_courses",
+)
+BACKUP_SENSITIVE_TABLES = ("users", "tool_permissions", "audit_log", "decision_log")
 
 
 def _ollama_url(path: str) -> str:
@@ -74,91 +85,189 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     return dot / (na * nb) if na and nb else 0.0
 
 
+def _isotonic_calibration(judgments: list[dict[str, Any]]) -> list[tuple[float, float, int]]:
+    """Fit a monotonic empirical P(relevant | retrieval score) without extra dependencies."""
+    points = sorted(
+        (max(0.0, min(1.0, float(row["score"] or 0.0))), int(bool(row["relevant"])))
+        for row in judgments
+    )
+    grouped: list[list[float | int]] = []
+    for score, label in points:
+        if grouped and grouped[-1][0] == score:
+            grouped[-1][2] = int(grouped[-1][2]) + 1
+            grouped[-1][3] = int(grouped[-1][3]) + label
+        else:
+            grouped.append([score, score, 1, label])
+    groups: list[list[float | int]] = grouped
+    changed = True
+    while changed and len(groups) >= 2:
+        changed = False
+        for index in range(len(groups) - 1):
+            left, right = groups[index], groups[index + 1]
+            left_mean = float(left[3]) / int(left[2])
+            right_mean = float(right[3]) / int(right[2])
+            if left_mean <= right_mean:
+                continue
+            left[1] = right[1]
+            left[2] = int(left[2]) + int(right[2])
+            left[3] = int(left[3]) + int(right[3])
+            groups.pop(index + 1)
+            changed = True
+            break
+    return [
+        (float((group[0] + group[1]) / 2.0), float(group[3]) / int(group[2]), int(group[2]))
+        for group in groups
+    ]
+
+
+def _calibrated_confidence(score: float, judgments: list[dict[str, Any]]) -> tuple[float | None, int]:
+    if len(judgments) < 5:
+        return None, 0
+    curve = _isotonic_calibration(judgments)
+    if not curve:
+        return None, 0
+    if score <= curve[0][0]:
+        return round(curve[0][1], 6), curve[0][2]
+    if score >= curve[-1][0]:
+        return round(curve[-1][1], 6), curve[-1][2]
+    for left, right in zip(curve, curve[1:]):
+        if left[0] <= score <= right[0]:
+            span = right[0] - left[0]
+            ratio = (score - left[0]) / span if span else 0.0
+            value = left[1] + ratio * (right[1] - left[1])
+            return round(max(0.0, min(1.0, value)), 6), left[2] + right[2]
+    return None, 0
+
+
 @lru_cache(maxsize=128)
 def _hybrid_search_cached(query: str, limit: int, bucket: int, verified_only: bool) -> list[dict[str, Any]]:
     limit = max(1, min(limit, 50))
     from .db import _normalize_search_text
+
     normalized = _normalize_search_text(query)
     tokens = [t for t in normalized.replace('"', ' ').split() if t][:12]
     match = " ".join(f'"{t}"' for t in tokens) if tokens else '""'
     verification_clause = " AND k.verification_status IN ('verified','approved')" if verified_only else ""
+
     lexical = fetch_all(
         f"""SELECT k.id, bm25(knowledge_fts) AS fts_rank
-           FROM knowledge_fts JOIN knowledge k ON k.id=knowledge_fts.rowid
-           WHERE knowledge_fts MATCH ?{verification_clause} ORDER BY fts_rank""",
+            FROM knowledge_fts JOIN knowledge k ON k.id=knowledge_fts.rowid
+            WHERE knowledge_fts MATCH ?{verification_clause}
+            ORDER BY fts_rank""",
         (match,),
     ) if tokens else []
-    lexical_scores = {}
+    lexical_scores: dict[int, float] = {}
     if lexical:
-        ranks = [float(r["fts_rank"]) for r in lexical]
+        ranks = [float(row["fts_rank"]) for row in lexical]
         best, worst = min(ranks), max(ranks)
         span = worst - best
-        lexical_scores = {int(r["id"]):(1.0 if span == 0 else (worst-float(r["fts_rank"]))/span) for r in lexical}
-    rows = fetch_all("SELECT * FROM knowledge WHERE verification_status IN ('verified','approved') ORDER BY id DESC" if verified_only else "SELECT * FROM knowledge ORDER BY id DESC")
-    cached = fetch_all("SELECT knowledge_id,content_hash,embedding FROM knowledge_embeddings WHERE model=?", (settings.embedding_model,))
-    cache = {int(r["knowledge_id"]): r for r in cached}
-    missing = []
-    missing_rows = []
+        lexical_scores = {
+            int(row["id"]): 1.0 if span == 0 else max(0.0, min(1.0, (worst - float(row["fts_rank"])) / span))
+            for row in lexical
+        }
+
+    rows = fetch_all(
+        "SELECT * FROM knowledge WHERE verification_status IN ('verified','approved') ORDER BY id DESC"
+        if verified_only
+        else "SELECT * FROM knowledge ORDER BY id DESC"
+    )
+    cached = fetch_all(
+        "SELECT knowledge_id,content_hash,embedding FROM knowledge_embeddings WHERE model=?",
+        (settings.embedding_model,),
+    )
+    cache = {int(row["knowledge_id"]): row for row in cached}
+
+    missing_rows: list[dict[str, Any]] = []
+    missing_texts: list[str] = []
     for row in rows:
         cached_row = cache.get(int(row["id"]))
         if not cached_row or cached_row["content_hash"] != (row.get("content_hash") or ""):
             missing_rows.append(row)
-            missing.append(f'{row.get("title","")}\n{row.get("content","")}\n{row.get("topic","")}')
-    if missing and not settings.read_only:
+            missing_texts.append(f'{row.get("title","")}\n{row.get("content","")}\n{row.get("topic","")}')
+
+    embedding_error: str | None = None
+    if missing_rows and os.getenv("MYAI_READ_ONLY", "false").strip().lower() != "true":
         try:
-            vectors = ollama_embed_batch(missing)
-            from .db import connect
+            vectors = ollama_embed_batch(missing_texts, settings.embedding_model)
             with connect() as conn:
                 for row, vector in zip(missing_rows, vectors):
                     conn.execute(
                         "INSERT INTO knowledge_embeddings(knowledge_id,content_hash,model,embedding) VALUES(?,?,?,?) "
                         "ON CONFLICT(knowledge_id,model) DO UPDATE SET content_hash=excluded.content_hash,embedding=excluded.embedding,created_at=CURRENT_TIMESTAMP",
-                        (row["id"], row.get("content_hash") or "", settings.embedding_model, json.dumps(vector, separators=(",",":"))),
+                        (
+                            row["id"],
+                            row.get("content_hash") or "",
+                            settings.embedding_model,
+                            json.dumps(vector, separators=(",", ":")),
+                        ),
                     )
                 conn.commit()
             for row, vector in zip(missing_rows, vectors):
-                cache[int(row["id"])] = {"content_hash": row.get("content_hash") or "", "embedding": json.dumps(vector)}
-        except Exception:
-            pass
+                cache[int(row["id"])] = {
+                    "content_hash": row.get("content_hash") or "",
+                    "embedding": json.dumps(vector, separators=(",", ":")),
+                }
+        except Exception as exc:
+            embedding_error = str(exc)
+
+    qvec: list[float] = []
     try:
-        qvec = ollama_embed(normalized)
-    except Exception:
-        qvec = []
-    calibration: dict[float, list[int]] = {}
-    for item in fetch_all("SELECT score,relevant FROM retrieval_judgments"):
-        score_bucket=round(float(item["score"] or 0.0),1)
-        state=calibration.setdefault(score_bucket,[0,0])
-        state[0]+=1
-        state[1]+=int(item["relevant"] or 0)
+        if rows:
+            qvec = ollama_embed(normalized, settings.embedding_model)
+    except Exception as exc:
+        embedding_error = embedding_error or str(exc)
+
+    judgments = [dict(row) for row in fetch_all("SELECT score,relevant FROM retrieval_judgments")]
+
     for row in rows:
         semantic = 0.0
         cached_row = cache.get(int(row["id"]))
         if qvec and cached_row:
             try:
                 semantic = max(0.0, min(1.0, cosine_similarity(qvec, json.loads(cached_row["embedding"]))))
-            except Exception:
+            except (TypeError, ValueError, json.JSONDecodeError):
                 semantic = 0.0
+
         lexical_score = lexical_scores.get(int(row["id"]), 0.0)
+        hybrid_score = 0.65 * semantic + 0.35 * lexical_score if qvec else lexical_score
         row["semantic_score"] = round(semantic, 6)
         row["lexical_score"] = round(lexical_score, 6)
-        row["hybrid_score"] = round(0.65*semantic + 0.35*lexical_score, 6)
+        row["hybrid_score"] = round(hybrid_score, 6)
         row["relevance"] = row["hybrid_score"]
-        row["provenance"] = {"knowledge_id": int(row["id"]), "source_url": row.get("source_url"), "verification_status": row.get("verification_status")}
-        row["citation_required"] = True
-        score_bucket=round(float(row["hybrid_score"]),1)
-        samples=calibration.get(score_bucket, (0,0))
-        if samples[0] >= 5:
-            row["confidence"]=round((samples[1]+1)/(samples[0]+2),6)
-            row["confidence_basis"]="empirical score-bucket calibration with Laplace smoothing"
-            row["confidence_calibrated"]=True
-            row["confidence_samples"]=samples[0]
-        else:
-            row["confidence"]=None
-            row["confidence_basis"]="uncalibrated; fewer than 5 judgments in score bucket"
-            row["confidence_calibrated"]=False
-            row["confidence_samples"]=samples[0]
-    return sorted(rows, key=lambda x:x["hybrid_score"], reverse=True)[:limit]
 
+        citation_id = f"K{int(row['id'])}"
+        source_url = str(row.get("source_url") or "").strip() or f"local://knowledge/{int(row['id'])}"
+        row["provenance"] = {
+            "citation_id": citation_id,
+            "source_url": source_url,
+            "title": str(row.get("title") or ""),
+            "content_hash": row.get("content_hash"),
+            "verification_status": row.get("verification_status"),
+            "retrieval": {
+                "semantic_score": row["semantic_score"],
+                "lexical_score": row["lexical_score"],
+                "hybrid_score": row["hybrid_score"],
+            },
+        }
+        row["citation_required"] = True
+
+        confidence, samples = _calibrated_confidence(float(row["hybrid_score"]), judgments)
+        row["confidence"] = confidence
+        row["confidence_calibrated"] = confidence is not None
+        row["confidence_samples"] = samples
+        row["confidence_basis"] = (
+            "isotonic empirical calibration over persisted retrieval judgments"
+            if confidence is not None
+            else "uncalibrated; fewer than 5 persisted retrieval judgments"
+        )
+
+        row["embedding_model"] = settings.embedding_model
+        row["semantic_available"] = bool(qvec)
+        row["hybrid_mode"] = "semantic+fts5" if qvec else "fts5-only"
+        if embedding_error:
+            row["embedding_error"] = embedding_error[:500]
+
+    return sorted(rows, key=lambda item: item["hybrid_score"], reverse=True)[:limit]
 
 def invalidate_hybrid_search_cache() -> None:
     _hybrid_search_cached.cache_clear()
@@ -214,34 +323,88 @@ DATA_ROOT = Path(settings.db_path).expanduser().resolve().parent
 BACKUP_ROOT = Path(os.getenv("MYAI_BACKUP_ROOT", str(DATA_ROOT / "backups"))).expanduser().resolve()
 
 
-def _safe_backup_path(value: str) -> Path:
-    path=Path(value).expanduser().resolve()
-    BACKUP_ROOT.mkdir(parents=True, exist_ok=True)
+def _safe_backup_path(value: str, *, create_parent: bool = True) -> Path:
+    path = Path(value).expanduser().resolve()
     try:
         path.relative_to(BACKUP_ROOT)
     except ValueError as exc:
         raise ValueError(f"Backup paths must stay under {BACKUP_ROOT}.") from exc
+    if create_parent:
+        BACKUP_ROOT.mkdir(parents=True, exist_ok=True)
     return path
 
 
+def _atomic_replace_bytes(destination: Path, payload: bytes) -> str:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    tmp = destination.with_name(f".{destination.name}.tmp-{os.getpid()}-{time.time_ns()}")
+    try:
+        with tmp.open("wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, destination)
+        return str(destination)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _atomic_sqlite_backup(destination: Path) -> str:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    tmp = destination.with_name(f".{destination.name}.tmp-{os.getpid()}-{time.time_ns()}")
+    try:
+        with connect() as conn, sqlite3_backup(conn, tmp) as _:
+            pass
+        os.replace(tmp, destination)
+        return str(destination)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _backup_manifest(tables: dict[str, list[dict[str, Any]]], *, encrypted: bool) -> dict[str, Any]:
+    canonical = json.dumps(tables, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return {
+        "format_version": BACKUP_FORMAT_VERSION,
+        "app_version": "0.2.0",
+        "created_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+        "sha256": hashlib.sha256(canonical).hexdigest(),
+        "tables": sorted(tables),
+        "encrypted": bool(encrypted),
+    }
+
+
+def _verify_export_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(payload, dict) or not isinstance(payload.get("tables"), dict):
+        raise ValueError("Backup payload is invalid.")
+    metadata = payload.get("metadata") or {}
+    version = int(metadata.get("format_version", 0))
+    if version < 2 or version > BACKUP_FORMAT_VERSION:
+        raise ValueError(f"Unsupported backup format {version}.")
+    canonical = json.dumps(payload["tables"], ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    expected = str(metadata.get("sha256") or "")
+    actual = hashlib.sha256(canonical).hexdigest()
+    if not expected or expected != actual:
+        raise ValueError("Backup integrity check failed: SHA-256 mismatch.")
+    return metadata
+
+
 def backup_database(destination: str, password: str | None = None) -> str:
+    assert_mutation_allowed("database backup")
     src = Path(settings.db_path)
     dst = _safe_backup_path(destination)
-    if password:
-        temp = dst.with_name(dst.name + ".plain.tmp")
-        temp.parent.mkdir(parents=True, exist_ok=True)
-        with connect() as conn, sqlite3_backup(conn, temp) as _:
-            pass
-        try:
-            return encrypt_file(temp, dst, password)
-        finally:
-            temp.unlink(missing_ok=True)
-    dst.parent.mkdir(parents=True, exist_ok=True)
     if not src.exists():
         raise FileNotFoundError(src)
-    with connect() as conn, sqlite3_backup(conn, dst) as _:
-        pass
-    return str(dst)
+    if password:
+        plain = dst.with_name(f".{dst.name}.plain-{os.getpid()}-{time.time_ns()}")
+        encrypted = dst.with_name(f".{dst.name}.encrypted-{os.getpid()}-{time.time_ns()}")
+        try:
+            _atomic_sqlite_backup(plain)
+            encrypt_file(plain, encrypted, password)
+            os.replace(encrypted, dst)
+            return str(dst)
+        finally:
+            plain.unlink(missing_ok=True)
+            encrypted.unlink(missing_ok=True)
+    return _atomic_sqlite_backup(dst)
 
 
 class sqlite3_backup:
@@ -261,74 +424,105 @@ class sqlite3_backup:
 
 
 def export_database(destination: str, password: str | None = None) -> str:
+    assert_mutation_allowed("database export")
     dst = _safe_backup_path(destination)
-    dst.parent.mkdir(parents=True, exist_ok=True)
+    tables = BACKUP_CORE_TABLES + (BACKUP_SENSITIVE_TABLES if password else ())
+    data: dict[str, list[dict[str, Any]]] = {}
     with connect() as conn:
-        data = {}
-        for table in ("users","tool_permissions","knowledge","chat_sessions","conversations","learning_sessions","agent_runs","generated_projects","security_scans","audit_log"):
+        for table in tables:
             try:
                 data[table] = [dict(x) for x in conn.execute(f"SELECT * FROM {table}").fetchall()]
             except Exception:
                 data[table] = []
-    canonical = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    checksum = hashlib.sha256(canonical).hexdigest()
-    payload = {"metadata": {"format_version": BACKUP_FORMAT_VERSION, "app_version": "0.2.0", "created_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(), "sha256": checksum}, "tables": data}
+    metadata = _backup_manifest(data, encrypted=bool(password))
+    payload = {"metadata": metadata, "tables": data}
     raw = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
     if password:
         from .backup_crypto import encrypt_bytes
-        dst.write_bytes(encrypt_bytes(raw, password))
-    else:
-        dst.write_bytes(raw)
-    return str(dst)
-
+        raw = encrypt_bytes(raw, password)
+    return _atomic_replace_bytes(dst, raw)
 
 def _import_data(data: dict[str, Any]) -> dict[str, Any]:
+    assert_mutation_allowed("database import")
+    metadata: dict[str, Any] = {}
     if "tables" in data:
-        metadata = data.get("metadata") or {}
-        version = int(metadata.get("format_version", 0))
-        if version > BACKUP_FORMAT_VERSION:
-            raise ValueError(f"Backup format {version} is newer than supported format {BACKUP_FORMAT_VERSION}.")
-        tables = data["tables"]
-        if version >= 2:
-            expected = str(metadata.get("sha256") or "")
-            canonical = json.dumps(tables, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
-            actual = hashlib.sha256(canonical).hexdigest()
-            if not expected or expected != actual:
-                raise ValueError("Backup integrity check failed: SHA-256 mismatch.")
-        data = tables
-    allowed = {"knowledge","chat_sessions","conversations","learning_sessions","agent_runs","generated_projects","security_scans"}
-    inserted = {}
+        metadata = _verify_export_payload(data)
+        data = data["tables"]
+        sensitive_present = any(name in data for name in BACKUP_SENSITIVE_TABLES)
+        if sensitive_present and not bool(metadata.get("encrypted")):
+            raise ValueError("Sensitive backup tables require an encrypted export.")
+    allowed = set(BACKUP_CORE_TABLES)
+    if metadata.get("encrypted"):
+        allowed.update(BACKUP_SENSITIVE_TABLES)
+    inserted: dict[str, int] = {}
     with connect() as conn:
-        for table in allowed:
-            rows = data.get(table) or []
-            if not rows:
-                continue
-            columns = [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
-            for row in rows:
-                cols = [col for col in columns if col in row and col != "id"]
-                if not cols:
+        try:
+            for table in allowed:
+                rows = data.get(table) or []
+                if not rows:
                     continue
-                marks = ",".join("?" for _ in cols)
-                conn.execute(f"INSERT OR IGNORE INTO {table} ({','.join(cols)}) VALUES ({marks})", tuple(row[col] for col in cols))
-            inserted[table] = len(rows)
-        conn.commit()
+                columns = [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+                inserted_count = 0
+                for row in rows:
+                    cols = [col for col in columns if col in row]
+                    if not cols:
+                        continue
+                    marks = ",".join("?" for _ in cols)
+                    cursor = conn.execute(
+                        f"INSERT OR IGNORE INTO {table} ({','.join(cols)}) VALUES ({marks})",
+                        tuple(row[col] for col in cols),
+                    )
+                    inserted_count += max(cursor.rowcount, 0)
+                if inserted_count:
+                    inserted[table] = inserted_count
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
     return inserted
 
-
 def import_database(source: str) -> dict[str, Any]:
-    path = _safe_backup_path(source)
-    return _import_data(json.loads(path.read_text(encoding="utf-8")))
+    path = _safe_backup_path(source, create_parent=False)
+    raw = path.read_bytes()
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("Backup is not a valid unencrypted JSON export.") from exc
+    return _import_data(data)
 
 
 def import_encrypted_database(source: str, password: str) -> dict[str, Any]:
     from .backup_crypto import decrypt_bytes
-    data = json.loads(decrypt_bytes(_safe_backup_path(source).read_bytes(), password).decode("utf-8"))
+    path = _safe_backup_path(source, create_parent=False)
+    data = json.loads(decrypt_bytes(path.read_bytes(), password).decode("utf-8"))
     return _import_data(data)
 
 
 def restore_encrypted_backup(source: str, destination: str, password: str) -> str:
-    return decrypt_file(_safe_backup_path(source), _safe_backup_path(destination), password)
+    assert_mutation_allowed("encrypted backup restore")
+    src = _safe_backup_path(source, create_parent=False)
+    dst = _safe_backup_path(destination)
+    tmp = dst.with_name(f".{dst.name}.restore-{os.getpid()}-{time.time_ns()}")
+    try:
+        decrypt_file(src, tmp, password)
+        os.replace(tmp, dst)
+        return str(dst)
+    finally:
+        tmp.unlink(missing_ok=True)
 
+
+def verify_backup(source: str, password: str | None = None) -> dict[str, Any]:
+    path = _safe_backup_path(source, create_parent=False)
+    if password:
+        from .backup_crypto import decrypt_bytes
+        payload = json.loads(decrypt_bytes(path.read_bytes(), password).decode("utf-8"))
+    else:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return {"valid": False, "type": "sqlite", "path": str(path), "size": path.stat().st_size}
+    metadata = _verify_export_payload(payload)
+    return {"valid": True, "type": "encrypted-json" if password else "json", "path": str(path), "size": path.stat().st_size, "metadata": metadata}
 
 def _assert_public_http_url(url: str) -> urllib.parse.ParseResult:
     parsed = urllib.parse.urlparse(url)

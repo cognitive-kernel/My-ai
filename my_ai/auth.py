@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import hmac
 import secrets
 import sqlite3
@@ -159,6 +160,47 @@ def audit(
             details[:4000],
         ),
     )
+
+
+def audit_event(
+    user: dict[str, Any] | None,
+    tool_name: str,
+    action: str,
+    status: str,
+    *,
+    request_id: str | None = None,
+    input_data: bytes | str | None = None,
+    output_data: bytes | str | None = None,
+    error: str | None = None,
+    extra: dict[str, Any] | None = None,
+) -> None:
+    def digest(value: bytes | str | None) -> str | None:
+        if value is None:
+            return None
+        raw = value if isinstance(value, bytes) else value.encode("utf-8", "replace")
+        return hashlib.sha256(raw).hexdigest()
+
+    def size(value: bytes | str | None) -> int | None:
+        if value is None:
+            return None
+        return len(value) if isinstance(value, bytes) else len(value.encode("utf-8", "replace"))
+
+    payload: dict[str, Any] = {
+        "request_id": request_id,
+        "actor": {
+            "id": user.get("id") if user else None,
+            "username": user.get("username") if user else "anonymous",
+            "role": user.get("role") if user else None,
+        },
+        "input": {"sha256": digest(input_data), "bytes": size(input_data)},
+        "output": {"sha256": digest(output_data), "bytes": size(output_data)},
+        "error": str(error)[:1000] if error else None,
+    }
+    if extra:
+        payload["extra"] = extra
+    audit(user, tool_name, action, status, json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+
+
 
 
 # Route authorization is defined centrally so API middleware and tests share one policy.

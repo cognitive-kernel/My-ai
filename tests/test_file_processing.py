@@ -41,3 +41,10 @@ def test_generic_inspection_is_read_only(tmp_path: Path):
     assert result["size"] == 5
     assert result["sha256"]
     assert target.read_bytes() == b"hello"
+
+
+def test_system_prerequisite_catalog_is_allowlisted(monkeypatch):
+    from my_ai import file_processing
+    monkeypatch.setattr(file_processing.shutil, "which", lambda name: "/usr/bin/" + name if name in {"git", "ffmpeg"} else None)
+    status = file_processing.system_prerequisite_status(["git", "ffmpeg", "nmap"])
+    assert status == {"git": True, "ffmpeg": True, "nmap": False}

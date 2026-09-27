@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from .file_processing import create_docx, create_pdf, create_pptx, create_xlsx, detect_type, install_known_prerequisites, missing_prerequisites, missing_system_prerequisites
 from .auth import require_admin
+from .access_policy import assert_mutation_allowed
 from .local_files import filesystem_roots, inspect_file, list_directory, read_text, workspace_path
 from .multimodal import analyze
 from .image_generation import generate_image, IMAGE_ROOT, ImageGenerationError
@@ -67,9 +68,61 @@ def _normalise_format(value: str) -> str:
 
 def _chat_content(prompt: str, fmt: str) -> tuple[str, list[str], list[dict[str, str]]]:
     clean = prompt.strip()
-    title = clean[:120] or "My-AI document"
-    paragraphs = [clean]
-    slides = [{"title": title, "body": clean}]
+    if not clean:
+        raise HTTPException(400, "prompt must not be empty")
+    lines = [line.strip() for line in clean.replace("\r\n", "\n").split("\n")]
+    lines = [line for line in lines if line]
+    title = "My-AI document"
+    if lines and (lines[0].startswith("#") or len(lines[0]) <= 120):
+        title = lines[0].lstrip("#").strip() or title
+
+    paragraphs: list[str] = []
+    bullets: list[str] = []
+    sections: list[dict[str, str]] = []
+    current_title = title
+    current_body: list[str] = []
+
+    def flush_section() -> None:
+        nonlocal current_body
+        if current_body:
+            sections.append({"title": current_title, "body": "\n".join(current_body)})
+            current_body = []
+
+    for line in lines:
+        if line.startswith("#"):
+            flush_section()
+            heading = line.lstrip("#").strip()
+            if heading:
+                current_title = heading
+                if title == "My-AI document":
+                    title = heading
+            continue
+        if line.startswith(("-", "*", "•")):
+            item = line.lstrip("-*• ").strip()
+            if item:
+                bullets.append(item)
+                paragraphs.append("• " + item)
+                current_body.append("• " + item)
+            continue
+        if len(line) >= 2 and line[0].isdigit() and line[1:2] in {".", ")"}:
+            item = line[2:].strip()
+            if item:
+                bullets.append(item)
+                paragraphs.append(line)
+                current_body.append(line)
+            continue
+        paragraphs.append(line)
+        current_body.append(line)
+
+    flush_section()
+    if not paragraphs:
+        paragraphs = [clean]
+    if fmt == "pptx":
+        slides = sections or [{"title": title, "body": "\n".join(paragraphs)}]
+        if bullets and not sections:
+            slides = [{"title": title, "body": "\n".join(paragraphs)}]
+    else:
+        slides = sections or [{"title": title, "body": "\n".join(paragraphs)}]
     return title, paragraphs, slides
 
 
@@ -140,6 +193,7 @@ def register_routes(app, scheduler, require_user, audit):
 
     @router.post("/files/upload")
     async def files_upload(request: Request, file: UploadFile = File(...)):
+        assert_mutation_allowed("file upload")
         user = require_user(request)
         if not file.filename:
             raise HTTPException(400, "A filename is required.")
@@ -220,7 +274,7 @@ def register_routes(app, scheduler, require_user, audit):
         if fmt == "docx":
             path = create_docx(str(workspace_path(filename)), title, paragraphs)
         elif fmt == "xlsx":
-            path = create_xlsx(str(workspace_path(filename)), {"Sheet1": [[title], [payload.prompt]]})
+            path = create_xlsx(str(workspace_path(filename)), {"Sheet1": [[title]] + [[index + 1, paragraph] for index, paragraph in enumerate(paragraphs)]})
         elif fmt == "pdf":
             path = create_pdf(str(workspace_path(filename)), title, paragraphs)
         elif fmt == "pptx":

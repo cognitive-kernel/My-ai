@@ -1,102 +1,69 @@
-from my_ai.router import classify
+from my_ai.application.router import build_router_service
 
 
-def test_persian_learning_variants():
-    assert classify("لطفاً به من پایتون آموزش بده").name == "learning"
-    assert classify("درس پایتون رو شروع کن").name == "learning"
+class FakeRouter:
+    def __init__(self, payload):
+        self.payload = payload
+        self.calls = []
+
+    def structured_chat_json(self, message, schema, system=None):
+        self.calls.append((message, schema, system))
+        return self.payload
 
 
-def test_execution_variants():
-    assert classify("این کد رو ران کن").name == "code_execution"
-    assert classify("اجراش کن").name == "code_execution"
-    assert classify("run this code").name == "code_execution"
+def route(payload, text, context=None):
+    fake = FakeRouter(payload)
+    result = build_router_service(fake).classify(text, context)
+    return result, fake
 
 
-def test_self_update_variants():
-    assert classify("آپدیت خودت رو انجام بده").name == "self_update"
-    assert classify("self update کن").name == "self_update"
+def payload(primary="chat", intents=None, confidence=0.9, language=None, topic=None, goal=None, project_path=None, urls=None):
+    return {
+        "primary": primary, "intents": intents or [primary], "confidence": confidence,
+        "language": language, "topic": topic, "goal": goal,
+        "project_path": project_path, "urls": urls or [],
+    }
 
 
-def test_coding_variants_and_overlap():
-    assert classify("یک پروژه بساز").name == "coding"
+def test_semantic_router_distinguishes_question_from_command():
+    question, _ = route(payload("help", ["help"], 0.94, goal="explain how to run code"), "چطور کد را اجرا کنم؟")
+    command, _ = route(payload("code_execution", ["code_execution"], 0.96), "این کد را اجرا کن")
+    assert question.name == "help"
+    assert command.name == "code_execution"
+    assert command.requires_confirmation is True
 
 
-def test_normalization_and_half_space():
-    assert classify("لطفاً به من پایتون‌آموزش بده!").name == "learning"
+def test_ambiguous_multi_intent_request_preserves_all_intents():
+    result, fake = route(payload("learning", ["learning", "coding"], 0.91, "fa", "Python", "learn then implement"), "پایتون را یاد بگیر و بعد یک API بساز")
+    assert result.name == "learning"
+    assert result.intents == ("learning", "coding")
+    assert result.args["language"] == "fa"
+    assert result.args["topic"] == "Python"
+    assert len(fake.calls) == 1
 
 
-def test_arguments_and_multi_intent():
-    result = classify("پایتون یاد بگیر و بعد یک API بساز")
-    assert result.args["language"] == "python"
-    assert "learning" in result.intents
-    assert "coding" in result.intents
+def test_high_risk_confirmation_is_derived_outside_model_authorization():
+    result, _ = route(payload("git_write", ["git_write"], 0.98), "در مخزن تغییر بده")
+    assert result.requires_confirmation is True
 
 
-def test_context_for_continuation():
-    result = classify("اجراش کن", "این کد پایتون را آماده کردم")
-    assert result.name == "code_execution"
+def test_structured_arguments_are_preserved():
+    result, _ = route(payload("coding", ["coding"], 0.93, "python", None, "build API", "/projects/demo", ["https://example.com/spec"]), "پروژه را بساز")
+    assert result.args == {
+        "language": "python", "goal": "build API",
+        "project_path": "/projects/demo", "urls": ["https://example.com/spec"],
+    }
 
 
-def test_negative_execution_match():
-    assert classify("چطور کد را اجرا کنم؟").name != "code_execution"
-
-
-def test_high_risk_confirmation():
-    assert classify("روی گیت تغییر بده").requires_confirmation is True
-
-
-def test_chat_fallback():
-    result = classify("امروز هوا چطور است؟")
+def test_no_classifier_is_safe_chat_only():
+    result = build_router_service(None).classify("هر متن دلخواه")
     assert result.name == "chat"
-    assert result.intents == ("chat",)
+    assert result.confidence == 0.0
 
 
-def test_self_repair_variants():
-    assert classify("خودت را تعمیر کن").name == "self_repair"
-    assert classify("fix yourself").name == "self_repair"
-    assert classify("باگ خودتو درست کن").name == "self_repair"
-
-
-def test_additional_learning_and_coding_variants():
-    assert classify("ادامه یادگیری پایتون").name == "learning"
-    assert classify("کد تولید کن").name == "coding"
-
-
-def test_structured_learning_arguments():
-    result = classify("پایتون یاد بگیر درباره async و بعد یک API بساز برای مدیریت کارها")
-    assert result.args["language"] == "python"
-    assert "async" in result.args["topic"]
-    assert "goal" in result.args
-
-
-def test_project_path_argument():
-    result = classify("پروژه را در /projects/demo بساز")
-    assert result.args["project_path"] == "/projects/demo"
-    assert "coding" in result.intents
-
-
-def test_security_help_and_file_analysis_intents():
-    assert classify("اسکن امنیتی این کد را انجام بده").name == "security_scan"
-    assert classify("راهنما را نشان بده").name == "help"
-    assert classify("این فایل را تحلیل کن").name == "file_analysis"
-
-
-def test_execution_question_is_not_execution_command():
-    assert classify("چطور کد را اجرا کنم؟").name != "code_execution"
-
-
-def test_llm_router_resolves_ambiguous_request(monkeypatch):
-    import my_ai.router as router
-    class FakeLLM:
-        def chat(self, *args, **kwargs):
-            return '{"primary":"coding","intents":["coding"],"confidence":0.91,"language":"python","topic":null,"goal":"build an API"}'
-    monkeypatch.setattr("my_ai.llm.create_llm", lambda *args, **kwargs: FakeLLM())
-    result = router.classify("یک چیز برای مدیریت داده بساز")
-    assert result.name == "coding"
-    assert result.confidence == 0.91
-
-
-def test_cisco_learning_is_routed_to_learning():
-    intent = classify("سیسکو را از صفر یاد بگیر")
-    assert intent.name in {"learning", "chat"}
-    assert intent.args.get("language") == "cisco"
+def test_chat_route_does_not_define_keyword_intent_tables():
+    from pathlib import Path
+    source = Path("my_ai/api.py").read_text(encoding="utf-8")
+    assert "learn_intent=(\"یاد بگیر\"" not in source
+    assert "code_words=(" not in source
+    assert "image_words=(" not in source

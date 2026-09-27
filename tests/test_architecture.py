@@ -1,15 +1,10 @@
 from pathlib import Path
 
 
-def test_layered_packages_exist_and_domain_router_is_canonical():
-    assert Path("my_ai/core/protocols.py").is_file()
-    assert Path("my_ai/domain/router.py").is_file()
-    text = Path("my_ai/router.py").read_text(encoding="utf-8")
-    assert "Compatibility facade" in text
-    assert "from .domain.router import" in text
-
-
-def test_domain_router_does_not_depend_on_http_ui_layers():
-    text = Path("my_ai/domain/router.py").read_text(encoding="utf-8")
-    assert "from ..api" not in text
-    assert "from ..static" not in text
+def test_layered_packages_and_compatibility_facades_exist():
+    for package in ("core", "domain", "application", "infra"):
+        assert (Path("my_ai") / package).is_dir()
+    assert "application-layer" in Path("my_ai/application/router.py").read_text(encoding="utf-8") or "Application service" in Path("my_ai/application/router.py").read_text(encoding="utf-8")
+    assert "Compatibility facade" in Path("my_ai/router.py").read_text(encoding="utf-8") or "compatibility facade" in Path("my_ai/router.py").read_text(encoding="utf-8").lower()
+    assert "Compatibility facade" in Path("my_ai/llm.py").read_text(encoding="utf-8")
+    assert "Compatibility facade" in Path("my_ai/db.py").read_text(encoding="utf-8")

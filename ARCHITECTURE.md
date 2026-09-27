@@ -2,23 +2,36 @@
 
 ## Runtime layers
 
-- API layer (my_ai/api.py): authentication, request validation, HTTP status mapping, and route composition only.
-- Domain/services (learner.py, scheduler.py, platform.py, skill_engine.py, dynamic_learning.py, self_update.py): business rules and orchestration.
-- Persistence (db.py, settings_store.py): SQLite access and schema management.
-- UI (my_ai/static/): browser HTML/CSS/JavaScript. Python only serves the static page and API.
-- Infrastructure (runtime_prerequisites.py, network.py, watchdog.py, self_diagnostics.py): environment and process concerns.
+1. API/UI — my_ai/api.py and my_ai/static/; HTTP/authentication/transport only.
+2. Application — my_ai/application/; dependency injection and use-case composition.
+3. Domain — my_ai/domain/; pure business decisions and schemas. Domain code depends only on my_ai/core and standard-library code.
+4. Core — my_ai/core/; stable protocols and shared contracts with no infrastructure/application imports.
+5. Infrastructure — my_ai/infra/; LLM, persistence, network and host adapters.
 
-## Dependency rules
+Legacy top-level modules such as my_ai/router.py, my_ai/llm.py and my_ai/db.py are compatibility facades only. New code must import the layered implementation directly.
 
-1. UI communicates with the application through HTTP APIs; it must not import Python modules.
-2. API routes may call domain services, but domain services must not import FastAPI request/response objects.
-3. Persistence helpers own database connections; services use fetch_all/execute rather than creating ad-hoc global connections.
-4. Write-capable services must honor the central read-only/write policy before filesystem or repository mutations.
-5. Admin-only operations are enforced at the route boundary and audited.
-6. External retrieval and model access remain behind the platform/web/LLM service boundaries.
+## Dependency enforcement
+
+The dependency graph is enforced by tests/test_architecture_boundaries.py using AST import inspection:
+
+- Domain cannot import API/UI, application, infrastructure, database, LLM or configuration adapters.
+- Core cannot import application/domain/infrastructure/API packages.
+- Application cannot import API/UI; external adapters are injected through core protocols.
+- Infrastructure cannot import application or API layers.
+- Critical flat modules are verified to contain no implementation of routing, LLM or persistence.
+
+## Router boundary
+
+The router is a domain service with the StructuredRouter protocol injected by the application layer. Provider adapters live in my_ai/infra/router_llm.py.
+
+Routing uses strict schema-constrained structured output; there is no keyword/regex intent table or free-form JSON fallback. The router only returns intent data. Authorization, confirmation and execution remain separate policy concerns.
+
+## Persistence boundary
+
+SQLite implementation lives in my_ai/infra/persistence.py. my_ai/db.py remains a compatibility facade for existing integrations.
 
 ## Acceptance surfaces
 
-/admin/readiness, /eval/retrieval, /skills/reviews, /self-update/status, and the browser E2E suite expose the operational acceptance state without requiring local hardware-specific checks.
+/admin/readiness, /eval/retrieval, /skills/reviews, /self-update/status, and the browser E2E suite expose operational acceptance state.
 
-Self-update is deliberately disabled by default; enabling it requires both the explicit runtime enable flag and an explicit approval flag.
+Self-update remains disabled by default; enabling it requires the explicit runtime enable flag and explicit approval.

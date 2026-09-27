@@ -490,3 +490,30 @@ def test_detailed_status_exposes_persisted_lesson_without_key_error(monkeypatch)
     topic = result["courses"][0]["topics"][0]
     assert topic["lesson"] == "Full persisted lesson"
     assert topic["progress_percent"] == 100.0
+
+
+def test_scheduler_does_not_infer_worker_language_from_latest_chat():
+    scheduler = StudyScheduler.__new__(StudyScheduler)
+    scheduler._latest_learning_message = lambda: "Learn Android security engineering"
+    assert scheduler._normalize_language("PHP") == "PHP"
+
+
+def test_learning_retry_does_not_repeat_permanent_http_error():
+    engine = LearningEngine.__new__(LearningEngine)
+    attempts = []
+
+    class PermanentHTTPError(RuntimeError):
+        response = type("Response", (), {"status_code": 403})()
+
+    def operation():
+        attempts.append(1)
+        raise PermanentHTTPError("Forbidden")
+
+    try:
+        engine._retry_with_limit(operation, "source", max_attempts=3)
+    except RuntimeError as exc:
+        assert "permanently unavailable (HTTP 403)" in str(exc)
+    else:
+        raise AssertionError("permanent HTTP errors must fail without retrying")
+
+    assert attempts == [1]
