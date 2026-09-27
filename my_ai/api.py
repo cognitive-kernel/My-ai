@@ -10,7 +10,7 @@ import logging
 import uuid
 from urllib.parse import urlparse
 from pathlib import Path
-from fastapi import FastAPI,HTTPException,Request
+from fastapi import FastAPI,HTTPException,Request,UploadFile
 from pydantic import BaseModel
 from fastapi.responses import HTMLResponse,JSONResponse,RedirectResponse,StreamingResponse,Response
 from fastapi.staticfiles import StaticFiles
@@ -441,19 +441,48 @@ def models_select(task:str, request:Request):
 @app.post("/voice/transcribe")
 def voice_transcribe(r:VoiceTranscribeRequest, request:Request):
     user=require_user(request)
-    result=transcribe(_voice_path(r.audio_path,True),_voice_path(r.model_path,True),r.language)
+    model_path = r.model_path.strip() or os.getenv("WHISPER_MODEL_PATH", "").strip()
+    if not model_path:
+        raise HTTPException(503, "WHISPER_MODEL_PATH is not configured.")
+    result=transcribe(_voice_path(r.audio_path,True),_voice_path(model_path,True),r.language)
     audit(user,"voice","execute","200")
     return {"text":result}
 
 @app.post("/voice/synthesize")
 def voice_synthesize(r:VoiceSynthesizeRequest, request:Request):
     user=require_user(request)
+    model_path = r.model_path.strip() or os.getenv("PIPER_MODEL_PATH", "").strip()
+    if not model_path:
+        raise HTTPException(503, "PIPER_MODEL_PATH is not configured.")
     VOICE_ROOT.mkdir(parents=True,exist_ok=True)
     output_path=_voice_path(r.output_path,False)
     Path(output_path).parent.mkdir(parents=True,exist_ok=True)
-    result=synthesize(r.text,_voice_path(r.model_path,True),output_path)
+    result=synthesize(r.text,_voice_path(model_path,True),output_path)
     audit(user,"voice","execute","200")
     return {"path":result}
+
+@app.post("/voice/upload")
+def voice_upload(file:UploadFile, request:Request):
+    user=require_user(request)
+    if not file.filename:
+        raise HTTPException(400, "Voice file name is required.")
+    safe_name = Path(file.filename).name
+    suffix = Path(safe_name).suffix.lower()
+    if suffix not in {".wav",".webm",".ogg",".mp3",".m4a",".mp4"}:
+        raise HTTPException(400, "Unsupported voice recording format.")
+    VOICE_ROOT.mkdir(parents=True,exist_ok=True)
+    target = (VOICE_ROOT / f"recording-{uuid.uuid4().hex}{suffix}").resolve()
+    try:
+        target.relative_to(VOICE_ROOT)
+    except ValueError:
+        raise HTTPException(400, "Invalid voice path.")
+    data = file.file.read(25 * 1024 * 1024 + 1)
+    if len(data) > 25 * 1024 * 1024:
+        raise HTTPException(413, "Voice recording is limited to 25 MiB.")
+    assert_write_allowed(str(target))
+    target.write_bytes(data)
+    audit(user,"voice","write","201",str(target))
+    return {"path":str(target),"local_path":str(target)}
 
 @app.get("/voice/status")
 def voice_status_api(request:Request):
