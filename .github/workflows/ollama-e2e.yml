@@ -48,6 +48,27 @@ jobs:
         env:
           OLLAMA_MODEL: qwen2.5:0.5b
         run: python -c "from my_ai.llm import OllamaClient; r=OllamaClient().chat('Reply with exactly OK'); print(r); assert 'OK' in r.upper()"
+      - name: Run live semantic router and Persian response baseline
+        env:
+          OLLAMA_MODEL: qwen2.5:0.5b
+          ROUTER_MODEL: qwen2.5:0.5b
+          CODING_MODEL: qwen2.5:0.5b
+          FALLBACK_MODEL: qwen2.5:0.5b
+          ROUTER_LLM_ENABLED: "true"
+        run: |
+          python - <<'PY'
+          from my_ai.agent import Agent
+          from my_ai.eval_harness import PERSIAN_RESPONSE_BASELINE, run_response_eval
+          from my_ai.infra.llm import OllamaClient
+          from my_ai.db import init_db, execute
+          init_db()
+          sid=execute("INSERT INTO chat_sessions(title,kind) VALUES(?,?)", ("CI eval", "chat"))
+          agent=Agent(llm=OllamaClient())
+          result=run_response_eval(lambda prompt: agent.chat(prompt, sid), PERSIAN_RESPONSE_BASELINE, baseline=0.55)
+          print(result)
+          assert result["baseline_met"], result
+          assert result["pass_rate"] >= 0.5, result
+          PY
       - name: Start application
         env:
           OLLAMA_MODEL: qwen2.5:0.5b
