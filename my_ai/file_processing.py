@@ -85,6 +85,7 @@ def _system_install_command(package: str) -> list[str] | None:
 
 
 def install_known_prerequisites(kind: str, *, install_system: bool = False) -> dict[str, list[str]]:
+    assert_mutation_allowed(f"install-prerequisites:{kind}")
     packages = missing_prerequisites(kind)
     installed: list[str] = []
     for package in packages:
