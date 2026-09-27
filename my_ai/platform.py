@@ -89,16 +89,21 @@ def _isotonic_calibration(judgments: list[dict[str, Any]]) -> list[tuple[float, 
         else:
             grouped.append([score, score, 1, label])
     groups: list[list[float | int]] = grouped
-    while len(groups) >= 2:
-        left, right = groups[-2], groups[-1]
-        left_mean = float(left[3]) / int(left[2])
-        right_mean = float(right[3]) / int(right[2])
-        if left_mean <= right_mean:
+    changed = True
+    while changed and len(groups) >= 2:
+        changed = False
+        for index in range(len(groups) - 1):
+            left, right = groups[index], groups[index + 1]
+            left_mean = float(left[3]) / int(left[2])
+            right_mean = float(right[3]) / int(right[2])
+            if left_mean <= right_mean:
+                continue
+            left[1] = right[1]
+            left[2] = int(left[2]) + int(right[2])
+            left[3] = int(left[3]) + int(right[3])
+            groups.pop(index + 1)
+            changed = True
             break
-        left[1] = right[1]
-        left[2] = int(left[2]) + int(right[2])
-        left[3] = int(left[3]) + int(right[3])
-        groups.pop()
     return [
         (float((group[0] + group[1]) / 2.0), float(group[3]) / int(group[2]), int(group[2]))
         for group in groups
