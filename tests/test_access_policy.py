@@ -45,3 +45,25 @@ def test_sensitive_routes_use_explicit_action_boundaries():
     assert permission_for_path("/files/upload", "POST") == ("files", "write")
     assert permission_for_path("/tools/python", "POST") == ("tools", "execute")
     assert permission_for_path("/chat", "POST") == ("chat", "execute")
+
+
+def test_audit_event_records_actor_and_io_hashes(monkeypatch):
+    import json
+    import my_ai.auth as auth
+    captured = []
+    monkeypatch.setattr(auth, "execute", lambda sql, params=(): captured.append(params) or 1)
+    auth.audit_event(
+        {"id": 7, "username": "admin", "role": "admin"},
+        "tools",
+        "execute",
+        "200",
+        request_id="req-1",
+        input_data=b'{"secret":"redacted-by-hash"}',
+        output_data=b'{"ok":true}',
+    )
+    details = json.loads(captured[0][5])
+    assert details["actor"]["id"] == 7
+    assert details["request_id"] == "req-1"
+    assert details["input"]["sha256"]
+    assert details["output"]["sha256"]
+    assert "redacted-by-hash" not in captured[0][5]
