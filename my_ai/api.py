@@ -592,6 +592,11 @@ def set_tool_permission(r:PermissionRequest, request:Request):
     return {"ok":True}
 
 
+SKILLS_ADMIN_HTML="""<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Skill Engine | My-AI</title><style>body{font-family:Tahoma;background:#f3f4f6}.wrap{max-width:1200px;margin:24px auto}.card{background:#fff;padding:16px;border-radius:12px;margin:10px 0}.score{display:inline-block;padding:5px 9px;border-radius:8px;background:#eef2ff}.ev{background:#f8fafc;padding:8px;margin:6px 0;border-radius:8px}button{padding:7px 11px;margin:3px}</style><div class='wrap'><h1>Skill Engine</h1><p>Knowledge coverage و verified skill score مستقل‌اند؛ verification فقط با evidence معتبر انجام می‌شود.</p><div id='list'>در حال بارگذاری...</div></div><script>
+function esc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+async function load(){let r=await fetch('/skills'),j=await r.json();if(!r.ok){list.textContent=j.detail||'خطا';return}list.innerHTML=(j.items||[]).map(x=>'<div class="card"><h2>'+esc(x.name)+' <small>v'+esc(x.version)+'</small></h2><span class="score">Knowledge coverage: '+esc(x.knowledge_coverage_score)+'</span> <span class="score">Verified skill: '+esc(x.verified_skill_score)+'</span><p>State: '+esc(x.verification_state)+' | review due: '+esc(x.review_due)+'</p><button onclick="rev('+x.id+')">Revalidate</button><details><summary>Evidence ('+esc(x.evidence_count)+')</summary>'+((x.evidence||[]).map(e=>'<div class="ev"><b>'+esc(e.kind)+'</b> | passed='+esc(e.passed)+' | '+esc(e.created_at)+'<pre>'+esc(JSON.stringify(e.details,null,2))+'</pre></div>').join('')||'بدون evidence')+'</details></div>').join('')||'Skill ثبت نشده است'}
+async function rev(id){let version=prompt('نسخه فعلی skill را وارد کنید:','current');if(version===null)return;let r=await fetch('/skills/revalidate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({skill_id:Number(id),current_version:version})});let j=await r.json();if(!r.ok)alert(j.detail||'خطا');load()}load()</script>"""
+
 @app.get("/admin/skills", response_class=HTMLResponse)
 def admin_skills_page(request:Request):
     require_admin(request)
