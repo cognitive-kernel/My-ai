@@ -338,12 +338,13 @@ git pull
 
 The repository changes above are implemented and covered by regression tests, but they do not prove every local runtime dependency is installed on the user's machine. Full production claims still require the local Ollama/Whisper/Piper binaries and models to be exercised. GitHub Actions can verify the configured CI environment; it cannot certify the user's Windows runtime.
 
-### Remaining production work
+### Remaining verification boundary
 
-- Semantic retrieval is implemented with FTS5 + Ollama embeddings + cosine similarity; confidence remains explicitly heuristic and is not a calibrated probability. A future eval harness should benchmark retrieval quality and calibrate confidence.
-- Voice is now a complete local pipeline in code, but actual hardware/model availability must be verified on the target machine.
-- Multi-session server isolation is covered by existing authorization logic; a browser-level UI E2E suite remains optional future work.
+- Semantic retrieval uses FTS5 + Ollama embeddings + cosine similarity; confidence is calibrated with persisted retrieval judgments using monotonic isotonic empirical calibration and remains explicitly uncalibrated until sufficient judgments exist.
+- Voice is local/offline in the application path: MediaRecorder → local upload → whisper.cpp → chat → Piper. Actual Whisper/Piper binaries and models still require verification on the target machine.
+- Browser UI E2E now runs on pull requests and covers authenticated dashboard/API surfaces; final target-machine UI verification remains required.
 - Self-update remains deny-by-default and requires explicit approval plus the runtime enable flag.
+- Final repository-wide pytest/compile/security verification must be run after the current hardening commits settle in CI; the target Windows runtime still needs the final local verification.
 
 
 ## 14. 2026-09-26 — Learning runtime hardening follow-up
@@ -364,3 +365,15 @@ Verification boundary: GitHub-side code and test changes are committed, but a cl
 - application read-only mode now blocks key project, voice-output, and self-update writes and avoids import-time directory creation in read-only mode.
 - Unified permission policy و process-wide OS/database read-only enforcement روی writerهای اصلی و مسیرهای API اعمال شد.
 - Knowledge management UI در `/admin/knowledge` و Skill Engine UI در `/admin/skills` با verification/evidence workflow فعال شد.
+
+
+## Current hardening follow-up — 2026-09-27
+
+- Unified policy coverage now has a regression check for every non-public API route.
+- Direct SQLite knowledge writers honor `MYAI_READ_ONLY=true`, and embedding-cache writes honor the same dynamic read-only flag.
+- Encrypted backup creation was made type-safe and has explicit verification coverage.
+- Browser voice no longer uses `SpeechRecognition` or `speechSynthesis`; it uses local MediaRecorder plus the local Whisper/Piper endpoints.
+- Browser voice recordings are normalized with FFmpeg when Whisper cannot consume the browser container directly.
+- Chat-to-document conversion preserves headings, paragraphs and lists for DOCX/XLSX/PDF/PPTX.
+- Retrieval confidence calibration uses isotonic empirical calibration rather than per-bucket Laplace smoothing.
+- Dependency tests now require every runtime dependency declared in `pyproject.toml` to be pinned in `requirements.lock`.
