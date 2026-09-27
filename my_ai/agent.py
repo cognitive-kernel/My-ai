@@ -70,6 +70,8 @@ class Agent:
             provenance = raw_provenance or {}
             if not isinstance(provenance, dict):
                 provenance = {"source_url": str(provenance)}
+            if item_id is None and not provenance.get("citation_id"):
+                continue
             citation_id = str(provenance.get("citation_id") or f"K{item_id}")
             title = str(provenance.get("title") or item.get("title") or "local knowledge")
             source = str(provenance.get("source_url") or f"local://knowledge/{item_id}")
