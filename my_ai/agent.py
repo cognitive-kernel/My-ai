@@ -259,7 +259,7 @@ class Agent:
         for item in knowledge:
             item = dict(item)
             provenance = item.get("provenance")
-            if not isinstance(provenance, dict):
+            if not isinstance(provenance, dict) and item.get("id") is not None:
                 provenance = {
                     "citation_id": f"K{item.get('id')}",
                     "source_url": item.get("source_url") or f"local://knowledge/{item.get('id')}",
