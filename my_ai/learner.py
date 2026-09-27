@@ -295,7 +295,7 @@ class LearningEngine:
     def detailed_status(self,language=None):
         """Return the complete learning catalog, including completed topics."""
         rows=fetch_all(
-            "SELECT id,language,topic,status,score,progress_percent,phase,created_at FROM learning_sessions ORDER BY id DESC"
+            "SELECT id,language,topic,status,score,progress_percent,phase,notes,created_at FROM learning_sessions ORDER BY id DESC"
         )
         # Custom Course runners have their own progress model and must not
         # appear as standard language-learning tracks.
@@ -357,7 +357,7 @@ class LearningEngine:
                     "phase":str(row["phase"]) if row else "planned",
                     "progress_percent":progress,
                     "score":row["score"] if row and row["score"] is not None else None,
-                    "lesson":str(row["notes"] or "") if row else "",
+                    "lesson":str(row.get("notes") or "") if row else "",
                     "updated_at":row["created_at"] if row else None,
                     "last_attempt_at":row["created_at"] if row else None,
                 })
