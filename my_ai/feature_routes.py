@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from .file_processing import create_docx, create_pdf, create_pptx, create_xlsx, detect_type, install_known_prerequisites, missing_prerequisites, missing_system_prerequisites
@@ -149,6 +150,18 @@ def register_routes(app, scheduler, require_user, audit):
         target.write_bytes(data)
         audit(user, "files", "write", "201", f"uploaded:{target.name}")
         return {"path": str(target), "name": target.name, "size": len(data), "stored_in": str(target.parent)}
+
+    @router.get("/files/download")
+    def files_download(path: str, request: Request):
+        require_user(request)
+        candidate = Path(path).expanduser().resolve()
+        try:
+            candidate.relative_to(workspace_path("").resolve())
+        except ValueError:
+            raise HTTPException(400, "Only files in the My-AI workspace can be downloaded.")
+        if not candidate.is_file():
+            raise HTTPException(404, "File not found.")
+        return FileResponse(candidate, filename=candidate.name, media_type="application/octet-stream")
 
     @router.post("/files/analyze")
     def files_analyze(payload: FilePathRequest, request: Request):
