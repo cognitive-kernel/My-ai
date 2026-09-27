@@ -43,7 +43,6 @@ pathspec==1.1.1
 pip-api==0.0.35
 pip-audit==2.10.1
 pip-requirements-parser==32.0.1
-Pillow==12.3.0
 platformdirs==4.12.0
 pluggy==1.6.0
 psutil==7.2.2
