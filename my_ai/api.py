@@ -585,8 +585,12 @@ def skills_evidence(r:SkillEvidenceRequest, request:Request):
     user=require_admin(request)
     if r.kind not in {"test","benchmark","official_source"}:
         raise HTTPException(400,"Skill evidence must come from an executed test, benchmark, or official source.")
-    if not r.details or not any(k in r.details for k in ("command","source_url","test_id","artifact")):
-        raise HTTPException(400,"Evidence requires a command, source_url, test_id, or artifact reference.")
+    if not r.details:
+        raise HTTPException(400,"Evidence details are required.")
+    if r.kind == "official_source" and not str(r.details.get("source_url") or "").strip():
+        raise HTTPException(400,"Official-source evidence requires a non-empty source_url.")
+    if r.kind in {"test","benchmark"} and (not str(r.details.get("command") or "").strip() or "artifact" not in r.details):
+        raise HTTPException(400,"Executed evidence requires a command and artifact.")
     eid=record_evidence(r.skill_id,r.kind,r.passed,r.details)
     audit(user,"skill-engine","execute","200",f"evidence:{r.skill_id}")
     return {"evidence_id":eid}
