@@ -37,6 +37,16 @@ class LearningEngine:
             except Exception as exc:
                 if stop_event is not None and stop_event.is_set():
                     raise InterruptedError("learning stopped") from exc
+
+                # Do not retry permanent HTTP client errors such as 401/403/404.
+                # Retrying an access-denied source only amplifies load and log
+                # noise. Explicitly transient client statuses remain retryable.
+                response = getattr(exc, "response", None)
+                status = int(getattr(response, "status_code", 0) or 0)
+                permanent_client_error = 400 <= status < 500 and status not in {408, 409, 425, 429}
+                if permanent_client_error:
+                    raise RuntimeError(f"{label} permanently unavailable (HTTP {status}): {exc}") from exc
+
                 if attempt >= max_attempts:
                     raise RuntimeError(f"{label} failed after {max_attempts} attempts: {exc}") from exc
                 if progress_callback:
