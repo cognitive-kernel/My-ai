@@ -6,7 +6,7 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from .file_processing import create_docx, create_pdf, create_pptx, create_xlsx, detect_type, install_known_prerequisites, missing_prerequisites, missing_system_prerequisites
+from .file_processing import create_docx, create_pdf, create_pptx, create_xlsx, detect_type, install_known_prerequisites, install_os_packages, missing_prerequisites, missing_system_prerequisites
 from .auth import require_admin
 from .access_policy import assert_mutation_allowed
 from .local_files import filesystem_roots, inspect_file, list_directory, read_text, workspace_path
@@ -226,6 +226,20 @@ def register_routes(app, scheduler, require_user, audit):
         prerequisites = install_known_prerequisites(info["kind"], install_system=install_system) if missing or missing_system_prerequisites(info["kind"]) else {"python_installed": [], "system_missing": [], "system_installed": []}
         result = analyze(payload.path)
         result["prerequisites"] = {"missing_before": missing, **prerequisites}
+        return result
+
+    @router.post("/system/prerequisites/install")
+    def system_prerequisites_install(payload: dict, request: Request):
+        user = require_admin(request)
+        packages = payload.get("packages") if isinstance(payload, dict) else None
+        confirmed = bool(payload.get("confirmed")) if isinstance(payload, dict) else False
+        if not isinstance(packages, list):
+            raise HTTPException(400, "packages must be a list")
+        try:
+            result = install_os_packages([str(x) for x in packages], confirmed=confirmed)
+        except (PermissionError, ValueError, RuntimeError) as exc:
+            raise HTTPException(400, str(exc))
+        audit(user, "system-prerequisites", "write", "200", f"installed:{len(result['packages'])}")
         return result
 
     @router.post("/files/prerequisites")
