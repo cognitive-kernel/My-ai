@@ -269,7 +269,11 @@ def _llm_classify(text: str, context: str | None = None) -> Intent | None:
 
 
 def classify(text: str, context: str | None = None) -> Intent:
-    """Prefer LLM classification for ambiguous requests and keep deterministic safety fallback."""
+    """Semantic-first routing with deterministic safety fallback."""
+    llm_intent = _llm_classify(text, context)
+    if llm_intent is not None and llm_intent.confidence >= 0.55:
+        return llm_intent
+
     message = _normalize(text)
     context_n = _normalize(context or "")
     scored = []
@@ -277,56 +281,30 @@ def classify(text: str, context: str | None = None) -> Intent:
         score, matches = _score_intent(message, patterns)
         if score:
             scored.append((name, score, matches))
-
     if message in {"اجراش کن", "رانش کن", "run it", "execute it"} and any(
         token in context_n for token in ("کد", "code", "python", "javascript", "script")
     ):
         scored.append(("code_execution", 3.5, ["context:code"]))
-
     if not scored:
-        llm_intent = _llm_classify(text, context)
-        if llm_intent is not None:
-            return llm_intent
-        return Intent("chat", 0.5, False, intents=("chat",))
-
-    # Let the routing model resolve genuine overlap; deterministic rules remain the
-    # authority for high-risk commands so an LLM cannot silently authorize them.
+        return Intent("chat", 0.45, False, intents=("chat",))
     scored.sort(key=lambda item: (-item[1], -len(item[2][0]), item[0]))
-    primary_score = scored[0][1]
-    ambiguous = len(scored) > 1 and scored[1][1] >= primary_score * 0.65
-    if ambiguous or primary_score < 2.0:
-        llm_intent = _llm_classify(text, context)
-        if llm_intent is not None and llm_intent.name not in HIGH_RISK:
-            return llm_intent
-
-    scored.sort(key=lambda item: (-item[1], -len(item[2][0]), item[0]))
-    primary_name, primary_score, _ = scored[0]
-    ordered = tuple(name for name, _, _ in scored)
-    confidence = min(0.99, 0.5 + 0.08 * primary_score)
-    if len(scored) > 1 and scored[1][1] >= primary_score * 0.65:
-        confidence = min(confidence, 0.88)
-
+    primary, score, matches = scored[0]
+    confidence = min(0.82, 0.45 + score / 10.0)
     args: dict[str, Any] = {}
-    language = _extract_language(message)
+    language = _extract_language(text)
+    topic = _extract_topic(text)
+    goal = _extract_goal(text)
     if language:
         args["language"] = language
-    urls = _extract_urls(str(text))
-    if urls:
-        args["urls"] = urls
-    topic = _extract_topic(message) if "learning" in ordered else None
     if topic:
         args["topic"] = topic
-    goal = _extract_goal(message) if "coding" in ordered else None
     if goal:
         args["goal"] = goal
-    project_path = _extract_project_path(str(text))
+    urls = _extract_urls(text)
+    if urls:
+        args["urls"] = urls
+    project_path = _extract_project_path(text)
     if project_path:
         args["project_path"] = project_path
+    return Intent(primary, round(confidence, 3), primary in HIGH_RISK, args=args, intents=(primary,))
 
-    return Intent(
-        primary_name,
-        round(confidence, 3),
-        primary_name in HIGH_RISK,
-        args=args,
-        intents=ordered,
-    )
