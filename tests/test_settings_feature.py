@@ -23,27 +23,10 @@ def test_settings_feature_can_register_directly():
     assert "/settings" in paths
 
 
-def test_default_cisco_course_is_seeded():
+def test_legacy_cisco_course_is_purged():
+    sf.execute("INSERT OR IGNORE INTO custom_courses(name,description) VALUES(?,?)", ("Cisco", "legacy"))
     sf._setup()
-    rows = sf.fetch_all("SELECT id,name FROM custom_courses WHERE lower(name)=lower(?)", ("Cisco",))
-    assert rows
-    items = sf._progress(int(rows[0]["id"]))
-    assert len(items) >= len(sf.DEFAULT_TOPICS)
-    seeded_titles = {str(x[0]) for x in sf.DEFAULT_TOPICS}
-    assert seeded_titles.issubset({str(x["title"]) for x in items})
-    assert items[0]["status"] in {"planned", "started", "paused", "completed"}
-
-
-def test_course_summary_reports_current_topic_and_fractional_progress():
-    sf._setup()
-    course = sf.fetch_all("SELECT id FROM custom_courses WHERE lower(name)=lower(?)", ("Cisco",))[0]
-    course_id = int(course["id"])
-    topic = sf._progress(course_id)[0]
-    sf._set_topic(int(topic["id"]), "started", 25, "lesson")
-    summary = sf._summary(course_id)
-    assert summary["current"]["title"] == sf.DEFAULT_TOPICS[0][0]
-    assert summary["current"]["phase"] == "lesson"
-    assert summary["progress_percent"] > 0
+    assert not sf.fetch_all("SELECT id FROM custom_courses WHERE lower(name)=lower(?)", ("Cisco",))
 
 
 def test_settings_requires_authentication():
@@ -54,7 +37,7 @@ def test_settings_requires_authentication():
 
 def test_adding_topic_reduces_completed_course_progress():
     sf._setup()
-    course_id = int(sf.fetch_all("SELECT id FROM custom_courses WHERE lower(name)=lower(?)", ("Cisco",))[0]["id"])
+    course_id = int(sf.fetch_all("SELECT id FROM custom_courses WHERE lower(name)=lower(?)", ("Python",))[0]["id"])
     rows = sf._progress(course_id)
     for row in rows:
         sf._set_topic(int(row["id"]), "completed", 100, "completed")
