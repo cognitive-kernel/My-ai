@@ -235,7 +235,7 @@ class Agent:
             )
             enriched_knowledge.append(item)
         context_note = (
-            "RELEVANT VERIFIED LOCAL KNOWLEDGE. Cite provenance when making factual claims. "
+            "RELEVANT LOCAL KNOWLEDGE (verified when marked verified). Cite provenance when making factual claims. "
             "Do not present uncalibrated retrieval as high confidence.\n"
             + json.dumps(enriched_knowledge, ensure_ascii=False)
         )
