@@ -67,3 +67,12 @@ def test_audit_event_records_actor_and_io_hashes(monkeypatch):
     assert details["input"]["sha256"]
     assert details["output"]["sha256"]
     assert "redacted-by-hash" not in captured[0][5]
+
+
+def test_permission_actions_are_method_specific():
+    assert permission_for_path("/admin/tools", "GET") == ("admin", "read")
+    assert permission_for_path("/admin/tools", "PUT") == ("admin", "write")
+    assert permission_for_path("/admin/users", "GET") == ("admin", "read")
+    assert permission_for_path("/admin/users", "POST") == ("admin", "write")
+    assert permission_for_path("/skills/reviews", "GET") == ("skill-engine", "read")
+    assert permission_for_path("/skills/reviews", "POST") == ("skill-engine", "write")
