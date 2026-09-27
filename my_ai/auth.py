@@ -162,4 +162,7 @@ def audit(
 
 
 # Route authorization is defined centrally so API middleware and tests share one policy.
-from .access_policy import TOOL_RULES, PATH_ACTIONS, permission_for_path
+from . import access_policy as _access_policy
+TOOL_RULES = _access_policy.TOOL_RULES
+PATH_ACTIONS = _access_policy.PATH_ACTIONS
+permission_for_path = _access_policy.permission_for_path
