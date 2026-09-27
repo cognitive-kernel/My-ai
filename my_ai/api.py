@@ -40,7 +40,7 @@ from .tooling import catalog as tool_catalog, doctor as tool_doctor, run_project
 from .image_generation import generate_image, ImageGenerationError
 from .runtime_prerequisites import startup_check, runtime_status
 from .local_files import WORKSPACE_ROOT
-from .settings_feature import start_named_course
+from .settings_feature import start_named_course, shutdown_course_workers
 from .readiness import build_readiness
 
 scheduler=StudyScheduler()
@@ -79,6 +79,7 @@ async def lifespan(_):
     if not under_pytest:
         scheduler.stop()
         self_diagnostics.stop()
+    shutdown_course_workers()
 app=FastAPI(title="My-AI",version="0.2.0",description="Local-first personal learning and coding agent.",lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=Path(__file__).resolve().parent / "static"), name="static")
 
