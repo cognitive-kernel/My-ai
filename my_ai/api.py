@@ -958,7 +958,7 @@ def tools_sqlite_query(r:SQLiteQueryRequest,request:Request):
 def learning_status(request:Request, language:str|None=None):
     require_user(request)
     summary=learner.status(language)
-    summary.update(learner.detailed_status(language))
+    summary.update(learner.detailed_status(language, include_lessons=False))
     # Custom Course progress is exposed by /learning/active and its own UI;
     # never leak its internal custom_course:<id> tracks into the standard
     # learning status response, even if a stale/legacy learner implementation
@@ -967,6 +967,24 @@ def learning_status(request:Request, language:str|None=None):
         return not str(item.get("language") or "").strip().lower().startswith("custom_course:")
     summary["languages"]=[item for item in summary.get("languages",[]) if _standard_track(item)]
     summary["courses"]=[item for item in summary.get("courses",[]) if _standard_track(item)]
+    return summary
+
+@app.get("/learning/lesson")
+def learning_lesson(request:Request, language:str, topic:str):
+    require_user(request)
+    rows=fetch_all(
+        "SELECT id,language,topic,status,score,progress_percent,phase,notes,created_at FROM learning_sessions WHERE language=? AND topic=? ORDER BY id DESC LIMIT 1",
+        (canonical_language(language), topic),
+    )
+    if not rows:
+        raise HTTPException(404, "Learning topic not found.")
+    row=rows[0]
+    return {
+        "id":row["id"], "language":canonical_language(str(row["language"] or "")),
+        "topic":row["topic"], "status":row["status"], "score":row["score"],
+        "progress_percent":row["progress_percent"], "phase":row["phase"],
+        "lesson":str(row.get("notes") or ""), "created_at":row["created_at"],
+    }
     summary["sessions"]=[item for item in summary.get("sessions",[]) if _standard_track(item)]
     summary["available_languages"]=[
         item for item in summary.get("available_languages",[])
