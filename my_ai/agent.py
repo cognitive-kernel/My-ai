@@ -11,6 +11,8 @@ from .self_update import check_for_update, apply_confirmed_update, recent_lesson
 from .router import classify
 from .web_learner import WebLearner
 from .web_learning import create_pending, pending, learn_confirmed
+from .local_files import inspect_file, read_text
+from .multimodal import analyze as analyze_file
 
 
 SYSTEM = """You are My-AI, a local-first personal AI assistant.
@@ -150,7 +152,36 @@ class Agent:
 
         return None
 
-    def chat(self, message, session_id=1):
+    @staticmethod
+    def _attachment_context(attachments):
+        if not attachments:
+            return ""
+        parts = ["ATTACHED LOCAL FILES (user-provided; inspect these files as part of the current request):"]
+        for item in attachments[:10]:
+            path = str(item.get("path") or "").strip()
+            name = str(item.get("name") or "").strip() or path
+            if not path:
+                continue
+            try:
+                info = inspect_file(path)
+                parts.append(f"\nFILE: {name} | size={info['size']} | type={info['mime_type']} | path={info['path']}")
+                mime = str(info.get("mime_type") or "")
+                suffix = str(info.get("extension") or "").lower()
+                text_like = mime.startswith("text/") or suffix in {".py", ".js", ".ts", ".tsx", ".jsx", ".html", ".css", ".json", ".xml", ".yaml", ".yml", ".md", ".txt", ".csv", ".sql", ".sh", ".bat", ".ps1", ".conf", ".ini", ".toml"}
+                if text_like:
+                    content = read_text(path, max_bytes=2 * 1024 * 1024)
+                    parts.append("CONTENT:\n" + content[:12000])
+                else:
+                    try:
+                        result = analyze_file(path)
+                        parts.append("ANALYSIS:\n" + json.dumps(result, ensure_ascii=False)[:12000])
+                    except Exception as exc:
+                        parts.append("ANALYSIS: unavailable (" + str(exc)[:300] + ")")
+            except Exception as exc:
+                parts.append(f"\nFILE: {name} | unavailable: {str(exc)[:300]}")
+        return "\n".join(parts)
+
+    def chat(self, message, session_id=1, attachments=None):
         web_confirmation = self._web_learning_confirmation(message, session_id)
         if web_confirmation is not None:
             execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (session_id, "user", message))
@@ -187,8 +218,10 @@ class Agent:
             "SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 20",
             (session_id,),
         )[::-1]
+        attachment_context = self._attachment_context(attachments)
         context = "\n".join(f"{row['role']}: {row['content']}" for row in history[-8:])
         intent = classify(message, context)
+        llm_message = message + ("\n\n" + attachment_context if attachment_context else "")
         task = "coding" if intent.name == "coding" else "general"
         llm = self.llm if task == "general" else create_llm(task)
         knowledge = recall(message, 8)
@@ -205,7 +238,7 @@ class Agent:
                     + json.dumps(lessons, ensure_ascii=False)
                 )
         answer = llm.chat(
-            message,
+            llm_message,
             system=SYSTEM + "\n\n" + context_note + lesson_note,
             history=history,
         )
