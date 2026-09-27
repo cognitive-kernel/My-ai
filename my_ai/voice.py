@@ -56,9 +56,9 @@ def status(transcription_model: str | None = None, synthesis_model: str | None =
         "whisper_model_ready": whisper_model_ok,
         "piper_model_ready": piper_model_ok,
         "ffmpeg_ready": ffmpeg_probe,
+        "media_container_ready": bool(ffmpeg and ffmpeg_probe),
         "probes": probes,
-        "offline_ready": bool(whisper and piper and ffmpeg and whisper_model_ok and piper_model_ok
-                               and ffmpeg_probe
+        "offline_ready": bool(whisper and piper and whisper_model_ok and piper_model_ok
                                and probes.get("whisper_cpp", {}).get("healthy")
                                and probes.get("piper", {}).get("healthy")),
     }
