@@ -149,6 +149,8 @@ def _setup() -> None:
         conn.execute("DELETE FROM knowledge_audit WHERE knowledge_id IN (SELECT id FROM knowledge WHERE lower(topic) LIKE '%cisco%' OR lower(title) LIKE '%cisco%' OR lower(content) LIKE '%cisco%' OR lower(COALESCE(source_url,'')) LIKE '%cisco%')")
         conn.execute("DELETE FROM knowledge WHERE lower(topic) LIKE '%cisco%' OR lower(title) LIKE '%cisco%' OR lower(content) LIKE '%cisco%' OR lower(COALESCE(source_url,'')) LIKE '%cisco%'")
         conn.commit()
+    for row in fetch_all("SELECT id FROM custom_courses WHERE active=1"):
+        _ensure_custom_review_schedule(int(row["id"]))
 
 
 def _course(course_id: int) -> dict[str, Any] | None:
