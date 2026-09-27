@@ -38,6 +38,13 @@ def configure_logging() -> None:
     logging.getLogger("uvicorn.access").setLevel(
         getattr(logging, os.getenv("MYAI_UVICORN_ACCESS_LOG_LEVEL", "WARNING").upper(), logging.WARNING)
     )
+    http_client_level = getattr(
+        logging,
+        os.getenv("MYAI_HTTP_CLIENT_LOG_LEVEL", "WARNING").upper(),
+        logging.WARNING,
+    )
+    logging.getLogger("httpx").setLevel(http_client_level)
+    logging.getLogger("httpcore").setLevel(http_client_level)
 
 
 def request_log(*, request_id: str, method: str, path: str, status: int, duration_ms: float, user_id: int | None = None) -> dict[str, Any]:
