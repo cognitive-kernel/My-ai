@@ -3,20 +3,7 @@ from __future__ import annotations
 from fastapi.responses import HTMLResponse
 
 
-INJECT = """
-<div class="card" id="localFileTools" style="margin-top:12px">
-  <b>فایل و پردازش محلی</b>
-  <input id="chatFile" type="file" style="display:block;margin:8px 0" />
-  <span class="small">فایل انتخاب‌شده در فضای محلی برنامه ذخیره و برای تحلیل به My-AI داده می‌شود.</span>
-  <div style="margin-top:8px">
-    <input id="fileGeneratePrompt" placeholder="برای ساخت فایل، توضیح کوتاه را بنویس" style="width:55%" />
-    <select id="fileGenerateFormat"><option value="docx">Word (.docx)</option><option value="xlsx">Excel (.xlsx)</option><option value="pdf">PDF</option><option value="pptx">PowerPoint (.pptx)</option></select>
-    <button type="button" id="fileGenerateButton">ساخت فایل</button>
-  </div>
-  <div id="fileStatus" class="small"></div>
-</div>
-<script src="/static/ui_extensions.js" defer></script>
-"""
+INJECT = ""
 
 
 def install_ui_extensions(app) -> None:
