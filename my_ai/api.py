@@ -24,7 +24,6 @@ from .learner import LearningEngine
 from .dynamic_learning import resolve_learning_target
 from .router import classify
 from .observability import configure_logging, request_log
-from .runtime_prerequisites import startup_check
 from .scheduler import StudyScheduler
 from .ui import page
 from .feature_routes import register_routes
