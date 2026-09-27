@@ -587,6 +587,16 @@ class StudyScheduler:
                     self._update_worker(language, "retrying", result=result, error=str(exc), status="retrying")
                     if stop_event.wait(min(60.0, 2.0 ** min(consecutive_errors, 5))):
                         break
+                finally:
+                    # A slot limits concurrent learning cycles, not the lifetime
+                    # of a worker thread. Release it after each cycle so another
+                    # course can actually start learning.
+                    if slot_acquired:
+                        try:
+                            self._worker_slots.release()
+                        except ValueError:
+                            pass
+                        slot_acquired = False
         finally:
             logger.info(
                 "LEARNING_WORKER_EXIT: language=%s stop_requested=%s stage=%s topic=%s error=%s",
