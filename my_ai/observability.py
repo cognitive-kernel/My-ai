@@ -31,6 +31,13 @@ def configure_logging() -> None:
         handler.setFormatter(JsonLogFormatter())
         root.addHandler(handler)
     root.setLevel(getattr(logging, os.getenv("MYAI_LOG_LEVEL", "INFO").upper(), logging.INFO))
+    # Routine HTTP polling/access lines are intentionally quiet; warnings/errors remain visible.
+    logging.getLogger("my_ai.http").setLevel(
+        getattr(logging, os.getenv("MYAI_HTTP_LOG_LEVEL", "WARNING").upper(), logging.WARNING)
+    )
+    logging.getLogger("uvicorn.access").setLevel(
+        getattr(logging, os.getenv("MYAI_UVICORN_ACCESS_LOG_LEVEL", "WARNING").upper(), logging.WARNING)
+    )
 
 
 def request_log(*, request_id: str, method: str, path: str, status: int, duration_ms: float, user_id: int | None = None) -> dict[str, Any]:
