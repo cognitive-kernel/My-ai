@@ -68,21 +68,23 @@ def missing_system_prerequisites(kind: str) -> list[str]:
 
 
 def _system_install_command(package: str) -> list[str] | None:
+    package = str(package).strip().lower()
+    if package not in {"git", "ffmpeg", "nmap"}:
+        raise ValueError(f"Unsupported system prerequisite: {package}")
     if os.name == "nt":
+        ids = {"git": "Git.Git", "ffmpeg": "Gyan.FFmpeg", "nmap": "Insecure.Nmap"}
         if shutil.which("winget"):
-            return ["winget", "install", "--id", "Gyan.FFmpeg", "-e", "--accept-package-agreements", "--accept-source-agreements"]
+            return ["winget", "install", "--id", ids[package], "-e", "--accept-package-agreements", "--accept-source-agreements"]
         if shutil.which("choco"):
-            return ["choco", "install", "ffmpeg", "-y"]
+            return ["choco", "install", package, "-y"]
         return None
     if platform.system() == "Darwin" and shutil.which("brew"):
-        return ["brew", "install", "ffmpeg"]
+        return ["brew", "install", package]
     for manager in ("apt-get", "dnf", "pacman"):
         if shutil.which(manager):
-            if manager == "apt-get":
-                return ["sudo", "apt-get", "install", "-y", "ffmpeg"]
-            if manager == "dnf":
-                return ["sudo", "dnf", "install", "-y", "ffmpeg"]
-            return ["sudo", "pacman", "-S", "--noconfirm", "ffmpeg"]
+            if manager == "pacman":
+                return [manager, "-S", "--noconfirm", package]
+            return [manager, "install", "-y", package]
     return None
 
 
