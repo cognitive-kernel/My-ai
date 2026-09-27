@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 import shlex
+import shutil
+import sqlite3
 import subprocess
 import sys
 import ipaddress
@@ -39,6 +41,24 @@ def _validate_health_url(value: str | None) -> str | None:
     except ValueError as exc:
         raise ValueError("Self-update health_url must target loopback.") from exc
     return value
+
+
+def _snapshot_database(destination: Path) -> Path | None:
+    db_path = Path(os.getenv("DB_PATH", "data/myai.db")).expanduser().resolve()
+    if not db_path.exists():
+        return None
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    tmp = destination.with_suffix(destination.suffix + ".tmp")
+    source = sqlite3.connect(db_path)
+    target = sqlite3.connect(tmp)
+    try:
+        source.backup(target)
+        target.commit()
+    finally:
+        target.close()
+        source.close()
+    os.replace(tmp, destination)
+    return destination
 
 
 def _stamp():
@@ -160,6 +180,7 @@ def apply_confirmed_update(health_url=None, health_timeout=45):
     stamp = _stamp()
     backup = f"myai-preupdate-{stamp}"
     candidate = STATE_DIR / f"candidate-{stamp}"
+    db_snapshot = _snapshot_database(STATE_DIR / f"db-preupdate-{stamp}.sqlite")
     _git("tag", "-a", backup, "-m", "My-AI automatic pre-update snapshot")
 
     try:
@@ -193,6 +214,8 @@ def apply_confirmed_update(health_url=None, health_timeout=45):
         ]
         if health_url:
             watchdog += ["--url", health_url]
+        if db_snapshot:
+            watchdog += ["--db-snapshot", str(db_snapshot), "--db-path", str(Path(get_setting("db.path", os.getenv("DB_PATH", "data/myai.db"))).expanduser().resolve())]
         subprocess.Popen(
             watchdog,
             cwd=ROOT,
