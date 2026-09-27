@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from .file_processing import create_docx, create_pdf, create_pptx, create_xlsx, detect_type, install_known_prerequisites, missing_prerequisites, missing_system_prerequisites
 from .auth import require_admin
+from .access_policy import assert_mutation_allowed
 from .local_files import filesystem_roots, inspect_file, list_directory, read_text, workspace_path
 from .multimodal import analyze
 from .image_generation import generate_image, IMAGE_ROOT, ImageGenerationError
@@ -140,6 +141,7 @@ def register_routes(app, scheduler, require_user, audit):
 
     @router.post("/files/upload")
     async def files_upload(request: Request, file: UploadFile = File(...)):
+        assert_mutation_allowed("file upload")
         user = require_user(request)
         if not file.filename:
             raise HTTPException(400, "A filename is required.")
