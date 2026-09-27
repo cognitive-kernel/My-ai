@@ -12,6 +12,8 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+from .access_policy import assert_mutation_allowed
+
 OPTIONAL_PREREQUISITES: dict[str, str] = {
     "docx": "python-docx",
     "openpyxl": "openpyxl",
