@@ -142,10 +142,16 @@ def _setup() -> None:
             ("Cisco", "سیسکو", "Cisco"),
         ).fetchall()
         if aliases:
-            course_id = int(aliases[0]["id"])
-            conn.execute("UPDATE custom_courses SET name='Cisco', active=1 WHERE id=?", (course_id,))
-            for duplicate in aliases[1:]:
-                conn.execute("UPDATE custom_courses SET active=0 WHERE id=?", (int(duplicate["id"]),))
+            canonical = next((row for row in aliases if str(row["name"]).strip().casefold() == "cisco"), None)
+            if canonical is not None:
+                course_id = int(canonical["id"])
+            else:
+                course_id = int(aliases[0]["id"])
+                conn.execute("UPDATE custom_courses SET name='Cisco' WHERE id=?", (course_id,))
+            conn.execute("UPDATE custom_courses SET active=1 WHERE id=?", (course_id,))
+            for duplicate in aliases:
+                if int(duplicate["id"]) != course_id:
+                    conn.execute("UPDATE custom_courses SET active=0 WHERE id=?", (int(duplicate["id"]),))
             topic_count = conn.execute("SELECT COUNT(*) AS n FROM custom_course_topics WHERE course_id=?", (course_id,)).fetchone()["n"]
         else:
             cur = conn.execute("INSERT INTO custom_courses(name,description) VALUES(?,?)", ("Cisco", "Cisco networking / IOS learning path with practical, verification-focused modules."))
