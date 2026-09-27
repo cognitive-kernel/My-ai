@@ -418,3 +418,6 @@ Additional completion items in this pass:
 - self-update database snapshot and rollback support.
 
 Operational boundary: application-level read-only cannot revoke write privileges from arbitrary unrelated processes running outside My-AI, and actual Whisper/Piper model/binary availability remains a property of the target machine. These are host/runtime prerequisites, not unimplemented repository routes.
+
+
+Final CI verification follow-up: generic OS prerequisite installation passed compile/ruff review; a mypy narrowing issue in the admin route was fixed in main before final verification. The next verification run must be green before this hardening cycle is declared complete.
