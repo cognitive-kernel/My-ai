@@ -394,3 +394,27 @@ Repository-level fixes added on the layered branch:
 - self-update creates a SQLite database snapshot before activation and the watchdog restores that snapshot together with the tagged source revision on failed health activation.
 
 These changes are not considered final until CI, browser E2E, Ollama E2E and the target Windows test suite are green after this pass.
+
+
+## 16. 2026-09-27 — Repository hardening verification complete
+
+Final branch head: 6e480c2d18464a335bd00a7efd9f292112a024db.
+
+Verified in GitHub Actions for this head:
+- CI: success — compileall, Ruff, mypy, Bandit, pip-audit, full pytest, Docker build and Compose validation.
+- Browser E2E: success.
+- Ollama E2E: success — Ollama startup/model smoke, automated Persian response baseline, authenticated API/UI smoke, and Docker Compose E2E.
+
+Additional completion items in this pass:
+- method-specific central permission actions and deny-by-default for unmapped routes including administrators;
+- structured audit event metadata with actor/request ID/input-output hashes;
+- no keyword intent tables in the main chat intent selection;
+- complete versioned backup export/import with encrypted sensitive-state handling;
+- persisted scheduler worker leases;
+- evidence age/version revalidation for skills;
+- offline voice readiness plus media-container readiness;
+- dependency lock is installed by CI rather than only checked;
+- allowlisted cross-platform system prerequisite catalog for Git, FFmpeg and Nmap;
+- self-update database snapshot and rollback support.
+
+Operational boundary: application-level read-only cannot revoke write privileges from arbitrary unrelated processes running outside My-AI, and actual Whisper/Piper model/binary availability remains a property of the target machine. These are host/runtime prerequisites, not unimplemented repository routes.
