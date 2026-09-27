@@ -155,7 +155,21 @@ async def auth_and_audit_middleware(request: Request, call_next):
     response.headers["X-Request-ID"] = request_id
     if user and path != "/auth/logout":
         action = decision.action or {"GET": "read", "POST": "execute", "PUT": "write", "PATCH": "write", "DELETE": "write"}.get(request.method, request.method.lower())
-        audit(user, decision.tool or path, action, str(response.status_code), audit_payload(request_id, request.method, path, response.status_code))
+        audit_event(
+            user,
+            decision.tool or path,
+            action,
+            str(response.status_code),
+            request_id=request_id,
+            input_data=request_body,
+            output_data=getattr(response, "body", None),
+            extra={
+                "method": request.method,
+                "path": path,
+                "content_type": response.headers.get("content-type"),
+                "streaming": isinstance(response, StreamingResponse),
+            },
+        )
     return response
 agent=Agent(); learner=LearningEngine()
 VOICE_ROOT=Path("data/voice").resolve()
