@@ -237,6 +237,8 @@ class Agent:
         context_note = (
             "RELEVANT LOCAL KNOWLEDGE (verified when marked verified). Cite provenance when making factual claims. "
             "Do not present uncalibrated retrieval as high confidence.\n"
+            + json.dumps(knowledge, ensure_ascii=False)
+            + "\nRETRIEVAL METADATA:\n"
             + json.dumps(enriched_knowledge, ensure_ascii=False)
         )
         lesson_note = ""
