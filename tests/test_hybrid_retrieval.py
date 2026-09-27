@@ -75,3 +75,24 @@ def test_hybrid_confidence_is_empirically_calibrated_after_judgments(tmp_path, m
     assert hit["confidence_calibrated"] is True
     assert hit["confidence_samples"] == 5
     assert 0.0 < hit["confidence"] <= 1.0
+
+
+def test_hybrid_confidence_calibration_is_monotonic(tmp_path, monkeypatch):
+    monkeypatch.setenv("DB_PATH", str(tmp_path / "hybrid.db"))
+    import importlib
+    import my_ai.config as config
+    import my_ai.db as db
+    import my_ai.platform as platform
+    config.settings = config.Settings()
+    importlib.reload(db)
+    importlib.reload(platform)
+    db.init_db()
+    judgments = [
+        {"score": 0.2, "relevant": 0},
+        {"score": 0.4, "relevant": 1},
+        {"score": 0.6, "relevant": 0},
+        {"score": 0.8, "relevant": 1},
+        {"score": 1.0, "relevant": 1},
+    ]
+    curve = platform._isotonic_calibration(judgments)
+    assert all(left[1] <= right[1] for left, right in zip(curve, curve[1:]))
