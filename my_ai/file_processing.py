@@ -8,6 +8,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import re
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -111,6 +112,48 @@ def _system_install_command(package: str) -> list[str] | None:
             if manager == "pacman":
                 return [manager, "-S", "--noconfirm", package]
             return [manager, "install", "-y", package]
+    return None
+
+def install_os_packages(packages: list[str], *, confirmed: bool = False) -> dict[str, object]:
+    """Install arbitrary OS package names through a detected native package manager.
+
+    Package names are passed as argv values (never through a shell) and require
+    explicit confirmation. This is intentionally separate from the allowlisted
+    prerequisite catalog used by automatic feature detection.
+    """
+    assert_mutation_allowed("install-os-packages")
+    if not confirmed:
+        raise PermissionError("Explicit confirmation is required for OS package installation.")
+    normalized = []
+    for package in packages:
+        name = str(package).strip()
+        if not name or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+:-]{0,127}", name):
+            raise ValueError(f"Invalid OS package name: {name!r}")
+        normalized.append(name)
+    if not normalized:
+        raise ValueError("At least one OS package is required.")
+    command = _generic_system_install_command(normalized)
+    if command is None:
+        raise RuntimeError("No supported native package manager was found.")
+    subprocess.run(command, check=True, timeout=900)
+    return {"packages": normalized, "package_manager_command": command, "confirmed": True}
+
+
+def _generic_system_install_command(packages: list[str]) -> list[str] | None:
+    if os.name == "nt":
+        if shutil.which("winget"):
+            return ["winget", "install", "--exact", "--accept-package-agreements", "--accept-source-agreements", *packages]
+        if shutil.which("choco"):
+            return ["choco", "install", "-y", *packages]
+        return None
+    if platform.system() == "Darwin" and shutil.which("brew"):
+        return ["brew", "install", *packages]
+    if shutil.which("apt-get"):
+        return ["apt-get", "install", "-y", *packages]
+    if shutil.which("dnf"):
+        return ["dnf", "install", "-y", *packages]
+    if shutil.which("pacman"):
+        return ["pacman", "-S", "--noconfirm", *packages]
     return None
 
 
