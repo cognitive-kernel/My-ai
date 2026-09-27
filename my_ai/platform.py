@@ -360,7 +360,7 @@ def _atomic_sqlite_backup(destination: Path) -> str:
         tmp.unlink(missing_ok=True)
 
 
-def _backup_manifest(tables: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+def _backup_manifest(tables: dict[str, list[dict[str, Any]]], *, encrypted: bool) -> dict[str, Any]:
     canonical = json.dumps(tables, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return {
         "format_version": BACKUP_FORMAT_VERSION,
@@ -368,6 +368,7 @@ def _backup_manifest(tables: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
         "created_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
         "sha256": hashlib.sha256(canonical).hexdigest(),
         "tables": sorted(tables),
+        "encrypted": bool(encrypted),
     }
 
 
@@ -425,14 +426,7 @@ class sqlite3_backup:
 def export_database(destination: str, password: str | None = None) -> str:
     assert_mutation_allowed("database export")
     dst = _safe_backup_path(destination)
-    data = {}
-    with connect() as conn:
-        for table in ("users","tool_permissions","knowledge","chat_sessions","conversations","learning_sessions","agent_runs","generated_projects","security_scans","audit_log","retrieval_judgments","knowledge_audit"):
-            try:
-                data[table] = [dict(x) for x in conn.execute(f"SELECT * FROM {table}").fetchall()]
-            except Exception:
-                data[table] = []
-    metadata = _backup_manifest(data)
+    metadata = _backup_manifest(data, encrypted=bool(password))
     payload = {"metadata": metadata, "tables": data}
     raw = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
     if password:
