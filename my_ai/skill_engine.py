@@ -145,9 +145,11 @@ def record_evidence(skill_id: int, kind: str, passed: bool, details: dict[str, A
         raise ValueError("Evidence must be an executed test, benchmark, or official source.")
     if not details:
         raise ValueError("Evidence details are required.")
-    required = {"source_url"} if kind == "official_source" else {"command", "artifact"}
-    if not any(key in details for key in required):
-        raise ValueError("Evidence must include a visible source_url or executed command/artifact.")
+    if kind == "official_source":
+        if not str(details.get("source_url") or "").strip():
+            raise ValueError("Official-source evidence requires a non-empty source_url.")
+    elif not str(details.get("command") or "").strip() or "artifact" not in details:
+        raise ValueError("Executed evidence requires a command and artifact.")
     skill_rows = fetch_all("SELECT id,version FROM skills WHERE id=?", (skill_id,))
     if not skill_rows:
         raise ValueError("Skill not found.")
