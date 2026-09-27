@@ -1,3 +1,4 @@
+from .access_policy import assert_mutation_allowed
 from __future__ import annotations
 
 import hashlib
