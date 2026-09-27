@@ -53,6 +53,7 @@ jobs:
           OLLAMA_MODEL: qwen2.5:0.5b
         run: python -c "from my_ai.llm import OllamaClient; r=OllamaClient().chat('Reply with exactly OK'); print(r); assert 'OK' in r.upper()"
       - name: Run live semantic router and Persian response baseline
+        timeout-minutes: 8
         env:
           OLLAMA_MODEL: qwen2.5:0.5b
           ROUTER_MODEL: qwen2.5:0.5b
