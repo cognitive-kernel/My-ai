@@ -879,8 +879,8 @@ def chat(r:ChatRequest, request:Request):
                     requested_languages.append(name)
             if not requested_languages:
                 requested_languages=[requested or "Python"]
-            languages=[]
-            custom_courses=[]
+            languages: list[str] = []
+            custom_courses: list[dict[str, object]] = []
             for target in requested_languages:
                 target_language=canonical_language(resolve_learning_target(msg,target))
                 if target_language not in languages:
