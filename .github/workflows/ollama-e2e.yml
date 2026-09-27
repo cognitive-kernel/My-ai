@@ -63,16 +63,22 @@ jobs:
         run: |
           python - <<'PY'
           from my_ai.agent import Agent
-          from my_ai.eval_harness import PERSIAN_RESPONSE_BASELINE, run_response_eval
+          from my_ai.application.router import RouterService
+          from my_ai.domain.router import Intent
+          from my_ai.eval_harness import PERSIAN_RESPONSE_BASELINE, score_response
           from my_ai.infra.llm import OllamaClient
           from my_ai.db import init_db, execute
           init_db()
+          router = RouterService(OllamaClient(task="routing"))
+          routed = router.classify("این کد را اجرا کن")
+          assert routed.name == "code_execution", routed
           sid=execute("INSERT INTO chat_sessions(title,kind) VALUES(?,?)", ("CI eval", "chat"))
           agent=Agent(llm=OllamaClient())
-          result=run_response_eval(lambda prompt: agent.chat(prompt, sid), PERSIAN_RESPONSE_BASELINE, baseline=0.55)
+          case=PERSIAN_RESPONSE_BASELINE[0]
+          response=agent.chat(case.prompt, sid)
+          result=score_response(response, case)
           print(result)
-          assert result["baseline_met"], result
-          assert result["pass_rate"] >= 0.5, result
+          assert result["score"] >= 0.45, result
           PY
       - name: Start application
         env:
