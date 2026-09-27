@@ -18,3 +18,22 @@ def test_baseline_contains_persian_cases_and_reports_languages():
     assert "fa" in result["languages"]
     assert "en" in result["languages"]
     assert "pass_rate" in result
+
+
+def test_persian_response_baseline_is_deterministic():
+    from my_ai.eval_harness import PERSIAN_RESPONSE_BASELINE, run_response_eval
+    result = run_response_eval(
+        lambda prompt: "پاسخ کامل درباره " + prompt + " شامل تست و مثال است.",
+        PERSIAN_RESPONSE_BASELINE,
+    )
+    assert result["case_count"] == len(PERSIAN_RESPONSE_BASELINE)
+    assert result["baseline_met"] is True
+
+
+def test_persian_response_quality_rejects_unknown_marker():
+    from my_ai.eval_harness import ResponseEvalCase, score_response
+    result = score_response(
+        "__MYAI_UNKNOWN__",
+        ResponseEvalCase("سؤال", ("پایتون",), "fa"),
+    )
+    assert result["passed"] is False
