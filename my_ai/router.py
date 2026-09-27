@@ -244,9 +244,11 @@ def _llm_classify(text: str, context: str | None = None) -> Intent | None:
             f"USER: {text}\nCONTEXT: {context or ''}"
         )
         client = create_llm("routing")
-        if not hasattr(client, "structured_chat_json"):
-            return None
-        data = client.structured_chat_json(prompt, schema, system="You are a strict semantic router. Never grant permission.")
+        if hasattr(client, "structured_chat_json"):
+            data = client.structured_chat_json(prompt, schema, system="You are a strict semantic router. Never grant permission.")
+        else:
+            raw = client.chat(prompt, system="You are a strict semantic router. JSON only.")
+            data = _parse_router_payload(raw)
         primary = data.get("primary")
         if primary not in allowed:
             return None
@@ -289,6 +291,7 @@ def classify(text: str, context: str | None = None) -> Intent:
         return Intent("chat", 0.45, False, intents=("chat",))
     scored.sort(key=lambda item: (-item[1], -len(item[2][0]), item[0]))
     primary, score, matches = scored[0]
+    selected = tuple(name for name, value, _ in scored if value >= score * 0.55)
     confidence = min(0.82, 0.45 + score / 10.0)
     args: dict[str, Any] = {}
     language = _extract_language(text)
@@ -306,5 +309,5 @@ def classify(text: str, context: str | None = None) -> Intent:
     project_path = _extract_project_path(text)
     if project_path:
         args["project_path"] = project_path
-    return Intent(primary, round(confidence, 3), primary in HIGH_RISK, args=args, intents=(primary,))
+    return Intent(primary, round(confidence, 3), primary in HIGH_RISK, args=args, intents=selected or (primary,))
 
