@@ -56,20 +56,6 @@ CREATE TABLE IF NOT EXISTS custom_course_progress (
 );
 """
 
-DEFAULT_TOPICS = [
-("Cisco IOS CLI and device management","Privileged EXEC, configuration modes, show commands, interfaces and safe configuration workflow","https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-26/products-installation-and-configuration-guides-list.html"),
-("IPv4 and IPv6 addressing","Addressing, subnetting, interfaces, gateways and verification commands","https://www.netacad.com/authoring-resources/courses/ff9e491c-49be-4734-803e-a79e6e83dab1/850c6c9b-b788-4915-b7d1-ac915f584548/en-US/assets/IPD%20-%20Shaping%20Future%20Tech%20Careers%20Empowering%20Educators%20with%20Cisco%20Certification-Aligned%20Pathways_en-US_1755107650203.pdf"),
-("Switching and VLANs","Ethernet switching, VLAN segmentation, trunking and SVIs","https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-26/products-installation-and-configuration-guides-list.html"),
-("STP and EtherChannel","Spanning Tree concepts, loop prevention and link aggregation","https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-26/products-installation-and-configuration-guides-list.html"),
-("Static routing and OSPF","Routing tables, static routes, OSPF concepts, configuration and verification","https://www.cisco.com/c/en/us/td/docs/routers/ios-xe/ip-routing/b-ip-routing/m_iro-mode-ospfv2.html"),
-("NAT and PAT","Inside/outside roles, static and dynamic NAT and PAT","https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/ipaddr_nat/configuration/xe-2/nat-xe-2-book/iadnat-addr-consv.html"),
-("IPv4 and IPv6 ACLs","Standard and extended ACLs, wildcard masks and interface application","https://www.cisco.com/c/en/us/td/docs/routers/ios-xe/security-vpn/security-vpn/m_sec-create-ip-apply-0.html"),
-("WAN, VPN and IPsec","WAN connectivity, VPN concepts and IPsec foundations","https://www.netacad.com/courses/ccna-enterprise-networking-security-automation"),
-("Network management","CDP, LLDP, NTP, SNMP, Syslog and device file maintenance","https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-26/products-installation-and-configuration-guides-list.html"),
-("QoS and traffic handling","Traffic characteristics, queuing concepts and QoS implementation","https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-26/products-installation-and-configuration-guides-list.html"),
-("Network automation","REST APIs, data formats, programmability and configuration automation","https://www.netacad.com/courses/ccna-enterprise-networking-security-automation"),
-("Troubleshooting and capstone","Evidence-driven troubleshooting, documentation, verification and a complete lab","https://www.netacad.com/courses/ccna-enterprise-networking-security-automation"),
-]
 
 class CourseRequest(BaseModel):
     name: str = Field(min_length=2, max_length=120)
@@ -134,44 +120,23 @@ class ImageSettingsRequest(BaseModel):
 
 def _setup() -> None:
     init_db()
-    from .db import connect
     with connect() as conn:
         conn.executescript(SCHEMA)
-        aliases = conn.execute(
-            "SELECT id,name FROM custom_courses WHERE lower(trim(name)) IN (lower(?), lower(?)) ORDER BY CASE WHEN lower(trim(name))=lower(?) THEN 0 ELSE 1 END, id",
-            ("Cisco", "سیسکو", "Cisco"),
-        ).fetchall()
-        if aliases:
-            canonical = next((row for row in aliases if str(row["name"]).strip().casefold() == "cisco"), None)
-            if canonical is not None:
-                course_id = int(canonical["id"])
-            else:
-                course_id = int(aliases[0]["id"])
-                conn.execute("UPDATE custom_courses SET name='Cisco' WHERE id=?", (course_id,))
-            conn.execute("UPDATE custom_courses SET active=1 WHERE id=?", (course_id,))
-            for duplicate in aliases:
-                if int(duplicate["id"]) != course_id:
-                    conn.execute("UPDATE custom_courses SET active=0 WHERE id=?", (int(duplicate["id"]),))
-            topic_count = conn.execute("SELECT COUNT(*) AS n FROM custom_course_topics WHERE course_id=?", (course_id,)).fetchone()["n"]
-        else:
-            cur = conn.execute("INSERT INTO custom_courses(name,description) VALUES(?,?)", ("Cisco", "Cisco networking / IOS learning path with practical, verification-focused modules."))
-            if cur.lastrowid is None:
-                raise RuntimeError("Unable to create the default Cisco course")
-            course_id = int(cur.lastrowid)
-            topic_count = 0
-        if int(topic_count or 0) == 0:
-            for order, (title, goal, source) in enumerate(DEFAULT_TOPICS, 1):
-                tcur = conn.execute("INSERT INTO custom_course_topics(course_id,topic_order,title,goal,source_url) VALUES(?,?,?,?,?)", (course_id, order, title, goal, source))
-                if tcur.lastrowid is None:
-                    raise RuntimeError("Unable to create a Cisco topic")
-                conn.execute("INSERT INTO custom_course_progress(course_id,topic_id) VALUES(?,?)", (course_id, int(tcur.lastrowid)))
-        try:
-            conn.execute("ALTER TABLE custom_course_progress ADD COLUMN last_attempt_at TEXT")
-        except Exception:
-            pass
+        # Permanently retire the legacy Cisco course and all persisted artifacts.
+        ids = [int(row["id"]) for row in conn.execute("SELECT id FROM custom_courses WHERE lower(trim(name))='cisco'").fetchall()]
+        if ids:
+            marks = ",".join("?" for _ in ids)
+            conn.execute(f"DELETE FROM custom_course_progress WHERE course_id IN ({marks})", ids)
+            conn.execute(f"DELETE FROM custom_course_topics WHERE course_id IN ({marks})", ids)
+            conn.execute(f"DELETE FROM custom_courses WHERE id IN ({marks})", ids)
+        conn.execute("DELETE FROM learning_workers WHERE lower(language)='cisco'")
+        conn.execute("DELETE FROM learning_sessions WHERE lower(language)='cisco'")
+        conn.execute("DELETE FROM learning_runtime WHERE lower(COALESCE(language,''))='cisco'")
+        conn.execute("DELETE FROM learning_domains WHERE lower(name) LIKE '%cisco%'")
+        conn.execute("DELETE FROM knowledge_embeddings WHERE knowledge_id IN (SELECT id FROM knowledge WHERE lower(topic) LIKE '%cisco%' OR lower(title) LIKE '%cisco%' OR lower(content) LIKE '%cisco%' OR lower(COALESCE(source_url,'')) LIKE '%cisco%')")
+        conn.execute("DELETE FROM knowledge_audit WHERE knowledge_id IN (SELECT id FROM knowledge WHERE lower(topic) LIKE '%cisco%' OR lower(title) LIKE '%cisco%' OR lower(content) LIKE '%cisco%' OR lower(COALESCE(source_url,'')) LIKE '%cisco%')")
+        conn.execute("DELETE FROM knowledge WHERE lower(topic) LIKE '%cisco%' OR lower(title) LIKE '%cisco%' OR lower(content) LIKE '%cisco%' OR lower(COALESCE(source_url,'')) LIKE '%cisco%'")
         conn.commit()
-    for row in fetch_all("SELECT id FROM custom_courses WHERE active=1"):
-        _ensure_custom_review_schedule(int(row["id"]))
 
 
 def _course(course_id: int) -> dict[str, Any] | None:
@@ -330,11 +295,11 @@ def _learn_topic(course_id: int, topic: dict[str, Any]) -> None:
     execute("UPDATE custom_course_progress SET last_attempt_at=CURRENT_TIMESTAMP WHERE topic_id=?", (topic_id,))
     _set_topic(topic_id, "started", 5, "understanding")
     llm = create_llm("general")
-    prompt = ("Teach this study unit accurately and practically. Explain prerequisites, concepts, Cisco IOS/IOS XE command examples, verification commands, common mistakes, safe lab exercises, and a short mastery checklist. "
-              "Do not claim a command is valid for every Cisco platform/version; state platform/version uncertainty. Prefer official Cisco documentation when supplied.\n"
+    prompt = ("Teach this study unit accurately and practically. Explain prerequisites, concepts, technical examples and verification steps, common mistakes, safe lab exercises, and a short mastery checklist. "
+              "Do not invent platform-specific behavior; state uncertainty when applicable.\n"
               f"COURSE: {(_course(course_id) or {}).get('name', 'Custom Course')}\nTOPIC: {topic['title']}\nGOAL: {topic['goal']}\nOFFICIAL SOURCE: {topic.get('source_url') or 'none'}")
     _set_topic(topic_id, "started", 25, "lesson")
-    lesson = llm.chat(prompt, system="You are a rigorous Cisco networking instructor. Return a concise but technically precise lesson.")
+    lesson = llm.chat(prompt, system="You are a rigorous technical instructor. Return a concise but technically precise lesson.")
     _set_topic(topic_id, "started", 70, "assessment", lesson=lesson)
     raw = llm.chat("Return only a numeric score from 0 to 100 for whether this lesson adequately covers the stated goal. GOAL:" + topic["goal"] + "\nLESSON:" + lesson)
     match = re.search(r"(?<!\d)(100|\d{1,2})(?!\d)", raw)
@@ -707,7 +672,7 @@ SETTINGS_HTML = """<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8
 <section class='card'><h2>Self-Update</h2><label><input id='su_enabled' type='checkbox'> فعال‌سازی Self-Update برای بررسی و اجرای به‌روزرسانی خودکار</label><label><input id='su_approved' type='checkbox'> اجازه اجرای Update بدون تأیید دستی در مرحله اجرا</label><input id='su_health' placeholder='Health URL محلی، مثلاً http://127.0.0.1:8000/health'><button onclick='saveFeatures()'>ذخیره</button><div id='suout' class='muted'></div></section>
 <section class='card'><h2>Self-Repair</h2><label><input id='sr_enabled' type='checkbox'> فعال‌سازی Self-Repair برای پیشنهاد/اجرای تعمیرات</label><label><input id='sr_approval' type='checkbox' checked> قبل از اعمال تعمیر، تأیید ادمین الزامی باشد</label><button onclick='saveFeatures()'>ذخیره</button><div id='srout' class='muted'></div></section>
 <section class='card'><h2>یادگیری سریع</h2><label><input id='lf_enabled' type='checkbox'> فعال</label><input id='lf_interval' type='number' min='60' max='86400' placeholder='فاصله یادگیری (ثانیه)'><input id='lf_retries' type='number' min='1' max='20' placeholder='حداکثر تلاش منبع'><button onclick='saveFeatures()'>ذخیره</button><div id='lfout' class='muted'></div></section><section class='card'><h2>تولید تصویر کاملاً آفلاین</h2><p class='muted'>فقط Automatic1111 روی همین کامپیوتر استفاده می‌شود و این مسیر هیچ API ابری ندارد. برای کیفیت بالا، checkpoint مناسب Manga/Anime/SDXL را در Automatic1111 نصب کنید.</p><label><input id='img_enabled' type='checkbox'> فعال</label><input id='img_url' placeholder='http://127.0.0.1:7860'><input id='img_model' placeholder='نام checkpoint/مدل نصب‌شده'><input id='img_sampler' placeholder='DPM++ 2M Karras'><div class='grid'><label>Steps<input id='img_steps' type='number' min='1' max='150'></label><label>CFG<input id='img_cfg' type='number' min='1' max='30' step='0.1'></label><label>اندازه<input id='img_size' placeholder='1024x1024'></label><label>Hires Scale<input id='img_hires_scale' type='number' min='1' max='2' step='0.1'></label><label>Denoise<input id='img_denoise' type='number' min='0.1' max='1' step='0.05'></label><input id='img_upscaler' placeholder='Latent'></div><label><input id='img_hires' type='checkbox'> Hires Fix</label><textarea id='img_negative' rows='5' placeholder='Negative prompt پیش‌فرض'></textarea><button onclick='saveImageSettings()'>ذخیره تنظیمات تصویر</button><button onclick='checkImageEngine()'>بررسی موتور محلی</button><div id='imgout' class='muted'></div></section><section class='card'><h2>منابع سخت‌افزاری</h2><p class='muted'>سقف پیش‌فرض اجرای یادگیری: CPU برابر 70٪ با 8 thread، RAM برابر 80٪ و GPU برابر 0 لایه (فقط CPU). این مقادیر قابل تغییر هستند.</p><label>حداکثر CPU (%)<input id='cpu_percent' type='number' min='1' max='100' step='0.5'></label><label>تعداد CPU thread<input id='cpu_threads' type='number' min='1' max='128' step='1'></label><label>حداکثر RAM (%)<input id='ram_percent' type='number' min='1' max='100' step='0.5'></label><label>GPU layers (0 = فقط CPU)<input id='gpu_layers' type='number' min='0' max='128' step='1'></label><button onclick='saveResources()'>ذخیره منابع</button><div id='resourceout' class='muted'></div></section><section class='card'><h2>مدیریت کاربران</h2><div id='users'>در حال بارگذاری...</div><hr><input id='nu' autocomplete='username' placeholder='نام کاربری'><input id='np' type='password' form='settings-form' autocomplete='new-password' placeholder='رمز عبور حداقل ۱۰ کاراکتر'><input id='nd' placeholder='نام نمایشی'><button onclick='addUser()'>ایجاد کاربر</button><div id='userout' class='muted'></div></section></div>
-<section class='card'><h2>مجوز ابزار کاربران</h2><p class='muted'>برای هر کاربر، ابزار و نوع عملیات را مشخص کنید. عدم وجود مجوز یعنی Deny.</p><div id='permissions'>در حال بارگذاری...</div></section><section class='card'><h2>افزودن Topic به آموزش موجود</h2><p class='muted'>Topic جدید با وضعیت «برنامه‌ریزی‌شده» اضافه می‌شود و درصد کلی آموزش دوباره محاسبه خواهد شد.</p><input id='existing_course_id' type='number' min='1' placeholder='شناسه آموزش'><input id='existing_topic' placeholder='عنوان Topic جدید'><input id='existing_goal' placeholder='هدف Topic'><input id='existing_source' placeholder='آدرس منبع رسمی اختیاری'><button onclick='addCourseTopic()'>افزودن Topic</button><div id='courseout' class='muted'></div></section><section class='card'><h2>ساخت آموزش جدید</h2><p class='muted'>هر خط یک سرفصل: <code>عنوان | هدف | آدرس منبع رسمی اختیاری</code>. می‌توانی «Cisco» یا هر موضوع دیگری بسازی.</p><input id='cn' placeholder='نام آموزش، مثلاً Cisco'><input id='cd' placeholder='توضیح آموزش'><textarea id='ct' rows='12' placeholder='Cisco IOS CLI | کار با حالت‌های CLI و show/configure | https://www.cisco.com/...\nVLAN | ساخت VLAN و trunk | https://www.cisco.com/...'></textarea><button onclick='createCourse()'>ایجاد آموزش</button><div id='newcourseout' class='muted'></div></section></div><script src='/settings/script.js?v=20260923-3'></script><script>
+<section class='card'><h2>مجوز ابزار کاربران</h2><p class='muted'>برای هر کاربر، ابزار و نوع عملیات را مشخص کنید. عدم وجود مجوز یعنی Deny.</p><div id='permissions'>در حال بارگذاری...</div></section><section class='card'><h2>افزودن Topic به آموزش موجود</h2><p class='muted'>Topic جدید با وضعیت «برنامه‌ریزی‌شده» اضافه می‌شود و درصد کلی آموزش دوباره محاسبه خواهد شد.</p><input id='existing_course_id' type='number' min='1' placeholder='شناسه آموزش'><input id='existing_topic' placeholder='عنوان Topic جدید'><input id='existing_goal' placeholder='هدف Topic'><input id='existing_source' placeholder='آدرس منبع رسمی اختیاری'><button onclick='addCourseTopic()'>افزودن Topic</button><div id='courseout' class='muted'></div></section><section class='card'><h2>ساخت آموزش جدید</h2><p class='muted'>هر خط یک سرفصل: <code>عنوان | هدف | آدرس منبع رسمی اختیاری</code>. می‌توانی هر موضوع دلخواهی بسازی.</p><input id='cn' placeholder='نام آموزش، مثلاً Python'><input id='cd' placeholder='توضیح آموزش'><textarea id='ct' rows='12' placeholder='Python functions | توابع و پارامترها | https://docs.python.org/3/tutorial/'></textarea><button onclick='createCourse()'>ایجاد آموزش</button><div id='newcourseout' class='muted'></div></section></div><script src='/settings/script.js?v=20260923-3'></script><script>
 (function(){
 async function imageSettingsLoad(){
   try{var j=await req("/settings/config");var x=j.image||{};byId("img_enabled").checked=!!x.enabled;byId("img_url").value=x.url||"";byId("img_model").value=x.model||"";byId("img_sampler").value=x.sampler||"";byId("img_steps").value=x.steps||32;byId("img_cfg").value=x.cfg||7;byId("img_hires").checked=!!x.hires;byId("img_hires_scale").value=x.hires_scale||1.5;byId("img_denoise").value=x.denoise||0.35;byId("img_upscaler").value=x.hr_upscaler||"Latent";byId("img_size").value=x.default_size||"1024x1024";byId("img_negative").value=x.negative_prompt||"";}catch(e){setText("imgout","خطا در بارگذاری تنظیمات تصویر: "+e.message)}
