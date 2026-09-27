@@ -156,8 +156,10 @@ def _hybrid_search_cached(query: str, limit: int, bucket: int, verified_only: bo
     for judgment in fetch_all("SELECT score,relevant FROM retrieval_judgments"):
         score = max(0.0, min(1.0, float(judgment["score"] or 0.0)))
         bucket = round(score, 1)
-        count, relevant = calibration.get(bucket, (0, 0))
-        calibration[bucket] = (count + 1, relevant + int(bool(judgment["relevant"])))
+        count: int
+        relevant_count: int
+        count, relevant_count = calibration.get(bucket, (0, 0))
+        calibration[bucket] = (count + 1, relevant_count + int(bool(judgment["relevant"])))
 
     for row in rows:
         semantic = 0.0
