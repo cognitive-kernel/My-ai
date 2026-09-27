@@ -138,13 +138,13 @@ DOMAIN_RULES: Dict[str, List[Tuple[Tuple[str, ...], Tuple[str, ...]]]] = {
         (("security", "hardening"), ("https://owasp.org/www-project-code-review-guide/", "https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html")),
     ],
     "PHP": [
-        (("composer", "psr", "package"), ("https://phptherightway.com/", "https://phpdelusions.net/")),
+        (("composer", "psr", "package"), ("https://phptherightway.com/", "https://getcomposer.org/doc/")),
         (("laravel", "framework"), ("https://laracasts.com/series/laravel-from-scratch", "https://laravel.com/learn")),
         (("security", "xss", "csrf", "ssrf", "upload"), ("https://owasp.org/www-project-web-security-testing-guide/", "https://cheatsheetseries.owasp.org/")),
         (("test", "phpunit"), ("https://phpunit.de/documentation.html", "https://phptherightway.com/#testing")),
         (("performance", "opcache", "profil"), ("https://www.php.net/manual/en/book.opcache.php", "https://phptherightway.com/#infrastructure")),
         (("api", "http", "web"), ("https://phptherightway.com/", "https://developer.mozilla.org/en-US/docs/Web/HTTP")),
-        (("database", "mysql", "postgres", "sqlite", "sql server"), ("https://phpdelusions.net/pdo", "https://owasp.org/www-project-code-review-guide/")),
+        (("database", "mysql", "postgres", "sqlite", "sql server"), ("https://www.php.net/manual/en/pdo.php", "https://owasp.org/www-project-code-review-guide/")),
     ],
     "JavaScript": [
         (("async", "promise", "event loop"), ("https://javascript.info/async", "https://javascript.info/event-loop")),
@@ -214,7 +214,7 @@ DOMAIN_RULES: Dict[str, List[Tuple[Tuple[str, ...], Tuple[str, ...]]]] = {
 DOMAIN_FALLBACKS = {
     "Python": ["https://realpython.com/", "https://pycon.org/"],
     "C": ["https://beej.us/guide/bgc/html/split/", "https://en.cppreference.com/w/c"],
-    "PHP": ["https://phptherightway.com/", "https://phpdelusions.net/"],
+    "PHP": ["https://phptherightway.com/", "https://getcomposer.org/doc/", "https://symfony.com/doc/current/"],
     "JavaScript": ["https://javascript.info/", "https://web.dev/learn/javascript/"],
     "SQL Server": ["https://www.brentozar.com/sql/", "https://learn.microsoft.com/en-us/sql/"],
     "MySQL": ["https://www.percona.com/blog/", "https://planet.mysql.com/"],
