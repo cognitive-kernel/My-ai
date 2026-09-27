@@ -351,7 +351,6 @@ class StudyScheduler:
 
     def _custom_course_due(self):
         try:
-            from .settings_feature import _course
             rows = fetch_all(
                 "SELECT c.id,c.name,d.next_review_at FROM custom_courses c "
                 "JOIN learning_domains d ON d.name=('custom_course:' || c.id) "
