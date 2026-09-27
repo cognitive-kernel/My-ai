@@ -56,10 +56,11 @@ def snapshot() -> dict[str, Any]:
             if not key.startswith("http:"):
                 continue
             name = key[5:]
+            path = name.split(":", 1)[1] if ":" in name else name
             http[name] = {
                 "requests": count,
                 "avg_seconds": round(_totals.get(f"{key}:duration", 0.0) / count, 4) if count else 0.0,
-                "errors": _counts.get(f"http_errors:{name.split(\":\", 1)[1] if ":\" in name else name}", 0),
+                "errors": _counts.get(f"http_errors:{path}", 0),
             }
         return {"inference": inference, "http": http}
 
