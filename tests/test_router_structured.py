@@ -21,7 +21,6 @@ def test_structured_router_handles_ambiguous_multi_intent(monkeypatch):
             return {"primary": "learning", "intents": ["learning", "coding"], "confidence": 0.91,
                     "language": "fa", "topic": "Python", "goal": "learn then implement"}
     monkeypatch.setattr(llm, "create_llm", lambda task: Client())
-    monkeypatch.setattr(router.settings, "router_llm_enabled", True, raising=False)
     result = router._llm_classify("پایتون را یاد بگیر و بعد یک مثال بنویس")
     assert result is not None
     assert result.intents == ("learning", "coding")
