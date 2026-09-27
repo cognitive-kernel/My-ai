@@ -26,7 +26,7 @@ class OllamaClient:
             try:
                 if not host or not ipaddress.ip_address(host).is_loopback: raise ValueError
             except ValueError as exc: raise LLMError("Offline strict mode permits only loopback Ollama endpoints.") from exc
-        self.default_model = getattr(settings, "ollama_model", "qwen2.5:7b")
+        self.default_model = getattr(_settings(), "ollama_model", "qwen2.5:7b")
         self.fallback_model = getattr(settings, "fallback_model", self.default_model)
         self.model = self._select_model(task)
     def _select_model(self, task: str | None) -> str:
@@ -38,7 +38,7 @@ class OllamaClient:
     def _options(self) -> dict[str, int]:
         cfg=limits(); return {"num_ctx":int(_settings().ollama_num_ctx),"num_thread":int(cfg["cpu_threads"]),"num_gpu":int(cfg["gpu_layers"])}
     def stream_chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None,stop_event=None)->Iterator[str]:
-        wait_until_available(stop_event, max_wait=_settings().resource_wait_seconds); messages: list[HistoryMessage] = []; payload={"model":self.model,"stream":True,"options":self._options(),"keep_alive":settings.ollama_keep_alive,"messages":messages}
+        wait_until_available(stop_event, max_wait=_settings().resource_wait_seconds); messages: list[HistoryMessage] = []; payload={"model":self.model,"stream":True,"options":self._options(),"keep_alive":_settings().ollama_keep_alive,"messages":messages}
         if system: messages.append({"role":"system","content":system})
         for item in history or ():
             if item.get("role") in {"user","assistant"} and isinstance(item.get("content"),str): messages.append({"role":item["role"],"content":item["content"]})
