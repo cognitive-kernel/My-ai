@@ -196,6 +196,7 @@ def create_pdf(path: str, title: str, paragraphs: list[str]) -> str:
 
 
 def create_pptx(path: str, title: str, slides: list[dict[str, str]]) -> str:
+    assert_mutation_allowed("presentation generation")
     from pptx import Presentation
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
