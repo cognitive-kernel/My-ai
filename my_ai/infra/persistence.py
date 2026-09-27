@@ -96,7 +96,6 @@ CREATE TABLE IF NOT EXISTS skill_evidence (
 """
 
 def connect() -> sqlite3.Connection:
-    import os
     path = Path(settings.db_path)
     if _write_blocked() and not path.parent.exists():
         raise PermissionError("MYAI_READ_ONLY blocks database directory creation.")
