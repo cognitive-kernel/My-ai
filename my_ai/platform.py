@@ -78,87 +78,139 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
 def _hybrid_search_cached(query: str, limit: int, bucket: int, verified_only: bool) -> list[dict[str, Any]]:
     limit = max(1, min(limit, 50))
     from .db import _normalize_search_text
+
     normalized = _normalize_search_text(query)
     tokens = [t for t in normalized.replace('"', ' ').split() if t][:12]
     match = " ".join(f'"{t}"' for t in tokens) if tokens else '""'
     verification_clause = " AND k.verification_status IN ('verified','approved')" if verified_only else ""
+
     lexical = fetch_all(
         f"""SELECT k.id, bm25(knowledge_fts) AS fts_rank
-           FROM knowledge_fts JOIN knowledge k ON k.id=knowledge_fts.rowid
-           WHERE knowledge_fts MATCH ?{verification_clause} ORDER BY fts_rank""",
+            FROM knowledge_fts JOIN knowledge k ON k.id=knowledge_fts.rowid
+            WHERE knowledge_fts MATCH ?{verification_clause}
+            ORDER BY fts_rank""",
         (match,),
     ) if tokens else []
-    lexical_scores = {}
+    lexical_scores: dict[int, float] = {}
     if lexical:
-        ranks = [float(r["fts_rank"]) for r in lexical]
+        ranks = [float(row["fts_rank"]) for row in lexical]
         best, worst = min(ranks), max(ranks)
         span = worst - best
-        lexical_scores = {int(r["id"]):(1.0 if span == 0 else (worst-float(r["fts_rank"]))/span) for r in lexical}
-    rows = fetch_all("SELECT * FROM knowledge WHERE verification_status IN ('verified','approved') ORDER BY id DESC" if verified_only else "SELECT * FROM knowledge ORDER BY id DESC")
-    cached = fetch_all("SELECT knowledge_id,content_hash,embedding FROM knowledge_embeddings WHERE model=?", (settings.embedding_model,))
-    cache = {int(r["knowledge_id"]): r for r in cached}
-    missing = []
-    missing_rows = []
+        lexical_scores = {
+            int(row["id"]): 1.0 if span == 0 else max(0.0, min(1.0, (worst - float(row["fts_rank"])) / span))
+            for row in lexical
+        }
+
+    rows = fetch_all(
+        "SELECT * FROM knowledge WHERE verification_status IN ('verified','approved') ORDER BY id DESC"
+        if verified_only
+        else "SELECT * FROM knowledge ORDER BY id DESC"
+    )
+    cached = fetch_all(
+        "SELECT knowledge_id,content_hash,embedding FROM knowledge_embeddings WHERE model=?",
+        (settings.embedding_model,),
+    )
+    cache = {int(row["knowledge_id"]): row for row in cached}
+
+    missing_rows: list[dict[str, Any]] = []
+    missing_texts: list[str] = []
     for row in rows:
         cached_row = cache.get(int(row["id"]))
         if not cached_row or cached_row["content_hash"] != (row.get("content_hash") or ""):
             missing_rows.append(row)
-            missing.append(f'{row.get("title","")}\n{row.get("content","")}\n{row.get("topic","")}')
-    if missing and not settings.read_only:
+            missing_texts.append(f'{row.get("title","")}\n{row.get("content","")}\n{row.get("topic","")}')
+
+    embedding_error: str | None = None
+    if missing_rows and not settings.read_only:
         try:
-            vectors = ollama_embed_batch(missing)
-            from .db import connect
+            vectors = ollama_embed_batch(missing_texts, settings.embedding_model)
             with connect() as conn:
                 for row, vector in zip(missing_rows, vectors):
                     conn.execute(
                         "INSERT INTO knowledge_embeddings(knowledge_id,content_hash,model,embedding) VALUES(?,?,?,?) "
                         "ON CONFLICT(knowledge_id,model) DO UPDATE SET content_hash=excluded.content_hash,embedding=excluded.embedding,created_at=CURRENT_TIMESTAMP",
-                        (row["id"], row.get("content_hash") or "", settings.embedding_model, json.dumps(vector, separators=(",",":"))),
+                        (
+                            row["id"],
+                            row.get("content_hash") or "",
+                            settings.embedding_model,
+                            json.dumps(vector, separators=(",", ":")),
+                        ),
                     )
                 conn.commit()
             for row, vector in zip(missing_rows, vectors):
-                cache[int(row["id"])] = {"content_hash": row.get("content_hash") or "", "embedding": json.dumps(vector)}
-        except Exception:
-            pass
+                cache[int(row["id"])] = {
+                    "content_hash": row.get("content_hash") or "",
+                    "embedding": json.dumps(vector, separators=(",", ":")),
+                }
+        except Exception as exc:
+            embedding_error = str(exc)
+
+    qvec: list[float] = []
     try:
-        qvec = ollama_embed(normalized)
-    except Exception:
-        qvec = []
-    calibration: dict[float, list[int]] = {}
-    for item in fetch_all("SELECT score,relevant FROM retrieval_judgments"):
-        score_bucket=round(float(item["score"] or 0.0),1)
-        state=calibration.setdefault(score_bucket,[0,0])
-        state[0]+=1
-        state[1]+=int(item["relevant"] or 0)
+        if rows:
+            qvec = ollama_embed(normalized, settings.embedding_model)
+    except Exception as exc:
+        embedding_error = embedding_error or str(exc)
+
+    calibration: dict[float, tuple[int, int]] = {}
+    for judgment in fetch_all("SELECT score,relevant FROM retrieval_judgments"):
+        score = max(0.0, min(1.0, float(judgment["score"] or 0.0)))
+        bucket = round(score, 1)
+        count, relevant = calibration.get(bucket, (0, 0))
+        calibration[bucket] = (count + 1, relevant + int(bool(judgment["relevant"])))
+
     for row in rows:
         semantic = 0.0
         cached_row = cache.get(int(row["id"]))
         if qvec and cached_row:
             try:
                 semantic = max(0.0, min(1.0, cosine_similarity(qvec, json.loads(cached_row["embedding"]))))
-            except Exception:
+            except (TypeError, ValueError, json.JSONDecodeError):
                 semantic = 0.0
+
         lexical_score = lexical_scores.get(int(row["id"]), 0.0)
+        hybrid_score = 0.65 * semantic + 0.35 * lexical_score if qvec else lexical_score
         row["semantic_score"] = round(semantic, 6)
         row["lexical_score"] = round(lexical_score, 6)
-        row["hybrid_score"] = round(0.65*semantic + 0.35*lexical_score, 6)
+        row["hybrid_score"] = round(hybrid_score, 6)
         row["relevance"] = row["hybrid_score"]
-        row["provenance"] = {"knowledge_id": int(row["id"]), "source_url": row.get("source_url"), "verification_status": row.get("verification_status")}
-        row["citation_required"] = True
-        score_bucket=round(float(row["hybrid_score"]),1)
-        samples=calibration.get(score_bucket, (0,0))
-        if samples[0] >= 5:
-            row["confidence"]=round((samples[1]+1)/(samples[0]+2),6)
-            row["confidence_basis"]="empirical score-bucket calibration with Laplace smoothing"
-            row["confidence_calibrated"]=True
-            row["confidence_samples"]=samples[0]
-        else:
-            row["confidence"]=None
-            row["confidence_basis"]="uncalibrated; fewer than 5 judgments in score bucket"
-            row["confidence_calibrated"]=False
-            row["confidence_samples"]=samples[0]
-    return sorted(rows, key=lambda x:x["hybrid_score"], reverse=True)[:limit]
 
+        citation_id = f"K{int(row['id'])}"
+        source_url = str(row.get("source_url") or "").strip() or f"local://knowledge/{int(row['id'])}"
+        row["provenance"] = {
+            "citation_id": citation_id,
+            "source_url": source_url,
+            "title": str(row.get("title") or ""),
+            "content_hash": row.get("content_hash"),
+            "verification_status": row.get("verification_status"),
+            "retrieval": {
+                "semantic_score": row["semantic_score"],
+                "lexical_score": row["lexical_score"],
+                "hybrid_score": row["hybrid_score"],
+            },
+        }
+        row["citation_required"] = True
+
+        score_bucket = round(float(row["hybrid_score"]), 1)
+        samples, relevant = calibration.get(score_bucket, (0, 0))
+        if samples >= 5:
+            row["confidence"] = round((relevant + 1) / (samples + 2), 6)
+            row["confidence_basis"] = "empirical retrieval-judgment calibration with Laplace smoothing"
+            row["confidence_calibrated"] = True
+            row["confidence_samples"] = samples
+        else:
+            row["confidence"] = None
+            row["confidence_basis"] = "uncalibrated; fewer than 5 retrieval judgments in this score bucket"
+            row["confidence_calibrated"] = False
+            row["confidence_samples"] = samples
+
+        row["embedding_model"] = settings.embedding_model
+        row["semantic_available"] = bool(qvec)
+        row["hybrid_mode"] = "semantic+fts5" if qvec else "fts5-only"
+        if embedding_error:
+            row["embedding_error"] = embedding_error[:500]
+
+    return sorted(rows, key=lambda item: item["hybrid_score"], reverse=True)[:limit]
 
 def invalidate_hybrid_search_cache() -> None:
     _hybrid_search_cached.cache_clear()
