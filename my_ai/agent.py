@@ -247,10 +247,18 @@ class Agent:
         enriched_knowledge = []
         for item in knowledge:
             item = dict(item)
-            item["provenance"] = item.get("source_url") or "local-knowledge"
+            provenance = item.get("provenance")
+            if not isinstance(provenance, dict):
+                provenance = {
+                    "citation_id": f"K{item.get('id')}",
+                    "source_url": item.get("source_url") or f"local://knowledge/{item.get('id')}",
+                    "title": item.get("title") or "local knowledge",
+                }
+            item["provenance"] = provenance
             item["confidence_label"] = (
                 round(float(item["confidence"]), 3)
-                if item.get("confidence") is not None else "uncalibrated"
+                if item.get("confidence") is not None and item.get("confidence_calibrated")
+                else "uncalibrated"
             )
             enriched_knowledge.append(item)
         context_note = (
