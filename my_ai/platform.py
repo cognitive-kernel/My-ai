@@ -343,7 +343,7 @@ def backup_database(destination: str, password: str | None = None) -> str:
         encrypted = dst.with_name(f".{dst.name}.encrypted-{os.getpid()}-{time.time_ns()}")
         try:
             _atomic_sqlite_backup(plain)
-            encrypted.write_bytes(encrypt_file(plain, encrypted, password) and encrypted.read_bytes())
+            encrypt_file(plain, encrypted, password)
             os.replace(encrypted, dst)
             return str(dst)
         finally:
