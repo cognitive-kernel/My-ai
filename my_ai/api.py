@@ -914,12 +914,11 @@ def chat(r:ChatRequest, request:Request):
                 raise HTTPException(403,"Tool permission denied: security:execute")
             if fix_requested and user["role"]!="admin":
                 raise HTTPException(403,"Security remediation requires administrator approval.")
-        help_intent=("راهنما" in low or "چطور وصل" in low or "چطور استفاده" in low or "how do i" in low or "how to" in low or "setup" in low)
+        help_intent=intent.name == "help"
         if help_intent:
             component="git" if any(x in low for x in ("git","github","گیت","گیت‌هاب")) else ("security" if any(x in low for x in ("امنیت","پن‌تست","pentest")) else ("docker" if "docker" in low else ("python" if "python" in low or "پایتون" in low else "general")))
             return {"type":"help","answer":"راهنمای هوشمند آماده شد.","data":ask_help(msg,component,agent.llm,learner.web)}
-        image_words=("تصویر بساز","عکس بساز","عکس طراحی کن","تصویر طراحی کن","تصویر ایجاد کن","عکس ایجاد کن","مانگا","مانگا طراحی","کمیک","comic","manga","draw an image","generate an image","create an image","design an image")
-        image_intent=any(x in low for x in image_words)
+        image_intent=intent.name == "image_generation"
         if image_intent:
             if not tool_allowed(user,"image-generation","execute"):
                 raise HTTPException(403,"Tool permission denied: image-generation:execute")
@@ -935,7 +934,7 @@ def chat(r:ChatRequest, request:Request):
             execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(sid,))
             return {"type":"image","answer":answer,"data":{**image_result,"url":image_url},"session_id":sid}
 
-        code_words=("برنامه بنویس","کد بنویس","برام برنامه","write a program","write code","program","build an app","create an app"); code_intent=any(x in low for x in code_words)
+        code_intent=intent.name == "coding"
         if security_words:
             if code_intent:
                 language=requested or "Python"; generated=learner.generate_program(msg,language); result=learner.security_assessment_code(generated["code"],language,fix_requested); result["generated_project"]=generated; result["mode"]="pentest_and_fix" if fix_requested else "pentest_report"
