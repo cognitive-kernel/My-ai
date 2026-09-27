@@ -22,7 +22,7 @@ OPTIONAL_PREREQUISITES: dict[str, str] = {
     "PIL": "Pillow",
 }
 
-SYSTEM_PREREQUISITES = {"ffmpeg": "ffmpeg", "ffprobe": "ffprobe"}
+SYSTEM_PREREQUISITES = {"ffmpeg": "ffmpeg", "ffprobe": "ffprobe", "git": "git", "nmap": "nmap"}
 
 
 def detect_type(path: str) -> dict[str, str]:
