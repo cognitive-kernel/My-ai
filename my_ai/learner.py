@@ -225,6 +225,26 @@ class LearningEngine:
         if progress_callback: progress_callback("completed",t["topic"])
         return {"status":"completed","session_id":s["session_id"],"language":language,"topic":t,"prerequisites":prerequisites,"score":score,"sources":sources,"seeded":bool(seed)}
 
+    def _generate_lesson_with_progress(self, prompt, progress_callback=None, stop_event=None):
+        """Generate a lesson while reporting incremental progress from streamed output."""
+        if not hasattr(self.llm, "stream_chat"):
+            return self.llm.chat(prompt, stop_event=stop_event)
+        chunks=[]
+        generated_chars=0
+        for chunk in self.llm.stream_chat(prompt, stop_event=stop_event):
+            if chunk:
+                chunks.append(str(chunk))
+                generated_chars += len(str(chunk))
+                if progress_callback:
+                    # The exact final length is unknown, so approach 74.5% as
+                    # output grows and reserve 75% for the completed generation.
+                    import math
+                    progress = 50.0 + 24.5 * (1.0 - math.exp(-generated_chars / 6000.0))
+                    progress_callback("lesson_generating", progress)
+            if stop_event is not None and stop_event.is_set():
+                raise InterruptedError("learning stopped")
+        return "".join(chunks).strip()
+
     def autonomous_step(self,language="Python"): return self.learn_next(language)
 
     def assess(self,topic,lesson,allow_retry=True):
