@@ -144,7 +144,7 @@ DOMAIN_RULES: Dict[str, List[Tuple[Tuple[str, ...], Tuple[str, ...]]]] = {
         (("test", "phpunit"), ("https://phpunit.de/documentation.html", "https://phptherightway.com/#testing")),
         (("performance", "opcache", "profil"), ("https://www.php.net/manual/en/book.opcache.php", "https://phptherightway.com/#infrastructure")),
         (("api", "http", "web"), ("https://phptherightway.com/", "https://developer.mozilla.org/en-US/docs/Web/HTTP")),
-        (("database", "mysql", "postgres", "sqlite", "sql server"), ("https://www.php.net/manual/en/pdo.php", "https://owasp.org/www-project-code-review-guide/")),
+        (("database", "mysql", "postgres", "sqlite", "sql server"), ("https://phptherightway.com/", "https://owasp.org/www-project-code-review-guide/")),
     ],
     "JavaScript": [
         (("async", "promise", "event loop"), ("https://javascript.info/async", "https://javascript.info/event-loop")),
