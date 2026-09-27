@@ -52,12 +52,17 @@ async function loadAdminPanel(){try{var me=await fetch('/auth/me',{cache:'no-sto
 async function savePermission(){try{var body={user_id:Number($('permUser').value),tool_name:$('permTool').value,action:$('permAction').value,allowed:$('permAllowed').checked};var r=await fetch('/admin/tools',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});var j=await r.json();if(!r.ok)throw Error(j.detail||'HTTP '+r.status);$('permStatus').textContent='ذخیره شد.'}catch(e){$('permStatus').textContent='خطا: '+e.message}}
 async function loadDash(){
 try{
-var rr=await Promise.all([
-fetch('/learning/status',{cache:'no-store'}),
-fetch('/scheduler/status',{cache:'no-store'}),
-fetch('/learning/active',{cache:'no-store'})
-]);
-var j=await rr[0].json(),s=await rr[1].json(),ac=await rr[2].json();
+async function readJson(url){
+var r=await fetch(url,{cache:'no-store'});
+var text=await r.text();
+if(!r.ok)throw Error('HTTP '+r.status+': '+text.slice(0,200));
+try{return JSON.parse(text)}catch(e){throw Error('پاسخ نامعتبر از '+url+': '+text.slice(0,200))}
+}
+var j=await readJson('/learning/status');
+var s={workers:[]},ac={items:[],running:[]};
+try{s=await readJson('/scheduler/status')}catch(e){console.warn('scheduler status:',e.message)}
+try{ac=await readJson('/learning/active')}catch(e){console.warn('learning active:',e.message)}
+
 var courses=j.courses||[],workers=s.workers||[],workerMap={},customMap={},items=[];
 (ac.items||[]).forEach(function(x){var c=x.course||{},key=String(c.name||'').trim().toLowerCase();if(key)customMap[key]=x});
 workers.forEach(function(w){workerMap[String(w.language||'').toLowerCase()]=w});
