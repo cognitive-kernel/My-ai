@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from html import escape
 from .db import execute, fetch_all
+from .access_policy import assert_mutation_allowed
 
 
 DOCS_DIR = Path(__file__).resolve().parent.parent / "docs" / "help"
@@ -21,6 +22,7 @@ def local_help_html(component):
         elif line.strip(): out.append("<p>"+escape(line)+"</p>")
     return "".join(out)
 def apply_help_update(component, proposal):
+    assert_mutation_allowed("help update")
     key=(component or "").lower().strip()
     if key not in DOC_FILES: return False
     p=DOCS_DIR/DOC_FILES[key]
