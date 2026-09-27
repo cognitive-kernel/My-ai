@@ -9,7 +9,7 @@ from ..core.protocols import StructuredRouter
 
 ALLOWED_INTENTS = frozenset({
     "chat", "learning", "coding", "code_execution", "security_scan", "file_analysis",
-    "help", "self_update", "git_write", "pentest_external", "self_repair",
+    "help", "self_update", "git_write", "pentest_external", "self_repair", "database_import", "image_generation",
 })
 HIGH_RISK = frozenset({"pentest_external", "git_write", "self_update", "database_import", "code_execution", "self_repair"})
 
