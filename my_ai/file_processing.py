@@ -181,6 +181,7 @@ def create_xlsx(path: str, sheets: dict[str, list[list[Any]]]) -> str:
 
 
 def create_pdf(path: str, title: str, paragraphs: list[str]) -> str:
+    assert_mutation_allowed("pdf generation")
     from reportlab.lib.pagesizes import A4
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
     from reportlab.lib.styles import getSampleStyleSheet
