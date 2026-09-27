@@ -58,6 +58,16 @@ def _evidence_scores(rows: list[dict[str, Any]]) -> dict[str, float]:
     }
 
 
+def _evidence_hash_valid(details: dict[str, Any]) -> bool:
+    stored = str(details.get("evidence_hash") or "")
+    if not stored:
+        return False
+    unsigned = dict(details)
+    unsigned.pop("evidence_hash", None)
+    canonical = json.dumps(unsigned, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest() == stored
+
+
 def _verification_state(skill: dict[str, Any], rows: list[dict[str, Any]], current_version: str | None = None) -> tuple[bool, str]:
     version = str(current_version if current_version is not None else skill["version"])
     if str(skill["version"]) != version:
@@ -73,8 +83,8 @@ def _verification_state(skill: dict[str, Any], rows: list[dict[str, Any]], curre
         details = _parse_evidence(row.get("evidence"))
         if str(details.get("skill_version") or "") != version:
             return False, "stale_evidence"
-        if not details.get("evidence_hash"):
-            return False, "evidence_not_immutable"
+        if not _evidence_hash_valid(details):
+            return False, "evidence_integrity_failed"
 
     scores = _evidence_scores(rows)
     passed_execution = all(
