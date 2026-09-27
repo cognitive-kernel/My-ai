@@ -26,3 +26,14 @@ def test_process_wide_mutation_guard(monkeypatch):
         assert_mutation_allowed("test")
     monkeypatch.setenv("MYAI_READ_ONLY", "false")
     assert_mutation_allowed("test")
+
+
+def test_every_non_public_http_route_has_central_policy_mapping():
+    from my_ai.api import app
+    for route in app.routes:
+        path = getattr(route, "path", "")
+        methods = getattr(route, "methods", set()) or set()
+        if not path or is_public_path(path) or path.startswith("/static/"):
+            continue
+        for method in methods - {"HEAD", "OPTIONS"}:
+            assert permission_for_path(path, method) is not None, (method, path)
