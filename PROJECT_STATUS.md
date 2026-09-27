@@ -418,3 +418,8 @@ Additional completion items in this pass:
 - self-update database snapshot and rollback support.
 
 Operational boundary: application-level read-only cannot revoke write privileges from arbitrary unrelated processes running outside My-AI, and actual Whisper/Piper model/binary availability remains a property of the target machine. These are host/runtime prerequisites, not unimplemented repository routes.
+
+
+## 2026-09-27 — Post-merge verification
+
+PR #57 is merged into `main`. PR #56 is closed because its implementation was carried into the current-main hardening branch. Generic confirmed OS package installation is exposed through the admin-only system prerequisite endpoint and uses native package managers without shell execution. Target-machine acceptance diagnostics are available at `scripts/target_acceptance.py`. GitHub Actions CI/E2E verification for the hardening branch passed before merge; target-machine Whisper/Piper availability remains environment-dependent.
