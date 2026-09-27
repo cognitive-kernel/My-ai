@@ -906,14 +906,9 @@ def chat(r:ChatRequest, request:Request):
                 raise HTTPException(403,f"Tool permission denied: {tool}:{action}")
             if intent.name in {"code_execution","self_repair","self_update","git_write","database_import"} and not any(token in low for token in ("confirm","approve","approved","تایید","تأیید")):
                 raise HTTPException(409,"Explicit confirmation required for high-risk intent: "+intent.name)
-        aliases={"sql server":"SQL Server","sqlserver":"SQL Server","mssql":"SQL Server","mysql":"MySQL","sqlite":"SQLite","sql lite":"SQLite","android":"Android","اندروید":"Android","ios":"iOS","آی او اس":"iOS","python":"Python","پایتون":"Python","php":"PHP","javascript":"JavaScript","js":"JavaScript","pentest":"Pentest","pen test":"Pentest","penetration testing":"Pentest","penetration test":"Pentest","پنتست":"Pentest","پن تست":"Pentest","تست نفوذ":"Pentest","امنیت":"Pentest"}
-        requested=None
-        for key,name in sorted(aliases.items(),key=lambda x:len(x[0]),reverse=True):
-            if key.isascii():
-                if re.search(r"(?<![a-z0-9])"+re.escape(key)+r"(?![a-z0-9])",low): requested=name; break
-            elif re.search(r"(?<!\w)"+re.escape(key)+r"(?!\w)",low,re.UNICODE):
-                requested=name; break
-        learn_intent=("یاد بگیر" in low or "یادگیری" in low or "learn" in low or "go learn" in low or "start learning" in low); sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language,user_id) VALUES(?,?,?,?)",(msg[:60] or "گفتگوی جدید","learning" if learn_intent else "chat",requested,user["id"])); _save_chat_attachments(sid,attachments); policy=parse_command(msg); security_words=policy.security; fix_requested=policy.security_action=="fix"
+        requested=intent.args.get("language") if isinstance(intent.args, dict) else None
+        requested=canonical_language(requested) if requested else None
+        learn_intent=intent.name == "learning"; sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language,user_id) VALUES(?,?,?,?)",(msg[:60] or "گفتگوی جدید","learning" if learn_intent else "chat",requested,user["id"])); sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language,user_id) VALUES(?,?,?,?)",(msg[:60] or "گفتگوی جدید","learning" if learn_intent else "chat",requested,user["id"])); _save_chat_attachments(sid,attachments); policy=parse_command(msg); security_words=policy.security; fix_requested=policy.security_action=="fix"
         if security_words:
             if not tool_allowed(user,"security","execute"):
                 raise HTTPException(403,"Tool permission denied: security:execute")
