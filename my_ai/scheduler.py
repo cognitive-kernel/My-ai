@@ -460,7 +460,7 @@ class StudyScheduler:
                         language = ensure_domain(language, getattr(engine, "llm", None)) or language
                     resources = self._wait_for_resources(stop_event)
                     self._update_worker(language, "starting", status="running")
-                    logger.info("LEARNING_CYCLE_START: language=%s current_topic=%s", language, self.current_topic)
+                    logger.debug("LEARNING_CYCLE_START: language=%s current_topic=%s", language, self.current_topic)
                     result = engine.learn_next(
                         language,
                         progress_callback=lambda stage, topic=None: self._update_worker(language, stage, topic),
