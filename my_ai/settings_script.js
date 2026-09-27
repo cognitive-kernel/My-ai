@@ -38,6 +38,7 @@ async function loadSettings() {
     byId("su_enabled").checked=!!j.features.self_update_enabled; byId("su_approved").checked=!!j.features.self_update_approved; byId("su_health").value=j.features.self_update_health_url||"";
     byId("sr_enabled").checked=!!j.features.self_repair_enabled; byId("sr_approval").checked=!!j.features.self_repair_require_approval;
     byId("lf_enabled").checked=!!j.features.learning_fast_enabled; byId("lf_interval").value=j.features.learning_interval_seconds; byId("lf_retries").value=j.features.learning_max_retries;
+    if (byId("log_level")) byId("log_level").value=j.logging && j.logging.level ? j.logging.level : "WARNING";
     byId("cpu_percent").value=j.resources.cpu_percent; byId("cpu_threads").value=j.resources.cpu_threads; byId("ram_percent").value=j.resources.ram_percent; byId("gpu_layers").value=j.resources.gpu_layers;
     setText("gitout",j.github.token_configured?"Token تنظیم شده است":"Token تنظیم نشده است"); await loadResourceStatus();
   } catch(e) { setText("gitout","خطا در بارگذاری تنظیمات: "+e.message); }
@@ -52,6 +53,7 @@ async function loadResourceStatus() {
   } catch(e) { setText("resourceout","خطا در خواندن منابع: "+e.message); }
 }
 
+async function saveLogging(){try{var j=await req("/settings/logging",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({level:byId("log_level").value})});setText("logout","تنظیمات لاگ ذخیره و اعمال شد: "+j.logging.level)}catch(e){setText("logout",e.message)}}
 async function saveGithubConfig(){try{await req("/settings/github",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({api_url:byId("apiurl").value.trim(),repository:byId("repo").value.trim(),username:byId("ghuser").value.trim()})});setText("gitout","تنظیمات GitHub ذخیره شد")}catch(e){setText("gitout",e.message)}}
 async function saveToken(){try{var j=await req("/settings/github-token",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:byId("token").value})});setText("gitout",j.authenticated?"Token معتبر و متصل به @"+j.login:"Token حذف شد");byId("token").value="";await loadSettings()}catch(e){setText("gitout",e.message)}}
 async function checkGit(){try{var j=await req("/git/check");setText("gitout",j.message||j.status||"بررسی انجام شد")}catch(e){setText("gitout","خطا در بررسی اتصال: "+e.message)}}
