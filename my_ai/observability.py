@@ -30,7 +30,13 @@ def configure_logging() -> None:
         handler = logging.StreamHandler()
         handler.setFormatter(JsonLogFormatter())
         root.addHandler(handler)
-    root.setLevel(getattr(logging, os.getenv("MYAI_LOG_LEVEL", "INFO").upper(), logging.INFO))
+
+    log_level = getattr(logging, os.getenv("MYAI_LOG_LEVEL", "INFO").upper(), logging.INFO)
+    root.setLevel(log_level)
+    # Keep application logger filtering explicit because Uvicorn may reconfigure
+    # the root logger after application import.
+    logging.getLogger("my_ai").setLevel(log_level)
+
     # Routine HTTP polling/access lines are intentionally quiet; warnings/errors remain visible.
     logging.getLogger("my_ai.http").setLevel(
         getattr(logging, os.getenv("MYAI_HTTP_LOG_LEVEL", "WARNING").upper(), logging.WARNING)
