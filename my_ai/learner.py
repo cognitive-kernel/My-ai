@@ -77,7 +77,7 @@ class LearningEngine:
         data=json.loads(raw)
         return data.get("prerequisites",[]) if isinstance(data,dict) else []
 
-    def _learn_sources_for_topic(self,language,topic,prerequisites,progress_callback=None,stop_event=None):
+    def _learn_sources_for_topic(self,language,topic,prerequisites,progress_callback=None,stop_event=None,session_id=None):
         knowledge=[]
         seed=seed_for(language,topic["topic"])
         if seed:
@@ -88,7 +88,8 @@ class LearningEngine:
         # replacing topic-specific learning material.
         topic_sources = topic_source_urls(language, topic["topic"])[:12]
         learned_urls=[]
-        for url in topic_sources:
+        total_sources=len(topic_sources)
+        for index,url in enumerate(topic_sources,1):
             def fetch_and_extract(url=url):
                 title,source=self.web.fetch(url, stop_event=stop_event)
                 # Web fetching is optional. Store the source as evidence; the single
@@ -117,6 +118,8 @@ class LearningEngine:
                     progress_callback("source_unavailable",topic["topic"])
                 continue
             remember(language,title,note,url); knowledge.append({"title":title,"url":url}); learned_urls.append(url)
+            if session_id is not None:
+                self._set_progress(session_id, 25.0 + 25.0 * (index / max(1,total_sources)), "sources")
         mark_sources_learned(language, topic["topic"], learned_urls)
         failed_sources = [item for item in knowledge if item.get("error")]
         if failed_sources:
@@ -182,7 +185,7 @@ class LearningEngine:
             prerequisites=[]
         self._set_progress(s["session_id"], 25.0, "sources")
         if progress_callback: progress_callback("sources",t["topic"])
-        sources=self._learn_sources_for_topic(language,t,prerequisites,progress_callback,stop_event)
+        sources=self._learn_sources_for_topic(language,t,prerequisites,progress_callback,stop_event,s["session_id"])
         self._set_progress(s["session_id"], 50.0, "lesson")
         if progress_callback: progress_callback("lesson",t["topic"])
         seed=seed_for(language,t["topic"])
@@ -313,7 +316,7 @@ class LearningEngine:
     @staticmethod
     def _half_percent(value): return max(0.0,min(100.0,round(float(value)*2)/2))
 
-    def detailed_status(self,language=None,include_lessons=False):
+    def detailed_status(self,language=None,include_lessons=True):
         """Return the complete learning catalog, including completed topics."""
         rows=fetch_all(
             "SELECT id,language,topic,status,score,progress_percent,phase,notes,created_at FROM learning_sessions ORDER BY id DESC"
