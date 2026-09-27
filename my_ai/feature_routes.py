@@ -83,6 +83,13 @@ def register_routes(app, scheduler, require_user, audit):
     @router.post("/learning/{language}/resume")
     def learning_resume(language: str, request: Request):
         user = require_user(request)
+        # Custom Courses (for example Cisco) have their own runner and must
+        # not be resumed through the standard language Scheduler.
+        from .settings_feature import start_named_course
+        course_id = start_named_course(language)
+        if course_id is not None:
+            audit(user, "learning", "write", "200", f"resumed-custom:{language}:{course_id}")
+            return {"status": "running", "language": language, "course_id": course_id, "custom_course": True}
         scheduler.start(language)
         audit(user, "learning", "write", "200", f"resumed:{language}")
         return {"status": "running", "language": language}
