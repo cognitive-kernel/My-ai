@@ -66,9 +66,12 @@ class Agent:
             provenance = item.get("provenance") or {}
             if not isinstance(provenance, dict):
                 provenance = {"source_url": str(provenance)}
-            citation_id = str(provenance.get("citation_id") or f"K{item.get('id')}")
+            item_id = item.get("id")
+            if not provenance and item_id is None:
+                continue
+            citation_id = str(provenance.get("citation_id") or f"K{item_id}")
             title = str(provenance.get("title") or item.get("title") or "local knowledge")
-            source = str(provenance.get("source_url") or f"local://knowledge/{item.get('id')}")
+            source = str(provenance.get("source_url") or f"local://knowledge/{item_id}")
             confidence = item.get("confidence")
             confidence_text = (
                 f"{float(confidence):.3f}"
