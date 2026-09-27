@@ -665,7 +665,7 @@ def chat_history(request:Request,limit:int=100,session_id:int|None=None):
     user=require_user(request)
     limit=max(1,min(limit,500))
     if session_id is None:
-        rows=fetch_all("SELECT c.role,c.content,c.created_at FROM conversations c JOIN chat_sessions s ON s.id=c.session_id WHERE s.user_id=? ORDER BY c.id DESC LIMIT ?",(user["id"],limit))
+        rows=fetch_all("SELECT c.id,c.role,c.content,c.created_at FROM conversations c JOIN chat_sessions s ON s.id=c.session_id WHERE s.user_id=? ORDER BY c.id DESC LIMIT ?",(user["id"],limit))
     else:
         rows=fetch_all("SELECT c.role,c.content,c.created_at FROM conversations c JOIN chat_sessions s ON s.id=c.session_id WHERE c.session_id=? AND s.user_id=? ORDER BY c.id DESC LIMIT ?",(session_id,user["id"],limit))
     rows.reverse();
