@@ -216,39 +216,51 @@ def _extract_project_path(text: str) -> str | None:
 
 
 def _llm_classify(text: str, context: str | None = None) -> Intent | None:
-    """Use the configured routing model when deterministic rules are ambiguous."""
+    """Primary structured router. The returned intent is never authorization."""
     if getattr(settings, "router_llm_enabled", True) is False:
         return None
     try:
         from .llm import create_llm
+        allowed = {"chat", "learning", "coding", "code_execution", "security_scan",
+                   "file_analysis", "help", "self_update", "git_write",
+                   "pentest_external", "self_repair"}
+        schema = {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["primary", "intents", "confidence", "language", "topic", "goal"],
+            "properties": {
+                "primary": {"type": "string", "enum": sorted(allowed)},
+                "intents": {"type": "array", "items": {"type": "string", "enum": sorted(allowed)}},
+                "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                "language": {"type": ["string", "null"]},
+                "topic": {"type": ["string", "null"]},
+                "goal": {"type": ["string", "null"]},
+            },
+        }
         prompt = (
-            "Classify the user request into one or more intents. Return JSON only. "
-            "Allowed intents: chat, learning, coding, code_execution, security_scan, "
-            "file_analysis, help, self_update, git_write, pentest_external, self_repair. "
-            'Schema: {"primary":"intent","intents":["intent"],"confidence":0.0,'
-            '"language":null,"topic":null,"goal":null}. '
-            "Do not invent intents. Questions about how to do something are not execution commands.\n"
+            "Classify the request by semantic intent, not keywords. "
+            "A question about an action is not an execution request. "
+            "Return only the schema-constrained object. "
             f"USER: {text}\nCONTEXT: {context or ''}"
         )
-        raw = create_llm("routing").chat(prompt, system="You are a strict intent classifier. JSON only.")
-        data = _parse_router_payload(raw)
-        allowed = {"chat", "learning", "coding", "code_execution", "security_scan", "file_analysis", "help", "self_update", "git_write", "pentest_external", "self_repair"}
-        intents = tuple(x for x in data.get("intents", []) if x in allowed)
+        client = create_llm("routing")
+        if not hasattr(client, "structured_chat_json"):
+            return None
+        data = client.structured_chat_json(prompt, schema, system="You are a strict semantic router. Never grant permission.")
         primary = data.get("primary")
         if primary not in allowed:
             return None
-        if not intents:
-            intents = (primary,)
-        confidence = max(0.0, min(0.99, float(data.get("confidence", 0.5))))
+        intents = tuple(x for x in data.get("intents", []) if x in allowed) or (primary,)
+        confidence = max(0.0, min(1.0, float(data.get("confidence", 0.0))))
         args: dict[str, Any] = {}
         for key in ("language", "topic", "goal"):
             value = data.get(key)
             if isinstance(value, str) and value.strip():
                 args[key] = value.strip()[:300]
-        urls = _extract_urls(str(text))
+        urls = _extract_urls(text)
         if urls:
             args["urls"] = urls
-        project_path = _extract_project_path(str(text))
+        project_path = _extract_project_path(text)
         if project_path:
             args["project_path"] = project_path
         return Intent(primary, round(confidence, 3), primary in HIGH_RISK, args=args, intents=intents)
