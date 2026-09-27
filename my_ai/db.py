@@ -9,6 +9,7 @@ if "my_ai.infra.persistence" in sys.modules:
 else:
     _persistence = importlib.import_module("my_ai.infra.persistence")
 
+settings = _persistence.settings
 SCHEMA = _persistence.SCHEMA
 connect = _persistence.connect
 execute = _persistence.execute
