@@ -134,21 +134,27 @@ def _setup() -> None:
                 auto_learn INTEGER NOT NULL DEFAULT 1
             )
         """)
-        # Permanently retire the legacy Cisco course and all persisted artifacts.
-        ids = [int(row["id"]) for row in conn.execute("SELECT id FROM custom_courses WHERE lower(trim(name))='cisco'").fetchall()]
-        if ids:
-            marks = ",".join("?" for _ in ids)
-            conn.execute(f"DELETE FROM custom_course_progress WHERE course_id IN ({marks})", ids)
-            conn.execute(f"DELETE FROM custom_course_topics WHERE course_id IN ({marks})", ids)
-            conn.execute(f"DELETE FROM custom_courses WHERE id IN ({marks})", ids)
-        conn.execute("DELETE FROM learning_workers WHERE lower(language)='cisco'")
-        conn.execute("DELETE FROM learning_sessions WHERE lower(language)='cisco'")
-        conn.execute("DELETE FROM learning_runtime WHERE lower(COALESCE(language,''))='cisco'")
-        conn.execute("DELETE FROM learning_domains WHERE lower(name) LIKE '%cisco%'")
-        conn.execute("DELETE FROM knowledge_embeddings WHERE knowledge_id IN (SELECT id FROM knowledge WHERE lower(topic) LIKE '%cisco%' OR lower(title) LIKE '%cisco%' OR lower(content) LIKE '%cisco%' OR lower(COALESCE(source_url,'')) LIKE '%cisco%')")
-        conn.execute("DELETE FROM knowledge_audit WHERE knowledge_id IN (SELECT id FROM knowledge WHERE lower(topic) LIKE '%cisco%' OR lower(title) LIKE '%cisco%' OR lower(content) LIKE '%cisco%' OR lower(COALESCE(source_url,'')) LIKE '%cisco%')")
-        conn.execute("DELETE FROM knowledge WHERE lower(topic) LIKE '%cisco%' OR lower(title) LIKE '%cisco%' OR lower(content) LIKE '%cisco%' OR lower(COALESCE(source_url,'')) LIKE '%cisco%'")
-        conn.commit()
+        # One-time migration: purge the retired Cisco training artifacts that may
+        # exist from older builds. Once complete, Cisco is a normal supported
+        # curriculum again and must never be purged on later startups.
+        migration_key = "migration.legacy_cisco_cleanup_v1"
+        migration_done = str(get_setting(migration_key, "")).strip().lower() == "done"
+        if not migration_done:
+            ids = [int(row["id"]) for row in conn.execute("SELECT id FROM custom_courses WHERE lower(trim(name))='cisco'").fetchall()]
+            if ids:
+                marks = ",".join("?" for _ in ids)
+                conn.execute(f"DELETE FROM custom_course_progress WHERE course_id IN ({marks})", ids)
+                conn.execute(f"DELETE FROM custom_course_topics WHERE course_id IN ({marks})", ids)
+                conn.execute(f"DELETE FROM custom_courses WHERE id IN ({marks})", ids)
+            conn.execute("DELETE FROM learning_workers WHERE lower(language)='cisco'")
+            conn.execute("DELETE FROM learning_sessions WHERE lower(language)='cisco'")
+            conn.execute("DELETE FROM learning_runtime WHERE lower(COALESCE(language,''))='cisco'")
+            conn.execute("DELETE FROM learning_domains WHERE lower(name) LIKE '%cisco%'")
+            conn.execute("DELETE FROM knowledge_embeddings WHERE knowledge_id IN (SELECT id FROM knowledge WHERE lower(topic) LIKE '%cisco%' OR lower(title) LIKE '%cisco%' OR lower(content) LIKE '%cisco%' OR lower(COALESCE(source_url,'')) LIKE '%cisco%')")
+            conn.execute("DELETE FROM knowledge_audit WHERE knowledge_id IN (SELECT id FROM knowledge WHERE lower(topic) LIKE '%cisco%' OR lower(title) LIKE '%cisco%' OR lower(content) LIKE '%cisco%' OR lower(COALESCE(source_url,'')) LIKE '%cisco%')")
+            conn.execute("DELETE FROM knowledge WHERE lower(topic) LIKE '%cisco%' OR lower(title) LIKE '%cisco%' OR lower(content) LIKE '%cisco%' OR lower(COALESCE(source_url,'')) LIKE '%cisco%'")
+            conn.commit()
+            set_setting(migration_key, "done")
     for row in fetch_all("SELECT id FROM custom_courses WHERE active=1"):
         _ensure_custom_review_schedule(int(row["id"]))
 
