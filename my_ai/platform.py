@@ -444,11 +444,17 @@ def export_database(destination: str, password: str | None = None) -> str:
 
 def _import_data(data: dict[str, Any]) -> dict[str, Any]:
     assert_mutation_allowed("database import")
+    metadata: dict[str, Any] = {}
     if "tables" in data:
-        _verify_export_payload(data)
+        metadata = _verify_export_payload(data)
         data = data["tables"]
-    allowed = {"knowledge","chat_sessions","conversations","learning_sessions","agent_runs","generated_projects","security_scans"}
-    inserted = {}
+        sensitive_present = any(name in data for name in BACKUP_SENSITIVE_TABLES)
+        if sensitive_present and not bool(metadata.get("encrypted")):
+            raise ValueError("Sensitive backup tables require an encrypted export.")
+    allowed = set(BACKUP_CORE_TABLES)
+    if metadata.get("encrypted"):
+        allowed.update(BACKUP_SENSITIVE_TABLES)
+    inserted: dict[str, int] = {}
     with connect() as conn:
         try:
             for table in allowed:
@@ -474,7 +480,6 @@ def _import_data(data: dict[str, Any]) -> dict[str, Any]:
             conn.rollback()
             raise
     return inserted
-
 
 def import_database(source: str) -> dict[str, Any]:
     path = _safe_backup_path(source, create_parent=False)
