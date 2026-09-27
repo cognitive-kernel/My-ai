@@ -81,6 +81,11 @@ class CourseTopicRequest(BaseModel):
     goal: str = Field(default="", max_length=2000)
     source_url: str = Field(default="", max_length=1000)
 
+class CourseUpdateRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    description: str = Field(default="", max_length=2000)
+
+
 class TokenRequest(BaseModel):
     token: str = Field(default="", max_length=10000)
 
@@ -520,7 +525,7 @@ def courses(request: Request):
     _setup()
     out=[]
     for c in fetch_all("SELECT * FROM custom_courses ORDER BY id"):
-        s=_summary(int(c["id"])); c.update({"progress_percent":s["progress_percent"],"completed_topics":s["completed_topics"],"total_topics":s["total_topics"],"current":s["current"]}); out.append(c)
+        s=_summary(int(c["id"])); c.update({"progress_percent":s["progress_percent"],"completed_topics":s["completed_topics"],"total_topics":s["total_topics"],"current":s["current"],"topics":s["topics"]}); out.append(c)
     return {"items":out}
 
 @router.post("/settings/courses")
@@ -537,6 +542,39 @@ def create_course(r: CourseRequest, request: Request):
         execute("INSERT INTO custom_course_progress(course_id,topic_id) VALUES(?,?)",(cid,tid))
     audit(user,"learning","write","200",f"course-created:{cid}")
     return {"id":cid,"status":"created"}
+
+@router.put("/settings/courses/{course_id}")
+def update_course(course_id: int, r: CourseUpdateRequest, request: Request):
+    user = require_admin(request); _setup()
+    if not _course(course_id):
+        raise HTTPException(404, "Course not found.")
+    name = r.name.strip()
+    if not name:
+        raise HTTPException(400, "Course name is required.")
+    try:
+        execute("UPDATE custom_courses SET name=?, description=? WHERE id=?", (name, r.description.strip(), course_id))
+    except Exception as exc:
+        raise HTTPException(400, "Course name already exists.") from exc
+    _ensure_custom_review_schedule(course_id)
+    audit(user, "learning", "write", "200", f"course-updated:{course_id}")
+    return {"status": "updated", "course_id": course_id}
+
+@router.put("/settings/courses/{course_id}/topics/{topic_id}")
+def update_course_topic(course_id: int, topic_id: int, r: CourseTopicRequest, request: Request):
+    user = require_admin(request); _setup()
+    rows = fetch_all("SELECT id FROM custom_course_topics WHERE id=? AND course_id=?", (topic_id, course_id))
+    if not rows:
+        raise HTTPException(404, "Topic not found.")
+    title = r.title.strip()
+    if not title:
+        raise HTTPException(400, "Topic title is required.")
+    execute(
+        "UPDATE custom_course_topics SET title=?, goal=?, source_url=? WHERE id=? AND course_id=?",
+        (title, r.goal.strip(), r.source_url.strip() or None, topic_id, course_id),
+    )
+    _ensure_custom_review_schedule(course_id)
+    audit(user, "learning", "write", "200", f"course-topic-updated:{course_id}:{topic_id}")
+    return {"status": "updated", "topic_id": topic_id}
 
 @router.post("/settings/courses/{course_id}/topics")
 def add_course_topic(course_id: int, r: CourseTopicRequest, request: Request):
@@ -654,7 +692,9 @@ async function logoutGit(){try{var j=await req('/git/logout',{method:'POST'});se
 async function createCourse(){try{var lines=byId('ct').value.split(/\n+/).map(function(x){return x.trim()}).filter(Boolean);var topics=lines.map(function(x){var p=x.split('|').map(function(v){return v.trim()});return {title:p[0],goal:p[1]||'',source_url:p[2]||''}});var j=await req('/settings/courses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:byId('cn').value,description:byId('cd').value,topics:topics})});setText('newcourseout','آموزش ساخته شد: '+j.id);loadCourses()}catch(e){setText('courseout',e.message)}}
 async function startCourse(id){try{await req('/settings/courses/'+id+'/start',{method:'POST'});loadCourses()}catch(e){setText('courseout',e.message)}}
 async function addCourseTopic(){try{var id=Number(byId('existing_course_id').value);var p={title:byId('existing_topic').value,goal:byId('existing_goal').value,source_url:byId('existing_source').value};await req('/settings/courses/'+id+'/topics',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});setText('courseout','Topic جدید اضافه شد و برای یادگیری برنامه‌ریزی شد.');loadCourses()}catch(e){setText('courseout',e.message)}}
-async function loadCourses(){var box=byId('courses');if(!box)return;try{var j=await req('/settings/courses');box.innerHTML=(j.items||[]).map(function(c){return '<div class="card"><h3>'+esc(c.name)+'</h3><p>'+esc(c.description)+'</p><div class="bar"><div class="fill" style="width:'+c.progress_percent+'%">'+c.progress_percent+'%</div></div><p class="muted">'+c.completed_topics+' از '+c.total_topics+' سرفصل کامل شده'+(c.current?' · اکنون: '+esc(c.current.title)+' · مرحله: '+esc(c.current.phase):'')+'</p></div>'}).join('')||'آموزشی نیست'}catch(e){box.textContent='خطا در بارگذاری آموزش‌ها: '+e.message}}
+async function loadCourses(){var box=byId('courses');if(!box)return;try{var j=await req('/settings/courses');box.innerHTML=(j.items||[]).map(function(c){var topics=(c.topics||[]).map(function(t){return '<div class="topic"><div><b>'+esc(t.topic_order)+'.</b> <input id="ctitle'+t.id+'" value="'+esc(t.title)+'"><input id="csource'+t.id+'" value="'+esc(t.source_url||'')+'" placeholder="لینک منبع رسمی"><textarea id="cgoal'+t.id+'" rows="2" placeholder="توضیحات / هدف درس">'+esc(t.goal||'')+'</textarea>'+(t.lesson?'<details><summary>متن کامل درس فعلی</summary><pre style="white-space:pre-wrap;max-height:420px;overflow:auto">'+esc(t.lesson)+'</pre></details>':'<div class="muted">متن درس هنوز تولید نشده است.</div>')+'<button type="button" onclick="saveTopic('+c.id+','+t.id+')">ذخیره مبحث</button></div>'}).join('');return '<div class="card"><h3>آموزش #'+c.id+'</h3><input id="cname'+c.id+'" value="'+esc(c.name)+'"><textarea id="cdesc'+c.id+'" rows="2">'+esc(c.description||'')+'</textarea><div class="bar"><div class="fill" style="width:'+c.progress_percent+'%">'+c.progress_percent+'%</div></div><p class="muted">'+c.completed_topics+' از '+c.total_topics+' سرفصل کامل شده'+(c.current?' · اکنون: '+esc(c.current.title)+' · مرحله: '+esc(c.current.phase):'')+'</p><button type="button" onclick="saveCourse('+c.id+')">ذخیره نام و توضیحات آموزش</button>'+topics+'</div>'}).join('')||'آموزشی نیست'}catch(e){box.textContent='خطا در بارگذاری آموزش‌ها: '+e.message}}
+async function saveCourse(id){try{await req('/settings/courses/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:byId('cname'+id).value,description:byId('cdesc'+id).value})});await loadCourses()}catch(e){setText('courseout',e.message)}}
+async function saveTopic(courseId,topicId){try{await req('/settings/courses/'+courseId+'/topics/'+topicId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:byId('ctitle'+topicId).value,goal:byId('cgoal'+topicId).value,source_url:byId('csource'+topicId).value})});await loadCourses()}catch(e){setText('courseout',e.message)}}
 loadSettings();loadUsers();loadPermissions();loadCourses();setInterval(loadCourses,10000)'''
 
 SETTINGS_HTML = """<!doctype html><html lang='fa' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>تنظیمات | My-AI</title><style>body{font-family:Tahoma,system-ui;background:#f3f4f6;margin:0;color:#17202a}.wrap{max-width:1100px;margin:auto;padding:20px}.card{background:#fff;padding:18px;border-radius:14px;margin:12px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}input,textarea,select{width:100%;box-sizing:border-box;padding:10px;margin:5px 0;border:1px solid #ccc;border-radius:8px}button{padding:9px 14px;margin:3px;border:0;border-radius:8px;cursor:pointer}.bar{height:22px;background:#ddd;border-radius:8px;overflow:hidden}.fill{height:100%;background:#2563eb;color:#fff;text-align:center;line-height:22px;font-size:12px}.topic{border:1px solid #ddd;padding:9px;border-radius:9px;margin:6px 0}.muted{font-size:13px;color:#667085}.ok{background:#dcfce7}.warn{background:#fef3c7}.danger{background:#fee2e2}</style><style>body{background:linear-gradient(135deg,#eef2ff,#f8fafc 45%,#ecfeff)!important}.wrap{max-width:1180px!important}.card{border:1px solid #e5e7eb;box-shadow:0 8px 24px #0f172a0b!important;transition:.18s}.card:hover{box-shadow:0 12px 30px #0f172a12!important}.wrap>h1{background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:24px;border-radius:20px}.grid{gap:16px!important}button{background:#1d4ed8;color:#fff!important;font-weight:700}button:hover{filter:brightness(1.05)}.topic{background:#f8fafc;border-color:#e2e8f0}.permissionGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}.permGroup{background:#f8fafc;padding:10px;border-radius:10px;border:1px solid #e2e8f0}@media(max-width:700px){.wrap{padding:12px!important}}</style><div class='wrap'><form id='settings-form' hidden></form><h1>تنظیمات My-AI</h1><p><a href='/'>صفحه اصلی</a> · <a href='/learning'>پیشرفت و مسیر یادگیری</a></p><div class='grid'><section class='card'><h2>اتصال GitHub</h2><p class='muted'>هیچ Repository یا API URL پیش‌فرضی وجود ندارد. تنظیمات در دیتابیس نگهداری می‌شود؛ Token به‌صورت رمزنگاری‌شده ذخیره می‌شود. GitHub REST API با username/password احراز هویت نمی‌کند و برای API باید Token یا OAuth/CLI استفاده شود.</p><input id='apiurl' placeholder='GitHub API URL'><input id='repo' placeholder='owner/repository'><input id='ghuser' placeholder='GitHub username (اختیاری)'><input id='token' type='password' form='settings-form' autocomplete='new-password' placeholder='Personal Access Token'><button onclick='saveGithubConfig()'>ثبت تنظیمات GitHub</button><button onclick='saveToken()'>ثبت Token</button><button onclick='checkGit()'>بررسی اتصال</button><button onclick='loginGit()'>ورود با GitHub CLI/OAuth</button><button onclick='logoutGit()'>خروج</button><div id='gitout' class='muted'></div></section>
@@ -686,6 +726,16 @@ function topicHtml(t){var pct=Number(t.progress_percent||0),done=pct>=100||t.sta
 async function load(){try{var a=await req('/learning/status'),j=a.courses||[],custom=await req('/learning/active'),sched=await req('/scheduler/status'),workers=sched.workers||[],nextReviews=(sched.weekly_review&&sched.weekly_review.next_reviews)||[],reviewMap={},seen={},customMap={},html='';nextReviews.forEach(function(x){reviewMap[String(x.name||'').toLowerCase()]=x.next_review_at});(custom.items||[]).forEach(function(x){var c=x.course,s=x.summary,key=String(c.name||'').trim().toLowerCase();if(key)customMap[key]=x});Object.keys(customMap).forEach(function(key){var x=customMap[key],c=x.course,s=x.summary,done=s.total_topics>0&&s.completed_topics===s.total_topics;seen[key]=true;html+='<details class="course '+(done?'complete':'')+'"><summary>'+esc(c.name)+' — '+(done?'تکمیل‌شده · ':'')+Number(s.progress_percent||0)+'% ('+s.completed_topics+'/'+s.total_topics+')</summary><div class="courseBody">'+bar(s.progress_percent,done)+'<div class="small">مرور هفتگی بعدی: '+formatRemaining(x.next_review_at)+'</div>'+s.topics.map(topicHtml).join('')+'</div></details>'});j.forEach(function(c){var key=String(c.language||'').trim().toLowerCase();if(!key||customMap[key])return;var done=Number(c.progress_percent||0)>=100;seen[key]=true;html+='<details class="course '+(done?'complete':'')+'"><summary>'+esc(c.language)+' — '+(done?'تکمیل‌شده · ':'')+Number(c.progress_percent||0)+'% ('+c.completed_topics+'/'+c.total_topics+')</summary><div class="courseBody">'+bar(c.progress_percent,done)+'<div class="small">مرور هفتگی بعدی: '+formatRemaining(reviewMap[key])+'</div>'+c.topics.map(topicHtml).join('')+'</div></details>'});workers.forEach(function(w){var key=String(w.language||'').trim().toLowerCase();if(!key||key.indexOf('custom_course:')===0||seen[key]||customMap[key])return;html+='<details class="course"><summary>'+esc(w.language)+' — در حال یادگیری</summary><div class="courseBody"><div class="small">مرحله: '+esc(w.stage||w.status||'running')+' · موضوع فعلی: '+esc(w.current_topic||'در حال پردازش')+'</div></div></details>';seen[key]=true});root.innerHTML=html||'<div class="card empty">هنوز آموزشی ثبت نشده است.</div>'}catch(e){root.textContent='خطا: '+e.message}}
 load();setInterval(function(){var y=window.scrollY;var states=Array.from(root.querySelectorAll('details')).map(function(d){return d.open});load().then(function(){Array.from(root.querySelectorAll('details')).forEach(function(d,i){if(i<states.length)d.open=states[i]});window.scrollTo(0,y)}).catch(function(){});},5000)
 </script></html>"""
+def shutdown_course_workers() -> None:
+    """Stop the custom-course executor during application shutdown."""
+    global _workers
+    try:
+        _workers.shutdown(wait=False, cancel_futures=True)
+    except TypeError:
+        _workers.shutdown(wait=False)
+    except RuntimeError:
+        pass
+
 def start_named_course(name: str) -> int | None:
     """Start a named custom course and return its course id."""
     _setup()
