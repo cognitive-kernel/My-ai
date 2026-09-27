@@ -200,7 +200,7 @@ class LearningEngine:
                              f"DISCOVERED PREREQUISITES: {json.dumps(prerequisites,ensure_ascii=False)}\n"
                              f"LEARNED KNOWLEDGE: {json.dumps(search_knowledge(language+' '+t['topic'],12),ensure_ascii=False)}")
         lesson=self._retry_with_limit(
-            lambda: self._generate_lesson_with_progress(lesson_prompt, progress_callback, stop_event),
+            lambda: self._generate_lesson_with_progress(lesson_prompt, progress_callback, stop_event, s["session_id"], t["topic"]),
             "lesson",progress_callback,t["topic"],stop_event,
         )
         logger.info("LEARNING_LESSON_SUCCESS: language=%s topic=%s chars=%s", language, t["topic"], len(lesson))
@@ -231,7 +231,7 @@ class LearningEngine:
         if progress_callback: progress_callback("completed",t["topic"])
         return {"status":"completed","session_id":s["session_id"],"language":language,"topic":t,"prerequisites":prerequisites,"score":score,"sources":sources,"seeded":bool(seed)}
 
-    def _generate_lesson_with_progress(self, prompt, progress_callback=None, stop_event=None):
+    def _generate_lesson_with_progress(self, prompt, progress_callback=None, stop_event=None, session_id=None, topic=None):
         """Generate a lesson while reporting incremental progress from streamed output."""
         if not hasattr(self.llm, "stream_chat"):
             return self.llm.chat(prompt, stop_event=stop_event)
@@ -246,7 +246,10 @@ class LearningEngine:
                     # output grows and reserve 75% for the completed generation.
                     import math
                     progress = 50.0 + 24.5 * (1.0 - math.exp(-generated_chars / 6000.0))
-                    progress_callback("lesson_generating", progress)
+                    if session_id is not None:
+                        self._set_progress(session_id, progress, "lesson_generating")
+                    if progress_callback:
+                        progress_callback("lesson_generating", topic)
             if stop_event is not None and stop_event.is_set():
                 raise InterruptedError("learning stopped")
         return "".join(chunks).strip()
