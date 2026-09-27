@@ -162,3 +162,8 @@ class SQLiteQueryRequest(BaseModel):
     path: str
     sql: str
     limit: int = 1000
+
+
+class SystemPrerequisiteRequest(BaseModel):
+    names: list[str] = Field(default_factory=list)
+    confirmed: bool = False
