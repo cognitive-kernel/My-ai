@@ -39,6 +39,14 @@ def test_settings_requires_authentication():
 def test_adding_topic_reduces_completed_course_progress():
     sf._setup()
     course_id = sf.execute("INSERT INTO custom_courses(name,description) VALUES(?,?)", ("Test Course", "test"))
+    sf.execute(
+        "INSERT INTO custom_course_topics(course_id,topic_order,title,goal) VALUES(?,?,?,?)",
+        (course_id, 1, "Initial Topic", "Initial goal"),
+    )
+    sf.execute(
+        "INSERT INTO custom_course_progress(course_id,topic_id) SELECT ?,id FROM custom_course_topics WHERE course_id=?",
+        (course_id, course_id),
+    )
     rows = sf._progress(course_id)
     for row in rows:
         sf._set_topic(int(row["id"]), "completed", 100, "completed")
