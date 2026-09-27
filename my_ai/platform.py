@@ -403,7 +403,7 @@ def _import_data(data: dict[str, Any]) -> dict[str, Any]:
                 columns = [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
                 inserted_count = 0
                 for row in rows:
-                    cols = [col for col in columns if col in row and col != "id"]
+                    cols = [col for col in columns if col in row]
                     if not cols:
                         continue
                     marks = ",".join("?" for _ in cols)
