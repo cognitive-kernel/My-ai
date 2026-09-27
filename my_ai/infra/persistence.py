@@ -77,6 +77,8 @@ CREATE TABLE IF NOT EXISTS skills (
  version TEXT NOT NULL,
  score REAL NOT NULL DEFAULT 0,
  verified INTEGER NOT NULL DEFAULT 0,
+ knowledge_coverage_score REAL NOT NULL DEFAULT 0,
+ verified_skill_score REAL NOT NULL DEFAULT 0,
  last_verified TEXT,
  UNIQUE(name,version)
 );
@@ -138,9 +140,9 @@ def init_db() -> None:
         if "progress_percent" not in cols_learning: conn.execute("ALTER TABLE learning_sessions ADD COLUMN progress_percent REAL NOT NULL DEFAULT 0")
         if "phase" not in cols_learning: conn.execute("ALTER TABLE learning_sessions ADD COLUMN phase TEXT NOT NULL DEFAULT 'starting'")
         cols_skills=[r[1] for r in conn.execute("PRAGMA table_info(skills)").fetchall()]
-        for column in ("concept_score","implementation_score","source_score","reliability_score"):
+        for column, ddl in (("concept_score","REAL NOT NULL DEFAULT 0"),("implementation_score","REAL NOT NULL DEFAULT 0"),("source_score","REAL NOT NULL DEFAULT 0"),("reliability_score","REAL NOT NULL DEFAULT 0"),("knowledge_coverage_score","REAL NOT NULL DEFAULT 0"),("verified_skill_score","REAL NOT NULL DEFAULT 0")):
             if column not in cols_skills:
-                conn.execute(f"ALTER TABLE skills ADD COLUMN {column} REAL NOT NULL DEFAULT 0")
+                conn.execute(f"ALTER TABLE skills ADD COLUMN {column} {ddl}")
         cols_knowledge=[r[1] for r in conn.execute("PRAGMA table_info(knowledge)").fetchall()]
         if "content_hash" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN content_hash TEXT")
         if "verification_status" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN verification_status TEXT NOT NULL DEFAULT 'unverified'")
