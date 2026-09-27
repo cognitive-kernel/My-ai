@@ -41,7 +41,8 @@ def test_encrypted_export_is_verifiable(tmp_path, monkeypatch):
 def test_encrypted_export_contains_security_and_learning_state(tmp_path, monkeypatch):
     from my_ai import platform
     monkeypatch.setattr(platform, "BACKUP_ROOT", tmp_path / "backups")
-    platform.init_db()
+    from my_ai import db
+    db.init_db()
     path = platform.export_database(
         str(tmp_path / "backups" / "complete.json"),
         password="complete-backup-password",
