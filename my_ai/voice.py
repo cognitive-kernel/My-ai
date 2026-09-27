@@ -39,15 +39,26 @@ def status(transcription_model: str | None = None, synthesis_model: str | None =
             probes[name] = {"available": True, "healthy": probe.returncode in (0, 1, 2), "returncode": probe.returncode}
         except Exception as exc:
             probes[name] = {"available": True, "healthy": False, "error": str(exc)}
+    ffmpeg = shutil.which("ffmpeg")
+    ffmpeg_probe = False
+    if ffmpeg:
+        try:
+            probe = subprocess.run([ffmpeg, "-version"], capture_output=True, text=True, timeout=5, check=False)
+            ffmpeg_probe = probe.returncode == 0
+        except Exception:
+            ffmpeg_probe = False
     return {
         "whisper_cpp": whisper,
         "piper": piper,
+        "ffmpeg": ffmpeg,
         "whisper_model": transcription_model,
         "piper_model": synthesis_model,
         "whisper_model_ready": whisper_model_ok,
         "piper_model_ready": piper_model_ok,
+        "ffmpeg_ready": ffmpeg_probe,
         "probes": probes,
-        "offline_ready": bool(whisper and piper and whisper_model_ok and piper_model_ok
+        "offline_ready": bool(whisper and piper and ffmpeg and whisper_model_ok and piper_model_ok
+                               and ffmpeg_probe
                                and probes.get("whisper_cpp", {}).get("healthy")
                                and probes.get("piper", {}).get("healthy")),
     }
