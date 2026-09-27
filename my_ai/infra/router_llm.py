@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, Sequence
+from typing import Any
 
 import httpx
 
@@ -14,16 +14,10 @@ from .llm import LLMError, OllamaClient, OpenAICompatibleClient
 class OpenAIStructuredRouterClient(OpenAICompatibleClient):
     """OpenAI Responses adapter using strict JSON Schema structured output."""
 
-    def structured_chat_json(
-        self,
-        message: str,
-        schema: dict[str, Any],
-        system: str | None = None,
-    ) -> dict[str, Any]:
-        input_items: list[dict[str, Any]] = [{"role": "user", "content": message}]
+    def structured_chat_json(self, message: str, schema: dict[str, Any], system: str | None = None) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "model": self.model,
-            "input": input_items,
+            "input": [{"role": "user", "content": message}],
             "text": {
                 "format": {
                     "type": "json_schema",
@@ -40,10 +34,7 @@ class OpenAIStructuredRouterClient(OpenAICompatibleClient):
         try:
             response = httpx.post(
                 f"{self.base_url}/responses",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
+                headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
                 json=payload,
                 timeout=120,
             )
@@ -51,11 +42,8 @@ class OpenAIStructuredRouterClient(OpenAICompatibleClient):
             data = response.json()
             usage = data.get("usage") if isinstance(data, dict) else {}
             record_inference(
-                "openai",
-                self.model,
-                time.perf_counter() - started,
-                prompt_tokens=(usage or {}).get("input_tokens"),
-                output_tokens=(usage or {}).get("output_tokens"),
+                "openai", self.model, time.perf_counter() - started,
+                prompt_tokens=(usage or {}).get("input_tokens"), output_tokens=(usage or {}).get("output_tokens"),
             )
             raw = data.get("output_text") if isinstance(data, dict) else None
             if not isinstance(raw, str):

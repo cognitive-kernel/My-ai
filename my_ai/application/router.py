@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 from ..core.protocols import StructuredRouter
 from ..domain.router import Intent, classify as domain_classify
 from ..infra.router_llm import create_structured_router
