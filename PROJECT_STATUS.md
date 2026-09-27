@@ -258,7 +258,7 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 
 ### Verification gate
 
-تا زمانی که GitHub Actions برای commit نهایی سبز نشده و verification محلی/CI دوباره ثبت نشده، این سند «100% verified» تلقی نمی‌شود. اجرای Ollama، whisper.cpp، Piper، package manager و محدودیت‌های OS-level وابسته به محیط واقعی ماشین هستند.
+Verification نهایی repository-level برای commit d83cff4d5d4ae579eb596d4bf41e53f8a38200e3 سبز است: CI run 36298379858، browser E2E run 36298379845 و Ollama E2E run 36298379864 همگی success شدند؛ CI شامل compileall، ruff، mypy، bandit، pip-audit، pytest (200 passed)، Docker build و docker compose config است. این به معنی 100% verification عملیاتی روی هر ماشین نیست: کنترل write فرآیندهای خارجی OS خارج از اختیار برنامه است، اجرای واقعی whisper.cpp/Piper به engine/model محلی نیاز دارد و uv.lock در محیط توسعه بدون شبکه تولید نشده است.
 
 ## 10. کار بعدی
 
