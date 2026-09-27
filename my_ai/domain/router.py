@@ -220,7 +220,7 @@ def _llm_classify(text: str, context: str | None = None) -> Intent | None:
     if getattr(settings, "router_llm_enabled", True) is False:
         return None
     try:
-        from .llm import create_llm
+        from ..llm import create_llm
         allowed = {"chat", "learning", "coding", "code_execution", "security_scan",
                    "file_analysis", "help", "self_update", "git_write",
                    "pentest_external", "self_repair"}
