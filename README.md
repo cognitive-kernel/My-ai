@@ -134,7 +134,6 @@ Next topic
 - Android / Kotlin
 - iOS / Swift
 - Pentest / Security Testing
-- Cisco networking / IOS learning path
 - Forex
 
 ### Forex curriculum
@@ -154,32 +153,6 @@ Next topic
 - برای Forex، پوشش منابع تکمیلی روی کل curriculum موجود، شامل مباحث تکنیکال، مدیریت ریسک، backtesting، MQL4/MQL5، MetaTrader و research/production نیز اعمال می‌شود.
 
 
-### Cisco curriculum
-
-مسیر Cisco شامل موضوعاتی مانند:
-
-- Cisco IOS CLI
-- device management
-- IPv4/IPv6 addressing
-- subnetting
-- switching
-- VLAN
-- trunking
-- SVI
-- STP
-- EtherChannel
-- static routing
-- OSPF
-- NAT/PAT
-- ACL
-- WAN/VPN/IPsec
-- CDP/LLDP/NTP/SNMP/Syslog
-- QoS
-- network automation
-- troubleshooting
-- capstone
-
-تشخیص زبان/موضوع از aliasهای کوتاه با مرزبندی token انجام می‌شود تا مثلاً `Cisco` به‌اشتباه به‌عنوان زبان `C` تشخیص داده نشود.
 
 ### Pentest learning
 
@@ -241,7 +214,6 @@ POST /learning/practice
 - مشاهده progress.
 - شروع/ادامه course.
 - pause کردن course.
-- course پیش‌فرض Cisco.
 
 Endpointها:
 
@@ -1308,11 +1280,6 @@ The Rust path covers fundamentals through ownership, borrowing, lifetimes, async
 
 The Forex curriculum contains **121 explicit topics**, including professional capital/risk-management material and a Forex/MetaTrader capstone.
 
-### Cisco
-
-The Cisco path covers IOS CLI, device management, IPv4/IPv6, subnetting, switching, VLANs, trunks, SVIs, STP, EtherChannel, routing, OSPF, NAT/PAT, ACLs, WAN/VPN/IPsec, network management, QoS, automation, troubleshooting and capstone work.
-
-Short language aliases are resolved using token boundaries so names such as `Cisco` are not incorrectly classified as the `C` language.
 
 ### Pentest
 
