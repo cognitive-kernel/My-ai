@@ -128,6 +128,7 @@ async def auth_and_audit_middleware(request: Request, call_next):
         else:
             response = RedirectResponse("/login", status_code=303)
         response.headers["X-Request-ID"] = request_id
+        audit(None, "auth", "authenticate", "401", audit_payload(request_id, request.method, path, 401))
         return response
     decision = policy.decide(user=user, method=request.method, path=path, read_only=settings.read_only)
     if not decision.allowed:
@@ -141,6 +142,7 @@ async def auth_and_audit_middleware(request: Request, call_next):
         response = await call_next(request)
     except Exception:
         record_http_error(path)
+        audit(user, decision.tool or path, decision.action or request.method.lower(), "500", audit_payload(request_id, request.method, path, 500))
         logger.exception("Unhandled request error", extra={"request_id": request_id, "method": request.method, "path": path})
         raise
     finally:
