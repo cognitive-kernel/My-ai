@@ -12,7 +12,7 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from .auth import require_admin, require_user, audit
-from .db import execute, fetch_all, init_db
+from .db import connect, execute, fetch_all, init_db
 from .git_connector import GitHubConnector
 from .llm import create_llm
 from .settings_store import get_setting, set_setting, get_bool, get_int, get_github_settings
