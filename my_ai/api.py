@@ -39,6 +39,7 @@ from .self_diagnostics import SelfDiagnosticsMonitor, latest_report, report_hist
 from .tooling import catalog as tool_catalog, doctor as tool_doctor, run_project_tool, run_python_snippet, sqlserver_query, sqlserver_schema, mysql_query, mysql_schema, sqlite_query, sqlite_schema
 from .image_generation import generate_image, ImageGenerationError
 from .runtime_prerequisites import startup_check, runtime_status
+from .local_files import WORKSPACE_ROOT
 from .settings_feature import start_named_course
 from .readiness import build_readiness
 
@@ -145,7 +146,7 @@ def _voice_path(value:str, must_exist:bool=False) -> str:
     except ValueError: raise HTTPException(400,"Voice paths must stay under data/voice.")
     if must_exist and not path.is_file(): raise HTTPException(404,"Voice input/model file not found.")
     return str(path)
-class ChatRequest(BaseModel): message:str; session_id:int|None=None
+class ChatRequest(BaseModel): message:str; session_id:int|None=None; attachments:list[dict[str,object]]=Field(default_factory=list)
 class SelfUpdateRequest(BaseModel): health_url: HttpUrl | None = None
 class RepairRequest(BaseModel): issue:str=""; proposal_id:str|None=None; approved:bool=False
 class AuthRegisterRequest(BaseModel): username:str; password:str; display_name:str=""
@@ -172,6 +173,39 @@ class ToolRequest(BaseModel): language:str="Python"; operation:str="test"; cwd:s
 class PythonToolRequest(BaseModel): code:str; confirmed:bool=False
 class SQLQueryRequest(BaseModel): sql:str; limit:int=1000
 class SQLiteQueryRequest(BaseModel): path:str; sql:str; limit:int=1000
+
+def _validate_chat_attachments(items):
+    result=[]
+    for item in list(items or [])[:10]:
+        raw_path=str(item.get("path") or "").strip()
+        if not raw_path:
+            raise HTTPException(400,"Attachment path is required.")
+        path=Path(raw_path).expanduser().resolve()
+        try:
+            path.relative_to(WORKSPACE_ROOT)
+        except ValueError:
+            raise HTTPException(400,"Chat attachments must stay inside the My-AI workspace.")
+        if not path.is_file():
+            raise HTTPException(404,f"Attachment not found: {path.name}")
+        size=path.stat().st_size
+        if size > 100 * 1024 * 1024:
+            raise HTTPException(413,"Each chat attachment is limited to 100 MiB.")
+        result.append({
+            "path":str(path),
+            "name":str(item.get("name") or path.name),
+            "size":int(item.get("size") or size),
+            "mime_type":str(item.get("mime_type") or "application/octet-stream"),
+        })
+    return result
+
+def _save_chat_attachments(session_id, attachments, conversation_id=None):
+    if not attachments:
+        return
+    for item in attachments:
+        execute(
+            "INSERT INTO chat_attachments(conversation_id,session_id,name,path,size,mime_type) VALUES(?,?,?,?,?,?)",
+            (conversation_id,session_id,item["name"],item["path"],item["size"],item["mime_type"]),
+        )
 
 @app.get("/",response_class=HTMLResponse)
 def home(request: Request):
@@ -634,7 +668,13 @@ def chat_history(request:Request,limit:int=100,session_id:int|None=None):
         rows=fetch_all("SELECT c.role,c.content,c.created_at FROM conversations c JOIN chat_sessions s ON s.id=c.session_id WHERE s.user_id=? ORDER BY c.id DESC LIMIT ?",(user["id"],limit))
     else:
         rows=fetch_all("SELECT c.role,c.content,c.created_at FROM conversations c JOIN chat_sessions s ON s.id=c.session_id WHERE c.session_id=? AND s.user_id=? ORDER BY c.id DESC LIMIT ?",(session_id,user["id"],limit))
-    rows.reverse(); return {"messages":rows}
+    rows.reverse();
+    attachment_query="SELECT id,conversation_id,name,path,size,mime_type,created_at FROM chat_attachments WHERE session_id=? ORDER BY id"
+    attachments=fetch_all(attachment_query,(session_id,)) if session_id is not None else []
+    for item in attachments:
+        item["download_url"]="/files/download?path="+__import__("urllib.parse",fromlist=["quote"]).quote(item["path"],safe="")
+        item.pop("path",None)
+    return {"messages":rows,"attachments":attachments}
 
 @app.get("/help/updates")
 def help_updates(status:str="pending"): return fetch_all("SELECT * FROM help_updates WHERE status=? ORDER BY id DESC",(status,))
@@ -741,6 +781,7 @@ def chat(r:ChatRequest, request:Request):
         raise HTTPException(404,"Chat session not found.")
     try:
         msg=r.message.strip(); low=msg.lower()
+        attachments=_validate_chat_attachments(r.attachments)
         intent=classify(msg)
         required_by_intent={"pentest_external":("security","execute"),"git_write":("github","write"),"self_update":("self-update","write"),"database_import":("database","write"),"code_execution":("code-execution","execute"),"self_repair":("self-repair","execute"),"learning":("learning","execute"),"coding":("code-generation","execute")}
         if intent.name in required_by_intent:
@@ -756,7 +797,7 @@ def chat(r:ChatRequest, request:Request):
                 if re.search(r"(?<![a-z0-9])"+re.escape(key)+r"(?![a-z0-9])",low): requested=name; break
             elif re.search(r"(?<!\w)"+re.escape(key)+r"(?!\w)",low,re.UNICODE):
                 requested=name; break
-        learn_intent=("یاد بگیر" in low or "یادگیری" in low or "learn" in low or "go learn" in low or "start learning" in low); sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language,user_id) VALUES(?,?,?,?)",(msg[:60] or "گفتگوی جدید","learning" if learn_intent else "chat",requested,user["id"])); policy=parse_command(msg); security_words=policy.security; fix_requested=policy.security_action=="fix"
+        learn_intent=("یاد بگیر" in low or "یادگیری" in low or "learn" in low or "go learn" in low or "start learning" in low); sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language,user_id) VALUES(?,?,?,?)",(msg[:60] or "گفتگوی جدید","learning" if learn_intent else "chat",requested,user["id"])); _save_chat_attachments(sid,attachments); policy=parse_command(msg); security_words=policy.security; fix_requested=policy.security_action=="fix"
         if security_words:
             if not tool_allowed(user,"security","execute"):
                 raise HTTPException(403,"Tool permission denied: security:execute")
@@ -840,7 +881,11 @@ def chat(r:ChatRequest, request:Request):
         if any(x in low for x in ("تایید آپدیت","تأیید آپدیت","تایید بروزرسانی","تأیید بروزرسانی","تایید به روزرسانی","تأیید به روزرسانی","confirm update","approve update","apply update")):
             if user["role"] != "admin":
                 raise HTTPException(403,"Self-update requires administrator approval.")
-        return {"type":"chat","answer":agent.chat(msg,sid),"session_id":sid}
+        answer=agent.chat(msg,sid,attachments=attachments)
+        user_message=fetch_all("SELECT id FROM conversations WHERE session_id=? AND role='user' ORDER BY id DESC LIMIT 1",(sid,))
+        if attachments and user_message:
+            execute("UPDATE chat_attachments SET conversation_id=? WHERE session_id=? AND conversation_id IS NULL",(user_message[0]["id"],sid))
+        return {"type":"chat","answer":answer,"session_id":sid,"attachments":[{**item,"download_url":"/files/download?path="+__import__("urllib.parse",fromlist=["quote"]).quote(item["path"],safe="")} for item in attachments]}
     except HTTPException:
         raise
     except Exception as e: raise HTTPException(502,str(e))
