@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import math
 import os
 import shutil
@@ -18,7 +19,7 @@ from .backup_crypto import encrypt_file, decrypt_file
 from functools import lru_cache
 import time
 
-BACKUP_FORMAT_VERSION = 1
+BACKUP_FORMAT_VERSION = 2
 
 
 def _ollama_url(path: str) -> str:
@@ -267,7 +268,9 @@ def export_database(destination: str, password: str | None = None) -> str:
                 data[table] = [dict(x) for x in conn.execute(f"SELECT * FROM {table}").fetchall()]
             except Exception:
                 data[table] = []
-    payload = {"metadata": {"format_version": BACKUP_FORMAT_VERSION, "app_version": "0.2.0"}, "tables": data}
+    canonical = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    checksum = hashlib.sha256(canonical).hexdigest()
+    payload = {"metadata": {"format_version": BACKUP_FORMAT_VERSION, "app_version": "0.2.0", "created_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(), "sha256": checksum}, "tables": data}
     raw = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
     if password:
         from .backup_crypto import encrypt_bytes
@@ -283,7 +286,14 @@ def _import_data(data: dict[str, Any]) -> dict[str, Any]:
         version = int(metadata.get("format_version", 0))
         if version > BACKUP_FORMAT_VERSION:
             raise ValueError(f"Backup format {version} is newer than supported format {BACKUP_FORMAT_VERSION}.")
-        data = data["tables"]
+        tables = data["tables"]
+        if version >= 2:
+            expected = str(metadata.get("sha256") or "")
+            canonical = json.dumps(tables, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            actual = hashlib.sha256(canonical).hexdigest()
+            if not expected or expected != actual:
+                raise ValueError("Backup integrity check failed: SHA-256 mismatch.")
+        data = tables
     allowed = {"knowledge","chat_sessions","conversations","learning_sessions","agent_runs","generated_projects","security_scans"}
     inserted = {}
     with connect() as conn:
