@@ -60,8 +60,14 @@ class WebLearner:
                     target=str(httpx.URL(robots_url).join(response.headers["location"]))
                     self._validate_url(target)
                     response=client.get(target)
-                if response.status_code == 404: return True
-                if response.status_code >= 400: return False
+                # A 4xx robots response means the policy file is unavailable.
+                # Do not convert that into a blanket site-wide deny.
+                if 400 <= response.status_code < 500:
+                    logger.warning("robots.txt unavailable", extra={"url": url, "status": response.status_code})
+                    return True
+                if response.status_code >= 500:
+                    logger.warning("robots.txt server failure; failing closed", extra={"url": url, "status": response.status_code})
+                    return False
                 parser=robotparser.RobotFileParser()
                 parser.parse(response.text.splitlines())
                 return parser.can_fetch("My-AI",url)
