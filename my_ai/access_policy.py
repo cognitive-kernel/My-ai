@@ -88,12 +88,29 @@ class Permission:
     tool: str
     action: str
 
+def _path_matches(pattern: str, path: str) -> bool:
+    if pattern == path:
+        return True
+    pattern_parts = pattern.strip("/").split("/")
+    path_parts = path.strip("/").split("/")
+    if len(pattern_parts) != len(path_parts):
+        return False
+    return all(
+        p == actual or (p.startswith("{") and p.endswith("}"))
+        for p, actual in zip(pattern_parts, path_parts)
+    )
+
+
 def permission_for_path(path: str, method: str) -> tuple[str, str] | None:
     method = method.upper()
     for prefix, tool in TOOL_RULES:
         if path.startswith(prefix) or path == prefix.rstrip("/"):
-            action = PATH_ACTIONS.get(
-                path,
+            action = next(
+                (
+                    configured_action
+                    for pattern, configured_action in PATH_ACTIONS.items()
+                    if _path_matches(pattern, path)
+                ),
                 "read" if method == "GET"
                 else "write" if method in {"PUT", "PATCH", "DELETE"}
                 else "execute",
