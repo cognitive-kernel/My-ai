@@ -156,7 +156,7 @@ def _hybrid_search_cached(query: str, limit: int, bucket: int, verified_only: bo
     calibration: dict[float, tuple[int, int]] = {}
     for judgment in fetch_all("SELECT score,relevant FROM retrieval_judgments"):
         score = max(0.0, min(1.0, float(judgment["score"] or 0.0)))
-        bucket = round(score, 1)
+        bucket = float(f"{score:.1f}")
         count: int
         relevant_count: int
         count, relevant_count = calibration.get(bucket, (0, 0))
