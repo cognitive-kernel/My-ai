@@ -59,3 +59,11 @@ def test_no_classifier_is_safe_chat_only():
     result = build_router_service(None).classify("هر متن دلخواه")
     assert result.name == "chat"
     assert result.confidence == 0.0
+
+
+def test_chat_route_does_not_define_keyword_intent_tables():
+    from pathlib import Path
+    source = Path("my_ai/api.py").read_text(encoding="utf-8")
+    assert "learn_intent=(\"یاد بگیر\"" not in source
+    assert "code_words=(" not in source
+    assert "image_words=(" not in source
