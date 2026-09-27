@@ -378,8 +378,8 @@ def knowledge_audit(knowledge_id:int, request:Request, limit:int=50):
 @app.delete("/memory/knowledge/{knowledge_id}")
 def knowledge_delete(knowledge_id:int, request:Request):
     user=require_admin(request)
-    execute("INSERT INTO knowledge_audit(knowledge_id,user_id,action,details) VALUES(?,?,?,?)",(knowledge_id,user["id"],"delete","knowledge item deleted"))
-    execute("DELETE FROM knowledge WHERE id=?",(knowledge_id,))
+    execute("INSERT INTO knowledge_audit(knowledge_id,user_id,action,details) VALUES(?,?,?,?)",(knowledge_id,user["id"],"delete","knowledge item soft-deleted"))
+    execute("UPDATE knowledge SET verification_status='deleted',verified_at=NULL,verified_by=NULL,confidence=NULL WHERE id=?",(knowledge_id,))
     audit(user,"knowledge","delete","200",f"deleted:{knowledge_id}")
     return {"deleted":knowledge_id}
 
