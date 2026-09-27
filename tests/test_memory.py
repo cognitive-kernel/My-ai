@@ -7,6 +7,7 @@ def test_memory_search(tmp_path,monkeypatch):
     config.settings=config.Settings()
     importlib.reload(db); importlib.reload(memory)
     db.init_db(); memory.remember("Python","Test note","functions and decorators")
+    db.execute("UPDATE knowledge SET verification_status=? WHERE title=?", ("verified", "Test note"))
     assert memory.recall("functions")[0]["title"]=="Test note"
 
 
