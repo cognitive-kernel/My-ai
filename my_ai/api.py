@@ -45,6 +45,7 @@ from .tooling import catalog as tool_catalog, doctor as tool_doctor, run_project
 from .image_generation import generate_image, ImageGenerationError
 from .runtime_prerequisites import startup_check, runtime_status
 from .local_files import WORKSPACE_ROOT
+from .file_processing import install_system_prerequisites, system_prerequisite_status
 from .settings_feature import shutdown_course_workers
 from .access_policy import is_public_path, TOOL_RULES, PATH_ACTIONS
 from .config import assert_write_allowed
