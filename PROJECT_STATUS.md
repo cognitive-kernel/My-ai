@@ -232,9 +232,39 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 
 آخرین verification برای commit فعلی موفق است: CI، tests و Ollama E2E همگی سبز هستند. Ruff، mypy، Bandit، pip-audit، pytest و Docker build همگی با موفقیت اجرا شدند.
 
+## 10. وضعیت نهایی hardening
+
+### Completed repository-level backlog
+
+- معماری: core/domain packages اضافه شدند؛ router به domain/router منتقل و my_ai/router.py به compatibility facade تبدیل شد و protocolهای core ثبت شدند.
+- Router: structured/schema-first routing و regression برای intentهای مبهم فعال است؛ fallback deterministic فقط مسیر resilience است.
+- Retrieval: FTS5 + Ollama embeddings + hybrid scoring + provenance + verified filtering + empirical confidence calibration فعال است.
+- Knowledge: UI مدیریت دانش، verification و audit trail فعال است؛ delete به soft-delete تبدیل شده تا تاریخچه حفظ شود.
+- Skill Engine: evidence، sandbox benchmark، score مستقل و version-aware revalidation فعال است.
+- Policy: deny-by-default API policy، correlation ID و read-only enforcement در route و database mutation boundary فعال است.
+- Self-update: approval gate، enable flag، clean-tree check، isolated worktree، pre-update tag snapshot، test gate، watchdog/health و rollback path فعال است و همچنان deny-by-default می‌ماند.
+- Scope: architecture/protocol boundaries و feature-creep guardrails مستند و enforced-by-test شده‌اند؛ curriculumهای جانبی optional باقی می‌مانند و core dependency ندارند.
+- Eval: retrieval baseline، calibration data و regression tests در CI قرار دارند.
+- E2E: browser smoke/file workflow و surface checks برای learning/voice/GitHub/self-update/knowledge/skills فعال است.
+- Voice: whisper.cpp/Piper discovery + health probes + offline readiness و semantic media analysis فعال است.
+- Dependencies: pyproject.toml تنها source of truth است؛ requirements.txt خالی و compatibility-only است؛ requirements.lock snapshot موجود است.
+- Scheduler/Web: resource guard، robots policy، public-address validation و timeout/backoff موجود است.
+- Streaming/multi-session/backup: streaming، session isolation و backup/export/import با format version + SHA-256 integrity فعال است.
+- Models: per-role availability و fallback readiness در health endpoint ثبت می‌شود.
+- Observability: structured JSON logging، request correlation ID و HTTP metrics فعال است.
+- Startup: python -m my_ai و uvicorn my_ai.api:app از startup prerequisite gate یکسان استفاده می‌کنند.
+- README: gapهای کدنویسی قبلی با implementation واقعی همگام شدند؛ فقط محدودیت‌های ذاتی host-level و نبود uv.lock در محیط offline صریح باقی مانده‌اند.
+- Issues: #52، #33 و #24 با وضعیت implementation فعلی آماده بسته‌شدن هستند و پس از verification نهایی باید بسته شوند.
+
+### Verification gate
+
+تا زمانی که GitHub Actions برای commit نهایی سبز نشده و verification محلی/CI دوباره ثبت نشده، این سند «100% verified» تلقی نمی‌شود. اجرای Ollama، whisper.cpp، Piper، package manager و محدودیت‌های OS-level وابسته به محیط واقعی ماشین هستند.
+
 ## 10. کار بعدی
 
-پس از سبز شدن CI، مرحله‌ی بعدی تست محیط واقعی روی سیستم محلی است: ساخت اولین account، بررسی admin access، login/logout، Ollama، hybrid retrieval با `nomic-embed-text` و تست مسیرهای backup/voice. self-update تا زمان policy review و approval صریح فعال نخواهد شد.
+کار بعدی فقط verification عملیاتی روی ماشین مقصد است: اجرای pytest/compile/lint/security audit، browser E2E، Ollama E2E، بررسی health مدل‌ها، voice engines و backup integrity. self-update عمداً تا زمان approval صریح فعال نمی‌شود.
+
+git pull
 
 ## 11. معیار موفقیت یادگیری
 
