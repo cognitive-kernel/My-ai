@@ -274,7 +274,7 @@ def register_routes(app, scheduler, require_user, audit):
         if fmt == "docx":
             path = create_docx(str(workspace_path(filename)), title, paragraphs)
         elif fmt == "xlsx":
-            path = create_xlsx(str(workspace_path(filename)), {"Sheet1": [[title], [payload.prompt]]})
+            path = create_xlsx(str(workspace_path(filename)), {"Sheet1": [[title]] + [[index + 1, paragraph] for index, paragraph in enumerate(paragraphs)]})
         elif fmt == "pdf":
             path = create_pdf(str(workspace_path(filename)), title, paragraphs)
         elif fmt == "pptx":
