@@ -415,9 +415,12 @@ class LearningEngine:
             # Include persisted ad-hoc topics (for example Cisco) in the
             # aggregate summary, while retaining fixed curriculum topics.
             all_topics=[str(x["topic"]).strip() for x in curriculum_topics]
-            for topic in latest:
-                if topic not in topic_names:
-                    all_topics.append(topic)
+            # Fixed curricula are closed sets; persisted ad-hoc topics belong only
+            # to genuinely dynamic domains without a predefined curriculum.
+            if not curriculum_topics:
+                for topic in latest:
+                    if topic not in topic_names:
+                        all_topics.append(topic)
 
             completed_topics=set()
             progress_values=[]
