@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .db import execute, fetch_all
@@ -83,6 +83,17 @@ def _verification_state(skill: dict[str, Any], rows: list[dict[str, Any]], curre
         details = _parse_evidence(row.get("evidence"))
         if str(details.get("skill_version") or "") != version:
             return False, "stale_evidence"
+        observed_at = str(details.get("observed_at") or "").strip()
+        if not observed_at:
+            return False, "missing_observed_at"
+        try:
+            observed = datetime.fromisoformat(observed_at.replace("Z", "+00:00"))
+        except ValueError:
+            return False, "invalid_observed_at"
+        if observed.tzinfo is None:
+            observed = observed.replace(tzinfo=timezone.utc)
+        if observed < datetime.now(timezone.utc) - timedelta(days=30):
+            return False, "evidence_expired"
         if not _evidence_hash_valid(details):
             return False, "evidence_integrity_failed"
 
