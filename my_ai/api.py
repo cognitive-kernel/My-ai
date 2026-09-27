@@ -132,7 +132,8 @@ async def auth_and_audit_middleware(request: Request, call_next):
         response.headers["X-Request-ID"] = request_id
         audit_event(None, "auth", "authenticate", "401", request_id=request_id, input_data=request_body, extra={"method": request.method, "path": path})
         return response
-    decision = policy.decide(user=user, method=request.method, path=path, read_only=settings.read_only)
+    read_only = os.getenv("MYAI_READ_ONLY", "false").strip().lower() == "true"
+    decision = policy.decide(user=user, method=request.method, path=path, read_only=read_only)
     if not decision.allowed:
         status = 423 if decision.reason == "read_only" else 403
         audit_event(user, decision.tool or "policy", decision.action or request.method.lower(), str(status), request_id=request_id, input_data=request_body, extra={"method": request.method, "path": path, "reason": decision.reason})
