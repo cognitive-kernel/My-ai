@@ -461,3 +461,32 @@ def test_scheduler_recovers_unexpected_worker_exit(monkeypatch):
     stop_event = threading.Event()
     scheduler._schedule_worker_recovery("Python", stop_event)
     assert calls == [("Python", 7)]
+
+
+def test_detailed_status_exposes_persisted_lesson_without_key_error(monkeypatch):
+    monkeypatch.setattr(
+        learner_module,
+        "LANGUAGE_CURRICULA",
+        {"Python": [{"order": 1, "topic": "A", "goal": "learn A"}]},
+    )
+    monkeypatch.setattr(
+        learner_module,
+        "fetch_all",
+        lambda *_args, **_kwargs: [
+            {
+                "id": 1,
+                "language": "Python",
+                "topic": "A",
+                "status": "completed",
+                "score": 95,
+                "progress_percent": 100,
+                "phase": "completed",
+                "notes": "Full persisted lesson",
+                "created_at": "2026-01-01 00:00:00",
+            }
+        ],
+    )
+    result = LearningEngine.__new__(LearningEngine).detailed_status()
+    topic = result["courses"][0]["topics"][0]
+    assert topic["lesson"] == "Full persisted lesson"
+    assert topic["progress_percent"] == 100.0
