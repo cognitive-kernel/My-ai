@@ -122,6 +122,18 @@ def _setup() -> None:
     init_db()
     with connect() as conn:
         conn.executescript(SCHEMA)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS learning_domains (
+                name TEXT PRIMARY KEY,
+                topics_json TEXT NOT NULL,
+                sources_json TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_review_at TEXT,
+                next_review_at TEXT,
+                auto_learn INTEGER NOT NULL DEFAULT 1
+            )
+        """)
         # Permanently retire the legacy Cisco course and all persisted artifacts.
         ids = [int(row["id"]) for row in conn.execute("SELECT id FROM custom_courses WHERE lower(trim(name))='cisco'").fetchall()]
         if ids:
