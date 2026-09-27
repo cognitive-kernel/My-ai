@@ -165,8 +165,7 @@ def resolve_learning_target(message, fallback="Python"):
     text = str(message or "").strip()
     low = text.casefold()
 
-    # Match aliases as complete words/phrases. This prevents the C alias from
-    # matching unrelated subjects such as "Cisco".
+    # Match aliases as complete words/phrases to avoid short-alias collisions.
     for alias, canonical in sorted(LANGUAGE_ALIASES.items(), key=lambda x: len(x[0]), reverse=True):
         alias_text = str(alias).strip().casefold()
         if not alias_text:
