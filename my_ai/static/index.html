@@ -102,7 +102,7 @@ var customRunning=!!(custom&&custom.course&&Array.isArray(ac.running)&&ac.runnin
 var status=custom?(customRunning?'running':'stopped'):(w?(w.status||'stopped'):'stopped');
 var current=w&&w.current_topic||((summary.current||{}).topic)||'در انتظار ادامه';
 var stage=w&&w.stage||(customRunning?'learning':'paused');
-var pct=Number(summary.progress_percent||0);
+var pct=Math.max(0,Math.min(100,Math.round(Number(summary.progress_percent||0)*2)/2));
 var cardClass=status==='stopping'?'learning-stopping':(status==='running'||status==='retrying'?'learning-running':'learning-stopped');
 var stateText=status==='stopping'?'در حال توقف…':(status==='running'||status==='retrying'?'در حال اجرا':'متوقف شده');
 html+='<details class="card learningCard '+cardClass+'" data-learning-language="'+escHtml(language)+'"><summary style="cursor:pointer"><b>'+escHtml(language)+'</b> · '+escHtml(current)+' · '+pct+'% · <b>'+stateText+'</b></summary>';
