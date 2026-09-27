@@ -4,13 +4,13 @@ import time
 from functools import lru_cache
 
 from .config import settings
-from .db import remember_knowledge, search_knowledge
-from .platform import invalidate_hybrid_search_cache
+from .db import remember_knowledge
+from .platform import hybrid_search, invalidate_hybrid_search_cache
 
 
 @lru_cache(maxsize=128)
 def _recall_cached(query: str, limit: int, bucket: int):
-    return search_knowledge(query, limit)
+    return hybrid_search(query, limit)
 
 
 def remember(topic, title, content, source_url=None):
