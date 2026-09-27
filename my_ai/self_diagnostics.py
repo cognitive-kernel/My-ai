@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .db import execute, fetch_all
+from .access_policy import assert_mutation_allowed
 
 ROOT = Path(__file__).resolve().parent.parent
 REPORT_ROOT = ROOT / "data" / "diagnostics"
@@ -59,6 +60,7 @@ def _hardware() -> dict[str, object]:
 
 
 def run_diagnostics() -> dict[str, object]:
+    assert_mutation_allowed("diagnostic report")
     checks: dict[str, dict[str, object]] = {}
 
     code, output = _run([sys.executable, "-m", "compileall", "-q", "my_ai"], 120)
