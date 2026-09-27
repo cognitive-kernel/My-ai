@@ -104,7 +104,7 @@ def _hybrid_search_cached(query: str, limit: int, bucket: int, verified_only: bo
         if not cached_row or cached_row["content_hash"] != (row.get("content_hash") or ""):
             missing_rows.append(row)
             missing.append(f'{row.get("title","")}\n{row.get("content","")}\n{row.get("topic","")}')
-    if missing:
+    if missing and not settings.read_only:
         try:
             vectors = ollama_embed_batch(missing)
             from .db import connect
@@ -143,6 +143,8 @@ def _hybrid_search_cached(query: str, limit: int, bucket: int, verified_only: bo
         row["lexical_score"] = round(lexical_score, 6)
         row["hybrid_score"] = round(0.65*semantic + 0.35*lexical_score, 6)
         row["relevance"] = row["hybrid_score"]
+        row["provenance"] = {"knowledge_id": int(row["id"]), "source_url": row.get("source_url"), "verification_status": row.get("verification_status")}
+        row["citation_required"] = True
         score_bucket=round(float(row["hybrid_score"]),1)
         samples=calibration.get(score_bucket, (0,0))
         if samples[0] >= 5:
