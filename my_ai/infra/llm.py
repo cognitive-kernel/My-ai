@@ -168,9 +168,9 @@ class OpenAICompatibleClient:
         raise LLMError(f"Unexpected OpenAI response: {data}")
 
 def create_llm(task:str|None=None):
-    provider=settings.llm_provider
+    provider=_settings().llm_provider
     if provider in {"openai","openai-compatible","openai_compatible"}: return OpenAICompatibleClient()
     if provider=="auto":
-        if settings.openai_api_key and not getattr(settings,"offline_strict",False): return OpenAICompatibleClient()
+        if _settings().openai_api_key and not getattr(_settings(),"offline_strict",False): return OpenAICompatibleClient()
         return OllamaClient(task=task)
     return OllamaClient(task=task)
