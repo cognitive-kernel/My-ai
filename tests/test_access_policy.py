@@ -37,3 +37,11 @@ def test_every_non_public_http_route_has_central_policy_mapping():
             continue
         for method in methods - {"HEAD", "OPTIONS"}:
             assert permission_for_path(path, method) is not None, (method, path)
+
+
+def test_sensitive_routes_use_explicit_action_boundaries():
+    assert permission_for_path("/memory/knowledge", "POST") == ("memory", "write")
+    assert permission_for_path("/memory/knowledge/123/verify", "POST") == ("memory", "write")
+    assert permission_for_path("/files/upload", "POST") == ("files", "write")
+    assert permission_for_path("/tools/python", "POST") == ("tools", "execute")
+    assert permission_for_path("/chat", "POST") == ("chat", "execute")
