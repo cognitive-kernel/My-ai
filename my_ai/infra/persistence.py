@@ -9,7 +9,8 @@ from .config import settings
 
 
 def _write_blocked() -> bool:
-    return bool(getattr(settings, "read_only", False))
+    import os
+    return os.getenv("MYAI_READ_ONLY", "false").strip().lower() == "true"
 
 
 SCHEMA = """
@@ -95,7 +96,10 @@ CREATE TABLE IF NOT EXISTS skill_evidence (
 """
 
 def connect() -> sqlite3.Connection:
+    import os
     path = Path(settings.db_path)
+    if _write_blocked() and not path.parent.exists():
+        raise PermissionError("MYAI_READ_ONLY blocks database directory creation.")
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, timeout=30)
     conn.row_factory = sqlite3.Row
