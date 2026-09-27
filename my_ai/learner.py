@@ -412,7 +412,7 @@ class LearningEngine:
                 if topic and topic not in latest:
                     latest[topic]=row
 
-            # Include persisted ad-hoc topics (for example Cisco) in the
+            # Include persisted ad-hoc topics for genuinely dynamic domains.
             # aggregate summary, while retaining fixed curriculum topics.
             all_topics=[str(x["topic"]).strip() for x in curriculum_topics]
             # Fixed curricula are closed sets; persisted ad-hoc topics belong only
