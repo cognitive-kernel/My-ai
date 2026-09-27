@@ -11,11 +11,12 @@ def test_export_backup_contains_integrity_metadata(tmp_path, monkeypatch):
     payload = json.loads((tmp_path / "backups" / "integrity.json").read_text(encoding="utf-8"))
     assert payload["metadata"]["format_version"] >= 2
     assert len(payload["metadata"]["sha256"]) == 64
-    assert platform.import_database(path)
+    assert platform.import_database(path) == {}
 
 
 def test_import_backup_rejects_tampering(tmp_path, monkeypatch):
     from my_ai import platform
+    monkeypatch.setattr(platform, "BACKUP_ROOT", tmp_path / "backups")
     db.init_db()
     path = platform.export_database(str(tmp_path / "backups" / "tamper.json"))
     raw = json.loads((tmp_path / "backups" / "tamper.json").read_text(encoding="utf-8"))
