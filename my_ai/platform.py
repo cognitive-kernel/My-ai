@@ -20,7 +20,7 @@ from .access_policy import assert_mutation_allowed
 from functools import lru_cache
 import time
 
-BACKUP_FORMAT_VERSION = 2
+BACKUP_FORMAT_VERSION = 3
 
 
 def _ollama_url(path: str) -> str:
@@ -269,35 +269,87 @@ DATA_ROOT = Path(settings.db_path).expanduser().resolve().parent
 BACKUP_ROOT = Path(os.getenv("MYAI_BACKUP_ROOT", str(DATA_ROOT / "backups"))).expanduser().resolve()
 
 
-def _safe_backup_path(value: str) -> Path:
-    path=Path(value).expanduser().resolve()
-    BACKUP_ROOT.mkdir(parents=True, exist_ok=True)
+def _safe_backup_path(value: str, *, create_parent: bool = True) -> Path:
+    path = Path(value).expanduser().resolve()
     try:
         path.relative_to(BACKUP_ROOT)
     except ValueError as exc:
         raise ValueError(f"Backup paths must stay under {BACKUP_ROOT}.") from exc
+    if create_parent:
+        BACKUP_ROOT.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _atomic_replace_bytes(destination: Path, payload: bytes) -> str:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    tmp = destination.with_name(f".{destination.name}.tmp-{os.getpid()}-{time.time_ns()}")
+    try:
+        with tmp.open("wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, destination)
+        return str(destination)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _atomic_sqlite_backup(destination: Path) -> str:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    tmp = destination.with_name(f".{destination.name}.tmp-{os.getpid()}-{time.time_ns()}")
+    try:
+        with connect() as conn, sqlite3_backup(conn, tmp) as _:
+            pass
+        os.replace(tmp, destination)
+        return str(destination)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _backup_manifest(tables: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+    canonical = json.dumps(tables, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return {
+        "format_version": BACKUP_FORMAT_VERSION,
+        "app_version": "0.2.0",
+        "created_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+        "sha256": hashlib.sha256(canonical).hexdigest(),
+        "tables": sorted(tables),
+    }
+
+
+def _verify_export_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(payload, dict) or not isinstance(payload.get("tables"), dict):
+        raise ValueError("Backup payload is invalid.")
+    metadata = payload.get("metadata") or {}
+    version = int(metadata.get("format_version", 0))
+    if version < 2 or version > BACKUP_FORMAT_VERSION:
+        raise ValueError(f"Unsupported backup format {version}.")
+    canonical = json.dumps(payload["tables"], ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    expected = str(metadata.get("sha256") or "")
+    actual = hashlib.sha256(canonical).hexdigest()
+    if not expected or expected != actual:
+        raise ValueError("Backup integrity check failed: SHA-256 mismatch.")
+    return metadata
 
 
 def backup_database(destination: str, password: str | None = None) -> str:
     assert_mutation_allowed("database backup")
     src = Path(settings.db_path)
     dst = _safe_backup_path(destination)
-    if password:
-        temp = dst.with_name(dst.name + ".plain.tmp")
-        temp.parent.mkdir(parents=True, exist_ok=True)
-        with connect() as conn, sqlite3_backup(conn, temp) as _:
-            pass
-        try:
-            return encrypt_file(temp, dst, password)
-        finally:
-            temp.unlink(missing_ok=True)
-    dst.parent.mkdir(parents=True, exist_ok=True)
     if not src.exists():
         raise FileNotFoundError(src)
-    with connect() as conn, sqlite3_backup(conn, dst) as _:
-        pass
-    return str(dst)
+    if password:
+        plain = dst.with_name(f".{dst.name}.plain-{os.getpid()}-{time.time_ns()}")
+        encrypted = dst.with_name(f".{dst.name}.encrypted-{os.getpid()}-{time.time_ns()}")
+        try:
+            _atomic_sqlite_backup(plain)
+            encrypted.write_bytes(encrypt_file(plain, encrypted, password) and encrypted.read_bytes())
+            os.replace(encrypted, dst)
+            return str(dst)
+        finally:
+            plain.unlink(missing_ok=True)
+            encrypted.unlink(missing_ok=True)
+    return _atomic_sqlite_backup(dst)
 
 
 class sqlite3_backup:
@@ -319,74 +371,95 @@ class sqlite3_backup:
 def export_database(destination: str, password: str | None = None) -> str:
     assert_mutation_allowed("database export")
     dst = _safe_backup_path(destination)
-    dst.parent.mkdir(parents=True, exist_ok=True)
+    data = {}
     with connect() as conn:
-        data = {}
-        for table in ("users","tool_permissions","knowledge","chat_sessions","conversations","learning_sessions","agent_runs","generated_projects","security_scans","audit_log"):
+        for table in ("users","tool_permissions","knowledge","chat_sessions","conversations","learning_sessions","agent_runs","generated_projects","security_scans","audit_log","retrieval_judgments","knowledge_audit"):
             try:
                 data[table] = [dict(x) for x in conn.execute(f"SELECT * FROM {table}").fetchall()]
             except Exception:
                 data[table] = []
-    canonical = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    checksum = hashlib.sha256(canonical).hexdigest()
-    payload = {"metadata": {"format_version": BACKUP_FORMAT_VERSION, "app_version": "0.2.0", "created_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(), "sha256": checksum}, "tables": data}
+    metadata = _backup_manifest(data)
+    payload = {"metadata": metadata, "tables": data}
     raw = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
     if password:
         from .backup_crypto import encrypt_bytes
-        dst.write_bytes(encrypt_bytes(raw, password))
-    else:
-        dst.write_bytes(raw)
-    return str(dst)
+        raw = encrypt_bytes(raw, password)
+    return _atomic_replace_bytes(dst, raw)
 
 
 def _import_data(data: dict[str, Any]) -> dict[str, Any]:
     assert_mutation_allowed("database import")
     if "tables" in data:
-        metadata = data.get("metadata") or {}
-        version = int(metadata.get("format_version", 0))
-        if version > BACKUP_FORMAT_VERSION:
-            raise ValueError(f"Backup format {version} is newer than supported format {BACKUP_FORMAT_VERSION}.")
-        tables = data["tables"]
-        if version >= 2:
-            expected = str(metadata.get("sha256") or "")
-            canonical = json.dumps(tables, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
-            actual = hashlib.sha256(canonical).hexdigest()
-            if not expected or expected != actual:
-                raise ValueError("Backup integrity check failed: SHA-256 mismatch.")
-        data = tables
+        _verify_export_payload(data)
+        data = data["tables"]
     allowed = {"knowledge","chat_sessions","conversations","learning_sessions","agent_runs","generated_projects","security_scans"}
     inserted = {}
     with connect() as conn:
-        for table in allowed:
-            rows = data.get(table) or []
-            if not rows:
-                continue
-            columns = [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
-            for row in rows:
-                cols = [col for col in columns if col in row and col != "id"]
-                if not cols:
+        try:
+            for table in allowed:
+                rows = data.get(table) or []
+                if not rows:
                     continue
-                marks = ",".join("?" for _ in cols)
-                conn.execute(f"INSERT OR IGNORE INTO {table} ({','.join(cols)}) VALUES ({marks})", tuple(row[col] for col in cols))
-            inserted[table] = len(rows)
-        conn.commit()
+                columns = [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+                for row in rows:
+                    cols = [col for col in columns if col in row and col != "id"]
+                    if not cols:
+                        continue
+                    marks = ",".join("?" for _ in cols)
+                    conn.execute(
+                        f"INSERT OR IGNORE INTO {table} ({','.join(cols)}) VALUES ({marks})",
+                        tuple(row[col] for col in cols),
+                    )
+                inserted[table] = len(rows)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
     return inserted
 
 
 def import_database(source: str) -> dict[str, Any]:
-    path = _safe_backup_path(source)
-    return _import_data(json.loads(path.read_text(encoding="utf-8")))
+    path = _safe_backup_path(source, create_parent=False)
+    raw = path.read_bytes()
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("Backup is not a valid unencrypted JSON export.") from exc
+    return _import_data(data)
 
 
 def import_encrypted_database(source: str, password: str) -> dict[str, Any]:
     from .backup_crypto import decrypt_bytes
-    data = json.loads(decrypt_bytes(_safe_backup_path(source).read_bytes(), password).decode("utf-8"))
+    path = _safe_backup_path(source, create_parent=False)
+    data = json.loads(decrypt_bytes(path.read_bytes(), password).decode("utf-8"))
     return _import_data(data)
 
 
 def restore_encrypted_backup(source: str, destination: str, password: str) -> str:
-    return decrypt_file(_safe_backup_path(source), _safe_backup_path(destination), password)
+    assert_mutation_allowed("encrypted backup restore")
+    src = _safe_backup_path(source, create_parent=False)
+    dst = _safe_backup_path(destination)
+    tmp = dst.with_name(f".{dst.name}.restore-{os.getpid()}-{time.time_ns()}")
+    try:
+        decrypt_file(src, tmp, password)
+        os.replace(tmp, dst)
+        return str(dst)
+    finally:
+        tmp.unlink(missing_ok=True)
 
+
+def verify_backup(source: str, password: str | None = None) -> dict[str, Any]:
+    path = _safe_backup_path(source, create_parent=False)
+    if password:
+        from .backup_crypto import decrypt_bytes
+        payload = json.loads(decrypt_bytes(path.read_bytes(), password).decode("utf-8"))
+    else:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return {"valid": False, "type": "sqlite", "path": str(path), "size": path.stat().st_size}
+    metadata = _verify_export_payload(payload)
+    return {"valid": True, "type": "encrypted-json" if password else "json", "path": str(path), "size": path.stat().st_size, "metadata": metadata}
 
 def _assert_public_http_url(url: str) -> urllib.parse.ParseResult:
     parsed = urllib.parse.urlparse(url)
