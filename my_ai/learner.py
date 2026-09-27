@@ -313,7 +313,7 @@ class LearningEngine:
     @staticmethod
     def _half_percent(value): return max(0.0,min(100.0,round(float(value)*2)/2))
 
-    def detailed_status(self,language=None):
+    def detailed_status(self,language=None,include_lessons=False):
         """Return the complete learning catalog, including completed topics."""
         rows=fetch_all(
             "SELECT id,language,topic,status,score,progress_percent,phase,notes,created_at FROM learning_sessions ORDER BY id DESC"
@@ -378,7 +378,7 @@ class LearningEngine:
                     "phase":str(row["phase"]) if row else "planned",
                     "progress_percent":progress,
                     "score":row["score"] if row and row["score"] is not None else None,
-                    "lesson":str(row.get("notes") or "") if row else "",
+                    "lesson":str(row.get("notes") or "") if row and include_lessons else "",
                     "updated_at":row["created_at"] if row else None,
                     "last_attempt_at":row["created_at"] if row else None,
                 })
