@@ -63,12 +63,13 @@ class Agent:
     def _required_citations(knowledge: list[dict]) -> str:
         citations: list[str] = []
         for item in knowledge[:4]:
-            provenance = item.get("provenance") or {}
+            raw_provenance = item.get("provenance")
+            item_id = item.get("id")
+            if raw_provenance is None and item_id is None:
+                continue
+            provenance = raw_provenance or {}
             if not isinstance(provenance, dict):
                 provenance = {"source_url": str(provenance)}
-            item_id = item.get("id")
-            if not provenance and item_id is None:
-                continue
             citation_id = str(provenance.get("citation_id") or f"K{item_id}")
             title = str(provenance.get("title") or item.get("title") or "local knowledge")
             source = str(provenance.get("source_url") or f"local://knowledge/{item_id}")
