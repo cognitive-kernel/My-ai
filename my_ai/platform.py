@@ -20,7 +20,17 @@ from .access_policy import assert_mutation_allowed
 from functools import lru_cache
 import time
 
-BACKUP_FORMAT_VERSION = 3
+BACKUP_FORMAT_VERSION = 4
+BACKUP_CORE_TABLES = (
+    "chat_sessions", "conversations", "chat_attachments", "knowledge",
+    "knowledge_embeddings", "learning_sessions", "learning_runtime",
+    "learning_workers", "experiments", "project_tasks", "agent_runs",
+    "generated_projects", "help_updates", "security_scans",
+    "learning_review_runs", "schema_meta", "fix_attempts", "retrieval_judgments",
+    "knowledge_audit", "skills", "skill_reviews", "skill_evidence",
+    "learning_domains", "learning_source_history", "custom_courses",
+)
+BACKUP_SENSITIVE_TABLES = ("users", "tool_permissions", "audit_log", "decision_log")
 
 
 def _ollama_url(path: str) -> str:
