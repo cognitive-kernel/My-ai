@@ -2,12 +2,16 @@ from __future__ import annotations
 import re
 import time
 import threading
+import logging
 from urllib.parse import urlparse, quote_plus
 from urllib import robotparser
 import httpx
 from bs4 import BeautifulSoup
 from .config import settings
 from .network import assert_public_hostname, pinned_client
+
+logger = logging.getLogger("my_ai.web_learner")
+
 class WebLearner:
     _rate_lock = threading.Lock()
     _last_fetch: dict[str, float] = {}
@@ -73,6 +77,15 @@ class WebLearner:
             for _ in range(6):
                 self._validate_url(url)
                 r=client.get(url)
+                if r.status_code in {429, 500, 502, 503, 504}:
+                    delay = min(8.0, 2.0 ** _)
+                    logger.warning("web fetch backoff", extra={"url": url, "status": r.status_code, "delay": delay})
+                    if stop_event is not None:
+                        if stop_event.wait(delay):
+                            raise InterruptedError("learning stopped")
+                    else:
+                        time.sleep(delay)
+                    continue
                 if r.status_code not in {301,302,303,307,308}: break
                 location=r.headers.get("location")
                 if not location: break
