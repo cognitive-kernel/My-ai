@@ -24,12 +24,20 @@ fetch_all = _persistence.fetch_all
 init_db = _persistence.init_db
 _normalize_search_text = _persistence._normalize_search_text
 def remember_knowledge(*args, **kwargs):
+    original_connect = _persistence.connect
     _persistence.connect = connect
-    return _persistence.remember_knowledge(*args, **kwargs)
+    try:
+        return _persistence.remember_knowledge(*args, **kwargs)
+    finally:
+        _persistence.connect = original_connect
 
 
 def search_knowledge(*args, **kwargs):
+    original_connect = _persistence.connect
     _persistence.connect = connect
-    return _persistence.search_knowledge(*args, **kwargs)
+    try:
+        return _persistence.search_knowledge(*args, **kwargs)
+    finally:
+        _persistence.connect = original_connect
 
 __all__ = ["SCHEMA", "connect", "execute", "fetch_all", "init_db", "_normalize_search_text", "remember_knowledge", "search_knowledge"]
