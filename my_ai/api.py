@@ -48,7 +48,7 @@ from .local_files import WORKSPACE_ROOT
 from .settings_feature import shutdown_course_workers
 from .access_policy import is_public_path, TOOL_RULES, PATH_ACTIONS
 from .config import assert_write_allowed
-from .policy_engine import policy, audit_payload
+from .policy_engine import policy
 _TOOL_RULES = TOOL_RULES
 _PATH_ACTIONS = PATH_ACTIONS
 from .api_models import (
