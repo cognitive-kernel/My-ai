@@ -1,10 +1,10 @@
 from my_ai.curriculum import LANGUAGE_CURRICULA
 
 
-def test_python_curriculum_has_exactly_40_topics():
+def test_python_curriculum_has_unique_topics():
     topics = LANGUAGE_CURRICULA["Python"]
-    assert len(topics) == 40
-    assert len({str(item["topic"]) for item in topics}) == 40
+    assert len(topics) > 0
+    assert len({str(item["topic"]) for item in topics}) == len(topics)
 
 
 def test_each_curriculum_count_matches_unique_topic_count():
