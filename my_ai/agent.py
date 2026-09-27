@@ -9,6 +9,7 @@ from .llm import create_llm
 from .capabilities import system_context
 from .self_update import check_for_update, apply_confirmed_update, recent_lessons
 from .router import classify
+from .application.router import build_router_service
 from .web_learner import WebLearner
 from .web_learning import create_pending, pending, learn_confirmed
 from .local_files import inspect_file, read_text
@@ -51,8 +52,12 @@ Self-maintenance rules:
 
 
 class Agent:
-    def __init__(self, llm=None):
+    def __init__(self, llm=None, router=None):
         self.llm = llm or create_llm("general")
+        self.router = router or (build_router_service(None) if llm is not None else None)
+
+    def _classify(self, message: str, context: str | None = None):
+        return self.router.classify(message, context) if self.router is not None else classify(message, context)
 
     @staticmethod
     def _required_citations(knowledge: list[dict]) -> str:
@@ -239,7 +244,7 @@ class Agent:
         )[::-1]
         attachment_context = self._attachment_context(attachments)
         context = "\n".join(f"{row['role']}: {row['content']}" for row in history[-8:])
-        intent = classify(message, context)
+        intent = self._classify(message, context)
         llm_message = message + ("\n\n" + attachment_context if attachment_context else "")
         task = "coding" if intent.name == "coding" else "general"
         llm = self.llm if task == "general" else create_llm(task)
@@ -321,7 +326,7 @@ class Agent:
             return
         history=fetch_all("SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 20",(session_id,))[::-1]
         context="\n".join(f"{row['role']}: {row['content']}" for row in history[-8:])
-        intent=classify(message, context)
+        intent=self._classify(message, context)
         task="coding" if intent.name=="coding" else "general"
         llm=self.llm if task=="general" else create_llm(task)
         knowledge=recall(message,8)
