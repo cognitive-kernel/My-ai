@@ -41,3 +41,14 @@ def test_forex_curriculum_is_fully_covered():
     forex_topics = LANGUAGE_CURRICULA["Forex"]
     assert len(forex_topics) >= 120
     assert not validate_topic_resources({"Forex": forex_topics})
+
+
+def test_cisco_curriculum_is_available_from_zero():
+    from my_ai.curriculum import LANGUAGE_ALIASES, LANGUAGE_SOURCES
+    topics = LANGUAGE_CURRICULA["Cisco"]
+    assert len(topics) >= 40
+    assert topics[0]["topic"] == "Networking fundamentals"
+    assert topics[-1]["topic"] == "Cisco networking capstone"
+    assert LANGUAGE_ALIASES["cisco"] == "Cisco"
+    assert LANGUAGE_ALIASES["سیسکو"] == "Cisco"
+    assert any("cisco.com" in url for url in LANGUAGE_SOURCES["Cisco"])
