@@ -9,6 +9,7 @@ import urllib.request
 from pathlib import Path
 
 from .settings_store import get_bool, get_int, get_setting
+from .access_policy import assert_mutation_allowed
 
 
 IMAGE_ROOT = Path("data/images").resolve()
@@ -53,6 +54,7 @@ def _get_json(url: str, timeout: int = 15) -> dict | list:
 
 
 def _save_b64(value: str, suffix: str = ".png") -> str:
+    assert_mutation_allowed("generated image")
     IMAGE_ROOT.mkdir(parents=True, exist_ok=True)
     filename = f"image_{int(time.time() * 1000)}{suffix}"
     path = IMAGE_ROOT / filename
