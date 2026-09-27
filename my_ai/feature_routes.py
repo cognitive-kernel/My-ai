@@ -94,7 +94,7 @@ def _chat_content(prompt: str, fmt: str) -> tuple[str, list[str], list[dict[str,
             heading = line.lstrip("#").strip()
             if heading:
                 current_title = heading
-                if not paragraphs:
+                if title == "My-AI document":
                     title = heading
             continue
         if line.startswith(("-", "*", "•")):
