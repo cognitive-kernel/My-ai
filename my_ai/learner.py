@@ -116,6 +116,8 @@ class LearningEngine:
                 knowledge.append({"title":"Source unavailable","url":url,"error":message})
                 if progress_callback:
                     progress_callback("source_unavailable",topic["topic"])
+                if session_id is not None:
+                    self._set_progress(session_id, 25.0 + 25.0 * (index / max(1,total_sources)), "sources")
                 continue
             remember(language,title,note,url); knowledge.append({"title":title,"url":url}); learned_urls.append(url)
             if session_id is not None:
@@ -388,7 +390,7 @@ class LearningEngine:
 
             if not topic_defs:
                 continue
-            overall=self._half_percent(sum(all_progress)/len(all_progress)) if all_progress else 0.0
+            overall=round(max(0.0,min(100.0,(sum(all_progress)/len(all_progress)) if all_progress else 0.0)),2)
             active=next((x for x in topic_items if x["progress_percent"]<100.0),topic_items[0])
             courses.append({
                 "language":lang,
@@ -470,7 +472,7 @@ class LearningEngine:
                 "completed_topics":completed,
                 "remaining_topics":max(0,total-completed),
                 "total_topics":total,
-                "progress_percent":self._half_percent(raw),
+                "progress_percent":round(max(0.0,min(100.0,raw)),2),
                 "progress_step":"0.5%",
                 "average_score":round(sum(scores)/len(scores),1) if scores else 0,
             })
