@@ -489,6 +489,9 @@ class StudyScheduler:
         threading.Timer(2.0, recover).start()
 
     def _loop(self, language, stop_event):
+        if not self._acquire_lease(language):
+            logger.error("LEARNING_WORKER_LEASE_HELD: language=%s", language)
+            return
         engine = LearningEngine()
         consecutive_errors = 0
         slot_acquired = False
