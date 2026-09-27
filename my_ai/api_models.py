@@ -78,13 +78,13 @@ class SkillRevalidateRequest(BaseModel):
 
 class VoiceTranscribeRequest(BaseModel):
     audio_path: str
-    model_path: str
+    model_path: str = ""
     language: str = "fa"
 
 
 class VoiceSynthesizeRequest(BaseModel):
     text: str
-    model_path: str
+    model_path: str = ""
     output_path: str
 
 
