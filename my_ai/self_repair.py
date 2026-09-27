@@ -14,6 +14,7 @@ from .settings_store import get_bool
 from .llm import create_llm
 from .self_update import recent_lessons
 from .decision_log import record as record_decision
+from .access_policy import assert_mutation_allowed
 from .notifications import notify
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -101,6 +102,7 @@ def _test_patch(patch: str, base: str) -> tuple[bool, str]:
 
 
 def propose_repair(issue: str) -> dict[str, object]:
+    assert_mutation_allowed("self-repair proposal")
     if not get_bool("self_repair.enabled", True):
         raise ValueError("Self-repair is disabled in Settings.")
     if not issue.strip():
