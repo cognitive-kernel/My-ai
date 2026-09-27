@@ -5,7 +5,6 @@ from my_ai import db
 
 def test_export_backup_contains_integrity_metadata(tmp_path, monkeypatch):
     from my_ai import platform
-    monkeypatch.setattr(platform.settings, "db_path", str(tmp_path / "db.sqlite"))
     monkeypatch.setattr(platform, "BACKUP_ROOT", tmp_path / "backups")
     db.init_db()
     path = platform.export_database("integrity.json")
