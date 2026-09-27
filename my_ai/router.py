@@ -20,6 +20,49 @@ class Intent:
 
 HIGH_RISK = {"pentest_external", "git_write", "self_update", "database_import", "code_execution", "self_repair"}
 
+ROUTER_TOOL_SCHEMA = {
+    "name": "route_request",
+    "description": "Return a structured intent and tool arguments. Never authorize execution by itself.",
+    "parameters": {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["primary", "intents", "confidence", "language", "topic", "goal"],
+        "properties": {
+            "primary": {"type": "string"},
+            "intents": {"type": "array", "items": {"type": "string"}},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "language": {"type": ["string", "null"]},
+            "topic": {"type": ["string", "null"]},
+            "goal": {"type": ["string", "null"]},
+        },
+    },
+}
+
+
+def router_tool_call(intent: Intent) -> dict[str, Any]:
+    """Serialize routing separately from authorization/execution."""
+    return {
+        "name": ROUTER_TOOL_SCHEMA["name"],
+        "arguments": {
+            "primary": intent.name,
+            "intents": list(intent.intents or (intent.name,)),
+            "confidence": float(intent.confidence),
+            "language": intent.args.get("language"),
+            "topic": intent.args.get("topic"),
+            "goal": intent.args.get("goal"),
+        },
+    }
+
+
+def _parse_router_payload(raw: str) -> dict[str, Any]:
+    data = json.loads(raw)
+    if not isinstance(data, dict):
+        raise ValueError("Router output must be a JSON object.")
+    required = ROUTER_TOOL_SCHEMA["parameters"]["required"]
+    if any(key not in data for key in required):
+        raise ValueError("Router output is missing required fields.")
+    return data
+
 _INTENT_PATTERNS: dict[str, tuple[tuple[str, float], ...]] = {
     "self_update": (
         ("self update", 1.8), ("self-update", 1.8), ("آپدیت خودت", 2.0),
@@ -188,7 +231,7 @@ def _llm_classify(text: str, context: str | None = None) -> Intent | None:
             f"USER: {text}\nCONTEXT: {context or ''}"
         )
         raw = create_llm("routing").chat(prompt, system="You are a strict intent classifier. JSON only.")
-        data = json.loads(raw)
+        data = _parse_router_payload(raw)
         allowed = {"chat", "learning", "coding", "code_execution", "security_scan", "file_analysis", "help", "self_update", "git_write", "pentest_external", "self_repair"}
         intents = tuple(x for x in data.get("intents", []) if x in allowed)
         primary = data.get("primary")
