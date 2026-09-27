@@ -218,8 +218,8 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 - اولویت 1: احراز هویت محلی، login/register، first-account-as-admin، session cookie، per-tool allow/deny و audit log پیاده‌سازی شد.
 - صفحه ساخت حساب و صفحه ورود اضافه شد. اولین حسابی که در دیتابیس ساخته شود role=admin می‌گیرد و به همه ابزارها دسترسی دارد؛ حساب‌های بعدی user هستند و دسترسی ابزارها به‌صورت جداگانه کنترل می‌شود.
 - صفحه مدیریت دانش در `/admin/knowledge` اضافه شد؛ دانش جدید unverified است و admin می‌تواند آن را ویرایش، حذف و verify کند.
-- Hybrid retrieval foundation با FTS5 + embedding از Ollama و confidence/provenance اضافه شد؛ مدل embedding پیش‌فرض `nomic-embed-text`.
-- Skill Engine foundation با evidence، score، verified و version-aware revalidation اضافه شد.
+- Hybrid retrieval کامل با FTS5 + `nomic-embed-text`، content-hash embedding cache، provenance/citation اجباری و confidence calibration مبتنی بر retrieval judgments پیاده‌سازی شد.
+- Skill Engine کامل‌تر شد: knowledge coverage و verified skill score مستقل، evidence immutable و قابل مشاهده، sandbox benchmark و version-aware revalidation.
 - streaming chat endpoint، backup/export/import دیتابیس و model health/routing foundation اضافه شد.
 - voice adapters برای whisper.cpp و Piper و endpointهای local voice اضافه شد.
 - scheduler در بار بالای CPU/RAM pause می‌شود و robots.txt policy برای web fetching در API اضافه شد.
@@ -362,3 +362,5 @@ Implemented in the current main branch:
 Verification boundary: GitHub-side code and test changes are committed, but a claim of 100% runtime closure still requires the target machine's local test suite and actual Whisper/Piper/Ollama installations to execute successfully.
 - retrieval confidence now has an empirical calibration path: admin judgments are persisted and confidence is only emitted as calibrated after sufficient same-score-bucket judgments; otherwise it is explicitly marked uncalibrated;
 - application read-only mode now blocks key project, voice-output, and self-update writes and avoids import-time directory creation in read-only mode.
+- Unified permission policy و process-wide OS/database read-only enforcement روی writerهای اصلی و مسیرهای API اعمال شد.
+- Knowledge management UI در `/admin/knowledge` و Skill Engine UI در `/admin/skills` با verification/evidence workflow فعال شد.
