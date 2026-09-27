@@ -161,6 +161,7 @@ def propose_repair(issue: str) -> dict[str, object]:
 
 
 def apply_repair(proposal_id: str, approved: bool) -> dict[str, object]:
+    assert_mutation_allowed("self-repair apply")
     if not get_bool("self_repair.enabled", True):
         raise ValueError("Self-repair is disabled in Settings.")
     if get_bool("self_repair.require_approval", True) and not approved:
