@@ -201,6 +201,15 @@ DOMAIN_RULES: Dict[str, List[Tuple[Tuple[str, ...], Tuple[str, ...]]]] = {
         (("test", "benchmark", "performance"), ("https://doc.rust-lang.org/book/ch11-00-testing.html", "https://bheisler.github.io/criterion.rs/book/")),
         (("security", "audit", "fuzz"), ("https://rustsec.org/", "https://rust-fuzz.github.io/book/")),
     ],
+    "Cisco": [
+        (("switch", "vlan", "trunk", "etherchannel", "stp", "rstp"), ("https://www.cisco.com/c/en/us/support/docs/lan-switching/spanning-tree-protocol/","https://www.cisco.com/c/en/us/support/docs/lan-switching/vlan/")),
+        (("routing", "ospf", "eigrp", "bgp", "static route"), ("https://www.cisco.com/c/en/us/support/docs/ip/open-shortest-path-first-ospf/","https://www.cisco.com/c/en/us/support/docs/ip/border-gateway-protocol-bgp/")),
+        (("acl", "security", "ssh", "port security"), ("https://www.cisco.com/c/en/us/support/docs/security-vpn/secure-shell-ssh/","https://www.cisco.com/c/en/us/support/docs/ip/access-lists/")),
+        (("ipv4", "ipv6", "subnet", "icmp", "arp"), ("https://www.cisco.com/c/en/us/support/docs/ip/routing-information-protocol-rip/","https://www.cisco.com/c/en/us/support/docs/ip/ip-version-6-ipv6/")),
+        (("qos", "wireless", "wan", "vpn"), ("https://www.cisco.com/c/en/us/support/docs/quality-of-service-qos/","https://www.cisco.com/c/en/us/support/docs/wireless-mobility/")),
+        (("automation", "api", "json", "telemetry", "monitor"), ("https://developer.cisco.com/docs/","https://www.cisco.com/c/en/us/products/cloud-systems-management/index.html")),
+        (("troubleshoot", "diagnos", "packet", "wireshark"), ("https://www.wireshark.org/docs/","https://www.cisco.com/c/en/us/support/docs/ip/")),
+    ],
     "Pentest": [
         (("web", "xss", "sql injection", "csrf", "ssrf", "upload"), ("https://owasp.org/www-project-web-security-testing-guide/", "https://portswigger.net/web-security")),
         (("api", "authorization"), ("https://wstg.owasp.org/latest/4-Web_Application_Security_Testing/12-API_Testing/00-API_Testing_Overview/", "https://portswigger.net/web-security/api-testing")),
@@ -223,6 +232,7 @@ DOMAIN_FALLBACKS = {
     "iOS": ["https://www.hackingwithswift.com/100/swiftui", "https://www.swiftbysundell.com/"],
     "Rust": ["https://rust-book.cs.brown.edu/", "https://rust-lang.github.io/async-book/"],
     "Pentest": ["https://portswigger.net/web-security", "https://owasp.org/www-project-web-security-testing-guide/"],
+    "Cisco": ["https://www.cisco.com/c/en/us/support/docs.html", "https://www.cisco.com/c/en/us/support/"],
 }
 
 
