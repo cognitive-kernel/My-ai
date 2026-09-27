@@ -16,6 +16,7 @@ from .config import settings
 from .db import connect, fetch_all
 from .network import assert_public_hostname, pinned_client
 from .backup_crypto import encrypt_file, decrypt_file
+from .access_policy import assert_mutation_allowed
 from functools import lru_cache
 import time
 
@@ -279,6 +280,7 @@ def _safe_backup_path(value: str) -> Path:
 
 
 def backup_database(destination: str, password: str | None = None) -> str:
+    assert_mutation_allowed("database backup")
     src = Path(settings.db_path)
     dst = _safe_backup_path(destination)
     if password:
@@ -315,6 +317,7 @@ class sqlite3_backup:
 
 
 def export_database(destination: str, password: str | None = None) -> str:
+    assert_mutation_allowed("database export")
     dst = _safe_backup_path(destination)
     dst.parent.mkdir(parents=True, exist_ok=True)
     with connect() as conn:
@@ -337,6 +340,7 @@ def export_database(destination: str, password: str | None = None) -> str:
 
 
 def _import_data(data: dict[str, Any]) -> dict[str, Any]:
+    assert_mutation_allowed("database import")
     if "tables" in data:
         metadata = data.get("metadata") or {}
         version = int(metadata.get("format_version", 0))
