@@ -1,22 +1,16 @@
 from pathlib import Path
+import sys
 
 __version__ = "0.2.0"
 
-# Keep the runtime-served Settings script identical to the source asset. The
-# package import executes this initialization before application routes are
-# registered, so stale bundled JavaScript cannot override the fixed asset.
 try:
     from . import settings_feature as _settings_feature
     _settings_script = Path(__file__).with_name("settings_script.js")
     if _settings_script.is_file():
         _settings_feature.SETTINGS_JS = _settings_script.read_text(encoding="utf-8")
 except Exception:
-    # Settings remains importable even in minimal tooling environments where
-    # optional runtime dependencies are not installed yet.
     pass
 
-# Serve the extended local-file and learning-control UI regardless of whether
-# the app is launched through `python -m my_ai` or directly through uvicorn.
 try:
     from . import ui as _ui
     from . import ui_extensions as _ui_extensions
@@ -24,8 +18,16 @@ try:
     if 'id="localFileTools"' not in _ui.HTML:
         _ui.HTML = _ui.HTML.replace("</body>", _ui_extensions_inject + "</body>")
 except Exception:
-    # Keep the base UI importable in minimal tooling environments.
     pass
+
+# Use one runtime chat implementation for every application import while keeping
+# my_ai.agent as the legacy implementation available to agent_runtime itself.
+try:
+    from . import agent_runtime as _agent_runtime
+    sys.modules[__name__ + ".agent"] = _agent_runtime
+    agent = _agent_runtime
+except Exception:
+    agent = None
 
 def page():
     return _ui.HTML
