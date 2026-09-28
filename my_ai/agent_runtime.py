@@ -11,6 +11,7 @@ from .memory import recall
 from .llm import create_llm
 from .self_update import recent_lessons
 from .chat_transport_context import get_attachments
+from .project_builder import build_project
 
 
 @dataclass
@@ -170,10 +171,46 @@ class Agent(LegacyAgent):
         self._update_state(ctx, answer)
         return answer
 
+    @staticmethod
+    def _project_build_requested(intent) -> bool:
+        return (
+            getattr(intent, "name", "") == "coding"
+            and str((getattr(intent, "args", {}) or {}).get("action") or "") == "create_artifact"
+        )
+
+    def _build_project_from_intent(self, message: str, intent: Any) -> str:
+        args = getattr(intent, "args", {}) or {}
+        language = str(args.get("language") or "Python").strip() or "Python"
+        project_path = str(args.get("project_path") or "").strip() or None
+        try:
+            result = build_project(message, language, project_path=project_path, timeout=300, repair_attempts=2)
+        except Exception as exc:
+            return f"ساخت پروژه انجام نشد: {exc}"
+        if result.get("status") == "built":
+            return (
+                "پروژه ساخته و تست شد.\n"
+                f"- زبان: {result.get('language', language)}\n"
+                f"- مسیر پروژه: {result.get('project_path') or result.get('project_name') or ''}\n"
+                f"- تعداد فایل‌ها: {len(result.get('files') or [])}\n"
+                "- Build: موفق\n- Tests: موفق\n- Lint: موفق"
+            )
+        return (
+            "ساخت پروژه کامل نشد.\n"
+            f"- مسیر پروژه: {result.get('project_path') or result.get('project_name') or ''}\n"
+            f"- Build: {(result.get('build') or {}).get('error') or (result.get('build') or {}).get('passed')}\n"
+            f"- Tests: {(result.get('tests') or {}).get('error') or (result.get('tests') or {}).get('passed')}\n"
+            f"- Lint: {(result.get('lint') or {}).get('error') or (result.get('lint') or {}).get('passed')}"
+        )
+
     def chat(self, message, session_id=1, attachments=None):
         ctx = self._prepare_chat_context(message, session_id, attachments)
         if ctx.shortcut is not None:
             answer = self._persist_shortcut(ctx)
+            self._update_state(ctx, answer)
+            return answer
+        if self._project_build_requested(ctx.intent):
+            answer = self._build_project_from_intent(ctx.message, ctx.intent)
+            self._persist_shortcut(PreparedChat(ctx.message, ctx.session_id, ctx.attachments, ctx.history, ctx.context, ctx.conversation_state, intent=ctx.intent, shortcut=answer))
             self._update_state(ctx, answer)
             return answer
         answer = ctx.llm.chat(ctx.llm_message, system=ctx.system, history=ctx.history)
