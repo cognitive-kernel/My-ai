@@ -67,3 +67,10 @@ def test_chat_route_does_not_define_keyword_intent_tables():
     assert "learn_intent=(\"یاد بگیر\"" not in source
     assert "code_words=(" not in source
     assert "image_words=(" not in source
+
+def test_code_generation_request_is_not_code_execution():
+    payload_data = payload("code_execution", ["code_execution"], 0.99, "mql4", None, "write an indicator that can read MetaTrader data and place trades")
+    result, _ = route(payload_data, "یه اندیکاتور MQL4 بنویس که قیمت، نمودار و زمان متاتریدر را بخواند و امکان انجام معامله داشته باشد")
+    assert result.name == "coding"
+    assert result.requires_confirmation is False
+
