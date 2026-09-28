@@ -21,6 +21,8 @@ BUILD_WORDS=(
     "پروژه بساز","پروژه ایجاد کن","ایجاد پروژه","اپلیکیشن بساز","برنامه بساز",
     "build project","create project","create application","build application","make a project",
     "compile the project","build the application",
+    "فایل رو بساز","فایل را بساز","همین رو بساز","همین را بساز",
+    "بر اساس دستوراتی که دادم","طبق دستوراتی که دادم",
 )
 # Source/file generation phrases (indicator, single file) — NOT application toolchain build.
 GENERATE_FILE_WORDS=("بساز","فایل بساز","همونو بساز","همان را بساز","همون فایل رو بساز","create file","write file")
