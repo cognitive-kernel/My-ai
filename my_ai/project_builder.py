@@ -149,10 +149,10 @@ def _recent_conversation_context(goal: str) -> tuple[str, str | None, int | None
     if not user_messages:
         return goal, sessions[0].get("language"), session_id
 
-    language = _detect_language_from_texts(user_messages) or sessions[0].get("language")
     current = str(goal or "").strip()
+    current_language = _detect_language_from_texts([current])
+    prior = None
     if _is_contextual_build_request(current):
-        prior = None
         for candidate in reversed(user_messages[:-1]):
             if len(candidate) < 8:
                 continue
@@ -172,6 +172,8 @@ def _recent_conversation_context(goal: str) -> tuple[str, str | None, int | None
     else:
         resolved_goal = current
 
+    prior_language = _detect_language_from_texts([prior]) if prior else None
+    language = current_language or prior_language or sessions[0].get("language")
     conversation_context = "\n".join(
         f"{row['role']}: {str(row['content'] or '')[:7000]}" for row in rows[-20:]
     )[:MAX_CONTEXT_CHARS]
