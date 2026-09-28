@@ -21,6 +21,29 @@ from .settings_store import get_int
 logger = logging.getLogger(__name__)
 
 class LearningEngine:
+    @staticmethod
+    def record_experience(language, topic, kind, action, content, error=None, session_id=None):
+        from .settings_store import get_bool
+        if not get_bool("learning.personal_experience", True):
+            return None
+        text=str(content or "").strip()
+        if not text and not error:
+            return None
+        if session_id is None:
+            rows=fetch_all("SELECT id FROM learning_sessions WHERE language=? AND topic=? ORDER BY id DESC LIMIT 1",(language,topic))
+            session_id=rows[0]["id"] if rows else None
+        return execute(
+            "INSERT INTO learning_experiences(session_id,language,topic,kind,action,content,error) VALUES(?,?,?,?,?,?,?)",
+            (session_id, str(language), str(topic), str(kind), str(action or ""), text[:20000], str(error or "")[:10000] or None),
+        )
+
+    @staticmethod
+    def personal_experiences(language, topic, limit=12):
+        return fetch_all(
+            "SELECT id,kind,action,content,error,created_at FROM learning_experiences WHERE language=? AND topic=? ORDER BY id DESC LIMIT ?",
+            (str(language), str(topic), max(1,min(int(limit),50))),
+        )
+
     def __init__(self,llm=None):
         self.llm=llm or create_llm("general"); self.web=WebLearner()
         self.security=SecurityEngine(self.llm); self.dast=LocalDAST()
@@ -123,6 +146,7 @@ class LearningEngine:
                     language, topic["topic"], url, type(exc).__name__, message,
                 )
                 knowledge.append({"title":"Source unavailable","url":url,"error":message})
+                self.record_experience(language, topic["topic"], "error", "source_fetch", f"منبع آموزشی در دسترس نبود: {url}", message)
                 if progress_callback:
                     progress_callback("source_unavailable",topic["topic"])
                 continue
@@ -209,6 +233,7 @@ class LearningEngine:
         )
         logger.info("LEARNING_LESSON_SUCCESS: language=%s topic=%s chars=%s", language, t["topic"], len(lesson))
         remember(language,"Mastery lesson: "+t["topic"],lesson)
+        self.record_experience(language, t["topic"], "lesson", "learn", lesson, session_id=s["session_id"])
         self._set_progress(s["session_id"], 75.0, "assessment")
         if progress_callback: progress_callback("assessment",t["topic"])
         try:
@@ -224,6 +249,7 @@ class LearningEngine:
         except Exception as exc:
             # Assessment must never erase a successfully generated lesson.
             # Keep the score nullable and let the next review re-assess it.
+            self.record_experience(language, t["topic"], "error", "assessment", "ارزیابی درس با خطا مواجه شد و درس بدون امتیاز تکمیل شد.", str(exc), s["session_id"])
             logger.warning(
                 "learning assessment unavailable; completing lesson without score: language=%s topic=%s error=%s",
                 language,
