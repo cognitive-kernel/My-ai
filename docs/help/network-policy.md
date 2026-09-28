@@ -6,7 +6,6 @@ Allowed online categories:
 - Configured LLM backend when it is online.
 - Explicitly confirmed chat web-learning after the local assistant says it does not know.
 - Explicitly configured educational learning sources and scheduled learning review.
-- Pentest/security tools and targets that require network access.
 - Online installation of missing prerequisites and educational tools.
 - Git/GitHub operations.
 
