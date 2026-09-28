@@ -1,10 +1,11 @@
-"""Run from project root: .venv\Scripts\python.exe patch_api.py"""
+"""Run from project root: .venv\\Scripts\\python.exe patch_api.py"""
 from pathlib import Path
 
 path = Path("my_ai/api.py")
 text = path.read_text(encoding="utf-8")
 changed = False
 
+# 1) database_import guard
 if "never hard-stop indicator/code file requests" not in text:
     old = "        intent=classify(msg)\n        # Learning and image generation have dedicated pages/endpoints."
     guard = (
@@ -37,6 +38,7 @@ if "never hard-stop indicator/code file requests" not in text:
 else:
     print("database_import guard already present")
 
+# 2) Indicator -> agent.chat
 marker = "        if code_intent:\n            language=requested or \"Python\"\n            if policy.build:"
 replacement = (
     "        if code_intent:\n"
@@ -83,18 +85,46 @@ if "Indicator/MQL source: never require application-build" not in text:
 else:
     print("indicator agent path already present")
 
+# 3) Force MQL4 language for generate_program fallback
 needle = "            generated_data=learner.generate_program(msg,language)"
-force = (
-    "            if any(t in low for t in (\"اندیکاتور\", \"indicator\", \"mql4\", \"mql5\", \"mq4\", \"mq5\", \"متاتریدر\", \"metatrader\")):\n"
-    "                language = \"MQL4\"\n"
-    "            generated_data=learner.generate_program(msg,language)"
-)
 if needle in text and 'language = "MQL4"\n            generated_data=learner.generate_program' not in text:
+    force = (
+        "            if any(t in low for t in (\"اندیکاتور\", \"indicator\", \"mql4\", \"mql5\", \"mq4\", \"mq5\", \"متاتریدر\", \"metatrader\")):\n"
+        "                language = \"MQL4\"\n"
+        "            generated_data=learner.generate_program(msg,language)"
+    )
     text = text.replace(needle, force, 1)
     changed = True
-    print("applied MQL4 language force before generate_program")
+    print("applied MQL4 language force")
 else:
-    print("generate_program language force skipped or already present")
+    print("MQL4 language force skipped or present")
+
+# 4) Expand answer with file paths
+if "فایل(ها) ذخیره شد" not in text:
+    old_a = '            generated_answer="Generated program:"'
+    new_a = (
+        "            _code = str((generated_data or {}).get(\"code\") or \"\")\n"
+        "            _files = (generated_data or {}).get(\"files\") or []\n"
+        "            _pp = str((generated_data or {}).get(\"project_path\") or \"\")\n"
+        "            _files_txt = (\"\\n\".join(\"- \" + str(f) for f in _files)\n"
+        "                         if _files else (\"- projects/\" + str((generated_data or {}).get(\"project_name\") or \"\") + \"/\"))\n"
+        "            generated_answer = (\n"
+        "                \"Generated program (\" + str((generated_data or {}).get(\"language\") or language) + \"):\\n\\n\"\n"
+        "                + _code\n"
+        "                + \"\\n\\n---\\nفایل(ها) ذخیره شد:\\n\"\n"
+        "                + _files_txt\n"
+        "                + ((\"\\nمسیر نسبی پروژه: \" + _pp) if _pp else \"\")\n"
+        "                + \"\\n\\nنصب MetaTrader 4: فایل .mq4 را در MQL4/Experts یا MQL4/Indicators کپی و Compile کنید. \"\n"
+        "                + \"اندیکاتور OrderSend ندارد؛ برای معامله از Expert Advisor استفاده کنید.\"\n"
+        "            )"
+    )
+    if old_a not in text:
+        raise SystemExit("generated_answer assignment not found")
+    text = text.replace(old_a, new_a, 1)
+    changed = True
+    print("applied answer with file paths")
+else:
+    print("answer path expansion already present")
 
 if changed:
     path.write_text(text, encoding="utf-8")
