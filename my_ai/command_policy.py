@@ -15,12 +15,10 @@ FIX_WORDS=("رفع کن","رفعش کن","برطرف کن","اصلاح کن","د
 SEC_WORDS=("پن تست","پنتست","تست نفوذ","تست امنیت","pentest","pen test","penetration test","security test")
 TEST_WORDS=("تست بگیر","بررسی امنیتی","امنیتش را بررسی","security check","security scan")
 LEARN_WORDS=("یاد بگیر","یادگیری","یاد بگیر که","learn","study","go learn")
-BUILD_WORDS=("بساز","برنامه بنویس","پروژه بساز","پروژه ایجاد کن","ایجاد پروژه","create project","build project","write a program","write code","make a project")
+BUILD_WORDS=("بساز","برنامه بنویس","پروژه بساز","پروژه ایجاد کن","ایجاد پروژه","فایل رو بساز","فایل را بساز","فایل بساز","بر اساس دستوراتی که دادم بساز","همونو بساز","همان را بساز","همون فایل رو بساز","create file","create project","build project","create application","build application","write a program","write code","make a project")
 
 def _contains(text, words):
     return any((re.search(r"(?<![A-Za-z])"+re.escape(x)+r"(?![A-Za-z])",text) if x.isascii() else x in text) for x in words)
-
-
 
 LANGUAGE_ALIASES={
     "python":"Python","py":"Python","پایتون":"Python",
@@ -29,6 +27,7 @@ LANGUAGE_ALIASES={
     "java":"Java","go":"Go","golang":"Go","rust":"Rust",
     "c++":"C++","cpp":"C++","c#":"C#","csharp":"C#",
     "php":"PHP","ruby":"Ruby","sql":"SQL","bash":"Bash","shell":"Bash",
+    "mql4":"MQL4","mql 4":"MQL4","mq4":"MQL4","mql":"MQL4","متا تریدر 4":"MQL4","متاتریدر 4":"MQL4","metatrader 4":"MQL4","metatrader":"MQL4",
 }
 
 def _detect_language(text):
