@@ -15,8 +15,12 @@ def test_agent_stream_chat_persists_context(monkeypatch):
     monkeypatch.setattr(agent_module, "recall", lambda *args, **kwargs: [])
     monkeypatch.setattr(agent_module, "recent_lessons", lambda *args, **kwargs: [])
     monkeypatch.setattr(agent_module, "execute", lambda *args: writes.append(args))
-    agent = agent_module.Agent(llm=FakeLLM())
+    class FakeRouter:
+        def classify(self, message, context=None):
+            return type("Intent", (), {"name": "chat", "args": {"action": "answer"}, "intents": ("chat",)})()
+    agent = agent_module.Agent(llm=FakeLLM(), router=FakeRouter())
     chunks = list(agent.stream_chat("سلام", session_id=7))
     assert "".join(chunks) == "سلام دنیا"
-    assert writes[0][1] == (7, "user", "سلام")
-    assert writes[1][1] == (7, "assistant", "سلام دنیا")
+    conversation_writes = [item for item in writes if len(item) >= 2 and isinstance(item[1], tuple)]
+    assert conversation_writes[0][1] == (7, "user", "سلام")
+    assert conversation_writes[1][1] == (7, "assistant", "سلام دنیا")

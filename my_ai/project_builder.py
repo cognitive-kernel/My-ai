@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from .command_policy import LANGUAGE_ALIASES
+from .command_policy import LANGUAGE_ALIASES, _detect_language
 from .config import assert_write_allowed
 from .curriculum import canonical_language
 from .db import execute, fetch_all, search_knowledge
@@ -149,10 +149,10 @@ def _recent_conversation_context(goal: str) -> tuple[str, str | None, int | None
     if not user_messages:
         return goal, sessions[0].get("language"), session_id
 
-    language = _detect_language_from_texts(user_messages) or sessions[0].get("language")
     current = str(goal or "").strip()
+    current_language = _detect_language_from_texts([current])
+    prior = None
     if _is_contextual_build_request(current):
-        prior = None
         for candidate in reversed(user_messages[:-1]):
             if len(candidate) < 8:
                 continue
@@ -172,6 +172,21 @@ def _recent_conversation_context(goal: str) -> tuple[str, str | None, int | None
     else:
         resolved_goal = current
 
+    prior_language = _detect_language_from_texts([prior]) if prior else _detect_language_from_texts(user_messages[:-1])
+    resolved_language = _detect_language(resolved_goal.casefold())
+    if not resolved_language:
+        normalized_goal = resolved_goal.casefold()
+        explicit_language_hints = (
+            ("mql4", "MQL4"), ("mql 4", "MQL4"), ("mq4", "MQL4"),
+            ("mql5", "MQL5"), ("python", "Python"), ("پایتون", "Python"),
+            ("rust", "Rust"), ("javascript", "JavaScript"), ("typescript", "TypeScript"),
+        )
+        resolved_language = next((name for needle, name in explicit_language_hints if needle in normalized_goal), None)
+    language = current_language or resolved_language or prior_language or sessions[0].get("language")
+    if not language and _is_contextual_build_request(current):
+        context_text = "\n".join(user_messages).casefold()
+        if "mql4" in context_text or "mq4" in context_text or "متاتریدر 4" in context_text or "metatrader 4" in context_text:
+            language = "MQL4"
     conversation_context = "\n".join(
         f"{row['role']}: {str(row['content'] or '')[:7000]}" for row in rows[-20:]
     )[:MAX_CONTEXT_CHARS]
@@ -204,13 +219,21 @@ def _artifact_files(workspace: Path) -> list[str]:
     return out[:200]
 
 
-def build_project(goal: str, language: str = "Python", *, timeout: int = 300, repair_attempts: int = 2) -> dict[str, Any]:
+def build_project(
+    goal: str,
+    language: str = "Python",
+    *,
+    project_path: str | None = None,
+    timeout: int = 300,
+    repair_attempts: int = 2,
+) -> dict[str, Any]:
     goal = str(goal or "").strip()
     if not goal:
         raise ValueError("Project goal is required.")
     resolved_goal, contextual_language, session_id = _recent_conversation_context(goal)
-    language = canonical_language(contextual_language or language)
-    workspace = create_project_workspace(goal)
+    detected_language = contextual_language or _detect_language_from_texts([resolved_goal, goal])
+    language = canonical_language(detected_language or language)
+    workspace = create_project_workspace(goal, projects_root=project_path)
     knowledge = search_knowledge(language + " " + resolved_goal, 20)
     llm = create_llm("coding")
     files = {}
@@ -244,10 +267,16 @@ def build_project(goal: str, language: str = "Python", *, timeout: int = 300, re
     return {
         "status": "built" if build.get("passed") and tests.get("passed", False) and lint.get("passed", False) else "build_failed",
         "language": language, "request": resolved_goal, "project_id": pid,
-        "project_name": workspace.name, "project_path": str(workspace.relative_to(workspace.parents[1])),
+        "project_name": workspace.name,
+        "project_path": str(workspace.relative_to(ROOT)) if workspace.is_relative_to(ROOT) else str(workspace),
         "session_id": session_id, "files": sorted(files), "file_count": len(files),
         "build": build, "tests": tests, "lint": lint, "repair_attempts": attempts - 1,
-        "artifacts": _artifact_files(workspace), "toolchain": doctor(language).get(language, {}),
+        "artifacts": _artifact_files(workspace),
+        "toolchain": (
+            {"metaeditor": bool(os.getenv("MYAI_METAEDITOR", "").strip())}
+            if canonical_language(language) == "MQL4"
+            else doctor(language).get(language, {})
+        ),
     }
 
 

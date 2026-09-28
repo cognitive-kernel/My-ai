@@ -17,24 +17,24 @@ def route(payload, text, context=None):
     return result, fake
 
 
-def payload(primary="chat", intents=None, confidence=0.9, language=None, topic=None, goal=None, project_path=None, urls=None):
+def payload(primary="chat", intents=None, action="answer", confidence=0.9, language=None, topic=None, goal=None, project_path=None, urls=None):
     return {
-        "primary": primary, "intents": intents or [primary], "confidence": confidence,
+        "primary": primary, "intents": intents or [primary], "action": action, "confidence": confidence,
         "language": language, "topic": topic, "goal": goal,
         "project_path": project_path, "urls": urls or [],
     }
 
 
 def test_semantic_router_distinguishes_question_from_command():
-    question, _ = route(payload("help", ["help"], 0.94, goal="explain how to run code"), "چطور کد را اجرا کنم؟")
-    command, _ = route(payload("code_execution", ["code_execution"], 0.96), "این کد را اجرا کن")
+    question, _ = route(payload("help", ["help"], "answer", 0.94, goal="explain how to run code"), "چطور کد را اجرا کنم؟")
+    command, _ = route(payload("code_execution", ["code_execution"], "execute", 0.96), "این کد را اجرا کن")
     assert question.name == "help"
     assert command.name == "code_execution"
     assert command.requires_confirmation is True
 
 
 def test_ambiguous_multi_intent_request_preserves_all_intents():
-    result, fake = route(payload("learning", ["learning", "coding"], 0.91, "fa", "Python", "learn then implement"), "پایتون را یاد بگیر و بعد یک API بساز")
+    result, fake = route(payload("learning", ["learning", "coding"], "continue_task", 0.91, "fa", "Python", "learn then implement"), "پایتون را یاد بگیر و بعد یک API بساز")
     assert result.name == "learning"
     assert result.intents == ("learning", "coding")
     assert result.args["language"] == "fa"
@@ -43,14 +43,14 @@ def test_ambiguous_multi_intent_request_preserves_all_intents():
 
 
 def test_high_risk_confirmation_is_derived_outside_model_authorization():
-    result, _ = route(payload("git_write", ["git_write"], 0.98), "در مخزن تغییر بده")
+    result, _ = route(payload("git_write", ["git_write"], "modify_artifact", 0.98), "در مخزن تغییر بده")
     assert result.requires_confirmation is True
 
 
 def test_structured_arguments_are_preserved():
-    result, _ = route(payload("coding", ["coding"], 0.93, "python", None, "build API", "/projects/demo", ["https://example.com/spec"]), "پروژه را بساز")
+    result, _ = route(payload("coding", ["coding"], "create_artifact", 0.93, "python", None, "build API", "/projects/demo", ["https://example.com/spec"]), "پروژه را بساز")
     assert result.args == {
-        "language": "python", "goal": "build API",
+        "action": "create_artifact", "language": "python", "goal": "build API",
         "project_path": "/projects/demo", "urls": ["https://example.com/spec"],
     }
 
@@ -69,7 +69,7 @@ def test_chat_route_does_not_define_keyword_intent_tables():
     assert "image_words=(" not in source
 
 def test_code_generation_request_is_not_code_execution():
-    payload_data = payload("code_execution", ["code_execution"], 0.99, "mql4", None, "write an indicator that can read MetaTrader data and place trades")
+    payload_data = payload("code_execution", ["code_execution"], "create_artifact", 0.99, "mql4", None, "write an indicator that can read MetaTrader data and place trades")
     result, _ = route(payload_data, "یه اندیکاتور MQL4 بنویس که قیمت، نمودار و زمان متاتریدر را بخواند و امکان انجام معامله داشته باشد")
     assert result.name == "coding"
     assert result.requires_confirmation is False
@@ -77,6 +77,7 @@ def test_mql4_source_request_stays_in_code_generation_path():
     payload_data = payload(
         "code_execution",
         ["code_execution"],
+        "create_artifact",
         0.99,
         "mql4",
         None,
@@ -88,3 +89,12 @@ def test_mql4_source_request_stays_in_code_generation_path():
     )
     assert result.name == "coding"
     assert result.requires_confirmation is False
+
+
+def test_semantic_artifact_action_does_not_depend_on_trigger_words():
+    result, _ = route(
+        payload("coding", ["coding"], "create_artifact", 0.97, "python", None, "create a complete API project"),
+        "یک سامانه کامل برای مدیریت سفارش‌ها طراحی کن، فایل‌های لازم را تولید کن و آماده اجرا تحویل بده",
+    )
+    assert result.name == "coding"
+    assert result.args["action"] == "create_artifact"

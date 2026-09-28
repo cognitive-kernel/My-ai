@@ -13,6 +13,7 @@ from .web_learner import WebLearner
 from .web_learning import create_pending, pending, learn_confirmed
 from .local_files import inspect_file, read_text, WORKSPACE_ROOT
 from .multimodal import analyze as analyze_file
+from .project_builder import build_project
 
 
 SYSTEM = """You are My-AI, a local-first personal AI assistant.
@@ -60,6 +61,7 @@ Self-maintenance rules:
 
 class Agent:
     def __init__(self, llm=None, router=None):
+        self._llm_injected = llm is not None
         self.llm = llm or create_llm("general")
         # router=None → fall back to module-level classify() (real semantic router).
         # Do not call build_router_service(None): that injects the test-only SafeNoop.
@@ -244,6 +246,54 @@ class Agent:
             return f"یادگیری تأییدشده انجام شد و به آموزش «{result['domain']}» در سرفصل «{result['topic']}» اضافه شد."
         return "یادگیری اینترنتی انجام نشد: " + str(result.get("error", "خطای نامشخص"))
 
+    @staticmethod
+    def _project_build_requested(message: str, intent) -> bool:
+        return (
+            getattr(intent, "name", "") == "coding"
+            and str((getattr(intent, "args", {}) or {}).get("action") or "") == "create_artifact"
+        )
+
+    @staticmethod
+    def _format_project_build_result(result: dict) -> str:
+        status = str(result.get("status") or "")
+        if status == "built":
+            files = result.get("files") or []
+            path = result.get("project_path") or result.get("project_name") or ""
+            language = result.get("language") or ""
+            return (
+                "پروژه ساخته و تست شد.\n"
+                f"- زبان: {language}\n"
+                f"- مسیر پروژه: {path}\n"
+                f"- تعداد فایل‌ها: {len(files)}\n"
+                + ("- Build: موفق\n- Tests: موفق\n- Lint: موفق" if result.get("build", {}).get("passed") and result.get("tests", {}).get("passed") and result.get("lint", {}).get("passed") else "- نتیجه: ساخت کامل نیست.")
+            )
+        details = []
+        for key in ("build", "tests", "lint"):
+            item = result.get(key) or {}
+            if item:
+                details.append(f"{key}: {item.get('error') or item.get('output') or item.get('passed')}")
+        return (
+            "ساخت پروژه کامل نشد.\n"
+            f"- مسیر پروژه: {result.get('project_path') or result.get('project_name') or ''}\n"
+            + "\n".join(f"- {item}" for item in details)
+        )
+
+    def _build_project_from_intent(self, message: str, intent) -> str:
+        args = getattr(intent, "args", {}) or {}
+        language = str(args.get("language") or "Python").strip() or "Python"
+        project_path = str(args.get("project_path") or "").strip() or None
+        try:
+            result = build_project(
+                message,
+                language,
+                project_path=project_path,
+                timeout=300,
+                repair_attempts=2,
+            )
+            return self._format_project_build_result(result)
+        except Exception as exc:
+            return f"ساخت پروژه انجام نشد: {exc}"
+
     def _handle_unknown(self, answer, message, session_id):
         if "__MYAI_UNKNOWN__" not in str(answer):
             return answer
@@ -402,7 +452,7 @@ class Agent:
         attachment_context = self._attachment_context(attachments)
         llm_message = message + ("\n\n" + attachment_context if attachment_context else "")
         task = "coding" if intent.name == "coding" else "general"
-        llm = self.llm if task == "general" else create_llm(task)
+        llm = self.llm if self._llm_injected or task == "general" else create_llm(task)
 
         query = self._retrieval_query(message, state, intent.name)
         raw_knowledge = recall(query, 8)
@@ -471,6 +521,10 @@ class Agent:
             return answer
 
         prep = self._prepare_inference(message, session_id, attachments=attachments)
+        if self._project_build_requested(message, prep["intent"]):
+            answer = self._build_project_from_intent(message, prep["intent"])
+            self._persist_turn(session_id, message, answer)
+            return answer
         answer = prep["llm"].chat(
             prep["llm_message"],
             system=prep["system"],
@@ -495,7 +549,7 @@ class Agent:
                     answer = (
                         str(answer).rstrip()
                         + "\n\n---\n"
-                        + f"فایل ذخیره شد:\n"
+                        + "فایل ذخیره شد:\n"
                         + f"- مسیر کامل: `{info['path']}`\n"
                         + f"- مسیر نسبی پروژه: `{info['workspace_relative']}`\n"
                         + f"- نام فایل: `{info['filename']}`\n\n"
@@ -530,6 +584,11 @@ class Agent:
             return
 
         prep = self._prepare_inference(message, session_id, attachments=attachments)
+        if self._project_build_requested(message, prep["intent"]):
+            answer = self._build_project_from_intent(message, prep["intent"])
+            self._persist_turn(session_id, message, answer)
+            yield answer
+            return
         chunks: list[str] = []
         for chunk in prep["llm"].stream_chat(
             prep["llm_message"],

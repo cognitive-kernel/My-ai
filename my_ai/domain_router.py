@@ -121,7 +121,6 @@ def classify(text: str, context: str | None = None, classifier: StructuredRouter
     explicit_execution = any(x in text_low for x in ("اجرا کن", "اجرایش کن", "اجرا بده", "run", "execute", "eval", "launch"))
     generation = _is_actionable(text)
     mql4_source = any(x in text_low for x in ("mql4", "mq4", "متاتریدر 4", "متاتریدر۴", "metatrader 4", "اندیکاتور", "indicator")) and generation
-    ctx_blob = f"{text}\n{context or ''}"
 
     # Code / indicator generation must never be treated as execution.
     if (mql4_source or (data.get("primary") == "code_execution" and generation)) and not explicit_execution:

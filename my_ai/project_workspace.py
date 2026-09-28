@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 from .config import assert_write_allowed
@@ -20,16 +21,36 @@ def project_slug(name: str) -> str:
     return (value or "project")[:80]
 
 
-def create_project_workspace(name: str) -> Path:
-    assert_write_allowed(str(PROJECTS_ROOT))
+def resolve_projects_root(project_path: str | Path | None = None) -> Path:
+    """Resolve a user-requested project directory without allowing arbitrary filesystem writes."""
+    configured = os.getenv("MYAI_PROJECT_ROOT", "").strip()
+    allowed_roots = [PROJECTS_ROOT.resolve(), ROOT.resolve()]
+    if configured:
+        allowed_roots.append(Path(configured).expanduser().resolve())
+
+    if not project_path:
+        return PROJECTS_ROOT.resolve()
+
+    raw = Path(str(project_path)).expanduser()
+    candidate = raw.resolve() if raw.is_absolute() else (ROOT / raw).resolve()
+    if not any(candidate == root or root in candidate.parents for root in allowed_roots):
+        raise ValueError("Project path must stay inside the My-AI project workspace.")
+    candidate.mkdir(parents=True, exist_ok=True)
+    assert_write_allowed(str(candidate))
+    return candidate
+
+
+def create_project_workspace(name: str, projects_root: str | Path | None = None) -> Path:
+    base_root = resolve_projects_root(projects_root)
+    assert_write_allowed(str(base_root))
     slug = project_slug(name)
-    base = PROJECTS_ROOT / slug
+    base = base_root / slug
     if not base.exists():
         base.mkdir(parents=True)
         return base
     index = 2
     while True:
-        candidate = PROJECTS_ROOT / f"{slug}-{index}"
+        candidate = base_root / f"{slug}-{index}"
         if not candidate.exists():
             candidate.mkdir(parents=True)
             return candidate

@@ -49,3 +49,27 @@ def test_project_workspace_uses_mql4_source_extension(tmp_path, monkeypatch):
 
     assert (workspace / "main.mq4").read_text(encoding="utf-8").startswith("int OnInit")
     assert any(path.endswith("/main.mq4") for path in files)
+
+
+def test_project_workspace_accepts_explicit_workspace_root(tmp_path, monkeypatch):
+    root = tmp_path / "projects"
+    monkeypatch.setattr(project_workspace, "PROJECTS_ROOT", tmp_path / "default-projects")
+    root.mkdir()
+
+    monkeypatch.setenv("MYAI_PROJECT_ROOT", str(root))
+    workspace = project_workspace.create_project_workspace("indicator", projects_root=root)
+
+    assert workspace.parent == root
+    assert workspace.is_dir()
+
+
+def test_project_workspace_rejects_path_outside_workspace(tmp_path, monkeypatch):
+    monkeypatch.setattr(project_workspace, "PROJECTS_ROOT", tmp_path / "projects")
+    project_workspace.PROJECTS_ROOT.mkdir()
+
+    try:
+        project_workspace.create_project_workspace("escape", projects_root=tmp_path / "outside")
+    except ValueError as exc:
+        assert "My-AI project workspace" in str(exc)
+    else:
+        raise AssertionError("outside project path must be rejected")

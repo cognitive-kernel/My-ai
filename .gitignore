@@ -26,3 +26,9 @@ self-repair/*
 !self-repair/.gitkeep
 
 data/
+
+# Local/editor artifacts
+*.bak
+*.orig
+*.tmp
+logs/*.log*
