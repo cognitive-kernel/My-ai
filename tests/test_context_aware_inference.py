@@ -3,9 +3,12 @@ from my_ai.domain.router import classify
 
 class FakeRouter:
     def structured_chat_json(self, prompt, schema, system):
+        if "MQL4" in prompt or "فایل رو بساز" in prompt:
+            return {"primary":"coding","intents":["coding"],"action":"create_artifact","confidence":0.99,"language":"MQL4","topic":None,"goal":"create artifact","project_path":None,"urls":[]}
         return {
             "primary": "chat",
             "intents": ["chat"],
+            "action": "answer",
             "confidence": 0.8,
             "language": None,
             "topic": None,
@@ -70,6 +73,7 @@ def test_agent_dispatches_coding_command_to_project_builder(monkeypatch):
             "language": "MQL4",
             "project_path": r"D:\Projects\MY-AI\projects",
             "goal": "build indicator",
+            "action": "create_artifact",
         },
         ("coding",),
     )
