@@ -26,7 +26,7 @@ def payload(primary="chat", intents=None, action="answer", confidence=0.9, langu
 
 
 def test_semantic_router_distinguishes_question_from_command():
-    question, _ = route(payload("help", ["help"], 0.94, goal="explain how to run code"), "چطور کد را اجرا کنم؟")
+    question, _ = route(payload("help", ["help"], "answer", 0.94, goal="explain how to run code"), "چطور کد را اجرا کنم؟")
     command, _ = route(payload("code_execution", ["code_execution"], "execute", 0.96), "این کد را اجرا کن")
     assert question.name == "help"
     assert command.name == "code_execution"
@@ -50,7 +50,7 @@ def test_high_risk_confirmation_is_derived_outside_model_authorization():
 def test_structured_arguments_are_preserved():
     result, _ = route(payload("coding", ["coding"], "create_artifact", 0.93, "python", None, "build API", "/projects/demo", ["https://example.com/spec"]), "پروژه را بساز")
     assert result.args == {
-        "language": "python", "goal": "build API",
+        "action": "create_artifact", "language": "python", "goal": "build API",
         "project_path": "/projects/demo", "urls": ["https://example.com/spec"],
     }
 
@@ -77,6 +77,7 @@ def test_mql4_source_request_stays_in_code_generation_path():
     payload_data = payload(
         "code_execution",
         ["code_execution"],
+        "create_artifact",
         0.99,
         "mql4",
         None,
