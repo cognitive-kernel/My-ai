@@ -289,32 +289,57 @@ class LearningEngine:
 
     def generate_program(self,request,language="Python"):
         language=canonical_language(language)
-        context=search_knowledge(language+" programming",20)
+        req_low = str(request or "").casefold()
+        # Detect MetaTrader / indicator requests even when language defaulted to Python.
+        mql_markers = (
+            "mql4", "mql5", "mq4", "mq5", "متاتریدر", "metatrader",
+            "اندیکاتور", "indicator", "اکسپرت", "expert advisor",
+        )
+        if any(x in req_low for x in mql_markers) and language.casefold() not in {"mql4", "mq4", "mql5"}:
+            language = "MQL4"
         coding_llm=create_llm("coding")
         lessons=recent_lessons(12)
-        if language.casefold() in {"mql4", "mq4"}:
-            instruction=(
-                "Generate MQL4 source code for MetaTrader 4. The user is asking for SOURCE CODE ONLY; "
-                "do not execute it, do not simulate JavaScript or another language, and do not answer with an explanation. "
-                "Use actual MQL4 syntax and MetaTrader 4 APIs. For requests involving both chart/market data and trading, "
-                "prefer an Expert Advisor (.mq4) when trade execution is required because custom indicators cannot perform trade operations. "
-                "If the user explicitly asks for an indicator, explain in a short code comment that trade execution must be moved to an EA, "
-                "then provide the indicator-side data/visualization code; never invent APIs. "
-                "For broad MetaTrader access, use documented MQL4 functions such as Symbol(), Bid/Ask, TimeCurrent(), iTime/iOpen/iHigh/iLow/iClose, "
-                "Bars, OrdersTotal/OrderSelect and trading functions only where the program type permits them. "
-                "Return ONLY the complete MQL4 source code."
+        if language.casefold() in {"mql4", "mq4", "mql5"}:
+            # Avoid knowledge pollution (e.g. JavaScript event-loop notes) for MT requests.
+            raw_context = search_knowledge("MQL4 MetaTrader 4 indicator Expert Advisor", 12)
+            distractors = (
+                "event loop", "macrotask", "microtask", "settimeout", "promise.resolve",
+                "javascript", "node.js", "console.log",
             )
+            context = []
+            for item in raw_context or []:
+                blob = " ".join(str(item.get(k) or "") for k in ("title", "content", "topic", "source_url")).casefold()
+                if any(d in blob for d in distractors):
+                    continue
+                context.append(item)
+            wants_trade = any(x in req_low for x in (
+                "معامله", "ترید", "خرید", "فروش", "order", "trade", "buy", "sell",
+                "دسترسی", "مدیریت متاتریدر",
+            ))
+            instruction=(
+                "Generate MQL4 source code for MetaTrader 4. OUTPUT SOURCE CODE ONLY. "
+                "Never write JavaScript, Python, or event-loop explanations. Never analyze unrelated code samples from knowledge. "
+                "Use real MQL4 / MetaTrader 4 APIs only. "
+                "Custom indicators CANNOT place trades; if the user asks for trading access, provide an Expert Advisor (.mq4) with OnTick "
+                "that reads prices/time/chart data (Bid/Ask, TimeCurrent, iClose, etc.) and uses OrderSend only when appropriate. "
+                "If they insist on an indicator-only file, provide indicator buffers/OnCalculate and note trading belongs in an EA. "
+                "Return ONLY the complete MQL4 source code inside one file."
+            )
+            if wants_trade:
+                instruction += " Prefer a single Expert Advisor file because trade execution was requested."
         else:
+            context=search_knowledge(language+" programming",20)
             instruction=(
                 "Write a complete runnable "+language+" program for the user request. Use accumulated learning knowledge. "
                 "Apply secure coding practices, validate inputs, avoid unsafe defaults, include appropriate error handling and tests where practical. "
-                "Return ONLY source code."
+                "Return ONLY source code. Do not answer an unrelated topic found in knowledge."
             )
         code=coding_llm.chat(
             instruction+"\nREQUEST: "+request+"\nKNOWLEDGE: "+json.dumps(context,ensure_ascii=False)
             +"\nRECENT SELF-REPAIR LESSONS: "+json.dumps(lessons,ensure_ascii=False),
             system="You are a senior secure software engineer. Never claim execution unless a result is supplied. "
-                   "When the requested language is MQL4, output MQL4 only. Never substitute JavaScript, Python, or another language."
+                   "When the topic is MetaTrader/MQL4, output MQL4 only. Never substitute JavaScript event-loop analysis or Python. "
+                   "Ignore knowledge entries that are not about the requested language."
         ).strip()
         fence=chr(96)*3
         if code.startswith(fence):
