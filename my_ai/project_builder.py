@@ -174,6 +174,14 @@ def _recent_conversation_context(goal: str) -> tuple[str, str | None, int | None
 
     prior_language = _detect_language_from_texts([prior]) if prior else _detect_language_from_texts(user_messages[:-1])
     resolved_language = _detect_language(resolved_goal.casefold())
+    if not resolved_language:
+        normalized_goal = resolved_goal.casefold()
+        explicit_language_hints = (
+            ("mql4", "MQL4"), ("mql 4", "MQL4"), ("mq4", "MQL4"),
+            ("mql5", "MQL5"), ("python", "Python"), ("پایتون", "Python"),
+            ("rust", "Rust"), ("javascript", "JavaScript"), ("typescript", "TypeScript"),
+        )
+        resolved_language = next((name for needle, name in explicit_language_hints if needle in normalized_goal), None)
     language = current_language or resolved_language or prior_language or sessions[0].get("language")
     conversation_context = "\n".join(
         f"{row['role']}: {str(row['content'] or '')[:7000]}" for row in rows[-20:]
