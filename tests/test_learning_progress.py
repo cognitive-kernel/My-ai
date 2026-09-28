@@ -517,3 +517,22 @@ def test_learning_retry_does_not_repeat_permanent_http_error():
         raise AssertionError("permanent HTTP errors must fail without retrying")
 
     assert attempts == [1]
+
+
+def test_personal_learning_experience_is_persisted(client_db):
+    from my_ai.learner import LearningEngine
+    engine = LearningEngine.__new__(LearningEngine)
+    engine.record_experience("Python", "Functions", "error", "practice", "تمرین شکست خورد", "NameError")
+    rows = engine.personal_experiences("Python", "Functions", 10)
+    assert rows
+    assert rows[0]["kind"] == "error"
+    assert "NameError" == rows[0]["error"]
+
+
+def test_personal_experience_can_be_disabled(client_db):
+    from my_ai.learner import LearningEngine
+    from my_ai.settings_store import set_setting
+    engine = LearningEngine.__new__(LearningEngine)
+    set_setting("learning.personal_experience", "false")
+    assert engine.record_experience("Python", "Functions", "lesson", "learn", "lesson") is None
+    assert engine.personal_experiences("Python", "Functions", 10) == []
