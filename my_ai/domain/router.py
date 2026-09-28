@@ -125,17 +125,30 @@ def classify(text: str, context: str | None = None, classifier: StructuredRouter
     # Code generation and code execution are different operations; authorization remains separate. A request that
     # asks to write/build/generate source code must remain coding unless it also
     # explicitly asks My-AI to run/execute the code.
-    if data.get("primary") == "code_execution":
-        text_low = text.casefold()
+    text_low = text.casefold()
+    # Some local router models confuse source-code generation with execution.
+    # For explicit MQL4 source requests, deterministically keep the request in
+    # the coding path unless the user explicitly asks My-AI to run the code.
+    mql4_source_request = (
+        any(token in text_low for token in ("mql4", "mq4", "متاتریدر 4", "متاتریدر۴", "متاتریدر"))
+        and any(token in text_low for token in (
+            "بنویس", "بنویسد", "بنویسم", "بساز", "ایجاد کن", "تولید کن",
+            "پیاده‌سازی", "پیاده سازی", "کدنویسی", "write", "build", "create",
+            "generate", "implement",
+        ))
+    )
+    explicit_execution = any(token in text_low for token in (
+        "اجرا کن", "اجرایش کن", "اجرا بده", "run", "execute", "eval", "launch",
+        "start the program",
+    ))
+    if mql4_source_request and not explicit_execution:
+        data = {**data, "primary": "coding", "intents": ["coding" if x == "code_execution" else x for x in data.get("intents", [])]}
+    elif data.get("primary") == "code_execution":
         generation = any(token in text_low for token in (
             "بنویس", "بنویسد", "بنویسم", "بساز", "ساختن", "ساخت",
             "ایجاد کن", "تولید کن", "پیاده‌سازی", "پیاده سازی", "کدنویسی",
             "write", "build", "create", "generate", "implement",
         ))
-        execution = any(token in text_low for token in (
-            "اجرا کن", "اجرایش کن", "اجرا بده",
-            "run", "execute", "eval", "launch", "start the program",
-        ))
-        if generation and not execution:
+        if generation and not explicit_execution:
             data = {**data, "primary": "coding", "intents": ["coding" if x == "code_execution" else x for x in data.get("intents", [])]}
     return _intent_from_payload(data)
