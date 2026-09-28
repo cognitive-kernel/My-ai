@@ -61,6 +61,7 @@ Self-maintenance rules:
 
 class Agent:
     def __init__(self, llm=None, router=None):
+        self._llm_injected = llm is not None
         self.llm = llm or create_llm("general")
         # router=None → fall back to module-level classify() (real semantic router).
         # Do not call build_router_service(None): that injects the test-only SafeNoop.
@@ -451,7 +452,7 @@ class Agent:
         attachment_context = self._attachment_context(attachments)
         llm_message = message + ("\n\n" + attachment_context if attachment_context else "")
         task = "coding" if intent.name == "coding" else "general"
-        llm = self.llm if task == "general" else create_llm(task)
+        llm = self.llm if self._llm_injected or task == "general" else create_llm(task)
 
         query = self._retrieval_query(message, state, intent.name)
         raw_knowledge = recall(query, 8)
