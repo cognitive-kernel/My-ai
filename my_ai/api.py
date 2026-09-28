@@ -945,7 +945,7 @@ def chat(r:ChatRequest, request:Request):
         msg=r.message.strip(); low=msg.lower()
         attachments=_validate_chat_attachments(r.attachments)
         intent=classify(msg)
-        # Learning and image generation have dedicated pages/endpoints. Never
+        # Learning and image generation have dedicated pages/endpoints. Never execute
         # execute either operation through the general chat endpoint.
         if intent.name == "learning":
             raise HTTPException(409, "یادگیری فقط در صفحه «پیشرفت و یادگیری» انجام می‌شود.")
