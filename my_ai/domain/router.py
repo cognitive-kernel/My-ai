@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 import json
-import re
 
 from ..core.protocols import StructuredRouter
 
@@ -128,8 +127,15 @@ def classify(text: str, context: str | None = None, classifier: StructuredRouter
     # explicitly asks My-AI to run/execute the code.
     if data.get("primary") == "code_execution":
         text_low = text.casefold()
-        generation = bool(re.search(r"(بنویس|بنویسد|بنویسم|بساز|ساختن|ساخت|ایجاد\s+کن|تولید\s+کن|پیاده[‌ ]?سازی|کدنویسی|write|build|create|generate|implement)", text_low))
-        execution = bool(re.search(r"(اجرا\s+کن|اجرایش\s+کن|اجرا\s+بده|run|execute|eval|launch|start\s+the\s+program)", text_low))
+        generation = any(token in text_low for token in (
+            "بنویس", "بنویسد", "بنویسم", "بساز", "ساختن", "ساخت",
+            "ایجاد کن", "تولید کن", "پیاده‌سازی", "پیاده سازی", "کدنویسی",
+            "write", "build", "create", "generate", "implement",
+        ))
+        execution = any(token in text_low for token in (
+            "اجرا کن", "اجرایش کن", "اجرا بده",
+            "run", "execute", "eval", "launch", "start the program",
+        ))
         if generation and not execution:
             data = {**data, "primary": "coding", "intents": ["coding" if x == "code_execution" else x for x in data.get("intents", [])]}
     return _intent_from_payload(data)
