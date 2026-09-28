@@ -2,17 +2,21 @@
 
 My-AI is a **local-first personal AI assistant** built around Ollama, FastAPI and SQLite. It provides natural-language chat, persistent memory, continuous learning, code and project generation, controlled code execution, Git/GitHub integration, documentation help, voice, local-file processing, resource control, self-update and self-repair.
 
-این پروژه یک دستیار هوش مصنوعی **local-first** است که مدل را به‌صورت محلی اجرا می‌کند و برای گفتگو، یادگیری، درک context، تولید کد و پروژه، اجرای کنترل‌شده کد، کار با Git/GitHub، پردازش فایل و مدیریت منابع طراحی شده است.
+این پروژه یک دستیار هوش مصنوعی **local-first** است که مدل را به‌صورت محلی اجرا می‌کند و برای گفتگو، یادگیری، درک context، تحقیق، برنامه‌ریزی و تولید پروژه‌های نرم‌افزاری طراحی شده است.
 
 ## قابلیت‌های اصلی
 
 - Chat فارسی و انگلیسی با context مکالمه و حافظه پایدار
 - تشخیص معنایی درخواست‌ها بدون وابستگی به عبارت‌های ثابت
-- تولید کد و پروژه بر اساس هدف، زبان و مشخصات درخواست
-- ادامه‌دادن کارهای چندمرحله‌ای بر اساس context قبلی
-- ساخت فایل‌ها و پروژه‌ها در workspace مشخص
+- استخراج نیازمندی‌ها و معیارهای پذیرش از درخواست
+- برنامه‌ریزی معماری و مراحل اجرای پروژه قبل از کدنویسی
+- استفاده ترکیبی از دانش آموزشی داخلی و تحقیق وب
+- تولید مرحله‌ای پروژه بر اساس زبان و فناوری مناسب
 - Build، test، lint و repair برای پروژه‌های تولیدشده
-- Git/GitHub integration
+- اعتبارسنجی متناسب با نوع پروژه و محیط اجرا
+- self-review و جلوگیری از اعلام موفقیت در صورت failure
+- Git lifecycle برای workspace پروژه تولیدشده
+- ادامه‌دادن کارهای چندمرحله‌ای بر اساس context قبلی
 - یادگیری پیوسته و curriculum قابل توسعه
 - بازیابی دانش مرتبط از حافظه محلی
 - پردازش فایل‌های محلی و اتصال آن‌ها به مکالمه
@@ -23,6 +27,38 @@ My-AI is a **local-first personal AI assistant** built around Ollama, FastAPI an
 - self-update و self-repair با کنترل دسترسی
 - رابط وب محلی
 
+## چرخه عمومی مهندسی نرم‌افزار
+
+```text
+User Request
+    ↓
+Semantic Understanding + Context
+    ↓
+Requirements + Acceptance Criteria
+    ↓
+Local Knowledge + Web Research
+    ↓
+Technical Decisions + Architecture
+    ↓
+Project Plan
+    ↓
+Implementation
+    ↓
+Build / Run
+    ↓
+Tests + Runtime Validation
+    ↓
+Failure Analysis → Research / Repair → Retest
+    ↓
+Self Review
+    ↓
+Workspace Cleanup + Git Commit
+    ↓
+Evidence-based Completion Report
+```
+
+جزئیات این lifecycle در `docs/GENERAL_SOFTWARE_AGENT.md` مستند شده است.
+
 ## معماری کلی
 
 ```text
@@ -32,15 +68,17 @@ Semantic Router
     ↓
 Conversation Context + Persistent Memory
     ↓
-Agent Runtime
+Software Planning Agent
+    ├── Requirements
+    ├── Knowledge Retrieval
+    ├── Web Research
+    └── Architecture / Validation Plan
     ↓
-Task Planning / Knowledge Retrieval / Tool Selection
+Implementation Agent
     ↓
-Code & Project Generation
+Build → Test → Runtime Validation → Repair
     ↓
-Build → Test → Lint → Repair
-    ↓
-Workspace / Git / Response
+Self Review → Git → Response
 ```
 
 ## مدل و Runtime
@@ -71,13 +109,15 @@ Workspace / Git / Response
 
 My-AI وضعیت مکالمه و دانش مرتبط را در SQLite نگهداری می‌کند و هنگام پاسخ‌گویی یا تولید پروژه می‌تواند از موارد مرتبط قبلی استفاده کند.
 
-این معماری برای درخواست‌هایی طراحی شده که ممکن است در چند پیام و با بیان‌های متفاوت مطرح شوند؛ تشخیص کار بر اساس معنای درخواست و وضعیت مکالمه انجام می‌شود، نه صرفاً تطبیق چند کلمه مشخص.
+تشخیص کار بر اساس معنی درخواست و وضعیت مکالمه انجام می‌شود؛ عبارت‌های متفاوتی که یک هدف یکسان دارند نباید نیازمند triggerهای جداگانه باشند.
 
 ## تولید پروژه
 
-برای درخواست‌های برنامه‌نویسی، runtime ابتدا هدف و نوع کار را تشخیص می‌دهد، زبان و context مرتبط را استخراج می‌کند، سپس artifactهای موردنیاز را ایجاد می‌کند و در صورت امکان آن‌ها را build، test و lint می‌کند.
+برای درخواست‌های نرم‌افزاری، runtime ابتدا intent را به‌صورت معنایی تشخیص می‌دهد. سپس Planning Agent نیازمندی‌ها، معماری، معیارهای پذیرش و validation را استخراج می‌کند. Research Agent دانش داخلی و منابع وب مرتبط را جمع می‌کند و Implementation Agent بر اساس آن‌ها پروژه را می‌سازد.
 
-مسیر workspace پروژه‌ها قابل تنظیم است و نتیجه عملیات همراه با وضعیت build/test/lint گزارش می‌شود.
+پروژه تا حد امکان build، test، lint و runtime validation می‌شود. خطاها وارد repair loop می‌شوند و فقط پس از عبور از معیارهای واقعی completion، نتیجه کامل اعلام می‌شود.
+
+برای فناوری‌هایی که ابزار validation آن‌ها روی سیستم موجود نیست، وضعیت `unavailable`/`blocked` گزارش می‌شود و به‌اشتباه موفقیت اعلام نمی‌شود.
 
 ## امنیت و کنترل دسترسی
 
@@ -85,11 +125,11 @@ My-AI وضعیت مکالمه و دانش مرتبط را در SQLite نگهدا
 
 ## Git و GitHub
 
-پروژه می‌تواند با repositoryهای Git/GitHub کار کند و عملیات تغییر، بررسی و نگهداری پروژه را از طریق ابزارهای کنترل‌شده انجام دهد.
+My-AI می‌تواند با repositoryهای Git/GitHub کار کند. برای پروژه‌های تولیدشده، lifecycle Git در همان workspace انجام می‌شود و repository اصلی My-AI بدون مجوز تغییر نمی‌کند.
 
 ## توسعه و تست
 
-تست‌های پروژه با `pytest` اجرا می‌شوند. CI همچنین بررسی‌های compile، lint، type checking، dependency audit و container build را انجام می‌دهد.
+تست‌های پروژه با `pytest` اجرا می‌شوند. CI بررسی‌های compile، lint، type checking، dependency audit و container build را انجام می‌دهد.
 
 برای توسعه محلی:
 
@@ -97,12 +137,15 @@ My-AI وضعیت مکالمه و دانش مرتبط را در SQLite نگهدا
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
+برای سناریوهای پذیرش Agent، `tests/test_software_agent.py` و `docs/GENERAL_SOFTWARE_AGENT.md` را بررسی کنید.
+
 ## ساختار کلی
 
 ```text
 my_ai/
   agent.py
   agent_runtime.py
+  software_agent.py
   domain/
   learning/
   project_builder.py
