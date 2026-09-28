@@ -183,6 +183,10 @@ def _recent_conversation_context(goal: str) -> tuple[str, str | None, int | None
         )
         resolved_language = next((name for needle, name in explicit_language_hints if needle in normalized_goal), None)
     language = current_language or resolved_language or prior_language or sessions[0].get("language")
+    if not language and _is_contextual_build_request(current):
+        context_text = "\n".join(user_messages).casefold()
+        if "mql4" in context_text or "mq4" in context_text or "متاتریدر 4" in context_text or "metatrader 4" in context_text:
+            language = "MQL4"
     conversation_context = "\n".join(
         f"{row['role']}: {str(row['content'] or '')[:7000]}" for row in rows[-20:]
     )[:MAX_CONTEXT_CHARS]
