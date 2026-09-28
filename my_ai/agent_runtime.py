@@ -208,7 +208,7 @@ class Agent(LegacyAgent):
             answer = self._persist_shortcut(ctx)
             self._update_state(ctx, answer)
             return answer
-        if self._project_build_requested(ctx.intent):
+        if self._runtime_project_build_requested(ctx.intent):
             answer = self._build_project_from_intent(ctx.message, ctx.intent)
             self._persist_shortcut(PreparedChat(ctx.message, ctx.session_id, ctx.attachments, ctx.history, ctx.context, ctx.conversation_state, intent=ctx.intent, shortcut=answer))
             self._update_state(ctx, answer)
