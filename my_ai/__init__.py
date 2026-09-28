@@ -27,7 +27,7 @@ try:
     sys.modules[__name__ + ".agent"] = _agent_runtime
     agent = _agent_runtime
 except Exception:
-    agent = None
+    pass
 
 def page():
     return _ui.HTML
