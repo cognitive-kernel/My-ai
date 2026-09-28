@@ -220,7 +220,8 @@ class LearningEngine:
         self._set_progress(s["session_id"], 50.0, "lesson")
         if progress_callback: progress_callback("lesson",t["topic"])
         seed=seed_for(language,t["topic"])
-        logger.info("LEARNING_LESSON_START: language=%s topic=%s sources=%s", language, t["topic"], len(sources))
+        experiences=self.personal_experiences(language,t["topic"],12)
+        logger.info("LEARNING_LESSON_START: language=%s topic=%s sources=%s experiences=%s", language, t["topic"], len(sources), len(experiences))
         lesson=self._retry_with_limit(
             lambda: self.llm.chat("Teach the topic as a complete, structured study unit. Include prerequisite lessons first, then the main topic, examples, exercises, tests, common mistakes, security considerations and a mastery checklist. "
                              "Use the model knowledge seed only as an initial layer; reconcile it with supplied official-source knowledge and explicitly correct conflicts. "
@@ -228,7 +229,9 @@ class LearningEngine:
                              f"LANGUAGE: {language}\nTOPIC: {t['topic']}\nGOAL: {t['goal']}\n"
                              f"MODEL KNOWLEDGE SEED: {seed}\n"
                              f"DISCOVERED PREREQUISITES: {json.dumps(prerequisites,ensure_ascii=False)}\n"
-                             f"LEARNED KNOWLEDGE: {json.dumps(search_knowledge(language+' '+t['topic'],12),ensure_ascii=False)}"),
+                             f"LEARNED KNOWLEDGE: {json.dumps(search_knowledge(language+' '+t['topic'],12),ensure_ascii=False)}\n"
+                             f"PERSONAL EXPERIENCE FROM PREVIOUS RUNS: {json.dumps(experiences,ensure_ascii=False)}\n"
+                             "Use these experiences as practical evidence. Avoid repeating recorded mistakes; if an experience conflicts with verified source knowledge, prefer the verified source and record the discrepancy."),
             "lesson",progress_callback,t["topic"],stop_event,
         )
         logger.info("LEARNING_LESSON_SUCCESS: language=%s topic=%s chars=%s", language, t["topic"], len(lesson))
