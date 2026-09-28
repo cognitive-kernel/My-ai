@@ -11,12 +11,15 @@ ALLOWED_INTENTS = frozenset({
     "help", "self_update", "git_write", "pentest_external", "self_repair", "database_import", "image_generation",
 })
 HIGH_RISK = frozenset({"pentest_external", "git_write", "self_update", "database_import", "code_execution", "self_repair"})
+ACTION_VALUES = ("answer", "explain", "analyze", "create_artifact", "modify_artifact", "execute", "inspect", "save", "continue_task")
+
 ROUTER_SCHEMA: dict[str, Any] = {
     "type": "object", "additionalProperties": False,
-    "required": ["primary", "intents", "confidence", "language", "topic", "goal", "project_path", "urls"],
+    "required": ["primary", "intents", "action", "confidence", "language", "topic", "goal", "project_path", "urls"],
     "properties": {
         "primary": {"type": "string", "enum": sorted(ALLOWED_INTENTS)},
         "intents": {"type": "array", "items": {"type": "string", "enum": sorted(ALLOWED_INTENTS)}, "minItems": 1, "maxItems": 5},
+        "action": {"type": "string", "enum": list(ACTION_VALUES)},
         "confidence": {"type": "number", "minimum": 0, "maximum": 1},
         "language": {"type": ["string", "null"]}, "topic": {"type": ["string", "null"]},
         "goal": {"type": ["string", "null"]}, "project_path": {"type": ["string", "null"]},
@@ -34,7 +37,7 @@ class Intent:
     intents: tuple[str, ...] = ()
 
 def router_tool_call(intent: Intent) -> dict[str, Any]:
-    return {"name": ROUTER_TOOL_SCHEMA["name"], "arguments": {"primary": intent.name, "intents": list(intent.intents or (intent.name,)), "confidence": float(intent.confidence), "language": intent.args.get("language"), "topic": intent.args.get("topic"), "goal": intent.args.get("goal"), "project_path": intent.args.get("project_path"), "urls": list(intent.args.get("urls", []))}}
+    return {"name": ROUTER_TOOL_SCHEMA["name"], "arguments": {"primary": intent.name, "intents": list(intent.intents or (intent.name,)), "action": intent.args.get("action", "answer"), "confidence": float(intent.confidence), "language": intent.args.get("language"), "topic": intent.args.get("topic"), "goal": intent.args.get("goal"), "project_path": intent.args.get("project_path"), "urls": list(intent.args.get("urls", []))}}
 
 def _parse_router_payload(raw: str) -> dict[str, Any]:
     data = json.loads(raw)
@@ -55,35 +58,29 @@ def _intent_from_payload(data: dict[str, Any]) -> Intent:
     payload = _parse_router_payload(json.dumps(data, ensure_ascii=False))
     primary = payload["primary"]
     intents = tuple(dict.fromkeys(payload["intents"]))
-    args = {key: payload[key] for key in ("language", "topic", "goal", "project_path") if payload[key]}
+    args = {key: payload[key] for key in ("action", "language", "topic", "goal", "project_path") if payload[key]}
     if payload["urls"]: args["urls"] = list(payload["urls"])
     return Intent(name=primary, confidence=round(float(payload["confidence"]), 3), requires_confirmation=primary in HIGH_RISK, args=args, intents=intents or (primary,))
 
-def _is_continuation(text: str) -> bool:
-    low = " ".join(str(text or "").casefold().split())
-    return any(x in low for x in ("همونو", "همان را", "همون را", "همین رو", "همین را", "همون فایل", "دستورات قبلی", "دستور قبلی", "ادامه بده", "بر اساس چیزی که گفتم", "بر اساس دستوراتی که دادم", "طبق چیزی که گفتم", "the previous instructions", "the previous request", "continue", "build it", "create it", "make it", "same file", "same project"))
-
-def _is_actionable(text: str) -> bool:
-    low = str(text or "").casefold()
-    return any(x in low for x in ("بساز", "ایجاد کن", "تولید کن", "بنویس", "فایل بساز", "پروژه بساز", "write", "build", "create", "generate", "implement"))
-
 def classify(text: str, context: str | None = None, classifier: StructuredRouter | None = None) -> Intent:
-    if classifier is None: return Intent("chat", 0.0, False, intents=("chat",))
+    if classifier is None:
+        return Intent("chat", 0.0, False, args={"action": "answer"}, intents=("chat",))
+
     prompt = (
         "Classify the user's request semantically using the current conversation state. "
+        "Do NOT use fixed trigger words or phrase lists. Infer the requested operation from meaning. "
         "The CURRENT USER message has highest priority; recent conversation is context for references. "
-        "If the current message refers to a previous request, same file/project, or says build/create it, inherit the active task and do not classify it as a new unrelated question. "
-        "For multi-step requests include every relevant intent in intents. Never infer authorization. Return only the schema.\n"
+        "Choose exactly one action: answer, explain, analyze, create_artifact, modify_artifact, execute, inspect, save, or continue_task. "
+        "Use create_artifact when the user wants a new software/file/code deliverable, even when phrased indirectly. "
+        "Use modify_artifact for changing an existing artifact. Use continue_task when the current message continues a prior task. "
+        "For a coding creation request, primary should normally be coding, not code_execution. Never infer authorization. Return only the schema.\n"
         f"CURRENT USER: {text}\nCONVERSATION CONTEXT:\n{context or ''}"
     )
-    data = classifier.structured_chat_json(prompt, ROUTER_SCHEMA, system="You are My-AI's context-aware semantic router. Output only schema-constrained routing data.")
-    text_low = text.casefold()
-    explicit_execution = any(x in text_low for x in ("اجرا کن", "اجرایش کن", "اجرا بده", "run", "execute", "eval", "launch"))
-    generation = _is_actionable(text)
-    mql4_source = any(x in text_low for x in ("mql4", "mq4", "متاتریدر 4", "متاتریدر۴", "metatrader 4")) and generation
-    if (mql4_source or (data.get("primary") == "code_execution" and generation)) and not explicit_execution:
+    data = classifier.structured_chat_json(
+        prompt,
+        ROUTER_SCHEMA,
+        system="You are My-AI's context-aware semantic router. Understand intent from meaning, not trigger words. Output only schema-constrained routing data.",
+    )
+    if data.get("action") in {"create_artifact", "modify_artifact"} and data.get("primary") == "code_execution":
         data = {**data, "primary": "coding", "intents": ["coding" if x == "code_execution" else x for x in data.get("intents", [])]}
-    if _is_continuation(text) and not explicit_execution and data.get("primary") not in {"learning", "help", "image_generation", "security_scan", "pentest_external"}:
-        intents = list(dict.fromkeys(["coding", *data.get("intents", [])])) if generation else list(dict.fromkeys([data.get("primary", "chat"), *data.get("intents", [])]))
-        data = {**data, "primary": "coding" if generation else data.get("primary", "chat"), "intents": intents}
     return _intent_from_payload(data)
