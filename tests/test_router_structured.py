@@ -6,6 +6,7 @@ def valid_payload(**overrides):
     value = {
         "primary": "learning",
         "intents": ["learning", "coding"],
+        "action": "continue_task",
         "confidence": 0.91,
         "language": "fa",
         "topic": "Python",
