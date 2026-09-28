@@ -116,7 +116,10 @@ def test_agent_passes_real_history_and_retrieved_knowledge(monkeypatch):
     ])
     monkeypatch.setattr(agent_module, "recall", lambda *args: [{"title": "Python", "content": "knowledge"}])
     monkeypatch.setattr(agent_module, "execute", lambda *args: None)
-    agent = agent_module.Agent(FakeLLM())
+    class FakeRouter:
+        def classify(self, message, context=None):
+            return type("Intent", (), {"name": "chat", "args": {"action": "answer"}, "intents": ("chat",)})()
+    agent = agent_module.Agent(FakeLLM(), router=FakeRouter())
 
     result = agent.chat("پایتون چیست؟", session_id=7)
 
