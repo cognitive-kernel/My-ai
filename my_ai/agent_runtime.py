@@ -67,7 +67,7 @@ class Agent(LegacyAgent):
         low = str(message or "").casefold()
         return any(x in low for x in ("بساز", "ایجاد کن", "تولید کن", "بنویس", "پیاده سازی", "پیاده‌سازی", "فایل بساز", "برنامه بنویس", "پروژه بساز", "create", "build", "generate", "write", "implement"))
 
-    def _conversation_state(self, history: list[dict[str, Any]], message: str) -> dict[str, Any]:
+    def _runtime_conversation_state(self, history: list[dict[str, Any]], message: str) -> dict[str, Any]:
         self._ensure_state_table()
         user_messages = [str(x.get("content") or "").strip() for x in history if x.get("role") == "user"]
         assistant_messages = [str(x.get("content") or "").strip() for x in history if x.get("role") == "assistant"]
@@ -131,7 +131,7 @@ class Agent(LegacyAgent):
         if self._is_identity_question(message):
             return PreparedChat(message, session_id, normalized_attachments, [], "", {}, shortcut=self._identity_response())
         history = fetch_all("SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 24", (session_id,))[::-1]
-        state = self._conversation_state(history, message)
+        state = self._runtime_conversation_state(history, message)
         context = "\n".join(f"{row['role']}: {row['content']}" for row in history[-20:])
         routing_context = f"CONVERSATION STATE:\n{state['summary']}\n\nRECENT CHAT:\n{context}"
         intent = self._classify(message, routing_context)
