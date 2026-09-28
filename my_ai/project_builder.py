@@ -204,13 +204,21 @@ def _artifact_files(workspace: Path) -> list[str]:
     return out[:200]
 
 
-def build_project(goal: str, language: str = "Python", *, timeout: int = 300, repair_attempts: int = 2) -> dict[str, Any]:
+def build_project(
+    goal: str,
+    language: str = "Python",
+    *,
+    project_path: str | None = None,
+    timeout: int = 300,
+    repair_attempts: int = 2,
+) -> dict[str, Any]:
     goal = str(goal or "").strip()
     if not goal:
         raise ValueError("Project goal is required.")
     resolved_goal, contextual_language, session_id = _recent_conversation_context(goal)
-    language = canonical_language(contextual_language or language)
-    workspace = create_project_workspace(goal)
+    detected_language = contextual_language or _detect_language_from_texts([resolved_goal, goal])
+    language = canonical_language(detected_language or language)
+    workspace = create_project_workspace(goal, projects_root=project_path)
     knowledge = search_knowledge(language + " " + resolved_goal, 20)
     llm = create_llm("coding")
     files = {}
@@ -244,7 +252,8 @@ def build_project(goal: str, language: str = "Python", *, timeout: int = 300, re
     return {
         "status": "built" if build.get("passed") and tests.get("passed", False) and lint.get("passed", False) else "build_failed",
         "language": language, "request": resolved_goal, "project_id": pid,
-        "project_name": workspace.name, "project_path": str(workspace.relative_to(workspace.parents[1])),
+        "project_name": workspace.name,
+        "project_path": str(workspace.relative_to(ROOT)) if workspace.is_relative_to(ROOT) else str(workspace),
         "session_id": session_id, "files": sorted(files), "file_count": len(files),
         "build": build, "tests": tests, "lint": lint, "repair_attempts": attempts - 1,
         "artifacts": _artifact_files(workspace), "toolchain": doctor(language).get(language, {}),
