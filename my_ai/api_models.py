@@ -3,12 +3,16 @@ from __future__ import annotations
 from pydantic import BaseModel, Field, HttpUrl
 
 from .config import settings
+from .chat_transport_context import set_attachments
 
 
 class ChatRequest(BaseModel):
     message: str
     session_id: int | None = None
     attachments: list[dict[str, object]] = Field(default_factory=list)
+
+    def model_post_init(self, __context) -> None:
+        set_attachments(self.attachments)
 
 
 class SelfUpdateRequest(BaseModel):
@@ -40,11 +44,6 @@ class KnowledgeUpdateRequest(BaseModel):
 
 
 class BackupRequest(BaseModel):
-    path: str
-    password: str | None = None
-
-
-class ImportRequest(BaseModel):
     path: str
     password: str | None = None
     destination: str | None = None
