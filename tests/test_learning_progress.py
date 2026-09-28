@@ -519,7 +519,10 @@ def test_learning_retry_does_not_repeat_permanent_http_error():
     assert attempts == [1]
 
 
-def test_personal_learning_experience_is_persisted(client_db):
+def test_personal_learning_experience_is_persisted(tmp_path, monkeypatch):
+    old = db_module.settings.db_path
+    object.__setattr__(db_module.settings, "db_path", str(tmp_path / "experience.db"))
+    db_module.init_db()
     from my_ai.learner import LearningEngine
     engine = LearningEngine.__new__(LearningEngine)
     engine.record_experience("Python", "Functions", "error", "practice", "تمرین شکست خورد", "NameError")
@@ -529,7 +532,10 @@ def test_personal_learning_experience_is_persisted(client_db):
     assert "NameError" == rows[0]["error"]
 
 
-def test_personal_experience_can_be_disabled(client_db):
+def test_personal_experience_can_be_disabled(tmp_path, monkeypatch):
+    old = db_module.settings.db_path
+    object.__setattr__(db_module.settings, "db_path", str(tmp_path / "experience-disabled.db"))
+    db_module.init_db()
     from my_ai.learner import LearningEngine
     from my_ai.settings_store import set_setting
     engine = LearningEngine.__new__(LearningEngine)
