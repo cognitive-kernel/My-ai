@@ -30,7 +30,7 @@ def _nav(path: str) -> str:
   <span class="sep"></span>
   <div class="group">
     <a class="{active('/settings')}" href="/settings">تنظیمات</a>
-    <a href="/settings-sections">بخش‌های تنظیمات</a>
+    <a class="{active('/settings')}" href="/settings/sections">بخش‌های تنظیمات</a>
     <a class="{active('/self-diagnostics')}" href="/self-diagnostics">گزارش سلامت</a>
     <a class="{active('/help')}" href="/help">راهنمای کامل</a>
   </div>
@@ -53,10 +53,10 @@ def _settings_sections_page() -> str:
         ("image", "ساخت تصویر", "تنظیمات موتور و سرویس تولید تصویر"),
     ]
     cards = "".join(
-        f'<a class="myai-setting-link" href="/settings-section/{slug}"><b>{escape(title)}</b><span>{escape(desc)}</span></a>'
+        f'<a class="myai-setting-link" href="/settings/section/{slug}"><b>{escape(title)}</b><span>{escape(desc)}</span></a>'
         for slug, title, desc in sections
     )
-    return f"""<!doctype html><html lang='fa' dir='rtl'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>بخش‌های تنظیمات | My-AI</title>{NAV_STYLE}<style>body{{margin:0;background:#f3f4f6;color:#17202a}}.wrap{{max-width:1100px;margin:auto;padding:20px}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}}.myai-setting-link{{display:flex;flex-direction:column;gap:7px;padding:18px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;text-decoration:none;color:#17202a;box-shadow:0 8px 24px #0f172a0b}}.myai-setting-link:hover{{border-color:#93c5fd;transform:translateY(-1px)}}.myai-setting-link span{{font-size:13px;color:#64748b;line-height:1.8}}</style></head><body><div class='wrap'>{_nav('/settings-sections')}<section class='card'><h1>بخش‌های تنظیمات</h1><p class='myai-muted'>هر بخش تنظیمات از اینجا در یک صفحه مستقل باز می‌شود و امکانات موجود پروژه را بدون حذف نگه می‌دارد.</p><div class='grid'>{cards}</div></section></div></body></html>"""
+    return f"""<!doctype html><html lang='fa' dir='rtl'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>بخش‌های تنظیمات | My-AI</title>{NAV_STYLE}<style>body{{margin:0;background:#f3f4f6;color:#17202a}}.wrap{{max-width:1100px;margin:auto;padding:20px}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}}.myai-setting-link{{display:flex;flex-direction:column;gap:7px;padding:18px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;text-decoration:none;color:#17202a;box-shadow:0 8px 24px #0f172a0b}}.myai-setting-link:hover{{border-color:#93c5fd;transform:translateY(-1px)}}.myai-setting-link span{{font-size:13px;color:#64748b;line-height:1.8}}</style></head><body><div class='wrap'>{_nav('/settings/sections')}<section class='card'><h1>بخش‌های تنظیمات</h1><p class='myai-muted'>هر بخش تنظیمات از اینجا در یک صفحه مستقل باز می‌شود و امکانات موجود پروژه را بدون حذف نگه می‌دارد.</p><div class='grid'>{cards}</div></section></div></body></html>"""
 
 
 def _settings_section_page(slug: str) -> str:
@@ -74,7 +74,7 @@ def _settings_section_page(slug: str) -> str:
     }
     title = labels.get(slug, "تنظیمات")
     needle = json.dumps(title, ensure_ascii=False)
-    return f"""<!doctype html><html lang='fa' dir='rtl'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>{escape(title)} | تنظیمات My-AI</title>{NAV_STYLE}</head><body><div class='myai-settings-shell'>{_nav('/settings-section/'+slug)}<div class='card' style='padding:16px'><h1>{escape(title)}</h1><p class='myai-muted'>این صفحه فقط بخش «{escape(title)}» را از تنظیمات اصلی نمایش می‌دهد.</p><iframe id='settingsFrame' class='myai-settings-frame' src='/settings' title='{escape(title)}'></iframe></div></div><script>(function(){{var frame=document.getElementById('settingsFrame');frame.addEventListener('load',function(){{try{{var doc=frame.contentDocument||frame.contentWindow.document;var target={needle};var all=Array.from(doc.querySelectorAll('.card,section'));var found=null;all.forEach(function(el){{var h=el.querySelector('h1,h2,h3');if(h&&h.textContent.trim().toLowerCase().indexOf(target.toLowerCase())!==-1)found=el;}});if(found){{all.forEach(function(el){{if(el!==found&&el.querySelector('h1,h2,h3'))el.style.display='none';}});found.style.display='block';found.scrollIntoView({{block:'start'}});}}}}catch(e){{console.warn(e);}}}});}})();</script></body></html>"""
+    return f"""<!doctype html><html lang='fa' dir='rtl'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>{escape(title)} | تنظیمات My-AI</title>{NAV_STYLE}</head><body><div class='myai-settings-shell'>{_nav('/settings/section/'+slug)}<div class='card' style='padding:16px'><h1>{escape(title)}</h1><p class='myai-muted'>این صفحه فقط بخش «{escape(title)}» را از تنظیمات اصلی نمایش می‌دهد.</p><iframe id='settingsFrame' class='myai-settings-frame' src='/settings' title='{escape(title)}'></iframe></div></div><script>(function(){{var frame=document.getElementById('settingsFrame');frame.addEventListener('load',function(){{try{{var doc=frame.contentDocument||frame.contentWindow.document;var target={needle};var all=Array.from(doc.querySelectorAll('.card,section'));var found=null;all.forEach(function(el){{var h=el.querySelector('h1,h2,h3');if(h&&h.textContent.trim().toLowerCase().indexOf(target.toLowerCase())!==-1)found=el;}});if(found){{all.forEach(function(el){{if(el!==found&&el.querySelector('h1,h2,h3'))el.style.display='none';}});found.style.display='block';found.scrollIntoView({{block:'start'}});}}}}catch(e){{console.warn(e);}}}});}})();</script></body></html>"""
 
 
 def _image_page() -> str:
@@ -106,11 +106,11 @@ def install_ui_extensions(app) -> None:
     async def image_page():
         return HTMLResponse(_image_page(), headers={'Cache-Control':'no-store'})
 
-    @app.get('/settings-sections', response_class=HTMLResponse)
+    @app.get('/settings/sections', response_class=HTMLResponse)
     async def settings_sections_page():
         return HTMLResponse(_settings_sections_page(), headers={'Cache-Control':'no-store'})
 
-    @app.get('/settings-section/{slug}', response_class=HTMLResponse)
+    @app.get('/settings/section/{slug}', response_class=HTMLResponse)
     async def settings_section_page(slug: str):
         if slug not in {'github','update','repair','learning','resource','user','permission','course','log','image'}:
             return HTMLResponse(_settings_sections_page(), status_code=404)
