@@ -17,3 +17,12 @@ def test_chat_ui_supports_multiple_pending_files():
     assert "pendingFiles" in text
     assert "addFileCards" in text
     assert "uploadPendingFiles" in text
+
+def test_chat_ui_has_global_navigation():
+    text = INDEX.read_text(encoding="utf-8")
+    assert 'id=' + chr(39) + 'myAiGlobalNav' + chr(39) in text
+    assert "href='/learning'" in text
+    assert "href='/image'" in text
+    assert "href='/settings/sections'" in text
+    assert "href='/self-diagnostics'" in text
+    assert "href='/help#chat'" in text
