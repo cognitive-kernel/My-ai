@@ -53,12 +53,13 @@ _PATH_ACTIONS = PATH_ACTIONS
 from .api_models import (
     AdminUserRequest, AuthLoginRequest, AuthRegisterRequest, BackupRequest, ChatRequest,
     CodeRequest, GitRequest, ImportRequest, KnowledgeUpdateRequest, LanguageRequest,
-    LearnRequest, PermissionRequest, ProjectRequest, ProgramRequest, PythonToolRequest,
+    LearnRequest, PermissionRequest, ProjectRequest, ProjectBuildRequest, ProgramRequest, PythonToolRequest,
     RepairRequest, SchedulerRequest, SecurityRequest, SelfUpdateRequest, SkillEvidenceRequest,
     SkillRevalidateRequest, SQLQueryRequest, SQLiteQueryRequest, ToolRequest, URLRequest,
     VoiceSynthesizeRequest, VoiceTranscribeRequest,
 )
 from .readiness import build_readiness
+from .project_builder import build_project, project_status
 
 logger = logging.getLogger("my_ai.api")
 scheduler=StudyScheduler()
@@ -1001,6 +1002,10 @@ def chat(r:ChatRequest, request:Request):
             raise HTTPException(409, "یادگیری فقط در صفحه «پیشرفت و یادگیری» انجام می‌شود.")
         if code_intent:
             language=requested or "Python"
+            if policy.build:
+                if not any(token in low for token in ("confirm","approve","approved","تایید","تأیید")):
+                    raise HTTPException(409,"Explicit confirmation required before building the application.")
+                return {"type":"project","answer":"Application project build completed.","data":build_project(msg,language,timeout=300,repair_attempts=2)}
             return {"type":"code","answer":"Generated program:","data":learner.generate_program(msg,language)}
         if any(x in low for x in ("تایید آپدیت","تأیید آپدیت","تایید بروزرسانی","تأیید بروزرسانی","تایید به روزرسانی","تأیید به روزرسانی","confirm update","approve update","apply update")):
             if user["role"] != "admin":
@@ -1351,6 +1356,22 @@ def git_update_file(r:GitRequest, request:Request):
     return GitHubConnector().update_file(r.repository,r.path,r.content,r.message,r.branch or "main",True)
 @app.get("/languages")
 def languages(): return {"languages":list(LANGUAGE_CURRICULA.keys())}
+@app.post("/projects/build")
+def projects_build(r:ProjectBuildRequest, request:Request):
+    user=require_user(request)
+    if not r.confirmed:
+        raise HTTPException(409,"Explicit confirmation is required before building and executing a project toolchain.")
+    if not tool_allowed(user,"code-generation","execute"):
+        raise HTTPException(403,"Tool permission denied: code-generation:execute")
+    try:return build_project(r.goal,r.language,timeout=max(30,min(int(r.timeout),600)),repair_attempts=max(0,min(int(r.repair_attempts),3)))
+    except Exception as e: raise HTTPException(502,str(e))
+
+@app.get("/projects/status")
+def projects_status(path:str, request:Request):
+    require_user(request)
+    try:return project_status(path)
+    except Exception as e: raise HTTPException(400,str(e))
+
 @app.post("/projects/plan")
 def project_plan(r:ProjectRequest, request:Request):
     require_user(request)
