@@ -172,7 +172,7 @@ class Agent(LegacyAgent):
         return answer
 
     @staticmethod
-    def _project_build_requested(intent) -> bool:
+    def _runtime_project_build_requested(intent: Any) -> bool:
         return (
             getattr(intent, "name", "") == "coding"
             and str((getattr(intent, "args", {}) or {}).get("action") or "") == "create_artifact"
