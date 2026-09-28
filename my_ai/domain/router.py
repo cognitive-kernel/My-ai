@@ -122,7 +122,7 @@ def classify(text: str, context: str | None = None, classifier: StructuredRouter
         ROUTER_SCHEMA,
         system="You are My-AI's semantic router. Output only schema-constrained routing data.",
     )
-    # Code generation and code execution are different operations. A request that
+    # Code generation and code execution are different operations; authorization remains separate. A request that
     # asks to write/build/generate source code must remain coding unless it also
     # explicitly asks My-AI to run/execute the code.
     if data.get("primary") == "code_execution":
