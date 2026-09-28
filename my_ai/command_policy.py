@@ -15,7 +15,9 @@ FIX_WORDS=("رفع کن","رفعش کن","برطرف کن","اصلاح کن","د
 SEC_WORDS=("پن تست","پنتست","تست نفوذ","تست امنیت","pentest","pen test","penetration test","security test")
 TEST_WORDS=("تست بگیر","بررسی امنیتی","امنیتش را بررسی","security check","security scan")
 LEARN_WORDS=("یاد بگیر","یادگیری","یاد بگیر که","learn","study","go learn")
-BUILD_WORDS=("بساز","برنامه بنویس","پروژه بساز","پروژه ایجاد کن","ایجاد پروژه","فایل رو بساز","فایل را بساز","فایل بساز","بر اساس دستوراتی که دادم بساز","همونو بساز","همان را بساز","همون فایل رو بساز","create file","create project","build project","create application","build application","write a program","write code","make a project")
+# These phrases request source/project generation, not execution of a build toolchain.
+# Actual build/compile/run remains a separately confirmable high-risk operation.
+BUILD_WORDS=("بساز","پروژه بساز","پروژه ایجاد کن","ایجاد پروژه","بر اساس دستوراتی که دادم بساز","همونو بساز","همان را بساز","همون فایل رو بساز","create file","create project","build project","create application","build application","make a project")
 
 def _contains(text, words):
     return any((re.search(r"(?<![A-Za-z])"+re.escape(x)+r"(?![A-Za-z])",text) if x.isascii() else x in text) for x in words)
