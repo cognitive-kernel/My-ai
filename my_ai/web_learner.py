@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 import re
 import time
 import threading
@@ -63,7 +63,7 @@ class WebLearner:
                 # A 4xx robots response means the policy file is unavailable.
                 # Do not convert that into a blanket site-wide deny.
                 if 400 <= response.status_code < 500:
-                    logger.warning("robots.txt unavailable", extra={"url": url, "status": response.status_code})
+                    logger.debug("robots.txt unavailable", extra={"url": url, "status": response.status_code})
                     return True
                 if response.status_code >= 500:
                     logger.warning("robots.txt server failure; failing closed", extra={"url": url, "status": response.status_code})
@@ -105,3 +105,5 @@ class WebLearner:
         for n in soup(["script","style","noscript","svg","nav","footer"]): n.decompose()
         title=soup.title.get_text(" ",strip=True) if soup.title else url
         return title,re.sub(r"\s+"," ",soup.get_text(" ",strip=True))[:settings.max_web_chars]
+
+
