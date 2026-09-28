@@ -30,7 +30,7 @@ def _nav(path: str) -> str:
   <span class="sep"></span>
   <div class="group">
     <a class="{active('/settings')}" href="/settings">تنظیمات</a>
-    <a class="{active('/settings')}" href="/settings-sections">بخش‌های تنظیمات</a>
+    <a href="/settings-sections">بخش‌های تنظیمات</a>
     <a class="{active('/self-diagnostics')}" href="/self-diagnostics">گزارش سلامت</a>
     <a class="{active('/help')}" href="/help">راهنمای کامل</a>
   </div>
@@ -118,9 +118,6 @@ def install_ui_extensions(app) -> None:
 
     @app.middleware('http')
     async def local_feature_ui(request, call_next):
-        # Keep the chat surface focused: learning and image-generation requests
-        # belong to their dedicated pages. This is enforced here in addition to
-        # the UI guard so direct POSTs from the browser get a clear response.
         if request.method == 'POST' and request.url.path in {'/chat','/chat/stream'}:
             try:
                 body = await request.body()
@@ -148,4 +145,3 @@ def install_ui_extensions(app) -> None:
             body = body.replace('<body>', '<body>' + INJECT, 1) if '<body>' in body else body.replace('</head>', NAV_STYLE + '</head>', 1).replace('</body>', INJECT + '</body>', 1)
         headers = {k: v for k, v in response.headers.items() if k.lower() not in {'content-length', 'content-type'}}
         return HTMLResponse(body, status_code=response.status_code, headers=headers)
-"""
