@@ -19,7 +19,8 @@ except Exception:
 # the app is launched through `python -m my_ai` or directly through uvicorn.
 try:
     from . import ui as _ui
-    from .ui_extensions import INJECT as _ui_extensions_inject
+    from . import ui_extensions as _ui_extensions
+    _ui_extensions_inject = getattr(_ui_extensions, "INJECT", "")
     if 'id="localFileTools"' not in _ui.HTML:
         _ui.HTML = _ui.HTML.replace("</body>", _ui_extensions_inject + "</body>")
 except Exception:
