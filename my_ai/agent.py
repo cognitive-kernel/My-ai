@@ -548,7 +548,7 @@ class Agent:
                     answer = (
                         str(answer).rstrip()
                         + "\n\n---\n"
-                        + f"فایل ذخیره شد:\n"
+                        + "فایل ذخیره شد:\n"
                         + f"- مسیر کامل: `{info['path']}`\n"
                         + f"- مسیر نسبی پروژه: `{info['workspace_relative']}`\n"
                         + f"- نام فایل: `{info['filename']}`\n\n"
