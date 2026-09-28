@@ -256,7 +256,12 @@ def build_project(
         "project_path": str(workspace.relative_to(ROOT)) if workspace.is_relative_to(ROOT) else str(workspace),
         "session_id": session_id, "files": sorted(files), "file_count": len(files),
         "build": build, "tests": tests, "lint": lint, "repair_attempts": attempts - 1,
-        "artifacts": _artifact_files(workspace), "toolchain": doctor(language).get(language, {}),
+        "artifacts": _artifact_files(workspace),
+        "toolchain": (
+            {"metaeditor": bool(os.getenv("MYAI_METAEDITOR", "").strip())}
+            if canonical_language(language) == "MQL4"
+            else doctor(language).get(language, {})
+        ),
     }
 
 
