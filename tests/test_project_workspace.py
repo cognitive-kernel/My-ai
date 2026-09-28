@@ -56,6 +56,7 @@ def test_project_workspace_accepts_explicit_workspace_root(tmp_path, monkeypatch
     monkeypatch.setattr(project_workspace, "PROJECTS_ROOT", tmp_path / "default-projects")
     root.mkdir()
 
+    monkeypatch.setenv("MYAI_PROJECT_ROOT", str(root))
     workspace = project_workspace.create_project_workspace("indicator", projects_root=root)
 
     assert workspace.parent == root
