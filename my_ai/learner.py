@@ -31,7 +31,7 @@ class LearningEngine:
             return None
         if session_id is None:
             rows=fetch_all("SELECT id FROM learning_sessions WHERE language=? AND topic=? ORDER BY id DESC LIMIT 1",(language,topic))
-            session_id=rows[0]["id"] if rows else None
+            session_id=(rows[0]["id"] if "id" in rows[0].keys() else None) if rows else None
         return execute(
             "INSERT INTO learning_experiences(session_id,language,topic,kind,action,content,error) VALUES(?,?,?,?,?,?,?)",
             (session_id, str(language), str(topic), str(kind), str(action or ""), text[:20000], str(error or "")[:10000] or None),
