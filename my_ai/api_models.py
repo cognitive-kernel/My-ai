@@ -167,3 +167,11 @@ class SQLiteQueryRequest(BaseModel):
 class SystemPrerequisiteRequest(BaseModel):
     names: list[str] = Field(default_factory=list)
     confirmed: bool = False
+
+
+class ProjectBuildRequest(BaseModel):
+    goal: str
+    language: str = "Python"
+    timeout: int = 300
+    repair_attempts: int = 2
+    confirmed: bool = False
