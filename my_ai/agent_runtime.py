@@ -11,7 +11,7 @@ from .memory import recall
 from .llm import create_llm
 from .self_update import recent_lessons
 from .chat_transport_context import get_attachments
-from .project_builder import build_project
+from .software_agent import run_software_task
 
 
 @dataclass
@@ -175,31 +175,37 @@ class Agent(LegacyAgent):
     def _runtime_project_build_requested(intent: Any) -> bool:
         return (
             getattr(intent, "name", "") == "coding"
-            and str((getattr(intent, "args", {}) or {}).get("action") or "") == "create_artifact"
+            and str((getattr(intent, "args", {}) or {}).get("action") or "") in {"create_artifact", "modify_artifact", "continue_task"}
         )
 
-    def _build_project_from_intent(self, message: str, intent: Any) -> str:
+    def _build_project_from_intent(self, message: str, intent: Any, context: str = "") -> str:
         args = getattr(intent, "args", {}) or {}
-        language = str(args.get("language") or "Python").strip() or "Python"
+        language = str(args.get("language") or "").strip() or None
         project_path = str(args.get("project_path") or "").strip() or None
         try:
-            result = build_project(message, language, project_path=project_path, timeout=300, repair_attempts=2)
+            result = run_software_task(
+                message,
+                language=language,
+                project_path=project_path,
+                context=context,
+                timeout=300,
+                repair_attempts=3,
+            )
         except Exception as exc:
             return f"ساخت پروژه انجام نشد: {exc}"
-        if result.get("status") == "built":
-            return (
-                "پروژه ساخته و تست شد.\n"
-                f"- زبان: {result.get('language', language)}\n"
-                f"- مسیر پروژه: {result.get('project_path') or result.get('project_name') or ''}\n"
-                f"- تعداد فایل‌ها: {len(result.get('files') or [])}\n"
-                "- Build: موفق\n- Tests: موفق\n- Lint: موفق"
-            )
+        completion = result.get("completion") or {}
+        status = "موفق" if completion.get("completed") else "ناقص"
         return (
-            "ساخت پروژه کامل نشد.\n"
+            f"ساخت پروژه: {status}\n"
+            f"- زبان: {result.get('language') or language or 'انتخاب خودکار'}\n"
             f"- مسیر پروژه: {result.get('project_path') or result.get('project_name') or ''}\n"
-            f"- Build: {(result.get('build') or {}).get('error') or (result.get('build') or {}).get('passed')}\n"
-            f"- Tests: {(result.get('tests') or {}).get('error') or (result.get('tests') or {}).get('passed')}\n"
-            f"- Lint: {(result.get('lint') or {}).get('error') or (result.get('lint') or {}).get('passed')}"
+            f"- فایل‌ها: {len(result.get('files') or [])}\n"
+            f"- Build: {bool(completion.get('build'))}\n"
+            f"- Tests: {bool(completion.get('tests'))}\n"
+            f"- Lint: {bool(completion.get('lint'))}\n"
+            f"- Git: {bool(completion.get('git'))}\n"
+            f"- Research sources: {int((result.get('research') or {}).get('source_count') or 0)}\n"
+            + ("- نتیجه: پروژه کامل شد." if completion.get("completed") else "- نتیجه: پروژه هنوز معیارهای اتمام را پاس نکرده است؛ جزئیات در لاگ/خروجی پروژه ثبت شده است.")
         )
 
     def chat(self, message, session_id=1, attachments=None):
@@ -209,7 +215,7 @@ class Agent(LegacyAgent):
             self._update_state(ctx, answer)
             return answer
         if self._runtime_project_build_requested(ctx.intent):
-            answer = self._build_project_from_intent(ctx.message, ctx.intent)
+            answer = self._build_project_from_intent(ctx.message, ctx.intent, ctx.context)
             self._persist_shortcut(PreparedChat(ctx.message, ctx.session_id, ctx.attachments, ctx.history, ctx.context, ctx.conversation_state, intent=ctx.intent, shortcut=answer))
             self._update_state(ctx, answer)
             return answer
@@ -225,6 +231,12 @@ class Agent(LegacyAgent):
         ctx = self._prepare_chat_context(message, session_id, attachments)
         if ctx.shortcut is not None:
             answer = self._persist_shortcut(ctx)
+            self._update_state(ctx, answer)
+            yield answer
+            return
+        if self._runtime_project_build_requested(ctx.intent):
+            answer = self._build_project_from_intent(ctx.message, ctx.intent, ctx.context)
+            self._persist_shortcut(PreparedChat(ctx.message, ctx.session_id, ctx.attachments, ctx.history, ctx.context, ctx.conversation_state, intent=ctx.intent, shortcut=answer))
             self._update_state(ctx, answer)
             yield answer
             return
