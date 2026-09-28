@@ -73,4 +73,18 @@ def test_code_generation_request_is_not_code_execution():
     result, _ = route(payload_data, "یه اندیکاتور MQL4 بنویس که قیمت، نمودار و زمان متاتریدر را بخواند و امکان انجام معامله داشته باشد")
     assert result.name == "coding"
     assert result.requires_confirmation is False
-
+def test_mql4_source_request_stays_in_code_generation_path():
+    payload_data = payload(
+        "code_execution",
+        ["code_execution"],
+        0.99,
+        "mql4",
+        None,
+        "generate MetaTrader 4 source",
+    )
+    result, _ = route(
+        payload_data,
+        "یه اندیکاتور MQL4 بنویس که قیمت، نمودار و زمان متاتریدر ۴ را بخواند و کد منبع را تولید کند",
+    )
+    assert result.name == "coding"
+    assert result.requires_confirmation is False

@@ -288,13 +288,34 @@ class LearningEngine:
         return {"exercise":llm.chat(f"Create one {language} exercise. Return JSON keys description, starter_code, expected_behavior, hidden_tests. Task: {task}")}
 
     def generate_program(self,request,language="Python"):
-        language=canonical_language(language); context=search_knowledge(language+" programming",20)
+        language=canonical_language(language)
+        context=search_knowledge(language+" programming",20)
         coding_llm=create_llm("coding")
         lessons=recent_lessons(12)
-        code=coding_llm.chat("Write a complete runnable "+language+" program for the user request. Use accumulated learning knowledge. "
-                            "Apply secure coding practices, validate inputs, avoid unsafe defaults, include appropriate error handling and tests where practical. "
-                            "Return ONLY source code.\nREQUEST: "+request+"\nKNOWLEDGE: "+json.dumps(context,ensure_ascii=False)+"\nRECENT SELF-REPAIR LESSONS: "+json.dumps(lessons,ensure_ascii=False),
-                            system="You are a senior secure software engineer. Never claim execution unless a result is supplied.").strip()
+        if language.casefold() in {"mql4", "mq4"}:
+            instruction=(
+                "Generate MQL4 source code for MetaTrader 4. The user is asking for SOURCE CODE ONLY; "
+                "do not execute it, do not simulate JavaScript or another language, and do not answer with an explanation. "
+                "Use actual MQL4 syntax and MetaTrader 4 APIs. For requests involving both chart/market data and trading, "
+                "prefer an Expert Advisor (.mq4) when trade execution is required because custom indicators cannot perform trade operations. "
+                "If the user explicitly asks for an indicator, explain in a short code comment that trade execution must be moved to an EA, "
+                "then provide the indicator-side data/visualization code; never invent APIs. "
+                "For broad MetaTrader access, use documented MQL4 functions such as Symbol(), Bid/Ask, TimeCurrent(), iTime/iOpen/iHigh/iLow/iClose, "
+                "Bars, OrdersTotal/OrderSelect and trading functions only where the program type permits them. "
+                "Return ONLY the complete MQL4 source code."
+            )
+        else:
+            instruction=(
+                "Write a complete runnable "+language+" program for the user request. Use accumulated learning knowledge. "
+                "Apply secure coding practices, validate inputs, avoid unsafe defaults, include appropriate error handling and tests where practical. "
+                "Return ONLY source code."
+            )
+        code=coding_llm.chat(
+            instruction+"\nREQUEST: "+request+"\nKNOWLEDGE: "+json.dumps(context,ensure_ascii=False)
+            +"\nRECENT SELF-REPAIR LESSONS: "+json.dumps(lessons,ensure_ascii=False),
+            system="You are a senior secure software engineer. Never claim execution unless a result is supplied. "
+                   "When the requested language is MQL4, output MQL4 only. Never substitute JavaScript, Python, or another language."
+        ).strip()
         fence=chr(96)*3
         if code.startswith(fence):
             lines=code.splitlines()[1:]

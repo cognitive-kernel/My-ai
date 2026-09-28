@@ -49,7 +49,7 @@ def write_project_files(workspace: Path, language: str, request: str, code: str)
             f"Request: {request}\n"
         )
     }
-    filename = "main.py" if language.lower() == "python" else "main.txt"
+    filename = "main.py" if language.lower() == "python" else ("main.mq4" if language.lower() in {"mql4", "mq4"} else "main.txt")
     files[filename] = code
 
     written = []
