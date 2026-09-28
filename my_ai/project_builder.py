@@ -173,7 +173,8 @@ def _recent_conversation_context(goal: str) -> tuple[str, str | None, int | None
         resolved_goal = current
 
     prior_language = _detect_language_from_texts([prior]) if prior else _detect_language_from_texts(user_messages[:-1])
-    language = current_language or prior_language or sessions[0].get("language")
+    resolved_language = _detect_language_from_texts([resolved_goal])
+    language = current_language or resolved_language or prior_language or sessions[0].get("language")
     conversation_context = "\n".join(
         f"{row['role']}: {str(row['content'] or '')[:7000]}" for row in rows[-20:]
     )[:MAX_CONTEXT_CHARS]
