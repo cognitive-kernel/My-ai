@@ -28,7 +28,7 @@ BACKUP_CORE_TABLES = (
     "generated_projects", "help_updates", "security_scans",
     "learning_review_runs", "schema_meta", "fix_attempts", "retrieval_judgments",
     "knowledge_audit", "skills", "skill_reviews", "skill_evidence",
-    "learning_domains", "learning_source_history", "custom_courses",
+    "learning_domains", "learning_source_history", "learning_experiences", "custom_courses",
 )
 BACKUP_SENSITIVE_TABLES = ("users", "tool_permissions", "audit_log", "decision_log")
 

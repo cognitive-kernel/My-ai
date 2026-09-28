@@ -517,3 +517,5 @@ def test_learning_retry_does_not_repeat_permanent_http_error():
         raise AssertionError("permanent HTTP errors must fail without retrying")
 
     assert attempts == [1]
+
+

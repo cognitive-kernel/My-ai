@@ -21,6 +21,29 @@ from .settings_store import get_int
 logger = logging.getLogger(__name__)
 
 class LearningEngine:
+    @staticmethod
+    def record_experience(language, topic, kind, action, content, error=None, session_id=None):
+        from .settings_store import get_bool
+        if not get_bool("learning.personal_experience", True):
+            return None
+        text=str(content or "").strip()
+        if not text and not error:
+            return None
+        if session_id is None:
+            rows=fetch_all("SELECT id FROM learning_sessions WHERE language=? AND topic=? ORDER BY id DESC LIMIT 1",(language,topic))
+            session_id=(rows[0]["id"] if "id" in rows[0].keys() else None) if rows else None
+        return execute(
+            "INSERT INTO learning_experiences(session_id,language,topic,kind,action,content,error) VALUES(?,?,?,?,?,?,?)",
+            (session_id, str(language), str(topic), str(kind), str(action or ""), text[:20000], str(error or "")[:10000] or None),
+        )
+
+    @staticmethod
+    def personal_experiences(language, topic, limit=12):
+        return fetch_all(
+            "SELECT id,kind,action,content,error,created_at FROM learning_experiences WHERE language=? AND topic=? ORDER BY id DESC LIMIT ?",
+            (str(language), str(topic), max(1,min(int(limit),50))),
+        )
+
     def __init__(self,llm=None):
         self.llm=llm or create_llm("general"); self.web=WebLearner()
         self.security=SecurityEngine(self.llm); self.dast=LocalDAST()
@@ -123,6 +146,7 @@ class LearningEngine:
                     language, topic["topic"], url, type(exc).__name__, message,
                 )
                 knowledge.append({"title":"Source unavailable","url":url,"error":message})
+                self.record_experience(language, topic["topic"], "error", "source_fetch", f"منبع آموزشی در دسترس نبود: {url}", message)
                 if progress_callback:
                     progress_callback("source_unavailable",topic["topic"])
                 continue
@@ -196,7 +220,8 @@ class LearningEngine:
         self._set_progress(s["session_id"], 50.0, "lesson")
         if progress_callback: progress_callback("lesson",t["topic"])
         seed=seed_for(language,t["topic"])
-        logger.info("LEARNING_LESSON_START: language=%s topic=%s sources=%s", language, t["topic"], len(sources))
+        experiences=self.personal_experiences(language,t["topic"],12)
+        logger.info("LEARNING_LESSON_START: language=%s topic=%s sources=%s experiences=%s", language, t["topic"], len(sources), len(experiences))
         lesson=self._retry_with_limit(
             lambda: self.llm.chat("Teach the topic as a complete, structured study unit. Include prerequisite lessons first, then the main topic, examples, exercises, tests, common mistakes, security considerations and a mastery checklist. "
                              "Use the model knowledge seed only as an initial layer; reconcile it with supplied official-source knowledge and explicitly correct conflicts. "
@@ -204,11 +229,14 @@ class LearningEngine:
                              f"LANGUAGE: {language}\nTOPIC: {t['topic']}\nGOAL: {t['goal']}\n"
                              f"MODEL KNOWLEDGE SEED: {seed}\n"
                              f"DISCOVERED PREREQUISITES: {json.dumps(prerequisites,ensure_ascii=False)}\n"
-                             f"LEARNED KNOWLEDGE: {json.dumps(search_knowledge(language+' '+t['topic'],12),ensure_ascii=False)}"),
+                             f"LEARNED KNOWLEDGE: {json.dumps(search_knowledge(language+' '+t['topic'],12),ensure_ascii=False)}\n"
+                             f"PERSONAL EXPERIENCE FROM PREVIOUS RUNS: {json.dumps(experiences,ensure_ascii=False)}\n"
+                             "Use these experiences as practical evidence. Avoid repeating recorded mistakes; if an experience conflicts with verified source knowledge, prefer the verified source and record the discrepancy."),
             "lesson",progress_callback,t["topic"],stop_event,
         )
         logger.info("LEARNING_LESSON_SUCCESS: language=%s topic=%s chars=%s", language, t["topic"], len(lesson))
         remember(language,"Mastery lesson: "+t["topic"],lesson)
+        self.record_experience(language, t["topic"], "lesson", "learn", lesson, session_id=s["session_id"])
         self._set_progress(s["session_id"], 75.0, "assessment")
         if progress_callback: progress_callback("assessment",t["topic"])
         try:
@@ -224,6 +252,7 @@ class LearningEngine:
         except Exception as exc:
             # Assessment must never erase a successfully generated lesson.
             # Keep the score nullable and let the next review re-assess it.
+            self.record_experience(language, t["topic"], "error", "assessment", "ارزیابی درس با خطا مواجه شد و درس بدون امتیاز تکمیل شد.", str(exc), s["session_id"])
             logger.warning(
                 "learning assessment unavailable; completing lesson without score: language=%s topic=%s error=%s",
                 language,

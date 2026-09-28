@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from .agent import Agent
 from .command_policy import parse_command
 from .config import settings
-from .settings_store import get_bool, get_int, get_github_settings
+from .settings_store import get_bool, get_int, get_github_settings, set_setting
 from .curriculum import canonical_language,LANGUAGE_CURRICULA
 from .db import fetch_all,init_db,execute
 from .learner import LearningEngine
@@ -153,6 +153,13 @@ async def auth_and_audit_middleware(request: Request, call_next):
         record_http_request(request.method, path, status_code, duration)
         logging.getLogger("my_ai.http").info("request", extra=request_log(request_id=request_id, method=request.method, path=path, status=status_code, duration_ms=duration * 1000, user_id=(user or {}).get("id")))
     response.headers["X-Request-ID"] = request_id
+    if user and response.status_code >= 400 and get_bool("learning.personal_experience", True):
+        try:
+            active = fetch_all("SELECT id,language,session_id,current_topic FROM learning_workers WHERE status IN ('running','retrying','paused') ORDER BY id DESC LIMIT 1")
+            if active and active[0].get("current_topic"):
+                learner.record_experience(active[0]["language"], active[0]["current_topic"], "error", f"{request.method} {path}", "عملیات در زمان یادگیری با خطا مواجه شد.", f"HTTP {response.status_code}", active[0].get("session_id"))
+        except Exception:
+            logger.exception("Failed to store learning personal experience")
     if user and path != "/auth/logout":
         action = decision.action or {"GET": "read", "POST": "execute", "PUT": "write", "PATCH": "write", "DELETE": "write"}.get(request.method, request.method.lower())
         audit_event(
@@ -1068,6 +1075,22 @@ def tools_sqlite_schema(request:Request,path:str):
 def tools_sqlite_query(r:SQLiteQueryRequest,request:Request):
     require_user(request)
     return sqlite_query(r.path,r.sql,r.limit)
+
+@app.get("/learning/experience/settings")
+def learning_experience_settings(request:Request):
+    require_user(request)
+    return {"enabled": get_bool("learning.personal_experience", True)}
+
+@app.patch("/learning/experience/settings")
+def learning_experience_settings_update(request:Request, enabled:bool):
+    require_user(request)
+    set_setting("learning.personal_experience", "true" if enabled else "false")
+    return {"enabled": bool(enabled)}
+
+@app.get("/learning/experiences")
+def learning_experiences(request:Request, language:str, topic:str, limit:int=20):
+    require_user(request)
+    return {"enabled": get_bool("learning.personal_experience", True), "items": [dict(x) for x in learner.personal_experiences(language, topic, limit)]}
 
 @app.get("/learning/status")
 def learning_status(request:Request, language:str|None=None):
