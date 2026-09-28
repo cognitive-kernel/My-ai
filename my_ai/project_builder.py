@@ -1,8 +1,8 @@
-# mypy: ignore-errors
 from __future__ import annotations
 
 import json
 import os
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -69,6 +69,24 @@ def _write_files(workspace: Path, files: dict[str, str]) -> list[str]:
     return written
 
 def _run(language: str, operation: str, workspace: Path, timeout: int) -> dict[str, Any]:
+    if canonical_language(language) == "MQL4":
+        metaeditor = os.getenv("MYAI_METAEDITOR", "").strip()
+        if not metaeditor:
+            return {"language":"MQL4","operation":operation,"passed":False,"return_code":-1,"output":"","error":"MetaEditor compiler is unavailable. Set MYAI_METAEDITOR to metaeditor.exe."}
+        if operation != "build":
+            return {"language":"MQL4","operation":operation,"passed":True,"return_code":0,"output":"No standard MQL4 test/lint command configured.","error":""}
+        sources=list(workspace.rglob("*.mq4"))
+        if not sources:
+            return {"language":"MQL4","operation":"build","passed":False,"return_code":-1,"output":"","error":"No .mq4 source file was generated."}
+        errors=[]
+        for source in sources:
+            try:
+                p=subprocess.run([metaeditor, f"/compile:{source}", "/log"], cwd=workspace, capture_output=True, text=True, timeout=max(1,min(int(timeout),600)), shell=False)
+                if p.returncode != 0:
+                    errors.append((p.stdout or "")[-6000:]+"\n"+(p.stderr or "")[-6000:])
+            except Exception as exc:
+                errors.append(str(exc))
+        return {"language":"MQL4","operation":"build","passed":not errors,"return_code":0 if not errors else 1,"output":"\n".join(errors),"error":"" if not errors else "MetaEditor compilation failed."}
     try:
         return run_project_tool(language, operation, str(workspace), timeout)
     except Exception as exc:
