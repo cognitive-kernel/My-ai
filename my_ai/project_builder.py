@@ -81,14 +81,14 @@ def _run(language: str, operation: str, workspace: Path, timeout: int) -> dict[s
     if canonical_language(language) == "MQL4":
         metaeditor = os.getenv("MYAI_METAEDITOR", "").strip()
         if not metaeditor:
-            return {"language": "MQL4", "operation": operation, "passed": False, "return_code": -1,
+            return {"language": "MQL4", "operation": operation, "passed": False, "available": False, "return_code": -1,
                     "output": "", "error": "MetaEditor compiler is unavailable. Set MYAI_METAEDITOR to metaeditor.exe."}
         if operation != "build":
-            return {"language": "MQL4", "operation": operation, "passed": True, "return_code": 0,
-                    "output": "No standard MQL4 test/lint command configured.", "error": ""}
+            return {"language": "MQL4", "operation": operation, "passed": False, "available": False, "return_code": -1,
+                    "output": "", "error": "No standard MQL4 test/lint command is configured."}
         sources = list(workspace.rglob("*.mq4"))
         if not sources:
-            return {"language": "MQL4", "operation": "build", "passed": False, "return_code": -1,
+            return {"language": "MQL4", "operation": "build", "passed": False, "available": True, "return_code": -1,
                     "output": "", "error": "No .mq4 source file was generated."}
         errors = []
         for source in sources:
@@ -101,7 +101,7 @@ def _run(language: str, operation: str, workspace: Path, timeout: int) -> dict[s
                     errors.append((p.stdout or "")[-6000:] + "\n" + (p.stderr or "")[-6000:])
             except Exception as exc:
                 errors.append(str(exc))
-        return {"language": "MQL4", "operation": "build", "passed": not errors,
+        return {"language": "MQL4", "operation": "build", "passed": not errors, "available": True,
                 "return_code": 0 if not errors else 1, "output": "\n".join(errors),
                 "error": "" if not errors else "MetaEditor compilation failed."}
     try:
@@ -135,61 +135,41 @@ def _detect_language_from_texts(texts: list[str]) -> str | None:
 
 
 def _recent_conversation_context(goal: str) -> tuple[str, str | None, int | None]:
-    sessions = fetch_all(
-        "SELECT id,language FROM chat_sessions WHERE kind='chat' ORDER BY updated_at DESC,id DESC LIMIT 1"
-    )
+    sessions = fetch_all("SELECT id,language FROM chat_sessions WHERE kind='chat' ORDER BY updated_at DESC,id DESC LIMIT 1")
     if not sessions:
         return goal, None, None
     session_id = int(sessions[0]["id"])
-    rows = fetch_all(
-        "SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 80",
-        (session_id,),
-    )[::-1]
+    rows = fetch_all("SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 80", (session_id,))[::-1]
     user_messages = [str(row["content"] or "").strip() for row in rows if row["role"] == "user"]
     if not user_messages:
         return goal, sessions[0].get("language"), session_id
-
     current = str(goal or "").strip()
     current_language = _detect_language_from_texts([current])
     prior = None
     if _is_contextual_build_request(current):
         for candidate in reversed(user_messages[:-1]):
-            if len(candidate) < 8:
-                continue
-            if _is_contextual_build_request(candidate):
+            if len(candidate) < 8 or _is_contextual_build_request(candidate):
                 continue
             prior = candidate
             break
-        if prior:
-            resolved_goal = (
-                "Previous user requirements from this same chat:\n"
-                + prior
-                + "\n\nCurrent user follow-up:\n"
-                + current
-            )
-        else:
-            resolved_goal = current
+        resolved_goal = (
+            "Previous user requirements from this same chat:\n" + prior + "\n\nCurrent user follow-up:\n" + current
+            if prior else current
+        )
     else:
         resolved_goal = current
-
     prior_language = _detect_language_from_texts([prior]) if prior else _detect_language_from_texts(user_messages[:-1])
     resolved_language = _detect_language(resolved_goal.casefold())
     if not resolved_language:
         normalized_goal = resolved_goal.casefold()
-        explicit_language_hints = (
-            ("mql4", "MQL4"), ("mql 4", "MQL4"), ("mq4", "MQL4"),
-            ("mql5", "MQL5"), ("python", "Python"), ("پایتون", "Python"),
-            ("rust", "Rust"), ("javascript", "JavaScript"), ("typescript", "TypeScript"),
-        )
+        explicit_language_hints = (("mql4", "MQL4"), ("mql 4", "MQL4"), ("mq4", "MQL4"), ("mql5", "MQL5"), ("python", "Python"), ("پایتون", "Python"), ("rust", "Rust"), ("javascript", "JavaScript"), ("typescript", "TypeScript"))
         resolved_language = next((name for needle, name in explicit_language_hints if needle in normalized_goal), None)
     language = current_language or resolved_language or prior_language or sessions[0].get("language")
     if not language and _is_contextual_build_request(current):
         context_text = "\n".join(user_messages).casefold()
         if "mql4" in context_text or "mq4" in context_text or "متاتریدر 4" in context_text or "metatrader 4" in context_text:
             language = "MQL4"
-    conversation_context = "\n".join(
-        f"{row['role']}: {str(row['content'] or '')[:7000]}" for row in rows[-20:]
-    )[:MAX_CONTEXT_CHARS]
+    conversation_context = "\n".join(f"{row['role']}: {str(row['content'] or '')[:7000]}" for row in rows[-20:])[:MAX_CONTEXT_CHARS]
     return resolved_goal + "\n\nFULL CHAT CONTEXT FOR THIS PROJECT REQUEST:\n" + conversation_context, language, session_id
 
 
@@ -198,14 +178,12 @@ def _prompt(language: str, goal: str, knowledge: list[Any], previous_error: str 
     return (
         "Generate a complete runnable software project, not a single source file. "
         "Return ONLY valid JSON: {\"files\":{\"relative/path\":\"file contents\"}}. "
-        "The conversation context is authoritative for follow-up requests: if the current message says to build/create it, "
-        "continue the user's previous concrete requirements instead of inventing a new task or language. "
+        "The conversation context is authoritative for follow-up requests: if the current message says to build/create it, continue the user's previous concrete requirements instead of inventing a new task or language. "
         "Ignore previous assistant answers when they conflict with the user's own requirements. "
         "Create all necessary source files, dependency manifests, configuration, tests, and README build/run instructions. "
         "Use the requested language/framework and keep every path relative to the project root. "
         "Do not use absolute paths, secrets, runtime network downloads, or placeholder TODO implementations. "
-        f"LANGUAGE: {language}\nGOAL: {goal}\n"
-        f"LEARNED KNOWLEDGE: {json.dumps(knowledge, ensure_ascii=False)[:30000]}{suffix}"
+        f"LANGUAGE: {language}\nGOAL: {goal}\nLEARNED KNOWLEDGE: {json.dumps(knowledge, ensure_ascii=False)[:30000]}{suffix}"
     )
 
 
@@ -219,14 +197,7 @@ def _artifact_files(workspace: Path) -> list[str]:
     return out[:200]
 
 
-def build_project(
-    goal: str,
-    language: str = "Python",
-    *,
-    project_path: str | None = None,
-    timeout: int = 300,
-    repair_attempts: int = 2,
-) -> dict[str, Any]:
+def build_project(goal: str, language: str = "Python", *, project_path: str | None = None, timeout: int = 300, repair_attempts: int = 2) -> dict[str, Any]:
     goal = str(goal or "").strip()
     if not goal:
         raise ValueError("Project goal is required.")
@@ -241,42 +212,25 @@ def build_project(
     last_error = ""
     attempts = max(1, min(int(repair_attempts) + 1, 4))
     for _ in range(attempts):
-        files = _parse_files(llm.chat(
-            _prompt(language, resolved_goal, knowledge, last_error),
-            system="You are a senior software architect. Generate complete, buildable projects. Return JSON only.",
-        ))
+        files = _parse_files(llm.chat(_prompt(language, resolved_goal, knowledge, last_error), system="You are a senior software architect. Generate complete, buildable projects. Return JSON only."))
         _write_files(workspace, files)
         build = _run(language, "build", workspace, timeout)
         if not build.get("passed"):
             last_error = build.get("error") or build.get("output") or "build failed"
             continue
-        tests = _run(language, "test", workspace, timeout) if language != "MQL4" else {
-            "operation": "test", "passed": True,
-            "note": "MQL4 test execution is delegated to MetaEditor/toolchain when available.",
-        }
-        lint = _run(language, "lint", workspace, timeout) if language != "MQL4" else {
-            "operation": "lint", "passed": True, "note": "No standard MQL4 lint command configured.",
-        }
+        tests = _run(language, "test", workspace, timeout) if language != "MQL4" else _run(language, "test", workspace, timeout)
+        lint = _run(language, "lint", workspace, timeout) if language != "MQL4" else _run(language, "lint", workspace, timeout)
         if tests.get("passed") and lint.get("passed"):
             break
         last_error = tests.get("error") or tests.get("output") or lint.get("error") or lint.get("output") or "tests/lint failed"
-    pid = execute(
-        "INSERT INTO generated_projects(language,request,code) VALUES(?,?,?)",
-        (language, resolved_goal, json.dumps(files, ensure_ascii=False)),
-    )
+    pid = execute("INSERT INTO generated_projects(language,request,code) VALUES(?,?,?)", (language, resolved_goal, json.dumps(files, ensure_ascii=False)))
     return {
         "status": "built" if build.get("passed") and tests.get("passed", False) and lint.get("passed", False) else "build_failed",
-        "language": language, "request": resolved_goal, "project_id": pid,
-        "project_name": workspace.name,
+        "language": language, "request": resolved_goal, "project_id": pid, "project_name": workspace.name,
         "project_path": str(workspace.relative_to(ROOT)) if workspace.is_relative_to(ROOT) else str(workspace),
-        "session_id": session_id, "files": sorted(files), "file_count": len(files),
-        "build": build, "tests": tests, "lint": lint, "repair_attempts": attempts - 1,
-        "artifacts": _artifact_files(workspace),
-        "toolchain": (
-            {"metaeditor": bool(os.getenv("MYAI_METAEDITOR", "").strip())}
-            if canonical_language(language) == "MQL4"
-            else doctor(language).get(language, {})
-        ),
+        "session_id": session_id, "files": sorted(files), "file_count": len(files), "build": build, "tests": tests, "lint": lint,
+        "repair_attempts": attempts - 1, "artifacts": _artifact_files(workspace),
+        "toolchain": ({"metaeditor": bool(os.getenv("MYAI_METAEDITOR", "").strip())} if canonical_language(language) == "MQL4" else doctor(language).get(language, {})),
     }
 
 
