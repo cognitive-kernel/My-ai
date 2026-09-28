@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -19,6 +20,7 @@ class PreparedChat:
     attachments: list[dict[str, Any]]
     history: list[dict[str, Any]]
     context: str
+    conversation_state: dict[str, Any]
     intent: Any = None
     task: str = "general"
     llm: Any = None
@@ -30,8 +32,23 @@ class PreparedChat:
     shortcut: str | None = None
 
 
+_CONTINUATION_MARKERS = (
+    "همونو", "همان را", "همون را", "همین را", "همین رو", "همون فایل", "دستورات قبلی",
+    "دستور قبلی", "طبق قبلی", "ادامه بده", "ادامه همان", "ادامه همون", "بر اساس چیزی که گفتم",
+    "بر اساس دستوراتی که دادم", "طبق چیزی که گفتم", "the previous instructions", "the previous request",
+    "continue", "continue that", "build it", "create it", "make it", "generate it", "same file", "same project",
+)
+
+
+def _tokens(text: str) -> set[str]:
+    return {x for x in re.findall(r"[\w+#.-]{2,}", str(text or "").casefold()) if x not in {"the", "and", "for", "with", "that", "this", "from", "user", "assistant"}}
+
+
 class Agent(LegacyAgent):
-    """Unified chat pipeline shared by synchronous and streaming chat."""
+    """Unified inference pipeline with explicit conversation state and context-aware retrieval."""
+
+    def _ensure_state_table(self) -> None:
+        execute("CREATE TABLE IF NOT EXISTS conversation_state (session_id INTEGER PRIMARY KEY, topic TEXT NOT NULL DEFAULT '', current_goal TEXT NOT NULL DEFAULT '', language TEXT, last_action TEXT NOT NULL DEFAULT '', summary TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
 
     def _persist_shortcut(self, ctx: PreparedChat) -> str:
         answer = str(ctx.shortcut or "")
@@ -40,127 +57,147 @@ class Agent(LegacyAgent):
         execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (ctx.session_id,))
         return answer
 
-    def _prepare_chat_context(self, message, session_id=1, attachments=None) -> PreparedChat:
-        """Single preparation path for chat and stream_chat.
+    @staticmethod
+    def _is_continuation(message: str) -> bool:
+        low = re.sub(r"\s+", " ", str(message or "").strip().casefold())
+        return any(marker in low for marker in _CONTINUATION_MARKERS)
 
-        Order is identical for both transports: web confirmation -> self maintenance ->
-        identity -> history/classify/knowledge -> system prompt.
-        """
-        message = str(message or "")
-        normalized_attachments = list(attachments if attachments is not None else get_attachments())[:10]
+    @staticmethod
+    def _is_action_request(message: str) -> bool:
+        low = str(message or "").casefold()
+        return any(x in low for x in ("بساز", "ایجاد کن", "تولید کن", "بنویس", "پیاده سازی", "پیاده‌سازی", "فایل بساز", "برنامه بنویس", "پروژه بساز", "create", "build", "generate", "write", "implement"))
 
-        web_confirmation = self._web_learning_confirmation(message, session_id)
-        if web_confirmation is not None:
-            return PreparedChat(message, session_id, normalized_attachments, [], "", shortcut=web_confirmation)
+    def _conversation_state(self, history: list[dict[str, Any]], message: str) -> dict[str, Any]:
+        self._ensure_state_table()
+        user_messages = [str(x.get("content") or "").strip() for x in history if x.get("role") == "user"]
+        assistant_messages = [str(x.get("content") or "").strip() for x in history if x.get("role") == "assistant"]
+        recent_users = user_messages[-12:]
+        joined = "\n".join(recent_users).casefold()
+        aliases = (("mql4", "MQL4"), ("mq4", "MQL4"), ("متاتریدر 4", "MQL4"), ("metatrader 4", "MQL4"), ("python", "Python"), ("پایتون", "Python"), ("javascript", "JavaScript"), ("جاوااسکریپت", "JavaScript"), ("typescript", "TypeScript"), ("java", "Java"), ("rust", "Rust"), ("c++", "C++"), ("c#", "C#"), ("php", "PHP"), ("go", "Go"))
+        language = next((canonical for alias, canonical in sorted(aliases, key=lambda x: len(x[0]), reverse=True) if alias in joined or alias in str(message).casefold()), None)
+        current_goal = next((x for x in reversed(user_messages) if len(x) >= 8 and not self._is_continuation(x)), str(message or ""))
+        topic = current_goal[:300]
+        action = "build/create" if self._is_action_request(message) else ("continue" if self._is_continuation(message) else "answer")
+        summary = f"موضوع جاری: {topic}\nزبان: {language or 'نامشخص'}\nآخرین اقدام: {action}\nآخرین درخواست‌های کاربر: {' | '.join(recent_users[-4:])}"
+        return {"topic": topic, "current_goal": current_goal, "language": language, "last_action": action, "summary": summary, "assistant_tail": assistant_messages[-2:]}
 
-        maintenance = self._self_maintenance(message)
-        if maintenance is not None:
-            return PreparedChat(message, session_id, normalized_attachments, [], "", shortcut=maintenance)
+    def _resolved_message(self, message: str, history: list[dict[str, Any]], state: dict[str, Any]) -> str:
+        if not self._is_continuation(message):
+            return message
+        prior = next((str(x.get("content") or "").strip() for x in reversed(history) if x.get("role") == "user" and len(str(x.get("content") or "").strip()) >= 8 and not self._is_continuation(str(x.get("content") or ""))), None)
+        prior = prior or state.get("current_goal") or ""
+        return f"PREVIOUS CONCRETE USER REQUIREMENTS:\n{prior}\n\nCURRENT USER FOLLOW-UP:\n{message}"
 
-        if self._is_identity_question(message):
-            return PreparedChat(message, session_id, normalized_attachments, [], "", shortcut=self._identity_response())
+    def _update_state(self, ctx: PreparedChat, answer: str = "") -> None:
+        self._ensure_state_table()
+        state = ctx.conversation_state
+        summary = state.get("summary", "")
+        if answer:
+            summary = (summary + "\nآخرین پاسخ تولیدشده: " + str(answer)[:1000])[:5000]
+        execute("INSERT INTO conversation_state(session_id,topic,current_goal,language,last_action,summary,updated_at) VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(session_id) DO UPDATE SET topic=excluded.topic,current_goal=excluded.current_goal,language=excluded.language,last_action=excluded.last_action,summary=excluded.summary,updated_at=CURRENT_TIMESTAMP", (ctx.session_id, state.get("topic", ""), state.get("current_goal", ""), state.get("language"), state.get("last_action", ""), summary))
 
-        history = fetch_all(
-            "SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 20",
-            (session_id,),
-        )[::-1]
-        context = "\n".join(f"{row['role']}: {row['content']}" for row in history[-8:])
-        intent = self._classify(message, context)
-        task = "coding" if intent.name == "coding" else "general"
-        llm = self.llm if task == "general" else create_llm(task)
-
-        attachment_context = self._attachment_context(normalized_attachments)
-        llm_message = message + ("\n\n" + attachment_context if attachment_context else "")
-
-        knowledge = recall(message, 8)
+    def _relevant_knowledge(self, message: str, state: dict[str, Any], intent: Any) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        query = "\n".join((state.get("summary", ""), state.get("topic", ""), str(message), str(getattr(intent, "name", ""))))
+        candidates = recall(query, 16)
+        query_tokens = _tokens(query)
+        filtered: list[dict[str, Any]] = []
+        for item in candidates:
+            text = " ".join(str(item.get(k) or "") for k in ("title", "topic", "content"))
+            overlap = len(query_tokens & _tokens(text))
+            if overlap >= 1 or len(filtered) < 2:
+                filtered.append(item)
+            if len(filtered) >= 8:
+                break
         enriched: list[dict[str, Any]] = []
-        for raw_item in knowledge:
+        for raw_item in filtered:
             item = dict(raw_item)
             provenance = item.get("provenance")
             if not isinstance(provenance, dict) and item.get("id") is not None:
-                provenance = {
-                    "citation_id": f"K{item.get('id')}",
-                    "source_url": item.get("source_url") or f"local://knowledge/{item.get('id')}",
-                    "title": item.get("title") or "local knowledge",
-                }
+                provenance = {"citation_id": f"K{item.get('id')}", "source_url": item.get("source_url") or f"local://knowledge/{item.get('id')}", "title": item.get("title") or "local knowledge"}
             item["provenance"] = provenance
-            item["confidence_label"] = (
-                round(float(item["confidence"]), 3)
-                if item.get("confidence") is not None and item.get("confidence_calibrated")
-                else "uncalibrated"
-            )
+            item["confidence_label"] = round(float(item["confidence"]), 3) if item.get("confidence") is not None and item.get("confidence_calibrated") else "uncalibrated"
             enriched.append(item)
+        return filtered, enriched
 
+    def _prepare_chat_context(self, message, session_id=1, attachments=None) -> PreparedChat:
+        message = str(message or "")
+        normalized_attachments = list(attachments if attachments is not None else get_attachments())[:10]
+        web_confirmation = self._web_learning_confirmation(message, session_id)
+        if web_confirmation is not None:
+            return PreparedChat(message, session_id, normalized_attachments, [], "", {}, shortcut=web_confirmation)
+        maintenance = self._self_maintenance(message)
+        if maintenance is not None:
+            return PreparedChat(message, session_id, normalized_attachments, [], "", {}, shortcut=maintenance)
+        if self._is_identity_question(message):
+            return PreparedChat(message, session_id, normalized_attachments, [], "", {}, shortcut=self._identity_response())
+        history = fetch_all("SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 24", (session_id,))[::-1]
+        state = self._conversation_state(history, message)
+        context = "\n".join(f"{row['role']}: {row['content']}" for row in history[-20:])
+        routing_context = f"CONVERSATION STATE:\n{state['summary']}\n\nRECENT CHAT:\n{context}"
+        intent = self._classify(message, routing_context)
+        if self._is_continuation(message) and getattr(intent, "name", "") not in {"learning", "help", "image_generation"}:
+            try:
+                intent.args["continue_task"] = True
+                if state.get("language") and not intent.args.get("language"):
+                    intent.args["language"] = state["language"]
+                if self._is_action_request(message):
+                    intent.args["actionable"] = True
+            except Exception:
+                pass
+        task = "coding" if getattr(intent, "name", "") in {"coding", "code_execution", "git_write"} or "coding" in getattr(intent, "intents", ()) else "general"
+        llm = self.llm if task == "general" else create_llm(task)
+        attachment_context = self._attachment_context(normalized_attachments)
+        resolved_message = self._resolved_message(message, history, state)
+        llm_message = resolved_message + ("\n\n" + attachment_context if attachment_context else "")
+        knowledge, enriched = self._relevant_knowledge(resolved_message, state, intent)
         context_note = (
-            "RELEVANT LOCAL KNOWLEDGE (verified when marked verified). Cite provenance when making factual claims. "
-            "Do not present uncalibrated retrieval as high confidence.\n"
-            + json.dumps(knowledge, ensure_ascii=False)
-            + "\nRETRIEVAL METADATA:\n"
-            + json.dumps(enriched, ensure_ascii=False)
+            "INFERENCE PRIORITY (strict):\n1. CURRENT USER INSTRUCTION\n2. CURRENT CONVERSATION STATE AND RELEVANT RECENT HISTORY\n3. RELEVANT LOCAL KNOWLEDGE ONLY\n4. GENERAL RULES\n"
+            "Knowledge is supporting evidence, never a new task. Ignore retrieved material that is unrelated to the current task. "
+            "If the user refers to a previous instruction, same file, same project, or 'build it', resolve the reference from this session before asking a clarification. "
+            "Do not treat a previous assistant answer as a user requirement.\n\n"
+            + json.dumps({"state": state, "knowledge": knowledge, "retrieval_metadata": enriched}, ensure_ascii=False)[:45000]
         )
         lesson_note = ""
-        if intent.name in {"coding", "code_execution", "git_write", "self_update"}:
+        if getattr(intent, "name", "") in {"coding", "code_execution", "git_write", "self_update"} or "coding" in getattr(intent, "intents", ()):
             lessons = recent_lessons(12)
             if lessons:
-                lesson_note = (
-                    "\nRECENT SELF-REPAIR LESSONS (use only as engineering constraints; do not treat as user facts):\n"
-                    + json.dumps(lessons, ensure_ascii=False)
-                )
+                lesson_note = "\nRECENT SELF-REPAIR LESSONS (constraints only):\n" + json.dumps(lessons, ensure_ascii=False)
+        return PreparedChat(message=message, session_id=session_id, attachments=normalized_attachments, history=history, context=context, conversation_state=state, intent=intent, task=task, llm=llm, llm_message=llm_message, knowledge=knowledge, enriched_knowledge=enriched, system=SYSTEM + "\n\n" + context_note + lesson_note, citation_block=self._required_citations(enriched))
 
-        citation_block = self._required_citations(enriched)
-        return PreparedChat(
-            message=message,
-            session_id=session_id,
-            attachments=normalized_attachments,
-            history=history,
-            context=context,
-            intent=intent,
-            task=task,
-            llm=llm,
-            llm_message=llm_message,
-            knowledge=knowledge,
-            enriched_knowledge=enriched,
-            system=SYSTEM + "\n\n" + context_note + lesson_note,
-            citation_block=citation_block,
-        )
+    def _persist_answer(self, ctx: PreparedChat, answer: str) -> str:
+        execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (ctx.session_id, "assistant", answer))
+        execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (ctx.session_id,))
+        self._update_state(ctx, answer)
+        return answer
 
     def chat(self, message, session_id=1, attachments=None):
         ctx = self._prepare_chat_context(message, session_id, attachments)
         if ctx.shortcut is not None:
-            return self._persist_shortcut(ctx)
-
+            answer = self._persist_shortcut(ctx)
+            self._update_state(ctx, answer)
+            return answer
         answer = ctx.llm.chat(ctx.llm_message, system=ctx.system, history=ctx.history)
         answer = self._handle_unknown(answer, ctx.message, ctx.session_id)
-        if ctx.knowledge and "__MYAI_UNKNOWN__" not in str(answer):
-            if ctx.citation_block and not any(
-                f"[K{item.get('id')}]" in str(answer) for item in (ctx.enriched_knowledge or [])[:4]
-            ):
-                answer = answer.rstrip() + ctx.citation_block
-
+        if ctx.knowledge and "__MYAI_UNKNOWN__" not in str(answer) and ctx.citation_block and not any(f"[K{item.get('id')}]" in str(answer) for item in (ctx.enriched_knowledge or [])[:4]):
+            answer = answer.rstrip() + ctx.citation_block
         execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (ctx.session_id, "user", ctx.message))
-        execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (ctx.session_id, "assistant", answer))
-        execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (ctx.session_id,))
+        self._persist_answer(ctx, answer)
         return answer
 
     def stream_chat(self, message, session_id=1, attachments=None):
         ctx = self._prepare_chat_context(message, session_id, attachments)
         if ctx.shortcut is not None:
-            yield self._persist_shortcut(ctx)
+            answer = self._persist_shortcut(ctx)
+            self._update_state(ctx, answer)
+            yield answer
             return
-
         execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (ctx.session_id, "user", ctx.message))
-
-        # Provenance is known before generation; emit it before model chunks so it
-        # cannot be lost after the stream terminates.
         if ctx.citation_block and ctx.knowledge:
             yield ctx.citation_block.lstrip() + "\n\n"
-
         chunks: list[str] = []
         for chunk in ctx.llm.stream_chat(ctx.llm_message, system=ctx.system, history=ctx.history):
             text_chunk = str(chunk)
             chunks.append(text_chunk)
             yield text_chunk
-
         answer = self._handle_unknown("".join(chunks), ctx.message, ctx.session_id)
-        execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (ctx.session_id, "assistant", answer))
-        execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (ctx.session_id,))
+        self._persist_answer(ctx, answer)
