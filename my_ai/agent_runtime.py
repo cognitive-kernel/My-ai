@@ -9,6 +9,7 @@ from .db import execute, fetch_all
 from .memory import recall
 from .llm import create_llm
 from .self_update import recent_lessons
+from .chat_transport_context import get_attachments
 
 
 @dataclass
@@ -42,11 +43,11 @@ class Agent(LegacyAgent):
     def _prepare_chat_context(self, message, session_id=1, attachments=None) -> PreparedChat:
         """Single preparation path for chat and stream_chat.
 
-        Order is intentionally identical for both transports:
-        web confirmation -> self maintenance -> identity -> history/classify/knowledge -> prompt.
+        Order is identical for both transports: web confirmation -> self maintenance ->
+        identity -> history/classify/knowledge -> system prompt.
         """
         message = str(message or "")
-        normalized_attachments = list(attachments or [])[:10]
+        normalized_attachments = list(attachments if attachments is not None else get_attachments())[:10]
 
         web_confirmation = self._web_learning_confirmation(message, session_id)
         if web_confirmation is not None:
@@ -149,8 +150,8 @@ class Agent(LegacyAgent):
 
         execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (ctx.session_id, "user", ctx.message))
 
-        # Sources are prepared before generation so they cannot be appended after the
-        # response stream has already ended.
+        # Provenance is known before generation; emit it before model chunks so it
+        # cannot be lost after the stream terminates.
         if ctx.citation_block and ctx.knowledge:
             yield ctx.citation_block.lstrip() + "\n\n"
 
