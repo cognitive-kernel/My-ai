@@ -122,4 +122,20 @@ def classify(text: str, context: str | None = None, classifier: StructuredRouter
         ROUTER_SCHEMA,
         system="You are My-AI's semantic router. Output only schema-constrained routing data.",
     )
+    # Code generation and code execution are different operations; authorization remains separate. A request that
+    # asks to write/build/generate source code must remain coding unless it also
+    # explicitly asks My-AI to run/execute the code.
+    if data.get("primary") == "code_execution":
+        text_low = text.casefold()
+        generation = any(token in text_low for token in (
+            "بنویس", "بنویسد", "بنویسم", "بساز", "ساختن", "ساخت",
+            "ایجاد کن", "تولید کن", "پیاده‌سازی", "پیاده سازی", "کدنویسی",
+            "write", "build", "create", "generate", "implement",
+        ))
+        execution = any(token in text_low for token in (
+            "اجرا کن", "اجرایش کن", "اجرا بده",
+            "run", "execute", "eval", "launch", "start the program",
+        ))
+        if generation and not execution:
+            data = {**data, "primary": "coding", "intents": ["coding" if x == "code_execution" else x for x in data.get("intents", [])]}
     return _intent_from_payload(data)

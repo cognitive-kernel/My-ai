@@ -42,7 +42,6 @@ from .platform import import_encrypted_database, restore_encrypted_backup
 from .self_repair import list_proposals, proposal_diff
 from .self_diagnostics import SelfDiagnosticsMonitor, latest_report, report_history, paginated_report_history
 from .tooling import catalog as tool_catalog, doctor as tool_doctor, run_project_tool, run_python_snippet, sqlserver_query, sqlserver_schema, mysql_query, mysql_schema, sqlite_query, sqlite_schema
-from .image_generation import generate_image, ImageGenerationError
 from .runtime_prerequisites import startup_check, runtime_status
 from .local_files import WORKSPACE_ROOT
 from .settings_feature import shutdown_course_workers
@@ -891,6 +890,52 @@ def health(): return {"status":"ok","model":settings.ollama_model,"executor_mode
 def health_metrics():
     return {"status":"ok","offline_strict":settings.offline_strict,**metrics_snapshot()}
 
+def _learning_command(r: ChatRequest, request: Request, user=None):
+    user = user or require_user(request)
+    if r.session_id is not None and not fetch_all(
+        "SELECT id FROM chat_sessions WHERE id=? AND user_id=? AND kind='learning'",
+        (r.session_id, user["id"]),
+    ):
+        raise HTTPException(404, "Learning session not found.")
+    msg = r.message.strip()
+    if not msg:
+        raise HTTPException(400, "Learning command is required.")
+    intent = classify(msg)
+    if intent.name != "learning":
+        raise HTTPException(400, "این صفحه فقط دستورات یادگیری را اجرا می‌کند.")
+    if not tool_allowed(user, "learning", "execute"):
+        raise HTTPException(403, "Tool permission denied: learning:execute")
+    requested = intent.args.get("language") if isinstance(intent.args, dict) else None
+    requested = canonical_language(requested) if requested else None
+    language = canonical_language(resolve_learning_target(msg, requested or "Python"))
+    sid = r.session_id or execute(
+        "INSERT INTO chat_sessions(title,kind,language,user_id) VALUES(?,?,?,?)",
+        (msg[:60] or "یادگیری جدید", "learning", language, user["id"]),
+    )
+    execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (sid, "user", msg))
+    scheduler.interval_seconds = settings.scheduler_interval_seconds
+    scheduler.start(language, sid)
+    answer = f"یادگیری {language} در پس‌زمینه شروع شد."
+    execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (sid, "assistant", answer))
+    execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (sid,))
+    return {
+        "type": "learning",
+        "answer": answer,
+        "data": {
+            "status": "started",
+            "languages": [language],
+            "language": language,
+            "interval_seconds": settings.scheduler_interval_seconds,
+            "session_id": sid,
+            "custom_courses": [],
+        },
+        "session_id": sid,
+    }
+
+@app.post("/learning/command")
+def learning_command(r: ChatRequest, request: Request):
+    return _learning_command(r, request)
+
 @app.post("/chat")
 def chat(r:ChatRequest, request:Request):
     user=require_user(request)
@@ -900,7 +945,13 @@ def chat(r:ChatRequest, request:Request):
         msg=r.message.strip(); low=msg.lower()
         attachments=_validate_chat_attachments(r.attachments)
         intent=classify(msg)
-        required_by_intent={"pentest_external":("security","execute"),"git_write":("github","write"),"self_update":("self-update","write"),"database_import":("database","write"),"code_execution":("code-execution","execute"),"self_repair":("self-repair","execute"),"learning":("learning","execute"),"coding":("code-generation","execute"),"image_generation":("image-generation","execute")}
+        # Learning and image generation have dedicated pages/endpoints. Never execute
+        # execute either operation through the general chat endpoint.
+        if intent.name == "learning":
+            raise HTTPException(409, "یادگیری فقط در صفحه «پیشرفت و یادگیری» انجام می‌شود.")
+        if intent.name == "image_generation":
+            raise HTTPException(409, "ساخت تصویر فقط در صفحه «ساخت تصویر» انجام می‌شود.")
+        required_by_intent={"pentest_external":("security","execute"),"git_write":("github","write"),"self_update":("self-update","write"),"database_import":("database","write"),"code_execution":("code-execution","execute"),"self_repair":("self-repair","execute"),"coding":("code-generation","execute")}
         if intent.name in required_by_intent:
             tool,action=required_by_intent[intent.name]
             if not tool_allowed(user,tool,action):
@@ -919,22 +970,6 @@ def chat(r:ChatRequest, request:Request):
         if help_intent:
             component="git" if any(x in low for x in ("git","github","گیت","گیت‌هاب")) else ("security" if any(x in low for x in ("امنیت","پن‌تست","pentest")) else ("docker" if "docker" in low else ("python" if "python" in low or "پایتون" in low else "general")))
             return {"type":"help","answer":"راهنمای هوشمند آماده شد.","data":ask_help(msg,component,agent.llm,learner.web)}
-        image_intent=intent.name == "image_generation"
-        if image_intent:
-            if not tool_allowed(user,"image-generation","execute"):
-                raise HTTPException(403,"Tool permission denied: image-generation:execute")
-            try:
-                image_result=generate_image(msg)
-            except ImageGenerationError as exc:
-                raise HTTPException(502,str(exc))
-            answer="تصویر با موفقیت تولید شد."
-            image_url=image_result["url"] if "url" in image_result else f"/image/file/{image_result['filename']}"
-            # Keep a compact textual history entry; the UI renders the returned image separately.
-            execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"user",msg))
-            execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"assistant",answer+" "+image_url))
-            execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(sid,))
-            return {"type":"image","answer":answer,"data":{**image_result,"url":image_url},"session_id":sid}
-
         code_intent=intent.name == "coding"
         if security_words:
             if code_intent:
@@ -956,18 +991,7 @@ def chat(r:ChatRequest, request:Request):
                 answer="External DAST completed for the explicitly supplied target." if path.lower().startswith(("http://","https://")) else ("Static assessment completed; local dynamic DAST requires an approved sandbox." if dynamic_status=="sandbox_required" else "Security assessment completed for the explicitly supplied target.")
                 return {"type":"security","answer":answer,"data":result}
         if learn_intent:
-            language=resolve_learning_target(msg, requested or "Python")
-            language=canonical_language(language)
-            execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"user",msg))
-            scheduler.interval_seconds=settings.scheduler_interval_seconds
-            target_language=canonical_language(requested or "Python")
-            languages: list[str] = [target_language]
-            custom_courses: list[dict[str, object]] = []
-            scheduler.start(target_language, sid)
-            label="، ".join(languages)
-            answer=f"یادگیری {label} در پس‌زمینه شروع شد." if len(languages)==1 else f"یادگیری همزمان {label} در پس‌زمینه شروع شد."
-            execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"assistant",answer)); execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(sid,))
-            return {"type":"learning","answer":answer,"data":{"status":"started","languages":languages,"language":languages[0],"interval_seconds":3600,"session_id":sid,"custom_courses":custom_courses},"session_id":sid}
+            raise HTTPException(409, "یادگیری فقط در صفحه «پیشرفت و یادگیری» انجام می‌شود.")
         if code_intent:
             language=requested or "Python"
             return {"type":"code","answer":"Generated program:","data":learner.generate_program(msg,language)}
