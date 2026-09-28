@@ -46,6 +46,11 @@ class KnowledgeUpdateRequest(BaseModel):
 class BackupRequest(BaseModel):
     path: str
     password: str | None = None
+
+
+class ImportRequest(BaseModel):
+    path: str
+    password: str | None = None
     destination: str | None = None
 
 
