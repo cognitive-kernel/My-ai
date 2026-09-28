@@ -11,7 +11,7 @@ def test_router_schema_is_strictly_structured():
 
 
 def test_router_tool_call_never_implies_authorization():
-    intent = Intent("code_execution", 0.91, True, {"language": "python"}, ("code_execution",))
+    intent = Intent("code_execution", 0.91, True, {"language": "python", "action": "execute"}, ("code_execution",))
     call = router_tool_call(intent)
     assert call["name"] == "route_request"
     assert call["arguments"]["primary"] == "code_execution"
@@ -20,7 +20,7 @@ def test_router_tool_call_never_implies_authorization():
 
 def test_router_payload_requires_schema_fields():
     payload = {
-        "primary": "chat", "intents": ["chat"], "confidence": 0.8,
+        "primary": "chat", "intents": ["chat"], "action": "answer", "confidence": 0.8,
         "language": None, "topic": None, "goal": None, "project_path": None, "urls": [],
     }
     assert _parse_router_payload(json.dumps(payload))["primary"] == "chat"
