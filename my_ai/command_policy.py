@@ -15,7 +15,7 @@ FIX_WORDS=("رفع کن","رفعش کن","برطرف کن","اصلاح کن","د
 SEC_WORDS=("پن تست","پنتست","تست نفوذ","تست امنیت","pentest","pen test","penetration test","security test")
 TEST_WORDS=("تست بگیر","بررسی امنیتی","امنیتش را بررسی","security check","security scan")
 LEARN_WORDS=("یاد بگیر","یادگیری","یاد بگیر که","learn","study","go learn")
-BUILD_WORDS=("بساز","برنامه بساز","برنامه بنویس","اپلیکیشن بساز","اپلیکیشن ایجاد کن","پروژه بساز","پروژه ایجاد کن","ساخت اپلیکیشن","create app","build app","create application","build application","create project","build project","write a program","write code","make a project")
+BUILD_WORDS=("بساز","برنامه بنویس","پروژه بساز","پروژه ایجاد کن","ایجاد پروژه","create project","build project","write a program","write code","make a project")
 
 def _contains(text, words):
     return any((re.search(r"(?<![A-Za-z])"+re.escape(x)+r"(?![A-Za-z])",text) if x.isascii() else x in text) for x in words)

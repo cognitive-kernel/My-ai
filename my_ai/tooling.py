@@ -1,4 +1,3 @@
-# mypy: ignore-errors
 from __future__ import annotations
 import os
 import re
@@ -21,10 +20,9 @@ LANGUAGE_TOOLS = {
     "Swift": {"toolchains":["swift","swiftc","xcodebuild"],"tests":["swift test"],"build":["swift build"],"lint":["swift format lint ."]},
     "Android": {"toolchains":["java","gradle","adb"],"tests":["gradle test"],"build":["gradle assembleDebug"],"lint":["gradle lint"]},
     "iOS": {"toolchains":["swift","xcodebuild"],"tests":["swift test"],"build":["xcodebuild test"],"lint":["swift format lint ."]},
-    "MQL4": {"toolchains":["metaeditor.exe"],"tests":[],"build":["metaeditor.exe /compile"],"lint":[]},
 }
 
-ALIASES={"mql4":"MQL4","mq4":"MQL4","mql 4":"MQL4","js":"JavaScript","node":"JavaScript","py":"Python","kotlin":"Kotlin","kt":"Kotlin","swift":"Swift","rust":"Rust","rs":"Rust","c":"C","php":"PHP","android":"Android","ios":"iOS"}
+ALIASES={"js":"JavaScript","node":"JavaScript","py":"Python","kotlin":"Kotlin","kt":"Kotlin","swift":"Swift","rust":"Rust","rs":"Rust","c":"C","php":"PHP","android":"Android","ios":"iOS"}
 
 def canonical_language(name:str)->str:
     raw=str(name or "").strip()
@@ -61,7 +59,6 @@ def _command(language:str,operation:str)->list[str]:
     if not commands: raise ValueError(f"Operation {operation} is not defined for {lang}.")
     for text in commands:
         exe=text.split()[0]
-        if exe == "metaeditor.exe" and os.getenv("MYAI_METAEDITOR"): exe=os.getenv("MYAI_METAEDITOR")
         if shutil.which(exe) or exe in {"vendor/bin/phpunit","gradle","npm","swift","xcodebuild"}:
             return text.split()
     return commands[0].split()
@@ -69,8 +66,6 @@ def _command(language:str,operation:str)->list[str]:
 def run_project_tool(language:str,operation:str,cwd:str|None=None,timeout:int=120)->dict[str,Any]:
     path=_safe_root(cwd)
     argv=_command(language,operation)
-    if argv and argv[0] == "metaeditor.exe" and os.getenv("MYAI_METAEDITOR"):
-        argv[0]=os.getenv("MYAI_METAEDITOR")
     exe=argv[0]
     if os.sep in exe or "/" in exe:
         candidate=path/exe
