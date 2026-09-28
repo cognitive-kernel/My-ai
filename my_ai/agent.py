@@ -247,15 +247,9 @@ class Agent:
 
     @staticmethod
     def _project_build_requested(message: str, intent) -> bool:
-        if getattr(intent, "name", "") != "coding":
-            return False
-        low = str(message or "").casefold()
-        return any(
-            marker in low
-            for marker in (
-                "بساز", "ایجاد کن", "تولید کن", "بنویس", "فایل بساز", "پروژه بساز",
-                "write", "build", "create", "generate", "implement",
-            )
+        return (
+            getattr(intent, "name", "") == "coding"
+            and str((getattr(intent, "args", {}) or {}).get("action") or "") == "create_artifact"
         )
 
     @staticmethod
