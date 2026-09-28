@@ -141,6 +141,8 @@ def install_os_packages(packages: list[str], *, confirmed: bool = False) -> dict
 
 def _generic_system_install_command(packages: list[str]) -> list[str] | None:
     if os.name == "nt":
+        if shutil.which("apt-get"):
+            return ["apt-get", "install", "-y", *packages]
         if shutil.which("winget"):
             return ["winget", "install", "--exact", "--accept-package-agreements", "--accept-source-agreements", *packages]
         if shutil.which("choco"):
