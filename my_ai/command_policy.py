@@ -17,7 +17,14 @@ TEST_WORDS=("تست بگیر","بررسی امنیتی","امنیتش را بر�
 LEARN_WORDS=("یاد بگیر","یادگیری","یاد بگیر که","learn","study","go learn")
 # These phrases request source/project generation, not execution of a build toolchain.
 # Actual build/compile/run remains a separately confirmable high-risk operation.
-BUILD_WORDS=("بساز","پروژه بساز","پروژه ایجاد کن","ایجاد پروژه","بر اساس دستوراتی که دادم بساز","همونو بساز","همان را بساز","همون فایل رو بساز","create file","create project","build project","create application","build application","make a project")
+BUILD_WORDS=(
+    "پروژه بساز","پروژه ایجاد کن","ایجاد پروژه","اپلیکیشن بساز","برنامه بساز",
+    "build project","create project","create application","build application","make a project",
+    "compile the project","build the application",
+)
+# Source/file generation phrases (indicator, single file) — NOT application toolchain build.
+GENERATE_FILE_WORDS=("بساز","فایل بساز","همونو بساز","همان را بساز","همون فایل رو بساز","create file","write file")
+INDICATOR_WORDS=("اندیکاتور","indicator","mql4","mql5","mq4","mq5","متاتریدر","metatrader","اکسپرت","expert advisor")
 
 def _contains(text, words):
     return any((re.search(r"(?<![A-Za-z])"+re.escape(x)+r"(?![A-Za-z])",text) if x.isascii() else x in text) for x in words)
@@ -55,4 +62,12 @@ def parse_command(text: str) -> CommandPolicy:
         action="report"
     else:
         action="default"
-    return CommandPolicy(language=_detect_language(low),security=security,security_action=action,learn=_contains(low,LEARN_WORDS),build=_contains(low,BUILD_WORDS))
+    build=_contains(low,BUILD_WORDS)
+    # "بساز اندیکاتور/MQL" is source generation, not project toolchain build
+    if _contains(low, INDICATOR_WORDS) or (
+        _contains(low, GENERATE_FILE_WORDS) and _contains(low, INDICATOR_WORDS)
+    ):
+        build = False
+    elif _contains(low, INDICATOR_WORDS):
+        build = False
+    return CommandPolicy(language=_detect_language(low),security=security,security_action=action,learn=_contains(low,LEARN_WORDS),build=build)
