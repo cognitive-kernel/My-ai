@@ -792,7 +792,7 @@ def chat_history(request:Request,limit:int=100,session_id:int|None=None):
     if session_id is None:
         rows=fetch_all("SELECT c.id,c.role,c.content,c.created_at FROM conversations c JOIN chat_sessions s ON s.id=c.session_id WHERE s.user_id=? ORDER BY c.id DESC LIMIT ?",(user["id"],limit))
     else:
-        rows=fetch_all("SELECT c.role,c.content,c.created_at FROM conversations c JOIN chat_sessions s ON s.id=c.session_id WHERE c.session_id=? AND s.user_id=? ORDER BY c.id DESC LIMIT ?",(session_id,user["id"],limit))
+        rows=fetch_all("SELECT c.id,c.role,c.content,c.created_at FROM conversations c JOIN chat_sessions s ON s.id=c.session_id WHERE c.session_id=? AND s.user_id=? ORDER BY c.id DESC LIMIT ?",(session_id,user["id"],limit))
     rows.reverse();
     attachment_query="SELECT id,conversation_id,name,path,size,mime_type,created_at FROM chat_attachments WHERE session_id=? ORDER BY id"
     attachments=fetch_all(attachment_query,(session_id,)) if session_id is not None else []
@@ -945,6 +945,12 @@ def _learning_command(r: ChatRequest, request: Request, user=None):
 def learning_command(r: ChatRequest, request: Request):
     return _learning_command(r, request)
 
+def _persist_api_chat_turn(session_id: int, message: str, answer: str) -> None:
+    """Persist chat turns handled directly by API branches before/without Agent.chat."""
+    execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (session_id, "user", message))
+    execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (session_id, "assistant", str(answer)))
+    execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
+
 @app.post("/chat")
 def chat(r:ChatRequest, request:Request):
     user=require_user(request)
@@ -969,7 +975,9 @@ def chat(r:ChatRequest, request:Request):
                 raise HTTPException(409,"Explicit confirmation required for high-risk intent: "+intent.name)
         requested=intent.args.get("language") if isinstance(intent.args, dict) else None
         requested=canonical_language(requested) if requested else None
-        learn_intent=intent.name == "learning"; sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language,user_id) VALUES(?,?,?,?)",(msg[:60] or "گفتگوی جدید","learning" if learn_intent else "chat",requested,user["id"])); sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language,user_id) VALUES(?,?,?,?)",(msg[:60] or "گفتگوی جدید","learning" if learn_intent else "chat",requested,user["id"])); _save_chat_attachments(sid,attachments); policy=parse_command(msg); security_words=policy.security; fix_requested=policy.security_action=="fix"
+        learn_intent=intent.name == "learning"
+        sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language,user_id) VALUES(?,?,?,?)",(msg[:60] or "گفتگوی جدید","learning" if learn_intent else "chat",requested,user["id"]))
+        _save_chat_attachments(sid,attachments); policy=parse_command(msg); security_words=policy.security; fix_requested=policy.security_action=="fix"
         if security_words:
             if not tool_allowed(user,"security","execute"):
                 raise HTTPException(403,"Tool permission denied: security:execute")
@@ -978,14 +986,18 @@ def chat(r:ChatRequest, request:Request):
         help_intent=intent.name == "help"
         if help_intent:
             component="git" if any(x in low for x in ("git","github","گیت","گیت‌هاب")) else ("security" if any(x in low for x in ("امنیت","پن‌تست","pentest")) else ("docker" if "docker" in low else ("python" if "python" in low or "پایتون" in low else "general")))
-            return {"type":"help","answer":"راهنمای هوشمند آماده شد.","data":ask_help(msg,component,agent.llm,learner.web)}
+            help_data=ask_help(msg,component,agent.llm,learner.web)
+            help_answer="راهنمای هوشمند آماده شد."
+            _persist_api_chat_turn(sid,msg,help_answer)
+            return {"type":"help","answer":help_answer,"data":help_data,"session_id":sid}
         code_intent=intent.name == "coding"
         if security_words:
             if code_intent:
                 language=requested or "Python"; generated=learner.generate_program(msg,language); result=learner.security_assessment_code(generated["code"],language,fix_requested); result["generated_project"]=generated; result["mode"]="pentest_and_fix" if fix_requested else "pentest_report"
                 dynamic_status=(result.get("dynamic") or {}).get("status")
                 answer=("Static assessment completed; local dynamic DAST requires an approved sandbox." if dynamic_status=="sandbox_required" else ("Security assessment completed." if not fix_requested else "Security assessment and remediation completed."))
-                return {"type":"security","answer":answer,"data":result}
+                _persist_api_chat_turn(sid,msg,answer)
+                return {"type":"security","answer":answer,"data":result,"session_id":sid}
             path=None
             for prefix in ("مسیر:","آدرس:","path:","url:","project:","پروژه:"):
                 if prefix in msg: path=msg.split(prefix,1)[1].strip().strip('"').strip("'"); break
@@ -998,7 +1010,8 @@ def chat(r:ChatRequest, request:Request):
                 result["mode"]="external_report" if path.lower().startswith(("http://","https://")) else ("pentest_and_fix" if fix_requested else "pentest_report")
                 dynamic_status=(result.get("dynamic") or {}).get("status")
                 answer="External DAST completed for the explicitly supplied target." if path.lower().startswith(("http://","https://")) else ("Static assessment completed; local dynamic DAST requires an approved sandbox." if dynamic_status=="sandbox_required" else "Security assessment completed for the explicitly supplied target.")
-                return {"type":"security","answer":answer,"data":result}
+                _persist_api_chat_turn(sid,msg,answer)
+                return {"type":"security","answer":answer,"data":result,"session_id":sid}
         if learn_intent:
             raise HTTPException(409, "یادگیری فقط در صفحه «پیشرفت و یادگیری» انجام می‌شود.")
         if code_intent:
@@ -1006,8 +1019,14 @@ def chat(r:ChatRequest, request:Request):
             if policy.build:
                 if not any(token in low for token in ("confirm","approve","approved","تایید","تأیید")):
                     raise HTTPException(409,"Explicit confirmation required before building the application.")
-                return {"type":"project","answer":"Application project build completed.","data":build_project(msg,language,timeout=300,repair_attempts=2)}
-            return {"type":"code","answer":"Generated program:","data":learner.generate_program(msg,language)}
+                build_data=build_project(msg,language,timeout=300,repair_attempts=2)
+                build_answer="Application project build completed."
+                _persist_api_chat_turn(sid,msg,build_answer)
+                return {"type":"project","answer":build_answer,"data":build_data,"session_id":sid}
+            generated_data=learner.generate_program(msg,language)
+            generated_answer="Generated program:"
+            _persist_api_chat_turn(sid,msg,generated_answer)
+            return {"type":"code","answer":generated_answer,"data":generated_data,"session_id":sid}
         if any(x in low for x in ("تایید آپدیت","تأیید آپدیت","تایید بروزرسانی","تأیید بروزرسانی","تایید به روزرسانی","تأیید به روزرسانی","confirm update","approve update","apply update")):
             if user["role"] != "admin":
                 raise HTTPException(403,"Self-update requires administrator approval.")
