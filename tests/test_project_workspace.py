@@ -48,4 +48,4 @@ def test_project_workspace_uses_mql4_source_extension(tmp_path, monkeypatch):
     )
 
     assert (workspace / "main.mq4").read_text(encoding="utf-8").startswith("int OnInit")
-    assert "main.mq4" in files
+    assert any(path.endswith("/main.mq4") for path in files)
