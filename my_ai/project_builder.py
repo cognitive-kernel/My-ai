@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from .command_policy import LANGUAGE_ALIASES
+from .command_policy import LANGUAGE_ALIASES, _detect_language
 from .config import assert_write_allowed
 from .curriculum import canonical_language
 from .db import execute, fetch_all, search_knowledge
@@ -173,7 +173,7 @@ def _recent_conversation_context(goal: str) -> tuple[str, str | None, int | None
         resolved_goal = current
 
     prior_language = _detect_language_from_texts([prior]) if prior else _detect_language_from_texts(user_messages[:-1])
-    resolved_language = _detect_language_from_texts([resolved_goal])
+    resolved_language = _detect_language(resolved_goal.casefold())
     language = current_language or resolved_language or prior_language or sessions[0].get("language")
     conversation_context = "\n".join(
         f"{row['role']}: {str(row['content'] or '')[:7000]}" for row in rows[-20:]
