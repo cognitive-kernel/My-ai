@@ -98,4 +98,8 @@ def classify(text: str, context: str | None = None, classifier: StructuredRouter
         ROUTER_SCHEMA,
         system="You are My-AI's context-aware semantic router. Understand intent from meaning, not trigger words. Output only schema-constrained routing data.",
     )
+    if data.get("action") in {"create_artifact", "modify_artifact"} and data.get("primary") != "coding":
+        intents = [x for x in data.get("intents", []) if x not in {"chat", "code_execution"}]
+        intents.insert(0, "coding")
+        data = {**data, "primary": "coding", "intents": list(dict.fromkeys(intents))[:5]}
     return _intent_from_payload(data)
