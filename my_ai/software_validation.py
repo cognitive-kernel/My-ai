@@ -10,6 +10,11 @@ class SoftwareValidationError(ValueError):
 
 
 def validate_plan(plan: dict[str, Any]) -> None:
+    # Older integrations may return the original plan shape. Normalize harmless omissions;
+    # the new planner schema still requires these fields from the model itself.
+    plan.setdefault("artifact_type", "software project")
+    plan.setdefault("constraints", [])
+    plan.setdefault("ambiguities", [])
     required = ("goal", "artifact_type", "language", "requirements", "acceptance_criteria", "research_queries", "validation")
     missing = [key for key in required if key not in plan]
     if missing:
@@ -41,20 +46,18 @@ def validate_generated_project(workspace: Path, plan: dict[str, Any], language: 
     defects: list[str] = []
     text = _read_text_files(workspace)
     canonical = str(language or "").casefold()
-    artifact = str(plan.get("artifact_type") or "").casefold()
+    artifact = re.sub(r"[\s_-]+", " ", str(plan.get("artifact_type") or "").casefold()).strip()
 
     if canonical == "mql4":
         if not list(workspace.rglob("*.mq4")):
             defects.append("MQL4 task produced no .mq4 source file.")
-        # MQL4 and MQL5 APIs must never be mixed merely because a model knows both.
         mql5_only = (r"#include\s*[<\"]Trade[\\/]Trade\.mqh[>\"]", r"\bCTrade\b", r"\bSymbolInfoTick\s*\(")
         for pattern in mql5_only:
             if re.search(pattern, text, re.IGNORECASE):
                 defects.append("MQL4 source contains an MQL5-only API/header: " + pattern)
-        if artifact in {"indicator", "custom_indicator", "mt4 indicator"} and re.search(r"\bOrderSend\s*\(", text):
+        if artifact in {"indicator", "custom indicator", "mt4 indicator"} and re.search(r"\bOrderSend\s*\(", text):
             defects.append("The generated artifact is declared as an MT4 custom indicator but contains OrderSend; trading must be implemented by an EA/script or the plan must explicitly split indicator and trading components.")
 
-    # A generator must not claim a requested capability by leaving an obvious placeholder.
     placeholder_patterns = (r"TODO\b", r"FIXME\b", r"placeholder", r"ConditionToTrade\s*\(\)\s*\{\s*return\s+true\s*;?")
     for pattern in placeholder_patterns:
         if re.search(pattern, text, re.IGNORECASE):
