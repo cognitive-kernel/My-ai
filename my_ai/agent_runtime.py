@@ -60,12 +60,17 @@ class Agent(LegacyAgent):
         user_messages = [str(x.get("content") or "").strip() for x in history if x.get("role") == "user"]
         assistant_messages = [str(x.get("content") or "").strip() for x in history if x.get("role") == "assistant"]
         recent_users = user_messages[-12:]
-        language = None
+        persisted = fetch_all(
+            "SELECT topic,current_goal,language,last_action,summary FROM conversation_state WHERE session_id=?",
+            (getattr(self, "_current_session_id", 1),),
+        )
+        saved = persisted[0] if persisted else {}
         current_goal = user_messages[-1] if user_messages else str(message or "")
-        topic = current_goal[:300]
-        action = "answer"
-        summary = f"موضوع جاری: {topic}\nزبان: {language or 'نامشخص'}\nآخرین اقدام: {action}\nآخرین درخواست‌های کاربر: {' | '.join(recent_users[-4:])}"
-        return {"topic": topic, "current_goal": current_goal, "language": language, "last_action": action, "summary": summary, "assistant_tail": assistant_messages[-2:]}
+        topic = str(saved.get("topic") or current_goal[:300])
+        language = saved.get("language")
+        last_action = str(saved.get("last_action") or "answer")
+        summary = str(saved.get("summary") or f"موضوع جاری: {topic}\nزبان: {language or 'نامشخص'}\nآخرین اقدام: {last_action}\nآخرین درخواست‌های کاربر: {' | '.join(recent_users[-4:])}")
+        return {"topic": topic, "current_goal": current_goal, "language": language, "last_action": last_action, "summary": summary, "assistant_tail": assistant_messages[-2:]}
 
     def _resolved_message(self, message: str, history: list[dict[str, Any]], state: dict[str, Any]) -> str:
         if str((state.get("last_action") or "") ) != "continue_task":
@@ -109,6 +114,7 @@ class Agent(LegacyAgent):
         message = str(message or "")
         normalized_attachments = list(attachments if attachments is not None else get_attachments())[:10]
         history = fetch_all("SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 24", (session_id,))[::-1]
+        self._current_session_id = session_id
         state = self._runtime_conversation_state(history, message)
         context = "\n".join(f"{row['role']}: {row['content']}" for row in history[-20:])
         routing_context = f"CONVERSATION STATE:\n{state['summary']}\n\nRECENT CHAT:\n{context}"
