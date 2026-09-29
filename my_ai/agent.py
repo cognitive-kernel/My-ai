@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from urllib.parse import quote
 
 from .db import execute, fetch_all
 from .memory import recall
@@ -154,13 +155,26 @@ class Agent:
             files = result.get("files") or []
             path = result.get("project_path") or result.get("project_name") or ""
             language = result.get("language") or ""
-            return (
-                "پروژه ساخته و تست شد.\n"
-                f"- زبان: {language}\n"
-                f"- مسیر پروژه: {path}\n"
-                f"- تعداد فایل‌ها: {len(files)}\n"
-                + ("- Build: موفق\n- Tests: موفق\n- Lint: موفق" if result.get("build", {}).get("passed") and result.get("tests", {}).get("passed") and result.get("lint", {}).get("passed") else "- نتیجه: ساخت کامل نیست.")
+            lines = [
+                "پروژه ساخته و تست شد.",
+                f"- زبان: {language}",
+                f"- مسیر پروژه: {path}",
+                f"- تعداد فایل‌ها: {len(files)}",
+            ]
+            project_root = str(path).replace("\\", "/").strip("/")
+            for rel in files:
+                rel = str(rel).replace("\\", "/").strip("/")
+                if not rel:
+                    continue
+                download_path = f"{project_root}/{rel}" if project_root else rel
+                name = rel.rsplit("/", 1)[-1]
+                lines.append(f"[[MYAI_FILE|{name}|0|/projects/file?path={quote(download_path, safe='')}]]")
+            lines.append(
+                "- Build: موفق\n- Tests: موفق\n- Lint: موفق"
+                if result.get("build", {}).get("passed") and result.get("tests", {}).get("passed") and result.get("lint", {}).get("passed")
+                else "- نتیجه: ساخت کامل نیست."
             )
+            return "\n".join(lines)
         details = []
         for key in ("build", "tests", "lint"):
             item = result.get(key) or {}
