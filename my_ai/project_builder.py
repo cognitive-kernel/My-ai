@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from .command_policy import LANGUAGE_ALIASES
+from .command_policy import LANGUAGE_ALIASES, _detect_language
 from .config import assert_write_allowed
 from .curriculum import canonical_language
 from .db import execute, fetch_all, search_knowledge
@@ -122,10 +122,13 @@ def _recent_conversation_context(goal: str) -> tuple[str, str | None, int | None
     rows = fetch_all("SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 80", (session_id,))[::-1]
     current = str(goal or "").strip()
     current_language = _detect_language_from_texts([current])
-    language = current_language or sessions[0].get("language")
     conversation_context = "\n".join(
         f"{row['role']}: {str(row['content'] or '')[:7000]}" for row in rows[-20:]
     )[:MAX_CONTEXT_CHARS]
+    # Follow-up requests may omit the language; recover it from prior user context
+    # without using build/generation trigger phrases to decide the action.
+    context_language = _detect_language(conversation_context) if conversation_context else None
+    language = current_language or sessions[0].get("language") or context_language
     resolved_goal = current
     if conversation_context:
         resolved_goal += "\n\nFULL CHAT CONTEXT FOR THIS PROJECT REQUEST:\n" + conversation_context
