@@ -76,11 +76,10 @@ def classify(text: str, context: str | None = None, classifier: StructuredRouter
         "For a coding creation request, primary should normally be coding, not code_execution. Never infer authorization. Return only the schema.\n"
         f"CURRENT USER: {text}\nCONVERSATION CONTEXT:\n{context or ''}"
     )
-    data = classifier.structured_chat_json(
-        prompt,
-        ROUTER_SCHEMA,
-        system="You are My-AI's context-aware semantic router. Understand intent from meaning, not trigger words. Output only schema-constrained routing data.",
-    )
-    if data.get("action") in {"create_artifact", "modify_artifact"} and data.get("primary") == "code_execution":
-        data = {**data, "primary": "coding", "intents": ["coding" if x == "code_execution" else x for x in data.get("intents", [])]}
+    data = classifier.structured_chat_json(prompt, ROUTER_SCHEMA, system="You are My-AI's context-aware semantic router. Understand intent from meaning, not trigger words. Output only schema-constrained routing data.")
+    if data.get("action") in {"create_artifact", "modify_artifact"} and data.get("primary") != "coding":
+        normalized_intents = ["coding" if x in {"chat", "code_execution"} else x for x in data.get("intents", [])]
+        if "coding" not in normalized_intents:
+            normalized_intents.insert(0, "coding")
+        data = {**data, "primary": "coding", "intents": normalized_intents[:5]}
     return _intent_from_payload(data)
