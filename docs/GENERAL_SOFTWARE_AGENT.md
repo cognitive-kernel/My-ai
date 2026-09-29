@@ -2,129 +2,132 @@
 
 ## هدف
 
-My-AI باید بتواند یک درخواست نرم‌افزاری را مستقل از واژه‌های ثابت درک کند، درباره فناوری‌های لازم تحقیق کند، از دانش محلی و منابع وب استفاده کند، معماری و برنامه اجرا بسازد، پروژه را مرحله‌به‌مرحله پیاده‌سازی کند، آن را اجرا و اعتبارسنجی کند، خطاها را تحلیل و اصلاح کند و فقط وقتی معیارهای اتمام برآورده شدند نتیجه را کامل اعلام کند.
-
-این معماری محدود به یک زبان، framework یا نوع پروژه نیست. یک بازی کوچک، API، وب‌سایت، برنامه دسکتاپ، ابزار CLI، سرویس backend، پروژه mobile یا artifactهای تخصصی باید از یک چرخه عمومی استفاده کنند و فقط ابزارهای validation متناسب با پروژه تغییر کنند.
+My-AI باید یک درخواست نرم‌افزاری را مستقل از واژه‌های ثابت درک کند، درباره فناوری‌ها و محدودیت‌های واقعی تحقیق کند، از دانش محلی و منابع وب استفاده کند، نوع artifact و قابلیت‌های قابل‌اجرا را مشخص کند، معماری و برنامه اجرا بسازد، پروژه را پیاده‌سازی و اعتبارسنجی کند، خطاها را تحلیل و اصلاح کند و فقط وقتی معیارهای اتمام برآورده شدند نتیجه را کامل اعلام کند.
 
 ## چرخه استاندارد
 
 ```text
-درخواست کاربر
+درخواست آزاد کاربر
   ↓
-درک معنایی + context
+Semantic Understanding + Conversation Context
   ↓
-استخراج نیازمندی‌ها و معیار موفقیت
+Artifact / Capability Identification
   ↓
-تحقیق دانش محلی + تحقیق وب
+Requirements + Constraints + Acceptance Criteria
   ↓
-تصمیم فنی و معماری
+Local Knowledge Retrieval + Web Research
   ↓
-برنامه اجرایی قابل پیگیری
+Platform Capability / Compatibility Check
   ↓
-ساخت skeleton
+Architecture + Technology Decision
   ↓
-پیاده‌سازی مرحله‌ای
+Implementation Plan
+  ↓
+Generate / Modify Project
+  ↓
+Semantic Artifact Validation
   ↓
 Build / Run
   ↓
-Unit / Integration / API / E2E / Runtime validation
+Tests / Lint / Type / API / Browser / Runtime validation
   ↓
-تحلیل خطا
-  ├── اطلاعات ناکافی → تحقیق مجدد
-  └── خطای پیاده‌سازی → اصلاح
+Failure diagnosis
+  ├── requirement ambiguity → resolve from context or ask only when essential
+  ├── missing knowledge → research again
+  ├── platform conflict → redesign valid architecture
+  └── implementation failure → repair
   ↓
-بازآزمایی
+Re-test
   ↓
-Self-review و بررسی کامل requirements
+Self-review against requirements
   ↓
-پاک‌سازی artifactهای موقت و dependencyهای غیرضروری
+Cleanup
   ↓
 Git status / diff / commit
   ↓
-گزارش نهایی با شواهد تست
+Final evidence-based completion report
 ```
 
-## اجزای Agent
+## Semantic understanding
 
-### 1. Semantic Understanding
+Router و Planner نباید برای تشخیص عملیات به فهرست trigger word وابسته باشند. عبارت‌های متفاوتی مانند درخواست مستقیم، غیرمستقیم، محاوره‌ای یا ادامه یک کار باید بر اساس معنی یکسان resolve شوند. current user request اولویت دارد و تاریخچه فقط برای resolve کردن reference و حفظ هدف پروژه استفاده می‌شود.
 
-Router باید intent را از معنی درخواست استخراج کند و به عبارت‌هایی مانند «بساز»، «بنویس»، «ایجاد کن» یا معادل انگلیسی آن‌ها وابسته نباشد. پیام فعلی اولویت دارد و تاریخچه فقط برای resolve کردن referenceها و context استفاده می‌شود.
+## Artifact و قابلیت
 
-### 2. Requirements Extractor
+قبل از تولید کد، Planner باید مشخص کند کاربر چه چیزی می‌خواهد بسازد: application، website، API، library، CLI، mobile app، indicator، expert advisor، script یا نوع دیگری از artifact. سپس باید بررسی کند که قابلیت‌های درخواستی واقعاً توسط آن artifact و platform قابل انجام هستند یا نه.
 
-خروجی باید شامل هدف، ورودی‌ها، خروجی‌ها، محدودیت‌ها، محیط اجرا، فناوری‌های صریح، فناوری‌های قابل انتخاب، مسیر پروژه و معیارهای پذیرش باشد. اگر requirement مبهم ولی قابل تحقیق باشد، Agent ابتدا تحقیق می‌کند؛ اگر واقعاً اطلاعات حیاتی وجود نداشته باشد، فقط همان مورد را از کاربر می‌پرسد.
+اگر دو requirement با محدودیت platform متعارض باشند، Agent نباید کد جعلی تولید کند یا یک capability را با placeholder شبیه‌سازی کند. باید از تحقیق و documentation برای تعیین محدودیت استفاده کند و نزدیک‌ترین معماری معتبر را انتخاب کند؛ در صورت نیاز artifact را به چند جزء سازگار تقسیم کند.
 
-### 3. Knowledge Retrieval
+## تحقیق
 
-دانش داخلی curriculum و memory فقط زمانی وارد prompt می‌شود که به مسئله فعلی مرتبط باشد. دانش بازیابی‌شده جایگزین درخواست کاربر نیست.
+تحقیق از دانش داخلی و WebLearner انجام می‌شود. برای مسائل تخصصی، research queries باید API رسمی، محدودیت platform، compatibility، syntax، نسخه و روش validation را پوشش دهند. منابع و خلاصه آن‌ها در project context ثبت می‌شوند تا تصمیم فنی قابل ردیابی باشد.
 
-### 4. Web Research
+## Planner
 
-Agent می‌تواند برای انتخاب فناوری، API، syntax، نسخه‌ها، محدودیت‌های runtime و روش‌های صحیح implementation تحقیق کند. منابع ترجیحی به ترتیب مستندات رسمی، specificationها، repositoryهای اصلی و منابع فنی معتبر هستند. نتایج تحقیق باید با URL و خلاصه قابل ردیابی در project context ذخیره شوند.
+Plan ساختاریافته باید حداقل شامل این موارد باشد:
 
-### 5. Technical Planner
+- goal
+- artifact_type
+- language/framework
+- requirements
+- architecture
+- phases
+- acceptance_criteria
+- research_queries
+- validation strategy
+- constraints
+- ambiguities
 
-Planner باید یک plan ساختاریافته بسازد که شامل architecture، technology decisions، file plan، implementation phases، validation strategy، risks و acceptance criteria باشد.
+Planner نباید قبل از تحقیق یک capability نامطمئن را قطعی فرض کند.
 
-### 6. Implementation Agent
+## Implementation و validation
 
-ساخت پروژه باید مرحله‌ای باشد. هر مرحله باید artifact تولید کند و بعد از آن validation انجام شود. تولید یک JSON عظیم بدون validation مرحله‌ای معیار کافی نیست.
+Generator باید کل artifact قابل اجرا را تولید کند، نه فقط یک snippet. پس از تولید، یک semantic validation مستقل از compiler بررسی می‌کند که artifact با plan و platform سازگار است و placeholder یا API ناسازگار ندارد. سپس compiler/runtime/test/lint اجرا می‌شوند.
 
-### 7. Validation Matrix
+مثال: اگر کاربر artifact نوع custom indicator برای یک platform درخواست کند ولی یک عملیات فقط در expert advisor/script مجاز باشد، Agent نباید صرفاً نام indicator را روی یک EA با API اشتباه بگذارد. باید محدودیت را تشخیص دهد و architecture معتبر ارائه کند.
 
-- Python: compile, pytest, lint, type checking در صورت وجود ابزار
+## Validation matrix
+
+- Python: compile، pytest، lint و type checking در صورت وجود ابزار
 - Rust: cargo check/test/clippy
-- JavaScript/TypeScript: package install، build، test، lint و در پروژه‌های وب browser E2E
-- PHP: syntax، test، lint و در صورت وجود framework test suite
-- SQL: schema/migration validation و integration tests
+- JavaScript/TypeScript: install، build، test، lint و browser E2E برای وب
+- PHP: syntax، test، lint و framework test suite در صورت وجود
+- SQL: schema/migration و integration validation
 - Android/iOS: build و testهای موجود در محیط توسعه
-- MQL4/MQL5: compiler/toolchain موجود؛ نبود compiler باید به‌عنوان validation ناقص گزارش شود
-- Web: backend/API checks + browser/runtime checks در محیط محلی
-- CLI/Desktop: اجرا و سناریوهای functional متناسب با artifact
+- MQL4/MQL5: compiler/toolchain واقعی؛ نبود compiler باید blocked/incomplete گزارش شود
+- Web: backend/API + browser/runtime validation
+- CLI/Desktop: اجرای سناریوهای functional متناسب با artifact
 
-### 8. Repair Loop
+## Repair loop
 
-هر failure باید به یک diagnosis تبدیل شود. Agent باید تشخیص دهد خطا از requirements، dependency، environment، implementation یا test است؛ در صورت نیاز دوباره تحقیق کند؛ اصلاح کند؛ و همان validation شکست‌خورده را تکرار کند. تعداد تلاش‌ها محدود و قابل تنظیم است و failure نهایی نباید به‌عنوان success گزارش شود.
+هر failure باید diagnosis شود و همان validation شکست‌خورده دوباره اجرا شود. در صورت نیاز Agent باید research را تکرار کند. تعداد repairها محدود است، اما پایان repair loop با خطا هرگز success محسوب نمی‌شود.
 
-### 9. Self-review
+## Self-review و Git
 
-قبل از اتمام، Agent باید requirements را با artifact نهایی مقایسه کند، فایل‌های placeholder/TODO غیرضروری، dependencyهای بلااستفاده و artifactهای موقت را بررسی کند و وضعیت واقعی test/build را گزارش کند.
-
-### 10. Git
-
-Git برای workspace تولیدشده بخشی از lifecycle است: status، diff، ثبت تغییرات meaningful و commit نهایی. Agent نباید تاریخچه یا repository اصلی My-AI را بدون مجوز تغییر دهد. عملیات Git روی پروژه تولیدشده محدود به همان workspace است.
+پیش از completion، requirements، acceptance criteria، placeholderها، dependencyهای غیرضروری، فایل‌های موقت و runtime state بررسی می‌شوند. Git فقط برای workspace پروژه تولیدشده استفاده می‌شود و commit نهایی تنها پس از validation انجام می‌شود.
 
 ## معیار اتمام
 
-وضعیت `completed` فقط وقتی مجاز است که:
+`completed` فقط وقتی مجاز است که:
 
-1. هدف کاربر resolve شده باشد.
-2. plan و acceptance criteria وجود داشته باشد.
-3. artifactهای لازم تولید شده باشند.
-4. validationهای مرتبط با نوع پروژه موفق شده باشند یا صریحاً به‌عنوان unavailable/blocked گزارش شوند.
-5. failure باقی‌مانده وجود نداشته باشد.
-6. self-review انجام شده باشد.
-7. workspace وضعیت Git مشخصی داشته باشد.
+1. هدف و artifact موردنظر resolve شده باشد.
+2. plan، requirements و acceptance criteria وجود داشته باشد.
+3. research موردنیاز انجام شده باشد یا دلیل مستند برای عدم دسترسی وجود داشته باشد.
+4. artifactهای لازم تولید شده باشند.
+5. semantic validation موفق باشد.
+6. build/test/lint/runtime validation متناسب با پروژه موفق باشد یا صریحاً blocked گزارش شود.
+7. failure حل‌نشده وجود نداشته باشد.
+8. self-review انجام شده باشد.
+9. مسیر workspace و وضعیت Git مشخص باشد.
 
 `generated`، `files_created` یا `build_passed` به‌تنهایی به معنی `completed` نیستند.
 
 ## سناریوهای پذیرش
 
-این سناریوها باید در محیط محلی نیز قابل اجرای واقعی باشند:
-
-1. درخواست طبیعی برای یک بازی ساده Python و بررسی وجود کد، اجرا و تست.
-2. درخواست طبیعی برای یک پروژه PHP و بررسی dependency، syntax، test و run.
-3. درخواست طبیعی برای یک وب‌سایت چندبخشی و بررسی build/API/browser در صورت فراهم بودن runtime.
-4. درخواست طبیعی برای یک artifact MQL4 و بررسی تشخیص زبان، طراحی، تولید `.mq4` و compilation در صورت تنظیم MetaEditor.
-5. ادامه همان پروژه در پیام بعدی با عبارتی متفاوت از triggerهای قبلی.
-6. درخواست اصلاح پروژه تولیدشده و بررسی اینکه Agent artifact موجود را تغییر می‌دهد، نه اینکه پروژه جدید و نامرتبط بسازد.
-
-## اصول مهم
-
-- درک معنایی مقدم بر keyword matching است.
-- current user request مقدم بر assistant history است.
-- دانش و وب برای حل مسئله استفاده می‌شوند، نه برای تغییر هدف کاربر.
-- تحقیق و اجرای ابزار باید قابل ردیابی باشند.
-- failure باید قابل مشاهده باشد و هرگز به success تبدیل نشود.
-- هر پروژه در workspace مستقل خود ساخته می‌شود.
-- قابلیت‌های تخصصی موجود باید در همین معماری عمومی ادغام شوند، نه اینکه برای هر زبان یک مسیر شکننده و مستقل ساخته شود.
+1. درخواست آزاد برای یک بازی Python و بررسی ساخت، اجرا و تست.
+2. درخواست آزاد برای یک پروژه PHP و بررسی dependency، syntax، test و run.
+3. درخواست آزاد برای یک وب‌سایت چندبخشی و بررسی build/API/browser.
+4. درخواست آزاد برای یک artifact MQL4 و بررسی تشخیص artifact، تحقیق platform، تولید `.mq4` و compilation واقعی در صورت تنظیم MetaEditor.
+5. ادامه همان پروژه با جمله‌ای کاملاً متفاوت از درخواست قبلی.
+6. اصلاح پروژه موجود بدون ساختن پروژه نامرتبط جدید.
+7. درخواست دارای دو قابلیت متعارض و بررسی اینکه Agent به‌جای تولید کد جعلی، محدودیت را تشخیص داده و معماری معتبر انتخاب می‌کند.
