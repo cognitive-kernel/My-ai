@@ -89,7 +89,9 @@ def test_project_build_result_exposes_dynamic_artifact_links():
 
 def test_project_builder_does_not_treat_persian_locale_as_programming_language(monkeypatch, tmp_path):
     import my_ai.project_builder as builder
+    import my_ai.project_workspace as workspace
 
+    monkeypatch.setattr(workspace, "PROJECTS_ROOT", tmp_path)
     monkeypatch.setattr(builder, "create_llm", lambda *_args, **_kwargs: type("LLM", (), {
         "chat": lambda self, *args, **kwargs: '{"files":{"EA.mq4":"#property strict\\nint OnInit(){return(INIT_SUCCEEDED);}"}}'
     })())
