@@ -55,7 +55,7 @@ def validate_generated_project(workspace: Path, plan: dict[str, Any], language: 
         for pattern in mql5_only:
             if re.search(pattern, text, re.IGNORECASE):
                 defects.append("MQL4 source contains an MQL5-only API/header: " + pattern)
-        if artifact in {"indicator", "custom indicator", "mt4 indicator"} and re.search(r"\bOrderSend\s*\(", text):
+        if (artifact in {"indicator", "custom indicator", "mt4 indicator"} or "custom indicator" in artifact) and re.search(r"\bOrderSend\s*\(", text):
             defects.append("The generated artifact is declared as an MT4 custom indicator but contains OrderSend; trading capability must be implemented by an EA or script, not silently mixed into an indicator.")
         if artifact in {"expert advisor", "expert advisor (ea)", "ea", "mt4 expert advisor"}:
             if re.search(r"\bdouble\s+(Bid|Ask)\s*\[\s*\]\s*;", text) and re.search(r"\b(Bid|Ask)\s*=\s*iClose\s*\(", text):
