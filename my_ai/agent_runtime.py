@@ -121,6 +121,12 @@ class Agent(LegacyAgent):
         context = "\n".join(f"{row['role']}: {row['content']}" for row in history[-20:])
         routing_context = f"CONVERSATION STATE:\n{state['summary']}\n\nRECENT CHAT:\n{context}"
         intent = self._classify(message, routing_context)
+        web_confirmation = self._web_learning_confirmation(message, session_id, intent)
+        if web_confirmation is not None:
+            return PreparedChat(message, session_id, normalized_attachments, history, context, state, intent=intent, shortcut=web_confirmation)
+        maintenance = self._semantic_maintenance(intent)
+        if maintenance is not None:
+            return PreparedChat(message, session_id, normalized_attachments, history, context, state, intent=intent, shortcut=maintenance)
         if getattr(intent, "args", None) is not None:
             state["last_action"] = str((intent.args or {}).get("action") or state.get("last_action") or "answer")
             if (intent.args or {}).get("language"):
