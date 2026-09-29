@@ -175,5 +175,23 @@ def run_software_task(request: str, *, language: str | None = None, project_path
     tests_ok = bool((result.get("tests") or {}).get("passed"))
     lint_ok = bool((result.get("lint") or {}).get("passed"))
     git_ok = bool((result.get("git") or {}).get("ok"))
-    result["completion"] = {"plan": True, "research": bool(research.sources), "build": build_ok, "tests": tests_ok, "lint": lint_ok, "git": git_ok, "completed": bool(result.get("status") == "built" and build_ok and tests_ok and lint_ok and git_ok)}
+    research_required = bool(plan.get("research_queries"))
+    research_ok = bool(research.sources) if research_required else True
+    result["completion"] = {
+        "plan": True,
+        "research": research_ok,
+        "build": build_ok,
+        "tests": tests_ok,
+        "lint": lint_ok,
+        "git": git_ok,
+        "completed": bool(
+            result.get("status") == "built"
+            and build_ok
+            and tests_ok
+            and lint_ok
+            and git_ok
+            and research_ok
+            and not result.get("semantic_defects")
+        ),
+    }
     return result
