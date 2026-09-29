@@ -971,7 +971,7 @@ def chat(r:ChatRequest, request:Request):
             if not tool_allowed(user,tool,action):
                 raise HTTPException(403,f"Tool permission denied: {tool}:{action}")
             semantic_action=str((intent.args or {}).get("action") or "answer")
-            if intent.name in {"code_execution","self_repair","self_update","git_write","database_import"} and semantic_action != "confirm_high_risk":
+            if intent.name in {"code_execution","self_repair","self_update","git_write","database_import"} and semantic_action in {"execute","modify_artifact"}:
                 raise HTTPException(409,"Semantic confirmation required for high-risk intent: "+intent.name)
         requested=intent.args.get("language") if isinstance(intent.args, dict) else None
         requested=canonical_language(requested) if requested else None
