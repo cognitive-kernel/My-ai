@@ -150,7 +150,7 @@ def _supported_language(value: str | None) -> str | None:
 
 def _plan_language(goal: str) -> str | None:
     try:
-        marker = "SOFTWARE ENGINEERING PLAN:\\n"
+        marker = "SOFTWARE ENGINEERING PLAN:\n"
         if marker not in goal:
             return None
         payload = goal.split(marker, 1)[1].split("\n\nRESEARCH BUNDLE:", 1)[0]
