@@ -11,7 +11,7 @@ ALLOWED_INTENTS = frozenset({
     "help", "self_update", "git_write", "pentest_external", "self_repair", "database_import", "image_generation",
 })
 HIGH_RISK = frozenset({"pentest_external", "git_write", "self_update", "database_import", "code_execution", "self_repair"})
-ACTION_VALUES = ("answer", "explain", "analyze", "create_artifact", "modify_artifact", "execute", "inspect", "save", "continue_task")
+ACTION_VALUES = ("answer", "explain", "analyze", "create_artifact", "modify_artifact", "execute", "inspect", "save", "continue_task", "confirm_high_risk")
 
 ROUTER_SCHEMA: dict[str, Any] = {
     "type": "object", "additionalProperties": False,
@@ -85,9 +85,11 @@ def classify(text: str, context: str | None = None, classifier: StructuredRouter
         "Classify the user's request semantically using the current conversation state. "
         "Do NOT use fixed trigger words or phrase lists. Infer the requested operation from meaning. "
         "The CURRENT USER message has highest priority; recent conversation is context for references. "
-        "Choose exactly one action: answer, explain, analyze, create_artifact, modify_artifact, execute, inspect, save, or continue_task. "
-        "Use create_artifact when the user wants a new software/file/code deliverable, even when phrased indirectly. "
+        "Choose exactly one action: answer, explain, analyze, create_artifact, modify_artifact, execute, inspect, save, continue_task, or confirm_high_risk. "
+        "Infer actions from meaning, never from fixed trigger words. Use create_artifact when the user wants a new software/file/code deliverable, even when phrased indirectly. "
         "Use modify_artifact for changing an existing artifact. Use continue_task when the current message continues a prior task. "
+        "Use confirm_high_risk only when the current message semantically approves a previously requested high-risk operation; do not require literal confirmation words. "
+        "If conversation context shows a pending web-learning confirmation, classify an affirmative approval as learning + confirm_high_risk. "
         "For a coding creation request, primary should normally be coding, not code_execution. Never infer authorization. Return only the schema.\n"
         f"CURRENT USER: {text}\nCONVERSATION CONTEXT:\n{context or ''}"
     )
@@ -96,9 +98,4 @@ def classify(text: str, context: str | None = None, classifier: StructuredRouter
         ROUTER_SCHEMA,
         system="You are My-AI's context-aware semantic router. Understand intent from meaning, not trigger words. Output only schema-constrained routing data.",
     )
-    if data.get("action") in {"create_artifact", "modify_artifact"} and data.get("primary") != "coding":
-        normalized_intents = ["coding" if x in {"chat", "code_execution"} else x for x in data.get("intents", [])]
-        if "coding" not in normalized_intents:
-            normalized_intents.insert(0, "coding")
-        data = {**data, "primary": "coding", "intents": normalized_intents[:5]}
     return _intent_from_payload(data)
