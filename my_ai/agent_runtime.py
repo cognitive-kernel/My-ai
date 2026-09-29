@@ -37,14 +37,6 @@ class PreparedChat:
     shortcut: str | None = None
 
 
-_CONTINUATION_MARKERS = (
-    "همونو", "همان را", "همون را", "همین را", "همین رو", "همون فایل", "دستورات قبلی",
-    "دستور قبلی", "طبق قبلی", "ادامه بده", "ادامه همان", "ادامه همون", "بر اساس چیزی که گفتم",
-    "بر اساس دستوراتی که دادم", "طبق چیزی که گفتم", "the previous instructions", "the previous request",
-    "continue", "continue that", "build it", "create it", "make it", "generate it", "same file", "same project",
-)
-
-
 def _tokens(text: str) -> set[str]:
     return {x for x in re.findall(r"[\w+#.-]{2,}", str(text or "").casefold()) if x not in {"the", "and", "for", "with", "that", "this", "from", "user", "assistant"}}
 
@@ -62,11 +54,6 @@ class Agent(LegacyAgent):
         execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (ctx.session_id,))
         return answer
 
-    @staticmethod
-    def _is_continuation(message: str) -> bool:
-        low = re.sub(r"\s+", " ", str(message or "").strip().casefold())
-        return any(marker in low for marker in _CONTINUATION_MARKERS)
-
 
     def _runtime_conversation_state(self, history: list[dict[str, Any]], message: str) -> dict[str, Any]:
         self._ensure_state_table()
@@ -78,12 +65,12 @@ class Agent(LegacyAgent):
         language = next((canonical for alias, canonical in sorted(aliases, key=lambda x: len(x[0]), reverse=True) if alias in joined or alias in str(message).casefold()), None)
         current_goal = next((x for x in reversed(user_messages) if len(x) >= 8 and not self._is_continuation(x)), str(message or ""))
         topic = current_goal[:300]
-        action = "continue_task" if self._is_continuation(message) else "answer"
+        action = "answer"
         summary = f"موضوع جاری: {topic}\nزبان: {language or 'نامشخص'}\nآخرین اقدام: {action}\nآخرین درخواست‌های کاربر: {' | '.join(recent_users[-4:])}"
         return {"topic": topic, "current_goal": current_goal, "language": language, "last_action": action, "summary": summary, "assistant_tail": assistant_messages[-2:]}
 
     def _resolved_message(self, message: str, history: list[dict[str, Any]], state: dict[str, Any]) -> str:
-        if not self._is_continuation(message):
+        if str((state.get("last_action") or "") ) != "continue_task":
             return message
         prior = next((str(x.get("content") or "").strip() for x in reversed(history) if x.get("role") == "user" and len(str(x.get("content") or "").strip()) >= 8 and not self._is_continuation(str(x.get("content") or ""))), None)
         prior = prior or state.get("current_goal") or ""
@@ -139,7 +126,7 @@ class Agent(LegacyAgent):
         if getattr(intent, "args", None) is not None:
             state["last_action"] = str((intent.args or {}).get("action") or state.get("last_action") or "answer")
             state["summary"] = f"موضوع جاری: {state.get('topic', '')}\nزبان: {state.get('language') or 'نامشخص'}\nآخرین اقدام: {state['last_action']}\nآخرین درخواست کاربر: {state.get('current_goal', '')}"
-        if self._is_continuation(message) and getattr(intent, "name", "") not in {"learning", "help", "image_generation"}:
+        if str((intent.args or {}).get("action") or "") == "continue_task" and getattr(intent, "name", "") not in {"learning", "help", "image_generation"}:
             try:
                 intent.args["continue_task"] = True
                 if state.get("language") and not intent.args.get("language"):
