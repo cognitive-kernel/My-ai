@@ -71,3 +71,17 @@ def test_chat_ui_does_not_classify_messages_with_static_keyword_lists():
     assert "learning=bool(re.search" not in source
     assert "image=bool(re.search" not in source
     assert "بساز.*تصویر" not in source
+
+def test_project_build_result_exposes_dynamic_artifact_links():
+    from my_ai.agent import Agent
+
+    answer = Agent._format_project_build_result({
+        "status": "build_failed",
+        "project_path": "projects/mt4-ea",
+        "project_name": "mt4-ea",
+        "files": ["EA.mq4", "README.md"],
+        "build": {"passed": False, "error": "MetaEditor unavailable"},
+    })
+    assert "[[MYAI_FILE|EA.mq4|" in answer
+    assert "/projects/file?path=projects%2Fmt4-ea%2FEA.mq4" in answer
+    assert "MetaEditor unavailable" in answer
