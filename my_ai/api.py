@@ -950,6 +950,14 @@ def _persist_api_chat_turn(session_id: int, message: str, answer: str) -> None:
     execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (session_id, "assistant", str(answer)))
     execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
 
+def _ensure_chat_history(session_id: int, message: str, answer: str) -> None:
+    """Guarantee that every completed chat request leaves a durable history turn."""
+    rows=fetch_all("SELECT id FROM conversations WHERE session_id=? LIMIT 1",(session_id,))
+    if not rows:
+        _persist_api_chat_turn(session_id,message,answer)
+    else:
+        execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(session_id,))
+
 @app.post("/chat")
 def chat(r:ChatRequest, request:Request):
     user=require_user(request)
@@ -996,6 +1004,7 @@ def chat(r:ChatRequest, request:Request):
             help_data=ask_help(msg,component,agent.llm,learner.web)
             help_answer="راهنمای هوشمند آماده شد."
             _persist_api_chat_turn(sid,msg,help_answer)
+            _ensure_chat_history(sid,msg,help_answer)
             return {"type":"help","answer":help_answer,"data":help_data,"session_id":sid}
         code_intent=intent.name == "coding"
         if security_words:
@@ -1004,6 +1013,7 @@ def chat(r:ChatRequest, request:Request):
                 dynamic_status=(result.get("dynamic") or {}).get("status")
                 answer=("Static assessment completed; local dynamic DAST requires an approved sandbox." if dynamic_status=="sandbox_required" else ("Security assessment completed." if not fix_requested else "Security assessment and remediation completed."))
                 _persist_api_chat_turn(sid,msg,answer)
+                _ensure_chat_history(sid,msg,answer)
                 return {"type":"security","answer":answer,"data":result,"session_id":sid}
             path=None
             for prefix in ("مسیر:","آدرس:","path:","url:","project:","پروژه:"):
@@ -1027,10 +1037,12 @@ def chat(r:ChatRequest, request:Request):
                 build_data=build_project(msg,language,timeout=300,repair_attempts=2)
                 build_answer="Application project build completed."
                 _persist_api_chat_turn(sid,msg,build_answer)
+                _ensure_chat_history(sid,msg,build_answer)
                 return {"type":"project","answer":build_answer,"data":build_data,"session_id":sid}
             generated_data=learner.generate_program(msg,language)
             generated_answer="Generated program:"
             _persist_api_chat_turn(sid,msg,generated_answer)
+            _ensure_chat_history(sid,msg,generated_answer)
             return {"type":"code","answer":generated_answer,"data":generated_data,"session_id":sid}
         if intent.name == "self_update" and intent.requires_confirmation and user["role"] != "admin":
             raise HTTPException(403,"Self-update requires administrator approval.")
@@ -1038,10 +1050,20 @@ def chat(r:ChatRequest, request:Request):
         user_message=fetch_all("SELECT id FROM conversations WHERE session_id=? AND role='user' ORDER BY id DESC LIMIT 1",(sid,))
         if attachments and user_message:
             execute("UPDATE chat_attachments SET conversation_id=? WHERE session_id=? AND conversation_id IS NULL",(user_message[0]["id"],sid))
+        _ensure_chat_history(sid,msg,answer)
         return {"type":"chat","answer":answer,"session_id":sid,"attachments":[{**item,"download_url":"/files/download?path="+__import__("urllib.parse",fromlist=["quote"]).quote(item["path"],safe="")} for item in attachments]}
     except HTTPException:
         raise
-    except Exception as e: raise HTTPException(502,str(e))
+    except Exception as e:
+        try:
+            if "sid" in locals() and "msg" in locals() and sid and msg:
+                rows=fetch_all("SELECT id FROM conversations WHERE session_id=? AND role='user' LIMIT 1",(sid,))
+                if not rows:
+                    execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"user",msg))
+                    execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(sid,))
+        except Exception:
+            logger.exception("Failed to persist failed chat turn")
+        raise HTTPException(502,str(e))
 
 @app.post("/learn/url")
 def learn_url(r:URLRequest, request:Request):
