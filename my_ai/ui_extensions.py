@@ -94,6 +94,7 @@ def install_ui_extensions(app) -> None:
 
     @app.middleware('http')
     async def local_feature_ui(request, call_next):
+        path=request.url.path
         # Chat intent routing is semantic and belongs to the agent/API pipeline.
         # This UI middleware only decorates HTML responses; it must never classify
         # chat messages with local keyword lists or redirect valid requests.
