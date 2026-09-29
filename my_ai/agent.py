@@ -202,44 +202,12 @@ class Agent:
             citations.append(f"- [{citation_id}] {title} — {source} (confidence: {confidence_text})")
         return "\n\nSources (mandatory provenance):\n" + "\n".join(citations) if citations else ""
 
-    @staticmethod
-    def _is_identity_question(message: str) -> bool:
-        text = re.sub(r"\s+", " ", message.strip().lower())
-        patterns = (
-            r"\bwho are you\b",
-            r"\bwhat are you\b",
-            r"\bwhat is your name\b",
-            r"\bwhat model are you\b",
-            r"\bwhat llm are you\b",
-            r"\babout yourself\b",
-            r"\bdescribe yourself\b",
-            r"درباره\s+خودت",
-            r"در مورد\s+خودت",
-            r"خودت\s+(چی|چه|کی)\s+(هستی|ای|کسی)",
-            r"اسم\s+تو\s+(چیه|چیست)",
-            r"مدل\s+تو\s+(چیه|چیست)",
-            r"چه\s+مدلی\s+هستی",
-            r"تو\s+چه\s+مدلی\s+هستی",
-        )
-        return any(re.search(pattern, text) for pattern in patterns)
-
-    def _identity_response(self) -> str:
-        provider = "OpenAI-compatible" if self.llm.__class__.__name__ == "OpenAICompatibleClient" else "Ollama"
-        model = getattr(self.llm, "model", "نامشخص")
-        return (
-            f"من My-AI هستم؛ دستیار هوش مصنوعی این پروژه. "
-            f"مدل زبانی فعال من {model} است و backend فعلی من {provider} است. "
-            "من را با کاربر اشتباه نمی‌گیرم: «من» در این پاسخ به خودِ دستیار اشاره دارد."
-        )
-
-    @staticmethod
-    def _is_web_learning_confirmation(message: str) -> bool:
-        text = re.sub(r"\s+", " ", message.strip().casefold())
-        return text in {"بله", "بله یاد بگیر", "یاد بگیر", "تایید", "تأیید", "تایید کن", "تأیید کن", "yes", "yes learn", "learn it", "approve"}
-
-    def _web_learning_confirmation(self, message, session_id):
+    def _web_learning_confirmation(self, message, session_id, intent=None):
         item = pending(session_id)
-        if not item or not self._is_web_learning_confirmation(message):
+        if not item or intent is None:
+            return None
+        action = str((getattr(intent, "args", {}) or {}).get("action") or "")
+        if getattr(intent, "name", "") != "learning" or action != "confirm_high_risk":
             return None
         result = learn_confirmed(session_id, item["question"], self.llm, WebLearner())
         if result.get("status") == "learned":
@@ -253,7 +221,6 @@ class Agent:
             and str((getattr(intent, "args", {}) or {}).get("action") or "") == "create_artifact"
         )
 
-    @staticmethod
     def _format_project_build_result(result: dict) -> str:
         status = str(result.get("status") or "")
         if status == "built":
