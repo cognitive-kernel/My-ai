@@ -273,52 +273,26 @@ class Agent:
         create_pending(session_id, message)
         return "این مورد را در دانش محلی خودم پیدا نکردم و نمی‌خواهم حدس بزنم. اگر تأیید کنی، در اینترنت جستجو می‌کنم، منابع را بررسی می‌کنم و نتیجه را به بخش آموزشی مرتبط اضافه می‌کنم؛ اگر سرفصل مناسبی وجود نداشته باشد، یک سرفصل جدید می‌سازم."
 
-    def _self_maintenance(self, message):
-        low = message.strip().lower()
-        inspect_words = (
-            "خودت را بررسی کن",
-            "خودت رو بررسی کن",
-            "خودت را چک کن",
-            "خودت رو چک کن",
-            "بررسی آپدیت",
-            "بررسی خودت",
-            "self check",
-            "check yourself",
-            "check for update",
-            "check update",
-        )
-        confirm_words = (
-            "تایید آپدیت",
-            "تأیید آپدیت",
-            "تایید بروزرسانی",
-            "تأیید بروزرسانی",
-            "تایید به روزرسانی",
-            "تأیید به روزرسانی",
-            "confirm update",
-            "approve update",
-            "apply update",
-        )
-        if any(x in low for x in confirm_words):
+    def _semantic_maintenance(self, intent):
+        if getattr(intent, "name", "") != "self_update":
+            return None
+        action = str((getattr(intent, "args", {}) or {}).get("action") or "answer")
+        if action == "confirm_high_risk":
             result = apply_confirmed_update()
             if result.get("status") == "up_to_date":
                 return "نسخه فعلی به‌روز است؛ تغییری اعمال نشد."
             if result.get("status") == "blocked":
                 return "بروزرسانی اعمال نشد چون تست نسخه جدید شکست خورد.\n" + result.get("details", "")
-            return "بروزرسانی تأیید و فعال شد. watchdog سلامت نسخه جدید را بررسی می‌کند و در صورت شکست به snapshot قبلی برمی‌گردد."
-        if any(x in low for x in inspect_words):
+            return "بروزرسانی تأیید و فعال شد. watchdog سلامت نسخه جدید را بررسی می‌کند."
+        if action in {"inspect", "analyze", "answer"}:
             result = check_for_update()
             if not result.get("ok"):
                 return "بررسی خودکار کامل نشد: " + result.get("error", result.get("reason", "unknown error"))
             if result.get("blocked"):
                 return "بررسی متوقف شد چون تغییرات محلی commit نشده وجود دارد."
             if result.get("update_available"):
-                return "نسخه جدید در origin/main موجود است. برای اجرای تست ایزوله و فعال‌سازی امن، صریحاً بگو: «تأیید آپدیت»."
-            lessons = recent_lessons(10)
-            if lessons:
-                lesson_text = json.dumps(lessons, ensure_ascii=False, indent=2)
-                return "نسخه فعلی به‌روز است و تغییر جدیدی در origin/main وجود ندارد.\nدرس‌های اخیر:\n" + lesson_text
+                return "نسخه جدید در origin/main موجود است و برای فعال‌سازی به تأیید معنایی نیاز دارد."
             return "نسخه فعلی به‌روز است و تغییر جدیدی در origin/main وجود ندارد."
-
         return None
 
     @staticmethod
@@ -479,21 +453,16 @@ class Agent:
         }
 
     def chat(self, message, session_id=1, attachments=None):
-        web_confirmation = self._web_learning_confirmation(message, session_id)
+        prep = self._prepare_inference(message, session_id, attachments=attachments)
+        web_confirmation = self._web_learning_confirmation(message, session_id, prep["intent"])
         if web_confirmation is not None:
             self._persist_turn(session_id, message, web_confirmation)
             return web_confirmation
-        maintenance = self._self_maintenance(message)
+        maintenance = self._semantic_maintenance(prep["intent"])
         if maintenance is not None:
             self._persist_turn(session_id, message, maintenance)
             return maintenance
 
-        if self._is_identity_question(message):
-            answer = self._identity_response()
-            self._persist_turn(session_id, message, answer)
-            return answer
-
-        prep = self._prepare_inference(message, session_id, attachments=attachments)
         if self._project_build_requested(message, prep["intent"]):
             answer = self._build_project_from_intent(message, prep["intent"])
             self._persist_turn(session_id, message, answer)
