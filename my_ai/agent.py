@@ -98,40 +98,6 @@ class Agent:
         return query[:2000]
 
     @staticmethod
-    def _filter_knowledge(knowledge: list[dict], message: str, state: str, limit: int = 8) -> list[dict]:
-        """Drop obviously off-topic knowledge when the active topic is clear.
-
-        Conservative: only filters when we have clear topic tokens in state/message
-        and the knowledge item has none of them while matching a known distractor.
-        """
-        if not knowledge:
-            return []
-        blob = f"{message}\n{state}".casefold()
-        active_tokens = [t for t in (
-            "mql4", "mql5", "mq4", "metatrader", "متاتریدر", "اندیکاتور", "indicator",
-            "forex", "python", "پایتون", "rust", "sql",
-        ) if t in blob]
-        if not active_tokens:
-            return knowledge[:limit]
-
-        distractors = (
-            "event loop", "macrotask", "microtask", "settimeout", "promise.resolve",
-            "javascript event", "node.js event loop",
-        )
-
-        kept: list[dict] = []
-        for item in knowledge:
-            text = " ".join(
-                str(item.get(k) or "") for k in ("title", "content", "topic", "source_url")
-            ).casefold()
-            if any(d in text for d in distractors) and not any(t in text for t in active_tokens):
-                continue
-            kept.append(item)
-            if len(kept) >= limit:
-                break
-        return kept if kept else knowledge[:limit]
-
-    @staticmethod
     def _required_citations(knowledge: list[dict]) -> str:
         citations: list[str] = []
         for item in knowledge[:4]:
@@ -347,7 +313,7 @@ class Agent:
 
         query = self._retrieval_query(message, state, intent.name)
         raw_knowledge = recall(query, 8)
-        knowledge = self._filter_knowledge(raw_knowledge, message, state, limit=8)
+        knowledge = raw_knowledge[:8]
 
         enriched_knowledge = []
         for item in knowledge:
