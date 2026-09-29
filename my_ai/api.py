@@ -992,7 +992,7 @@ def chat(r:ChatRequest, request:Request):
                 raise HTTPException(403,"Security remediation requires administrator approval.")
         help_intent=intent.name == "help"
         if help_intent:
-            component="git" if any(x in low for x in ("git","github","گیت","گیت‌هاب")) else ("security" if any(x in low for x in ("امنیت","پن‌تست","pentest")) else ("docker" if "docker" in low else ("python" if "python" in low or "پایتون" in low else "general")))
+            component=str((intent.args or {}).get("topic") or "general").strip() or "general"
             help_data=ask_help(msg,component,agent.llm,learner.web)
             help_answer="راهنمای هوشمند آماده شد."
             _persist_api_chat_turn(sid,msg,help_answer)
