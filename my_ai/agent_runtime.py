@@ -67,10 +67,6 @@ class Agent(LegacyAgent):
         low = re.sub(r"\s+", " ", str(message or "").strip().casefold())
         return any(marker in low for marker in _CONTINUATION_MARKERS)
 
-    @staticmethod
-    def _is_action_request(message: str) -> bool:
-        low = str(message or "").casefold()
-        return any(x in low for x in ("بساز", "ایجاد کن", "تولید کن", "بنویس", "پیاده سازی", "پیاده‌سازی", "فایل بساز", "برنامه بنویس", "پروژه بساز", "create", "build", "generate", "write", "implement"))
 
     def _runtime_conversation_state(self, history: list[dict[str, Any]], message: str) -> dict[str, Any]:
         self._ensure_state_table()
@@ -82,7 +78,7 @@ class Agent(LegacyAgent):
         language = next((canonical for alias, canonical in sorted(aliases, key=lambda x: len(x[0]), reverse=True) if alias in joined or alias in str(message).casefold()), None)
         current_goal = next((x for x in reversed(user_messages) if len(x) >= 8 and not self._is_continuation(x)), str(message or ""))
         topic = current_goal[:300]
-        action = "build/create" if self._is_action_request(message) else ("continue" if self._is_continuation(message) else "answer")
+        action = "continue_task" if self._is_continuation(message) else "answer"
         summary = f"موضوع جاری: {topic}\nزبان: {language or 'نامشخص'}\nآخرین اقدام: {action}\nآخرین درخواست‌های کاربر: {' | '.join(recent_users[-4:])}"
         return {"topic": topic, "current_goal": current_goal, "language": language, "last_action": action, "summary": summary, "assistant_tail": assistant_messages[-2:]}
 
@@ -140,13 +136,14 @@ class Agent(LegacyAgent):
         context = "\n".join(f"{row['role']}: {row['content']}" for row in history[-20:])
         routing_context = f"CONVERSATION STATE:\n{state['summary']}\n\nRECENT CHAT:\n{context}"
         intent = self._classify(message, routing_context)
+        if getattr(intent, "args", None) is not None:
+            state["last_action"] = str((intent.args or {}).get("action") or state.get("last_action") or "answer")
+            state["summary"] = f"موضوع جاری: {state.get('topic', '')}\nزبان: {state.get('language') or 'نامشخص'}\nآخرین اقدام: {state['last_action']}\nآخرین درخواست کاربر: {state.get('current_goal', '')}"
         if self._is_continuation(message) and getattr(intent, "name", "") not in {"learning", "help", "image_generation"}:
             try:
                 intent.args["continue_task"] = True
                 if state.get("language") and not intent.args.get("language"):
                     intent.args["language"] = state["language"]
-                if self._is_action_request(message):
-                    intent.args["actionable"] = True
             except Exception:
                 pass
         task = "coding" if getattr(intent, "name", "") in {"coding", "code_execution", "git_write"} or "coding" in getattr(intent, "intents", ()) else "general"
