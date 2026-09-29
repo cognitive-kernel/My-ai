@@ -180,11 +180,20 @@ class Agent:
             item = result.get(key) or {}
             if item:
                 details.append(f"{key}: {item.get('error') or item.get('output') or item.get('passed')}")
-        return (
-            "ساخت پروژه کامل نشد.\n"
-            f"- مسیر پروژه: {result.get('project_path') or result.get('project_name') or ''}\n"
-            + "\n".join(f"- {item}" for item in details)
-        )
+        lines = [
+            "ساخت پروژه کامل نشد.",
+            f"- مسیر پروژه: {result.get('project_path') or result.get('project_name') or ''}",
+        ]
+        lines.extend(f"- {item}" for item in details)
+        project_root = str(result.get("project_path") or result.get("project_name") or "").replace("\\", "/").strip("/")
+        for rel in result.get("files") or []:
+            rel = str(rel).replace("\\", "/").strip("/")
+            if not rel:
+                continue
+            download_path = f"{project_root}/{rel}" if project_root else rel
+            name = rel.rsplit("/", 1)[-1]
+            lines.append(f"[[MYAI_FILE|{name}|0|/projects/file?path={quote(download_path, safe='')}]]")
+        return "\n".join(lines)
 
     def _build_project_from_intent(self, message: str, intent) -> str:
         args = getattr(intent, "args", {}) or {}
