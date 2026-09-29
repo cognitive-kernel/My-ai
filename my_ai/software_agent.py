@@ -62,6 +62,8 @@ def _plan(request: str, context: str = "") -> dict[str, Any]:
         "Infer intent from meaning, not trigger words or phrase lists. Preserve explicit user constraints and use conversation context only to resolve references. "
         "Identify the concrete artifact type (application, website, API, library, CLI, indicator, expert advisor, script, mobile app, etc.) before choosing technology. "
         "Research questions must resolve platform capabilities, official APIs, compatibility constraints, and ambiguous requirements before implementation. "
+        "For MetaTrader 4, distinguish custom indicators from Expert Advisors. If the request includes trade execution or broad terminal/account/chart access, choose an Expert Advisor as the executable artifact; an indicator may be a separate visualization component. Do not call an indicator an EA or mix MQL5 APIs into MQL4. "
+        "If trading is requested but no trading strategy is specified, implement trading capability as explicit opt-in/user-controlled functionality and never invent an automatic entry condition. "
         "If two requested capabilities conflict with a platform's rules, do NOT silently generate an invalid hybrid: record the ambiguity/constraint and design the closest valid architecture (for example, split components when one platform artifact cannot legally perform another artifact's operation). "
         "Choose a language/framework only when justified; otherwise leave it null so implementation can choose. "
         "Every acceptance criterion must be testable. Return only JSON matching the schema. Do not write code yet.\n"
