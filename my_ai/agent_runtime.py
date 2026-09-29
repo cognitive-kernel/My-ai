@@ -123,6 +123,8 @@ class Agent(LegacyAgent):
         intent = self._classify(message, routing_context)
         if getattr(intent, "args", None) is not None:
             state["last_action"] = str((intent.args or {}).get("action") or state.get("last_action") or "answer")
+            if (intent.args or {}).get("language"):
+                state["language"] = str(intent.args["language"])
             state["summary"] = f"موضوع جاری: {state.get('topic', '')}\nزبان: {state.get('language') or 'نامشخص'}\nآخرین اقدام: {state['last_action']}\nآخرین درخواست کاربر: {state.get('current_goal', '')}"
         if str((intent.args or {}).get("action") or "") == "continue_task" and getattr(intent, "name", "") not in {"learning", "help", "image_generation"}:
             try:
