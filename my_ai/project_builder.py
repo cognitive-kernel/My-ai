@@ -153,7 +153,7 @@ def _plan_language(goal: str) -> str | None:
         marker = "SOFTWARE ENGINEERING PLAN:\\n"
         if marker not in goal:
             return None
-        payload = goal.split(marker, 1)[1].split("\\n\\nRESEARCH BUNDLE:", 1)[0]
+        payload = goal.split(marker, 1)[1].split("\n\nRESEARCH BUNDLE:", 1)[0]
         return _supported_language(json.loads(payload).get("language"))
     except Exception:
         return None
