@@ -133,3 +133,57 @@ def test_router_source_has_no_legacy_keyword_action_helpers():
     assert "_is_continuation" not in source
     assert "بساز" not in source
     assert "build it" not in source
+
+
+def test_semantic_learning_variants_do_not_require_learning_phrases():
+    variants = [
+        "درباره Rust مطالعه عمیق انجام بده و نکات مهمش را به آموزش من اضافه کن",
+        "می‌خواهم Rust را بررسی کنم و دانسته‌هایت درباره آن را گسترش بده",
+        "برای Rust منابع معتبر پیدا کن و آموخته‌ها را ثبت کن",
+        "از منابع موجود درباره Rust دانش جدید جمع‌آوری کن",
+    ]
+    for text in variants:
+        result, _ = route(payload("learning", ["learning"], "create_artifact", 0.95, "rust", "Rust", "learn Rust"), text)
+        assert result.name == "learning"
+
+
+def test_semantic_continuation_variants_do_not_require_continuation_phrases():
+    variants = [
+        "کار ناتمام قبلی را از همان نقطه دنبال کن",
+        "مرحله بعدی همان کاری که در جریان بود را انجام بده",
+        "فرآیند قبلی را کامل کن و نتیجه نهایی را تحویل بده",
+        "ادامه منطقی کار فعلی را اجرا کن",
+    ]
+    for text in variants:
+        result, _ = route(payload("coding", ["coding"], "continue_task", 0.95, "python", None, "continue active project"), text)
+        assert result.args["action"] == "continue_task"
+
+
+def test_semantic_high_risk_confirmation_variants_do_not_require_literal_tokens():
+    variants = [
+        "می‌توانی همان تغییر را اعمال کنی",
+        "موافقم؛ تغییر پیشنهادی را اجرا کن",
+        "همان موردی که بررسی کردی را عملی کن",
+        "تصمیم با تو نیست؛ فقط همان تغییر تأییدشده را اعمال کن",
+    ]
+    for text in variants:
+        result, _ = route(payload("git_write", ["git_write"], "confirm_high_risk", 0.95), text)
+        assert result.args["action"] == "confirm_high_risk"
+        assert result.requires_confirmation is False
+
+
+def test_api_has_no_command_policy_dependency():
+    from pathlib import Path
+    source = Path("my_ai/api.py").read_text(encoding="utf-8")
+    assert "command_policy" not in source
+    assert "parse_command" not in source
+    assert "BUILD_WORDS" not in source
+
+
+def test_router_has_no_static_topic_marker_lists():
+    from pathlib import Path
+    source = Path("my_ai/domain/router.py").read_text(encoding="utf-8")
+    assert "_is_code_or_indicator_request" not in source
+    assert "_is_explicit_database_import" not in source
+    assert "_is_actionable" not in source
+    assert "_is_continuation" not in source
