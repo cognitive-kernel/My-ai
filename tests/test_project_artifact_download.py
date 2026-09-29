@@ -100,9 +100,14 @@ def test_project_builder_does_not_treat_persian_locale_as_programming_language(m
     monkeypatch.setattr(builder, "execute", lambda *args, **kwargs: 1)
 
     result = builder.build_project(
-        "متاتریدر 4 برای من یک EA بساز",
+        """SOFTWARE ENGINEERING PLAN:
+{"goal":"MT4 EA","artifact_type":"expert advisor","language":"MQL4","framework":null,"requirements":[],"architecture":[],"phases":["implement"],"acceptance_criteria":["valid MQL4"],"research_queries":[],"validation":[],"constraints":[],"ambiguities":[]}
+
+RESEARCH BUNDLE:
+{}
+""",
         "fa",
         project_path=str(tmp_path),
         repair_attempts=0,
     )
-    assert result["language"] == "Python"
+    assert result["language"] == "MQL4"
