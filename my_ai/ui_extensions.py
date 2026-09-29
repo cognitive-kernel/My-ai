@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from html import escape
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 
 NAV_STYLE = """
 <style id="myAiGlobalNavStyle">
