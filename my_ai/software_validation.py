@@ -56,7 +56,14 @@ def validate_generated_project(workspace: Path, plan: dict[str, Any], language: 
             if re.search(pattern, text, re.IGNORECASE):
                 defects.append("MQL4 source contains an MQL5-only API/header: " + pattern)
         if artifact in {"indicator", "custom indicator", "mt4 indicator"} and re.search(r"\bOrderSend\s*\(", text):
-            defects.append("The generated artifact is declared as an MT4 custom indicator but contains OrderSend; trading must be implemented by an EA/script or the plan must explicitly split indicator and trading components.")
+            defects.append("The generated artifact is declared as an MT4 custom indicator but contains OrderSend; trading capability must be implemented by an EA or script, not silently mixed into an indicator.")
+        if artifact in {"expert advisor", "expert advisor (ea)", "ea", "mt4 expert advisor"}:
+            if re.search(r"\bdouble\s+(Bid|Ask)\s*\[\s*\]\s*;", text) and re.search(r"\b(Bid|Ask)\s*=\s*iClose\s*\(", text):
+                defects.append("MQL4 EA declares Bid/Ask as arrays and then assigns scalar prices; use MQL4 market-price values (Bid/Ask or MarketInfo) as scalars.")
+            if re.search(r"\bif\s*\(\s*Bid\s*>\s*Ask\s*\)", text) or re.search(r"\bif\s*\(\s*Ask\s*>\s*Bid\s*\)", text):
+                defects.append("MQL4 EA contains an impossible/inappropriate Bid-vs-Ask trading condition; do not invent a trade strategy when the user only requested terminal access.")
+            if re.search(r"\bOrderSend\s*\(", text) and not re.search(r"\b(User|Manual|Enable|Allow|Trade|Trading)\w*\s*=\s*(true|false)", text, re.IGNORECASE):
+                defects.append("MQL4 EA exposes trading without an explicit user-controlled enable/disable guard; trading must be opt-in when no strategy was specified.")
 
     placeholder_patterns = (r"TODO\b", r"FIXME\b", r"placeholder", r"ConditionToTrade\s*\(\)\s*\{\s*return\s+true\s*;?")
     for pattern in placeholder_patterns:
