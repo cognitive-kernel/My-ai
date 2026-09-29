@@ -32,7 +32,7 @@ def test_chat_and_stream_share_preparation_order(monkeypatch):
     events = []
     monkeypatch.setattr(agent_module.Agent, "_web_learning_confirmation", lambda self, *a: events.append("web") or None)
     monkeypatch.setattr(agent_module.Agent, "_semantic_maintenance", lambda self, *a: events.append("maintenance") or None)
-        agent = agent_module.Agent(llm=FakeLLM())
+    agent = agent_module.Agent(llm=FakeLLM())
     list(agent.stream_chat("hello", 1, attachments=[]))
     assert events == ["web", "maintenance"]
 
