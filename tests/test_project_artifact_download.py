@@ -85,3 +85,24 @@ def test_project_build_result_exposes_dynamic_artifact_links():
     assert "[[MYAI_FILE|EA.mq4|" in answer
     assert "/projects/file?path=projects%2Fmt4-ea%2FEA.mq4" in answer
     assert "MetaEditor unavailable" in answer
+
+
+def test_project_builder_does_not_treat_persian_locale_as_programming_language(monkeypatch, tmp_path):
+    import my_ai.project_builder as builder
+
+    monkeypatch.setattr(builder, "create_llm", lambda *_args, **_kwargs: type("LLM", (), {
+        "chat": lambda self, *args, **kwargs: '{"files":{"EA.mq4":"#property strict\\nint OnInit(){return(INIT_SUCCEEDED);}"}}'
+    })())
+    monkeypatch.setattr(builder, "search_knowledge", lambda *args, **kwargs: [])
+    monkeypatch.setattr(builder, "_run", lambda *args, **kwargs: {"passed": False, "available": False, "error": "MetaEditor compiler is unavailable."})
+    monkeypatch.setattr(builder, "validate_generated_project", lambda *args, **kwargs: [])
+    monkeypatch.setattr(builder, "fetch_all", lambda *args, **kwargs: [])
+    monkeypatch.setattr(builder, "execute", lambda *args, **kwargs: 1)
+
+    result = builder.build_project(
+        "متاتریدر 4 برای من یک EA بساز",
+        "fa",
+        project_path=str(tmp_path),
+        repair_attempts=0,
+    )
+    assert result["language"] == "Python"
