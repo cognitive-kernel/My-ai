@@ -60,10 +60,13 @@ class Agent(LegacyAgent):
         user_messages = [str(x.get("content") or "").strip() for x in history if x.get("role") == "user"]
         assistant_messages = [str(x.get("content") or "").strip() for x in history if x.get("role") == "assistant"]
         recent_users = user_messages[-12:]
-        persisted = fetch_all(
-            "SELECT topic,current_goal,language,last_action,summary FROM conversation_state WHERE session_id=?",
-            (getattr(self, "_current_session_id", 1),),
-        )
+        try:
+            persisted = fetch_all(
+                "SELECT topic,current_goal,language,last_action,summary FROM conversation_state WHERE session_id=?",
+                (getattr(self, "_current_session_id", 1),),
+            )
+        except Exception:
+            persisted = []
         saved = persisted[0] if persisted else {}
         current_goal = user_messages[-1] if user_messages else str(message or "")
         topic = str(saved.get("topic") or current_goal[:300])
