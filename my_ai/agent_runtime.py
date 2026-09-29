@@ -108,14 +108,6 @@ class Agent(LegacyAgent):
     def _prepare_chat_context(self, message, session_id=1, attachments=None) -> PreparedChat:
         message = str(message or "")
         normalized_attachments = list(attachments if attachments is not None else get_attachments())[:10]
-        web_confirmation = self._web_learning_confirmation(message, session_id)
-        if web_confirmation is not None:
-            return PreparedChat(message, session_id, normalized_attachments, [], "", {}, shortcut=web_confirmation)
-        maintenance = self._self_maintenance(message)
-        if maintenance is not None:
-            return PreparedChat(message, session_id, normalized_attachments, [], "", {}, shortcut=maintenance)
-        if self._is_identity_question(message):
-            return PreparedChat(message, session_id, normalized_attachments, [], "", {}, shortcut=self._identity_response())
         history = fetch_all("SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 24", (session_id,))[::-1]
         state = self._runtime_conversation_state(history, message)
         context = "\n".join(f"{row['role']}: {row['content']}" for row in history[-20:])
