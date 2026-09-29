@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 
 from .db import execute, fetch_all
 from .memory import recall
