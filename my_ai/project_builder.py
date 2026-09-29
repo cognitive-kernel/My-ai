@@ -3,12 +3,11 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import subprocess
 from pathlib import Path
 from typing import Any
 
-from .command_policy import LANGUAGE_ALIASES, _detect_language
+from .command_policy import LANGUAGE_ALIASES
 from .config import assert_write_allowed
 from .curriculum import canonical_language
 from .db import execute, fetch_all, search_knowledge
