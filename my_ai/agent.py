@@ -181,6 +181,7 @@ class Agent:
             and str((getattr(intent, "args", {}) or {}).get("action") or "") == "create_artifact"
         )
 
+    @staticmethod
     def _format_project_build_result(result: dict) -> str:
         status = str(result.get("status") or "")
         if status == "built":
@@ -220,12 +221,6 @@ class Agent:
             return self._format_project_build_result(result)
         except Exception as exc:
             return f"ساخت پروژه انجام نشد: {exc}"
-
-    def _handle_unknown(self, answer, message, session_id):
-        if "__MYAI_UNKNOWN__" not in str(answer):
-            return answer
-        create_pending(session_id, message)
-        return "این مورد را در دانش محلی خودم پیدا نکردم و نمی‌خواهم حدس بزنم. اگر تأیید کنی، در اینترنت جستجو می‌کنم، منابع را بررسی می‌کنم و نتیجه را به بخش آموزشی مرتبط اضافه می‌کنم؛ اگر سرفصل مناسبی وجود نداشته باشد، یک سرفصل جدید می‌سازم."
 
     def _semantic_maintenance(self, intent):
         if getattr(intent, "name", "") != "self_update":
