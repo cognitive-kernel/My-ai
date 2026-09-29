@@ -15,6 +15,7 @@ from .db import execute, fetch_all, search_knowledge
 from .llm import create_llm
 from .project_workspace import create_project_workspace
 from .tooling import run_project_tool, doctor
+from .software_validation import validate_generated_project
 
 ROOT = Path(__file__).resolve().parent.parent
 MAX_FILES = 80
@@ -81,44 +82,30 @@ def _run(language: str, operation: str, workspace: Path, timeout: int) -> dict[s
     if canonical_language(language) == "MQL4":
         metaeditor = os.getenv("MYAI_METAEDITOR", "").strip()
         if not metaeditor:
-            return {"language": "MQL4", "operation": operation, "passed": False, "available": False, "return_code": -1,
-                    "output": "", "error": "MetaEditor compiler is unavailable. Set MYAI_METAEDITOR to metaeditor.exe."}
-        if operation != "build":
-            return {"language": "MQL4", "operation": operation, "passed": False, "available": False, "return_code": -1,
-                    "output": "", "error": "No standard MQL4 test/lint command is configured."}
+            return {"language": "MQL4", "operation": operation, "passed": False, "available": False, "return_code": -1, "output": "", "error": "MetaEditor compiler is unavailable. Set MYAI_METAEDITOR to metaeditor.exe."}
         sources = list(workspace.rglob("*.mq4"))
         if not sources:
-            return {"language": "MQL4", "operation": "build", "passed": False, "available": True, "return_code": -1,
-                    "output": "", "error": "No .mq4 source file was generated."}
+            return {"language": "MQL4", "operation": operation, "passed": False, "available": True, "return_code": -1, "output": "", "error": "No .mq4 source file was generated."}
+        if operation in {"test", "lint"}:
+            return {"language": "MQL4", "operation": operation, "passed": True, "available": True, "return_code": 0, "output": "MQL4 semantic/static validation is performed by the software validation layer; compilation is performed by MetaEditor.", "error": ""}
         errors = []
         for source in sources:
             try:
-                p = subprocess.run(
-                    [metaeditor, f"/compile:{source}", "/log"], cwd=workspace,
-                    capture_output=True, text=True, timeout=max(1, min(int(timeout), 600)), shell=False,
-                )
+                p = subprocess.run([metaeditor, f"/compile:{source}", "/log"], cwd=workspace, capture_output=True, text=True, timeout=max(1, min(int(timeout), 600)), shell=False)
                 if p.returncode != 0:
                     errors.append((p.stdout or "")[-6000:] + "\n" + (p.stderr or "")[-6000:])
             except Exception as exc:
                 errors.append(str(exc))
-        return {"language": "MQL4", "operation": "build", "passed": not errors, "available": True,
-                "return_code": 0 if not errors else 1, "output": "\n".join(errors),
-                "error": "" if not errors else "MetaEditor compilation failed."}
+        return {"language": "MQL4", "operation": "build", "passed": not errors, "available": True, "return_code": 0 if not errors else 1, "output": "\n".join(errors), "error": "" if not errors else "MetaEditor compilation failed."}
     try:
         return run_project_tool(language, operation, str(workspace), timeout)
     except Exception as exc:
-        return {"language": canonical_language(language), "operation": operation,
-                "passed": False, "return_code": -1, "output": "", "error": str(exc)}
+        return {"language": canonical_language(language), "operation": operation, "passed": False, "return_code": -1, "output": "", "error": str(exc)}
 
 
 def _is_contextual_build_request(goal: str) -> bool:
     text = re.sub(r"\s+", " ", str(goal or "").strip().casefold())
-    markers = (
-        "فایل رو بساز", "فایل را بساز", "فایل بساز", "همونو بساز", "همان را بساز",
-        "همون فایل رو بساز", "بر اساس دستوراتی که دادم", "طبق دستوراتی که دادم",
-        "بر اساس چیزی که گفتم", "همین رو بساز", "همین را بساز", "create it", "build it",
-        "make it", "generate it",
-    )
+    markers = ("فایل رو بساز", "فایل را بساز", "فایل بساز", "همونو بساز", "همان را بساز", "همون فایل رو بساز", "بر اساس دستوراتی که دادم", "طبق دستوراتی که دادم", "بر اساس چیزی که گفتم", "همین رو بساز", "همین را بساز", "create it", "build it", "make it", "generate it")
     return any(marker in text for marker in markers)
 
 
@@ -152,10 +139,7 @@ def _recent_conversation_context(goal: str) -> tuple[str, str | None, int | None
                 continue
             prior = candidate
             break
-        resolved_goal = (
-            "Previous user requirements from this same chat:\n" + prior + "\n\nCurrent user follow-up:\n" + current
-            if prior else current
-        )
+        resolved_goal = ("Previous user requirements from this same chat:\n" + prior + "\n\nCurrent user follow-up:\n" + current if prior else current)
     else:
         resolved_goal = current
     prior_language = _detect_language_from_texts([prior]) if prior else _detect_language_from_texts(user_messages[:-1])
@@ -174,16 +158,16 @@ def _recent_conversation_context(goal: str) -> tuple[str, str | None, int | None
 
 
 def _prompt(language: str, goal: str, knowledge: list[Any], previous_error: str = "") -> str:
-    suffix = f"\nPREVIOUS BUILD/TEST/LINT ERROR (fix it):\n{previous_error[:12000]}" if previous_error else ""
+    suffix = f"\nPREVIOUS VALIDATION/BUILD/TEST/LINT DEFECTS (fix every one; do not merely explain them):\n{previous_error[:18000]}" if previous_error else ""
     return (
-        "Generate a complete runnable software project, not a single source file. "
-        "Return ONLY valid JSON: {\"files\":{\"relative/path\":\"file contents\"}}. "
-        "The conversation context is authoritative for follow-up requests: if the current message says to build/create it, continue the user's previous concrete requirements instead of inventing a new task or language. "
-        "Ignore previous assistant answers when they conflict with the user's own requirements. "
-        "Create all necessary source files, dependency manifests, configuration, tests, and README build/run instructions. "
-        "Use the requested language/framework and keep every path relative to the project root. "
+        "Generate a complete runnable software project, not a single source file. Return ONLY valid JSON: {\"files\":{\"relative/path\":\"file contents\"}}. "
+        "The embedded software plan and research are authoritative design inputs, but independently check their consistency. "
+        "Never mix incompatible platform APIs. Never invent a missing business rule or use an unconditional placeholder to simulate one. "
+        "If the requested artifact type cannot legally or technically perform a requested capability, implement the closest valid architecture described by the plan and document the boundary. "
+        "The conversation context is authoritative for follow-up requests; ignore previous assistant answers when they conflict with the user's own requirements. "
+        "Create all necessary source files, dependency manifests, configuration, tests, and README build/run instructions. Use the selected language/framework and keep paths relative to the project root. "
         "Do not use absolute paths, secrets, runtime network downloads, or placeholder TODO implementations. "
-        f"LANGUAGE: {language}\nGOAL: {goal}\nLEARNED KNOWLEDGE: {json.dumps(knowledge, ensure_ascii=False)[:30000]}{suffix}"
+        f"LANGUAGE: {language}\nGOAL AND PLAN/RESEARCH: {goal}\nLEARNED KNOWLEDGE: {json.dumps(knowledge, ensure_ascii=False)[:32000]}{suffix}"
     )
 
 
@@ -210,26 +194,42 @@ def build_project(goal: str, language: str = "Python", *, project_path: str | No
     files = {}
     build = tests = lint = {}
     last_error = ""
-    attempts = max(1, min(int(repair_attempts) + 1, 4))
+    attempts = max(1, min(int(repair_attempts) + 1, 5))
+    semantic_defects: list[str] = []
     for _ in range(attempts):
-        files = _parse_files(llm.chat(_prompt(language, resolved_goal, knowledge, last_error), system="You are a senior software architect. Generate complete, buildable projects. Return JSON only."))
+        files = _parse_files(llm.chat(_prompt(language, resolved_goal, knowledge, last_error), system="You are a senior software architect and implementation engineer. Generate complete, buildable projects. Return JSON only."))
         _write_files(workspace, files)
+        # The plan is embedded in resolved_goal. Validation remains independent of compiler success.
+        artifact_type = ""
+        try:
+            marker = "SOFTWARE ENGINEERING PLAN:\n"
+            if marker in resolved_goal:
+                plan_text = resolved_goal.split(marker, 1)[1].split("\n\nRESEARCH BUNDLE:", 1)[0]
+                plan_data = json.loads(plan_text)
+                artifact_type = str(plan_data.get("artifact_type") or "")
+        except Exception:
+            plan_data = {"artifact_type": artifact_type}
+        plan_data = locals().get("plan_data") or {"artifact_type": artifact_type}
+        semantic_defects = validate_generated_project(workspace, plan_data, language)
+        if semantic_defects:
+            last_error = "\n".join(semantic_defects)
+            continue
         build = _run(language, "build", workspace, timeout)
         if not build.get("passed"):
             last_error = build.get("error") or build.get("output") or "build failed"
             continue
-        tests = _run(language, "test", workspace, timeout) if language != "MQL4" else _run(language, "test", workspace, timeout)
-        lint = _run(language, "lint", workspace, timeout) if language != "MQL4" else _run(language, "lint", workspace, timeout)
+        tests = _run(language, "test", workspace, timeout)
+        lint = _run(language, "lint", workspace, timeout)
         if tests.get("passed") and lint.get("passed"):
             break
         last_error = tests.get("error") or tests.get("output") or lint.get("error") or lint.get("output") or "tests/lint failed"
+    status = "built" if build.get("passed") and tests.get("passed", False) and lint.get("passed", False) and not semantic_defects else "build_failed"
     pid = execute("INSERT INTO generated_projects(language,request,code) VALUES(?,?,?)", (language, resolved_goal, json.dumps(files, ensure_ascii=False)))
     return {
-        "status": "built" if build.get("passed") and tests.get("passed", False) and lint.get("passed", False) else "build_failed",
-        "language": language, "request": resolved_goal, "project_id": pid, "project_name": workspace.name,
-        "project_path": str(workspace.relative_to(ROOT)) if workspace.is_relative_to(ROOT) else str(workspace),
-        "session_id": session_id, "files": sorted(files), "file_count": len(files), "build": build, "tests": tests, "lint": lint,
-        "repair_attempts": attempts - 1, "artifacts": _artifact_files(workspace),
+        "status": status, "language": language, "request": resolved_goal, "project_id": pid, "project_name": workspace.name,
+        "project_path": str(workspace.relative_to(ROOT)) if workspace.is_relative_to(ROOT) else str(workspace), "session_id": session_id,
+        "files": sorted(files), "file_count": len(files), "build": build, "tests": tests, "lint": lint,
+        "semantic_defects": semantic_defects, "repair_attempts": attempts - 1, "artifacts": _artifact_files(workspace),
         "toolchain": ({"metaeditor": bool(os.getenv("MYAI_METAEDITOR", "").strip())} if canonical_language(language) == "MQL4" else doctor(language).get(language, {})),
     }
 
