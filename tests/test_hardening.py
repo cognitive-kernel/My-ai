@@ -189,10 +189,10 @@ def test_general_chat_does_not_execute_learning_or_image_actions(client_db, monk
     owner = auth.create_account("owner", "a-secure-password")
     cookies = login_cookie(owner)
     from my_ai.domain.router import Intent
-    monkeypatch.setattr("my_ai.api.classify", lambda message: Intent("learning", 0.99, False, {"language": "Python"}, ("learning",)))
+    monkeypatch.setattr("my_ai.api.classify", lambda message, context=None: Intent("learning", 0.99, False, {"language": "Python"}, ("learning",)))
     response = client.post("/chat", json={"message": "یاد بگیر Python"}, cookies=cookies)
     assert response.status_code == 409
-    monkeypatch.setattr("my_ai.api.classify", lambda message: Intent("image_generation", 0.99, False, {}, ("image_generation",)))
+    monkeypatch.setattr("my_ai.api.classify", lambda message, context=None: Intent("image_generation", 0.99, False, {}, ("image_generation",)))
     response = client.post("/chat", json={"message": "یک تصویر بساز"}, cookies=cookies)
     assert response.status_code == 409
 
