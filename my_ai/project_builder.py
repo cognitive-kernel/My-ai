@@ -103,12 +103,6 @@ def _run(language: str, operation: str, workspace: Path, timeout: int) -> dict[s
         return {"language": canonical_language(language), "operation": operation, "passed": False, "return_code": -1, "output": "", "error": str(exc)}
 
 
-def _is_contextual_build_request(goal: str) -> bool:
-    text = re.sub(r"\s+", " ", str(goal or "").strip().casefold())
-    markers = ("فایل رو بساز", "فایل را بساز", "فایل بساز", "همونو بساز", "همان را بساز", "همون فایل رو بساز", "بر اساس دستوراتی که دادم", "طبق دستوراتی که دادم", "بر اساس چیزی که گفتم", "همین رو بساز", "همین را بساز", "create it", "build it", "make it", "generate it")
-    return any(marker in text for marker in markers)
-
-
 def _detect_language_from_texts(texts: list[str]) -> str | None:
     for text in reversed(texts):
         normalized = str(text or "").casefold()
@@ -127,36 +121,16 @@ def _recent_conversation_context(goal: str) -> tuple[str, str | None, int | None
         return goal, None, None
     session_id = int(sessions[0]["id"])
     rows = fetch_all("SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 80", (session_id,))[::-1]
-    user_messages = [str(row["content"] or "").strip() for row in rows if row["role"] == "user"]
-    if not user_messages:
-        return goal, sessions[0].get("language"), session_id
     current = str(goal or "").strip()
     current_language = _detect_language_from_texts([current])
-    prior = None
-    if _is_contextual_build_request(current):
-        for candidate in reversed(user_messages[:-1]):
-            if len(candidate) < 8 or _is_contextual_build_request(candidate):
-                continue
-            prior = candidate
-            break
-        resolved_goal = ("Previous user requirements from this same chat:\n" + prior + "\n\nCurrent user follow-up:\n" + current if prior else current)
-    else:
-        resolved_goal = current
-    prior_language = _detect_language_from_texts([prior]) if prior else _detect_language_from_texts(user_messages[:-1])
-    resolved_language = _detect_language(resolved_goal.casefold())
-    if not resolved_language:
-        normalized_goal = resolved_goal.casefold()
-        explicit_language_hints = (("mql4", "MQL4"), ("mql 4", "MQL4"), ("mq4", "MQL4"), ("mql5", "MQL5"), ("python", "Python"), ("پایتون", "Python"), ("rust", "Rust"), ("javascript", "JavaScript"), ("typescript", "TypeScript"))
-        resolved_language = next((name for needle, name in explicit_language_hints if needle in normalized_goal), None)
-    language = current_language or resolved_language or prior_language or sessions[0].get("language")
-    if not language and _is_contextual_build_request(current):
-        context_text = "\n".join(user_messages).casefold()
-        if "mql4" in context_text or "mq4" in context_text or "متاتریدر 4" in context_text or "metatrader 4" in context_text:
-            language = "MQL4"
-    conversation_context = "\n".join(f"{row['role']}: {str(row['content'] or '')[:7000]}" for row in rows[-20:])[:MAX_CONTEXT_CHARS]
-    return resolved_goal + "\n\nFULL CHAT CONTEXT FOR THIS PROJECT REQUEST:\n" + conversation_context, language, session_id
-
-
+    language = current_language or sessions[0].get("language")
+    conversation_context = "\n".join(
+        f"{row['role']}: {str(row['content'] or '')[:7000]}" for row in rows[-20:]
+    )[:MAX_CONTEXT_CHARS]
+    resolved_goal = current
+    if conversation_context:
+        resolved_goal += "\n\nFULL CHAT CONTEXT FOR THIS PROJECT REQUEST:\n" + conversation_context
+    return resolved_goal, language, session_id
 def _prompt(language: str, goal: str, knowledge: list[Any], previous_error: str = "") -> str:
     suffix = f"\nPREVIOUS VALIDATION/BUILD/TEST/LINT DEFECTS (fix every one; do not merely explain them):\n{previous_error[:18000]}" if previous_error else ""
     return (
