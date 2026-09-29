@@ -16,7 +16,6 @@ from pydantic import BaseModel
 from fastapi.responses import HTMLResponse,JSONResponse,RedirectResponse,StreamingResponse,Response
 from fastapi.staticfiles import StaticFiles
 from .agent import Agent
-from .command_policy import parse_command
 from .config import settings
 from .settings_store import get_bool, get_int, get_github_settings, set_setting
 from .curriculum import canonical_language,LANGUAGE_CURRICULA
@@ -971,13 +970,17 @@ def chat(r:ChatRequest, request:Request):
             tool,action=required_by_intent[intent.name]
             if not tool_allowed(user,tool,action):
                 raise HTTPException(403,f"Tool permission denied: {tool}:{action}")
-            if intent.name in {"code_execution","self_repair","self_update","git_write","database_import"} and not any(token in low for token in ("confirm","approve","approved","تایید","تأیید")):
-                raise HTTPException(409,"Explicit confirmation required for high-risk intent: "+intent.name)
+            semantic_action=str((intent.args or {}).get("action") or "answer")
+            if intent.name in {"code_execution","self_repair","self_update","git_write","database_import"} and semantic_action != "confirm_high_risk":
+                raise HTTPException(409,"Semantic confirmation required for high-risk intent: "+intent.name)
         requested=intent.args.get("language") if isinstance(intent.args, dict) else None
         requested=canonical_language(requested) if requested else None
         learn_intent=intent.name == "learning"
         sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language,user_id) VALUES(?,?,?,?)",(msg[:60] or "گفتگوی جدید","learning" if learn_intent else "chat",requested,user["id"]))
-        _save_chat_attachments(sid,attachments); policy=parse_command(msg); security_words=policy.security; fix_requested=policy.security_action=="fix"
+        _save_chat_attachments(sid,attachments)
+        semantic_action=str((intent.args or {}).get("action") or "answer")
+        security_words=intent.name in {"security_scan","pentest_external"}
+        fix_requested=semantic_action == "modify_artifact"
         if security_words:
             if not tool_allowed(user,"security","execute"):
                 raise HTTPException(403,"Tool permission denied: security:execute")
@@ -1016,9 +1019,7 @@ def chat(r:ChatRequest, request:Request):
             raise HTTPException(409, "یادگیری فقط در صفحه «پیشرفت و یادگیری» انجام می‌شود.")
         if code_intent:
             language=requested or "Python"
-            if policy.build:
-                if not any(token in low for token in ("confirm","approve","approved","تایید","تأیید")):
-                    raise HTTPException(409,"Explicit confirmation required before building the application.")
+            if str((intent.args or {}).get("action") or "") in {"create_artifact","modify_artifact","continue_task"}:
                 build_data=build_project(msg,language,timeout=300,repair_attempts=2)
                 build_answer="Application project build completed."
                 _persist_api_chat_turn(sid,msg,build_answer)
