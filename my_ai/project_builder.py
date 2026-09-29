@@ -127,8 +127,13 @@ def _recent_conversation_context(goal: str) -> tuple[str, str | None, int | None
     )[:MAX_CONTEXT_CHARS]
     # Follow-up requests may omit the language; recover it from prior user context
     # without using build/generation trigger phrases to decide the action.
-    context_language = _detect_language(conversation_context) if conversation_context else None
-    language = current_language or sessions[0].get("language") or context_language
+    user_context_language = None
+    for row in reversed(rows):
+        if str(row.get("role") or "").lower() == "user":
+            user_context_language = _detect_language(str(row.get("content") or ""))
+            if user_context_language:
+                break
+    language = current_language or sessions[0].get("language") or user_context_language
     resolved_goal = current
     if conversation_context:
         resolved_goal += "\n\nFULL CHAT CONTEXT FOR THIS PROJECT REQUEST:\n" + conversation_context
