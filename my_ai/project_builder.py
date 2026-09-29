@@ -141,13 +141,31 @@ def _artifact_files(workspace: Path) -> list[str]:
     return out[:200]
 
 
+def _supported_language(value: str | None) -> str | None:
+    candidate = canonical_language(str(value or "").strip())
+    if candidate in {"MQL4", "Python", "C", "PHP", "JavaScript", "Rust", "Kotlin", "Swift", "Android", "iOS", "Forex", "Pentest", "Cisco", "SQL Server", "MySQL", "SQLite"}:
+        return candidate
+    return None
+
+
+def _plan_language(goal: str) -> str | None:
+    try:
+        marker = "SOFTWARE ENGINEERING PLAN:\\n"
+        if marker not in goal:
+            return None
+        payload = goal.split(marker, 1)[1].split("\\n\\nRESEARCH BUNDLE:", 1)[0]
+        return _supported_language(json.loads(payload).get("language"))
+    except Exception:
+        return None
+
+
 def build_project(goal: str, language: str = "Python", *, project_path: str | None = None, timeout: int = 300, repair_attempts: int = 2) -> dict[str, Any]:
     goal = str(goal or "").strip()
     if not goal:
         raise ValueError("Project goal is required.")
     resolved_goal, contextual_language, session_id = _recent_conversation_context(goal)
     detected_language = contextual_language
-    language = canonical_language(detected_language or language)
+    language = _supported_language(detected_language) or _supported_language(language) or _plan_language(resolved_goal) or "Python"
     workspace = create_project_workspace(goal, projects_root=project_path)
     knowledge = search_knowledge(language + " " + resolved_goal, 20)
     llm = create_llm("coding")
