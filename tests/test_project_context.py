@@ -31,4 +31,4 @@ def test_contextual_build_does_not_replace_explicit_current_request(monkeypatch)
 
     resolved, language, _ = project_builder._recent_conversation_context("یک API جدید برای همان پروژه آماده کن.")
     assert language == "Rust"
-    assert resolved.startswith("یک API جدید با Rust بساز.")
+    assert resolved.startswith("یک API جدید برای همان پروژه آماده کن.")
