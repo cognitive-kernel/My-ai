@@ -7,7 +7,6 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from .command_policy import LANGUAGE_ALIASES, _detect_language
 from .config import assert_write_allowed
 from .curriculum import canonical_language
 from .db import execute, fetch_all, search_knowledge
@@ -102,18 +101,6 @@ def _run(language: str, operation: str, workspace: Path, timeout: int) -> dict[s
         return {"language": canonical_language(language), "operation": operation, "passed": False, "return_code": -1, "output": "", "error": str(exc)}
 
 
-def _detect_language_from_texts(texts: list[str]) -> str | None:
-    for text in reversed(texts):
-        normalized = str(text or "").casefold()
-        for alias, canonical in sorted(LANGUAGE_ALIASES.items(), key=lambda item: len(item[0]), reverse=True):
-            if alias.casefold() in normalized:
-                try:
-                    return canonical_language(canonical)
-                except Exception:
-                    return canonical
-    return None
-
-
 def _recent_conversation_context(goal: str) -> tuple[str, str | None, int | None]:
     sessions = fetch_all("SELECT id,language FROM chat_sessions WHERE kind='chat' ORDER BY updated_at DESC,id DESC LIMIT 1")
     if not sessions:
@@ -121,19 +108,11 @@ def _recent_conversation_context(goal: str) -> tuple[str, str | None, int | None
     session_id = int(sessions[0]["id"])
     rows = fetch_all("SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 80", (session_id,))[::-1]
     current = str(goal or "").strip()
-    current_language = _detect_language_from_texts([current])
+    current_language = None
     conversation_context = "\n".join(
         f"{row['role']}: {str(row['content'] or '')[:7000]}" for row in rows[-20:]
     )[:MAX_CONTEXT_CHARS]
-    # Follow-up requests may omit the language; recover it from prior user context
-    # without using build/generation trigger phrases to decide the action.
-    user_context_language = None
-    for row in reversed(rows):
-        if str(row.get("role") or "").lower() == "user":
-            user_context_language = _detect_language(str(row.get("content") or ""))
-            if user_context_language:
-                break
-    language = current_language or sessions[0].get("language") or user_context_language
+    language = current_language or sessions[0].get("language")
     resolved_goal = current
     if conversation_context:
         resolved_goal += "\n\nFULL CHAT CONTEXT FOR THIS PROJECT REQUEST:\n" + conversation_context
