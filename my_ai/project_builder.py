@@ -146,7 +146,7 @@ def build_project(goal: str, language: str = "Python", *, project_path: str | No
     if not goal:
         raise ValueError("Project goal is required.")
     resolved_goal, contextual_language, session_id = _recent_conversation_context(goal)
-    detected_language = contextual_language or _detect_language_from_texts([resolved_goal, goal])
+    detected_language = contextual_language
     language = canonical_language(detected_language or language)
     workspace = create_project_workspace(goal, projects_root=project_path)
     knowledge = search_knowledge(language + " " + resolved_goal, 20)
