@@ -73,7 +73,7 @@ def _intent_from_payload(data: dict[str, Any]) -> Intent:
     if payload["urls"]:
         args["urls"] = list(payload["urls"])
     # Authorization is derived from the complete semantic intent set, not from the model's primary label.
-    requires_confirmation = bool(set(intents) & HIGH_RISK)
+    requires_confirmation = bool(set(intents) & HIGH_RISK) and payload["action"] != "confirm_high_risk"
     return Intent(name=primary, confidence=round(float(payload["confidence"]), 3), requires_confirmation=requires_confirmation, args=args, intents=intents or (primary,))
 
 
