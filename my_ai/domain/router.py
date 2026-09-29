@@ -36,31 +36,46 @@ class Intent:
     args: dict[str, Any] = field(default_factory=dict)
     intents: tuple[str, ...] = ()
 
+
 def router_tool_call(intent: Intent) -> dict[str, Any]:
     return {"name": ROUTER_TOOL_SCHEMA["name"], "arguments": {"primary": intent.name, "intents": list(intent.intents or (intent.name,)), "action": intent.args.get("action", "answer"), "confidence": float(intent.confidence), "language": intent.args.get("language"), "topic": intent.args.get("topic"), "goal": intent.args.get("goal"), "project_path": intent.args.get("project_path"), "urls": list(intent.args.get("urls", []))}}
 
+
 def _parse_router_payload(raw: str) -> dict[str, Any]:
     data = json.loads(raw)
-    if not isinstance(data, dict): raise ValueError("Router output must be a JSON object.")
+    if not isinstance(data, dict):
+        raise ValueError("Router output must be a JSON object.")
     required = tuple(ROUTER_SCHEMA["required"])
-    if any(key not in data for key in required): raise ValueError("Router output is missing required fields.")
-    if set(data) != set(required): raise ValueError("Router output contains unsupported fields.")
-    if data["primary"] not in ALLOWED_INTENTS: raise ValueError("Router output contains an unsupported primary intent.")
-    if not isinstance(data["intents"], list) or not data["intents"] or len(data["intents"]) > 5 or any(x not in ALLOWED_INTENTS for x in data["intents"]): raise ValueError("Router output contains unsupported intents.")
+    if any(key not in data for key in required):
+        raise ValueError("Router output is missing required fields.")
+    if set(data) != set(required):
+        raise ValueError("Router output contains unsupported fields.")
+    if data["primary"] not in ALLOWED_INTENTS:
+        raise ValueError("Router output contains an unsupported primary intent.")
+    if not isinstance(data["intents"], list) or not data["intents"] or len(data["intents"]) > 5 or any(x not in ALLOWED_INTENTS for x in data["intents"]):
+        raise ValueError("Router output contains unsupported intents.")
     confidence = data["confidence"]
-    if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not 0 <= confidence <= 1: raise ValueError("Router confidence must be between 0 and 1.")
-    if not isinstance(data["urls"], list) or len(data["urls"]) > 10 or any(not isinstance(x, str) for x in data["urls"]): raise ValueError("Router URLs must be a list of strings.")
+    if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not 0 <= confidence <= 1:
+        raise ValueError("Router confidence must be between 0 and 1.")
+    if not isinstance(data["urls"], list) or len(data["urls"]) > 10 or any(not isinstance(x, str) for x in data["urls"]):
+        raise ValueError("Router URLs must be a list of strings.")
     for key in ("language", "topic", "goal", "project_path"):
-        if data[key] is not None and not isinstance(data[key], str): raise ValueError(f"Router field {key} must be a string or null.")
+        if data[key] is not None and not isinstance(data[key], str):
+            raise ValueError(f"Router field {key} must be a string or null.")
     return data
+
 
 def _intent_from_payload(data: dict[str, Any]) -> Intent:
     payload = _parse_router_payload(json.dumps(data, ensure_ascii=False))
     primary = payload["primary"]
     intents = tuple(dict.fromkeys(payload["intents"]))
     args = {key: payload[key] for key in ("action", "language", "topic", "goal", "project_path") if payload[key]}
-    if payload["urls"]: args["urls"] = list(payload["urls"])
-    return Intent(name=primary, confidence=round(float(payload["confidence"]), 3), requires_confirmation=primary in HIGH_RISK, args=args, intents=intents or (primary,))
+    if payload["urls"]:
+        args["urls"] = list(payload["urls"])
+    # Authorization is derived from the complete semantic intent set, not from the model's primary label.
+    requires_confirmation = bool(set(intents) & HIGH_RISK)
+    return Intent(name=primary, confidence=round(float(payload["confidence"]), 3), requires_confirmation=requires_confirmation, args=args, intents=intents or (primary,))
+
 
 def classify(text: str, context: str | None = None, classifier: StructuredRouter | None = None) -> Intent:
     if classifier is None:
@@ -76,7 +91,11 @@ def classify(text: str, context: str | None = None, classifier: StructuredRouter
         "For a coding creation request, primary should normally be coding, not code_execution. Never infer authorization. Return only the schema.\n"
         f"CURRENT USER: {text}\nCONVERSATION CONTEXT:\n{context or ''}"
     )
-    data = classifier.structured_chat_json(prompt, ROUTER_SCHEMA, system="You are My-AI's context-aware semantic router. Understand intent from meaning, not trigger words. Output only schema-constrained routing data.")
+    data = classifier.structured_chat_json(
+        prompt,
+        ROUTER_SCHEMA,
+        system="You are My-AI's context-aware semantic router. Understand intent from meaning, not trigger words. Output only schema-constrained routing data.",
+    )
     if data.get("action") in {"create_artifact", "modify_artifact"} and data.get("primary") != "coding":
         normalized_intents = ["coding" if x in {"chat", "code_execution"} else x for x in data.get("intents", [])]
         if "coding" not in normalized_intents:
