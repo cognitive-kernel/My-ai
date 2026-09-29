@@ -78,3 +78,36 @@ def test_git_commit_is_scoped_to_generated_workspace(tmp_path):
     assert result["ok"] is True
     assert result["committed"] is True
     assert (tmp_path / ".git").exists()
+
+
+def test_mql4_validation_rejects_invalid_ea_market_price_and_auto_trade(tmp_path):
+    from my_ai.software_validation import validate_generated_project
+
+    (tmp_path / "MetaEA.mq4").write_text(
+        "double Bid[]; double Ask[]; void OnTick(){ Bid=iClose(Symbol(),1,0); Ask=iClose(Symbol(),1,0); "
+        "if(Bid>Ask) OrderSend(Symbol(),OP_BUY,0.1,Bid,3,0,0); }",
+        encoding="utf-8",
+    )
+    defects = validate_generated_project(
+        tmp_path,
+        {"artifact_type": "Expert Advisor"},
+        "MQL4",
+    )
+    assert any("arrays" in x for x in defects)
+    assert any("trade strategy" in x for x in defects)
+    assert any("user-controlled" in x for x in defects)
+
+
+def test_mql4_indicator_rejects_trading_api(tmp_path):
+    from my_ai.software_validation import validate_generated_project
+
+    (tmp_path / "MyIndicator.mq4").write_text(
+        "#property indicator_chart_window\nvoid OnCalculate(){}\nvoid x(){OrderSend(Symbol(),OP_BUY,0.1,Bid,3,0,0);}",
+        encoding="utf-8",
+    )
+    defects = validate_generated_project(
+        tmp_path,
+        {"artifact_type": "MT4 custom indicator"},
+        "MQL4",
+    )
+    assert any("custom indicator" in x.lower() and "ordersend" in x.lower() for x in defects)
