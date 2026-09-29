@@ -74,60 +74,15 @@ class Agent:
 
     @staticmethod
     def _conversation_state(history: list[dict], limit: int = 12) -> str:
-        """Build a compact structured state from recent turns without calling an LLM.
-
-        This is used for routing context and retrieval query enrichment so multi-turn
-        references ("بر اساس دستورات قبلی") resolve to the active topic.
-        """
         recent = list(history[-limit:]) if history else []
         if not recent:
             return "موضوع جاری: (شروع گفتگو)\nآخرین درخواست کاربر: (ندارد)"
-
-        user_msgs = [str(r.get("content") or "").strip() for r in recent if r.get("role") == "user"]
-        user_msgs = [m for m in user_msgs if m]
-        last_user = user_msgs[-1] if user_msgs else ""
-        prior_user = user_msgs[-2] if len(user_msgs) >= 2 else ""
-
-        # Prefer a longer prior actionable user message as the active goal signal.
-        goal_candidate = prior_user or last_user
-        for msg in reversed(user_msgs):
-            low = msg.casefold()
-            if any(k in low for k in (
-                "بنویس", "بساز", "ایجاد", "تولید", "اندیکاتور", "indicator",
-                "mql", "متاتریدر", "metatrader", "پروژه", "فایل", "write", "build", "create",
-            )):
-                goal_candidate = msg
-                break
-
-        topic_bits: list[str] = []
-        blob = " ".join(user_msgs[-4:]).casefold()
-        topic_keywords = (
-            ("mql4", "MQL4"), ("mql5", "MQL5"), ("متاتریدر 4", "MetaTrader 4"),
-            ("متاتریدر۴", "MetaTrader 4"), ("metatrader", "MetaTrader"),
-            ("اندیکاتور", "indicator"), ("python", "Python"), ("جاوااسکریپت", "JavaScript"),
-            ("javascript", "JavaScript"), ("forex", "Forex"), ("پایتون", "Python"),
-        )
-        for needle, label in topic_keywords:
-            if needle in blob and label not in topic_bits:
-                topic_bits.append(label)
-        topic = "، ".join(topic_bits) if topic_bits else (goal_candidate[:80] or "عمومی")
-
-        lines = [
-            f"موضوع جاری: {topic}",
-            f"آخرین درخواست کاربر: {last_user[:300]}",
-        ]
-        if goal_candidate and goal_candidate != last_user:
-            lines.append(f"هدف/دستور قبلی مرتبط: {goal_candidate[:400]}")
-        # Short transcript for the router (keep small).
-        transcript = []
-        for row in recent[-6:]:
-            role = row.get("role") or "?"
+        lines = ["آخرین درخواست‌های کاربر و پاسخ‌های مرتبط:"]
+        for row in recent[-8:]:
+            role = str(row.get("role") or "")
             content = str(row.get("content") or "").replace("\n", " ").strip()
             if content:
-                transcript.append(f"{role}: {content[:220]}")
-        if transcript:
-            lines.append("پیام‌های اخیر:")
-            lines.extend(transcript)
+                lines.append(f"{role}: {content[:500]}")
         return "\n".join(lines)
 
     @staticmethod
@@ -330,13 +285,8 @@ class Agent:
 
 
     @staticmethod
-    def _wants_saved_artifact(message: str) -> bool:
-        low = str(message or "").casefold()
-        return any(x in low for x in (
-            "لینک دانلود", "لینک دانلودش", "از کجا ذخیره", "از کجا برش دارم", "مسیر ذخیره",
-            "فایل رو بساز", "فایل را بساز", "ذخیره‌اش", "ذخیره اش", "دانلود",
-            "download link", "where did you save", "save the file", "give me the file",
-        ))
+    def _wants_saved_artifact(message: str, intent=None) -> bool:
+        return str((getattr(intent, "args", {}) or {}).get("action") or "") == "save"
 
     @staticmethod
     def _extract_mq4_source(text: str) -> str | None:
@@ -480,10 +430,7 @@ class Agent:
             ):
                 answer = answer.rstrip() + citation_block
         # If user asked for a saved file / download path and we have MQL source, persist it.
-        if self._wants_saved_artifact(message) or (
-            prep["intent"].name == "coding"
-            and any(k in message.casefold() for k in ("اندیکاتور", "mql", "متاتریدر", "indicator", "mq4"))
-        ):
+        if self._wants_saved_artifact(message, prep["intent"]):
             source = self._extract_mq4_source(str(answer))
             if source:
                 try:
@@ -508,24 +455,18 @@ class Agent:
         return answer
 
     def stream_chat(self, message, session_id=1, attachments=None):
-        # Same early exits and order as chat() for consistent behavior.
-        web_confirmation = self._web_learning_confirmation(message, session_id)
+        prep = self._prepare_inference(message, session_id, attachments=attachments)
+        web_confirmation = self._web_learning_confirmation(message, session_id, prep["intent"])
         if web_confirmation is not None:
             self._persist_turn(session_id, message, web_confirmation)
             yield web_confirmation
             return
-        maintenance = self._self_maintenance(message)
+        maintenance = self._semantic_maintenance(prep["intent"])
         if maintenance is not None:
             self._persist_turn(session_id, message, maintenance)
             yield maintenance
             return
-        if self._is_identity_question(message):
-            answer = self._identity_response()
-            self._persist_turn(session_id, message, answer)
-            yield answer
-            return
 
-        prep = self._prepare_inference(message, session_id, attachments=attachments)
         if self._project_build_requested(message, prep["intent"]):
             answer = self._build_project_from_intent(message, prep["intent"])
             self._persist_turn(session_id, message, answer)
