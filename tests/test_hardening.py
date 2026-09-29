@@ -52,13 +52,11 @@ def test_chat_session_isolation(client_db):
     assert response.json()["messages"] == []
 
 
-def test_curly_apostrophe_does_not_request_fix():
-    from my_ai.command_policy import parse_command
-    policy = parse_command("don't fix this")
-    assert policy.security_action != "fix"
-    policy = parse_command("don’t fix this")
-    assert policy.security_action != "fix"
-
+def test_chat_api_has_no_legacy_keyword_command_policy():
+    from pathlib import Path
+    source = Path("my_ai/api.py").read_text(encoding="utf-8")
+    assert "parse_command" not in source
+    assert "BUILD_WORDS" not in source
 
 def test_knowledge_triggers_survive_reinit_and_update(client_db):
     knowledge_id = db.remember_knowledge("Python", "عنوان", "محتوا")
