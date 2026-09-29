@@ -956,7 +956,7 @@ def chat(r:ChatRequest, request:Request):
     if r.session_id is not None and not fetch_all("SELECT id FROM chat_sessions WHERE id=? AND user_id=?",(r.session_id,user["id"])):
         raise HTTPException(404,"Chat session not found.")
     try:
-        msg=r.message.strip(); low=msg.lower()
+        msg=r.message.strip()
         attachments=_validate_chat_attachments(r.attachments)
         routing_history = []
         if r.session_id is not None:
