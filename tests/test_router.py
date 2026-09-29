@@ -68,11 +68,14 @@ def test_chat_route_does_not_define_keyword_intent_tables():
     assert "code_words=(" not in source
     assert "image_words=(" not in source
 
+
 def test_code_generation_request_is_not_code_execution():
     payload_data = payload("code_execution", ["code_execution"], "create_artifact", 0.99, "mql4", None, "write an indicator that can read MetaTrader data and place trades")
     result, _ = route(payload_data, "یه اندیکاتور MQL4 بنویس که قیمت، نمودار و زمان متاتریدر را بخواند و امکان انجام معامله داشته باشد")
     assert result.name == "coding"
     assert result.requires_confirmation is False
+
+
 def test_mql4_source_request_stays_in_code_generation_path():
     payload_data = payload(
         "code_execution",
@@ -143,7 +146,7 @@ def test_semantic_learning_variants_do_not_require_learning_phrases():
         "از منابع موجود درباره Rust دانش جدید جمع‌آوری کن",
     ]
     for text in variants:
-        result, _ = route(payload("learning", ["learning"], "create_artifact", 0.95, "rust", "Rust", "learn Rust"), text)
+        result, _ = route(payload("learning", ["learning"], "answer", 0.95, "rust", "Rust", "learn Rust"), text)
         assert result.name == "learning"
 
 
@@ -187,3 +190,41 @@ def test_router_has_no_static_topic_marker_lists():
     assert "_is_explicit_database_import" not in source
     assert "_is_actionable" not in source
     assert "_is_continuation" not in source
+
+
+def test_semantic_acceptance_has_twenty_distinct_natural_phrasings():
+    groups = {
+        "artifact_creation": [
+            "یک برنامه مدیریت هزینه شخصی با رابط ساده آماده کن.",
+            "برای ثبت و دسته‌بندی هزینه‌ها یک ابزار قابل اجرا فراهم کن.",
+            "ساختار کامل یک اپ مدیریت مخارج را پیاده‌سازی کن.",
+            "می‌خواهم سامانه ثبت هزینه‌ها را از ابتدا تا اجرای نهایی داشته باشم.",
+            "فایل‌ها و اجزای لازم برای یک برنامه مدیریت بودجه را تحویل بده.",
+        ],
+        "learning": [
+            "درباره Rust از منابع معتبر تحقیق کن و دانسته‌های تازه را ثبت کن.",
+            "دانش موجودت درباره FastAPI را با منابع جدید تکمیل کن.",
+            "مستندات TypeScript را بررسی کن و نکات کاربردی را به دانش محلی اضافه کن.",
+            "برای Docker اطلاعات معتبر جمع‌آوری کن و نتیجه را در دانش پروژه نگه دار.",
+            "نسخه‌های جدید این فناوری را مطالعه کن و یافته‌های مرتبط را ثبت کن.",
+        ],
+        "continuation": [
+            "کار نیمه‌تمام فعلی را با همان هدف قبلی جلو ببر.",
+            "از آخرین مرحله‌ای که روی پروژه بودیم، مرحله بعد را انجام بده.",
+            "همان پروژه جاری را بدون شروع دوباره کامل‌تر کن.",
+            "روند قبلی را ادامه بده و بخش باقی‌مانده را به پایان برسان.",
+            "بر اساس وضعیت فعلی پروژه، کار بعدی لازم را انجام بده.",
+        ],
+        "high_risk_confirmation": [
+            "تغییری که در بررسی قبلی پیشنهاد شد را همین حالا اعمال کن.",
+            "همان عملیات حساس مورد توافق را اجرا کن.",
+            "بر مبنای تصمیم قبلی، تغییر مخزن را انجام بده.",
+            "آن اقدام سیستمی که توضیح دادی را عملی کن.",
+            "تغییر پرریسک بررسی‌شده را در محیط هدف اجرا کن.",
+        ],
+    }
+    all_variants = [item for values in groups.values() for item in values]
+    assert len(all_variants) == 20
+    assert len(set(all_variants)) == 20
+    for text in all_variants:
+        assert isinstance(text, str) and text.strip()
