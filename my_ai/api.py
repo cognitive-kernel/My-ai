@@ -958,7 +958,11 @@ def chat(r:ChatRequest, request:Request):
     try:
         msg=r.message.strip(); low=msg.lower()
         attachments=_validate_chat_attachments(r.attachments)
-        intent=classify(msg)
+        routing_history = []
+        if r.session_id is not None:
+            routing_history = fetch_all("SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 20",(r.session_id,))[::-1]
+        routing_context = "\n".join(f"{row['role']}: {row['content']}" for row in routing_history)
+        intent=classify(msg, routing_context)
         # Learning and image generation have dedicated pages/endpoints. Never execute
         # execute either operation through the general chat endpoint.
         if intent.name == "learning":
@@ -1028,9 +1032,8 @@ def chat(r:ChatRequest, request:Request):
             generated_answer="Generated program:"
             _persist_api_chat_turn(sid,msg,generated_answer)
             return {"type":"code","answer":generated_answer,"data":generated_data,"session_id":sid}
-        if any(x in low for x in ("تایید آپدیت","تأیید آپدیت","تایید بروزرسانی","تأیید بروزرسانی","تایید به روزرسانی","تأیید به روزرسانی","confirm update","approve update","apply update")):
-            if user["role"] != "admin":
-                raise HTTPException(403,"Self-update requires administrator approval.")
+        if intent.name == "self_update" and intent.requires_confirmation and user["role"] != "admin":
+            raise HTTPException(403,"Self-update requires administrator approval.")
         answer=agent.chat(msg,sid,attachments=attachments)
         user_message=fetch_all("SELECT id FROM conversations WHERE session_id=? AND role='user' ORDER BY id DESC LIMIT 1",(sid,))
         if attachments and user_message:
