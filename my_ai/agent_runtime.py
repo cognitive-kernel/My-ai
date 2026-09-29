@@ -60,10 +60,8 @@ class Agent(LegacyAgent):
         user_messages = [str(x.get("content") or "").strip() for x in history if x.get("role") == "user"]
         assistant_messages = [str(x.get("content") or "").strip() for x in history if x.get("role") == "assistant"]
         recent_users = user_messages[-12:]
-        joined = "\n".join(recent_users).casefold()
-        aliases = (("mql4", "MQL4"), ("mq4", "MQL4"), ("متاتریدر 4", "MQL4"), ("metatrader 4", "MQL4"), ("python", "Python"), ("پایتون", "Python"), ("javascript", "JavaScript"), ("جاوااسکریپت", "JavaScript"), ("typescript", "TypeScript"), ("java", "Java"), ("rust", "Rust"), ("c++", "C++"), ("c#", "C#"), ("php", "PHP"), ("go", "Go"))
-        language = next((canonical for alias, canonical in sorted(aliases, key=lambda x: len(x[0]), reverse=True) if alias in joined or alias in str(message).casefold()), None)
-        current_goal = next((x for x in reversed(user_messages) if len(x) >= 8 and not self._is_continuation(x)), str(message or ""))
+        language = None
+        current_goal = user_messages[-1] if user_messages else str(message or "")
         topic = current_goal[:300]
         action = "answer"
         summary = f"موضوع جاری: {topic}\nزبان: {language or 'نامشخص'}\nآخرین اقدام: {action}\nآخرین درخواست‌های کاربر: {' | '.join(recent_users[-4:])}"
@@ -72,7 +70,7 @@ class Agent(LegacyAgent):
     def _resolved_message(self, message: str, history: list[dict[str, Any]], state: dict[str, Any]) -> str:
         if str((state.get("last_action") or "") ) != "continue_task":
             return message
-        prior = next((str(x.get("content") or "").strip() for x in reversed(history) if x.get("role") == "user" and len(str(x.get("content") or "").strip()) >= 8 and not self._is_continuation(str(x.get("content") or ""))), None)
+        prior = next((str(x.get("content") or "").strip() for x in reversed(history) if x.get("role") == "user" and len(str(x.get("content") or "").strip()) >= 8), None)
         prior = prior or state.get("current_goal") or ""
         return f"PREVIOUS CONCRETE USER REQUIREMENTS:\n{prior}\n\nCURRENT USER FOLLOW-UP:\n{message}"
 
