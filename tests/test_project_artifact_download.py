@@ -65,3 +65,9 @@ def test_project_artifact_download_rejects_paths_outside_projects(client_db, tmp
         cookies=login_cookie(user),
     )
     assert response.status_code == 400
+
+def test_chat_ui_does_not_classify_messages_with_static_keyword_lists():
+    source = Path("my_ai/ui_extensions.py").read_text(encoding="utf-8")
+    assert "learning=bool(re.search" not in source
+    assert "image=bool(re.search" not in source
+    assert "بساز.*تصویر" not in source
