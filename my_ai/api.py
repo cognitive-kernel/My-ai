@@ -951,12 +951,23 @@ def _persist_api_chat_turn(session_id: int, message: str, answer: str) -> None:
     execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
 
 def _ensure_chat_history(session_id: int, message: str, answer: str) -> None:
-    """Guarantee that every completed chat request leaves a durable history turn."""
-    rows=fetch_all("SELECT id FROM conversations WHERE session_id=? LIMIT 1",(session_id,))
-    if not rows:
-        _persist_api_chat_turn(session_id,message,answer)
-    else:
+    """Guarantee that the current completed turn is durably stored."""
+    rows=fetch_all(
+        "SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 2",
+        (session_id,),
+    )
+    latest=rows[0] if rows else None
+    if latest and latest["role"] == "assistant" and latest["content"] == answer:
         execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(session_id,))
+        return
+    if latest and latest["role"] == "user" and latest["content"] == message:
+        execute(
+            "INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",
+            (session_id,"assistant",answer),
+        )
+    else:
+        _persist_api_chat_turn(session_id,message,answer)
+    execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(session_id,))
 
 @app.post("/chat")
 def chat(r:ChatRequest, request:Request):
