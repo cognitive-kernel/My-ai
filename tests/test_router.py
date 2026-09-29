@@ -98,3 +98,38 @@ def test_semantic_artifact_action_does_not_depend_on_trigger_words():
     )
     assert result.name == "coding"
     assert result.args["action"] == "create_artifact"
+
+
+def test_semantic_confirmation_does_not_depend_on_confirmation_word():
+    result, _ = route(
+        payload("git_write", ["git_write"], "confirm_high_risk", 0.96),
+        "باشه، همون تغییری که گفتی را اعمال کن",
+    )
+    assert result.name == "git_write"
+    assert result.args["action"] == "confirm_high_risk"
+
+
+def test_semantic_variants_use_same_artifact_action_without_phrase_tables():
+    variants = [
+        "یک ابزار کامل مدیریت سفارش طراحی و آماده اجرا کن",
+        "برای مدیریت سفارش‌ها یک برنامه کامل تحویل بده",
+        "نیاز دارم سامانه مدیریت سفارش‌ها را پیاده‌سازی کنی",
+        "یک پروژه قابل اجرا برای مدیریت سفارش‌ها آماده کن",
+        "کل فایل‌ها و ساختار لازم این سامانه را فراهم کن",
+    ]
+    for text in variants:
+        result, _ = route(
+            payload("coding", ["coding"], "create_artifact", 0.95, "python", None, "order management application"),
+            text,
+        )
+        assert result.name == "coding"
+        assert result.args["action"] == "create_artifact"
+
+
+def test_router_source_has_no_legacy_keyword_action_helpers():
+    from pathlib import Path
+    source = Path("my_ai/domain/router.py").read_text(encoding="utf-8")
+    assert "_is_actionable" not in source
+    assert "_is_continuation" not in source
+    assert "بساز" not in source
+    assert "build it" not in source
