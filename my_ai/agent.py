@@ -214,6 +214,12 @@ class Agent:
             return f"یادگیری تأییدشده انجام شد و به آموزش «{result['domain']}» در سرفصل «{result['topic']}» اضافه شد."
         return "یادگیری اینترنتی انجام نشد: " + str(result.get("error", "خطای نامشخص"))
 
+    def _handle_unknown(self, answer, message, session_id):
+        if "__MYAI_UNKNOWN__" not in str(answer):
+            return answer
+        create_pending(session_id, message)
+        return "این مورد را در دانش محلی خودم پیدا نکردم و نمی‌خواهم حدس بزنم. اگر تأیید کنی، در اینترنت جستجو می‌کنم، منابع را بررسی می‌کنم و نتیجه را به بخش آموزشی مرتبط اضافه می‌کنم."
+
     @staticmethod
     def _project_build_requested(message: str, intent) -> bool:
         return (
