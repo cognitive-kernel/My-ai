@@ -777,7 +777,10 @@ def delete_chat_session(session_id:int,request:Request):
     user=require_user(request)
     rows=fetch_all("SELECT id FROM chat_sessions WHERE id=? AND user_id=?",(session_id,user["id"]))
     if not rows: raise HTTPException(404,"Chat session not found")
+    # Remove dependent chat data explicitly; this keeps deletion correct even when SQLite foreign-key cascades are disabled.
+    execute("DELETE FROM chat_attachments WHERE session_id=?",(session_id,))
     execute("DELETE FROM conversations WHERE session_id=?",(session_id,))
+    execute("DELETE FROM conversation_state WHERE session_id=?",(session_id,))
     execute("DELETE FROM chat_sessions WHERE id=?",(session_id,))
     return {"status":"deleted","id":session_id}
 @app.post("/chat/sessions")
@@ -792,7 +795,13 @@ def chat_history(request:Request,limit:int=100,session_id:int|None=None):
         rows=fetch_all("SELECT c.id,c.role,c.content,c.created_at FROM conversations c JOIN chat_sessions s ON s.id=c.session_id WHERE s.user_id=? ORDER BY c.id DESC LIMIT ?",(user["id"],limit))
     else:
         rows=fetch_all("SELECT c.id,c.role,c.content,c.created_at FROM conversations c JOIN chat_sessions s ON s.id=c.session_id WHERE c.session_id=? AND s.user_id=? ORDER BY c.id DESC LIMIT ?",(session_id,user["id"],limit))
-    rows.reverse();
+    rows.reverse()
+    # SQLite CURRENT_TIMESTAMP is UTC but is stored without an offset. Make that
+    # contract explicit so browsers do not interpret persisted timestamps as local time.
+    for item in rows:
+        value=item.get("created_at")
+        if value and "T" not in str(value):
+            item["created_at"]=str(value).replace(" ","T",1)+"Z"
     attachment_query="SELECT id,conversation_id,name,path,size,mime_type,created_at FROM chat_attachments WHERE session_id=? ORDER BY id"
     attachments=fetch_all(attachment_query,(session_id,)) if session_id is not None else []
     for item in attachments:
