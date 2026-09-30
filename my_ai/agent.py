@@ -326,7 +326,7 @@ class Agent:
         self._persist_user_message(session_id, message)
         self._persist_assistant_message(session_id, answer)
 
-    def _prepare_inference(self, message, session_id, attachments=None, history=None):
+    def _prepare_inference(self, message, session_id, attachments=None, history=None, intent=None):
         """Shared pipeline for chat and stream_chat: history, state, intent, knowledge, prompt notes."""
         if history is None:
             history = fetch_all(
@@ -336,7 +336,7 @@ class Agent:
         state = self._conversation_state(history)
         # Router gets structured state + short transcript (not only raw last-8 dump).
         route_context = state
-        intent = self._classify(message, route_context)
+        intent = intent or self._classify(message, route_context)
         attachment_context = self._attachment_context(attachments)
         llm_message = message + ("\n\n" + attachment_context if attachment_context else "")
         task = "coding" if intent.name == "coding" else "general"
@@ -393,7 +393,7 @@ class Agent:
             "system": system,
         }
 
-    def chat(self, message, session_id=1, attachments=None):
+    def chat(self, message, session_id=1, attachments=None, intent=None):
         # Persist the user message before any routing/LLM work. This guarantees
         # that pressing Enter creates durable history even if inference is slow,
         # interrupted, or the browser/server is refreshed while it is running.
@@ -402,7 +402,7 @@ class Agent:
             (session_id,),
         )[::-1]
         self._persist_user_message(session_id, message)
-        prep = self._prepare_inference(message, session_id, attachments=attachments, history=history)
+        prep = self._prepare_inference(message, session_id, attachments=attachments, history=history, intent=intent)
         web_confirmation = self._web_learning_confirmation(message, session_id, prep["intent"])
         if web_confirmation is not None:
             self._persist_assistant_message(session_id, web_confirmation)
