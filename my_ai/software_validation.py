@@ -26,6 +26,30 @@ def validate_plan(plan: dict[str, Any]) -> None:
     if not plan.get("requirements") or not plan.get("acceptance_criteria"):
         raise SoftwareValidationError("Planner produced no testable requirements or acceptance criteria.")
 
+    lifecycle = {"build", "test", "lint", "run"}
+    for index, requirement in enumerate(plan.get("tool_requirements") or []):
+        if not isinstance(requirement, dict):
+            raise SoftwareValidationError(f"Tool requirement {index} is not an object.")
+        commands = requirement.get("commands") or {}
+        if not isinstance(commands, dict) or any(key not in lifecycle for key in commands):
+            raise SoftwareValidationError(f"Tool requirement {index} contains non-lifecycle command keys.")
+        providers = requirement.get("providers")
+        if providers is not None:
+            if not isinstance(providers, list) or not providers:
+                raise SoftwareValidationError(f"Tool requirement {index} providers must be a non-empty list.")
+            for provider_index, provider in enumerate(providers):
+                if not isinstance(provider, dict) or not provider.get("executables"):
+                    raise SoftwareValidationError(f"Tool provider {index}:{provider_index} must declare host executables.")
+                provider_commands = provider.get("commands") or {}
+                if any(key not in lifecycle for key in provider_commands):
+                    raise SoftwareValidationError(f"Tool provider {index}:{provider_index} contains non-lifecycle command keys.")
+                install = provider.get("install")
+                if install is not None and (not isinstance(install, dict) or set(install) - {"manager", "package"}):
+                    raise SoftwareValidationError(f"Tool provider {index}:{provider_index} contains unsafe installation metadata.")
+        install = requirement.get("install")
+        if install is not None and (not isinstance(install, dict) or set(install) - {"manager", "package"}):
+            raise SoftwareValidationError(f"Tool requirement {index} contains unsafe installation metadata.")
+
 
 def _read_text_files(workspace: Path) -> str:
     chunks: list[str] = []
