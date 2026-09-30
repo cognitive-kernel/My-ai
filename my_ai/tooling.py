@@ -21,9 +21,10 @@ LANGUAGE_TOOLS = {
     "Android": {"toolchains":["java","gradle","adb"],"tests":["gradle test"],"build":["gradle assembleDebug"],"lint":["gradle lint"]},
     "iOS": {"toolchains":["swift","xcodebuild"],"tests":["swift test"],"build":["xcodebuild test"],"lint":["swift format lint ."]},
     "MQL4": {"toolchains":["metaeditor.exe"],"tests":["metaeditor.exe"],"build":["metaeditor.exe"],"lint":["metaeditor.exe"]},
+    "SQL Server": {"toolchains":["sqlcmd"],"tests":["sqlcmd"],"build":["sqlcmd"],"lint":["sqlcmd"]},
 }
 
-ALIASES={"mql4":"MQL4","mq4":"MQL4","mql 4":"MQL4","متاتریدر 4":"MQL4","متاتریدر۴":"MQL4","js":"JavaScript","node":"JavaScript","py":"Python","kotlin":"Kotlin","kt":"Kotlin","swift":"Swift","rust":"Rust","rs":"Rust","c":"C","php":"PHP","android":"Android","ios":"iOS"}
+ALIASES={"mql4":"MQL4","mq4":"MQL4","mql 4":"MQL4","متاتریدر 4":"MQL4","متاتریدر۴":"MQL4","js":"JavaScript","node":"JavaScript","py":"Python","kotlin":"Kotlin","kt":"Kotlin","swift":"Swift","rust":"Rust","rs":"Rust","c":"C","php":"PHP","android":"Android","ios":"iOS","sql server":"SQL Server","sqlserver":"SQL Server","sqlcmd":"SQL Server"}
 
 # Optional package-manager hints. Discovery always runs first; installation is opt-in.
 # IDs are exact package identifiers, never free-form shell commands.
@@ -231,7 +232,6 @@ def _safe_sqlite_path(value: str) -> Path:
             raise ValueError(f"SQLite paths must be the active database or stay under {root}.") from exc
     return db
 
-
 def sqlite_schema(path:str)->dict[str,Any]:
     db=_safe_sqlite_path(path)
     if not db.is_file(): raise ValueError("SQLite database file not found.")
@@ -261,8 +261,7 @@ def mysql_query(sql:str,limit:int=1000)->dict[str,Any]:
         columns=[str(x[0]) for x in cur.description or []]
         rows=[dict(zip(columns,row)) for row in cur.fetchmany(max(1,min(int(limit),5000)))]
         return {"columns":columns,"rows":rows,"row_count":len(rows)}
-    finally:
-        conn.close()
+    finally: conn.close()
 
 def mysql_schema(limit:int=500)->dict[str,Any]:
     return mysql_query("SELECT TABLE_SCHEMA,TABLE_NAME,COLUMN_NAME,DATA_TYPE,ORDINAL_POSITION FROM INFORMATION_SCHEMA.COLUMNS ORDER BY TABLE_SCHEMA,TABLE_NAME,ORDINAL_POSITION",limit)
