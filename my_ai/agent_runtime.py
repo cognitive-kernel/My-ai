@@ -171,8 +171,32 @@ class Agent(LegacyAgent):
         return answer
 
     @staticmethod
-    def _runtime_project_build_requested(intent: Any) -> bool:
-        return getattr(intent, "name", "") == "coding" and str((getattr(intent, "args", {}) or {}).get("action") or "") in {"create_artifact", "modify_artifact", "continue_task"}
+    def _explicit_project_request(message: str, intent: Any) -> bool:
+        """Require an explicit current-message request before creating/modifying a project."""
+        text = str(message or "").strip().casefold()
+        if not text:
+            return False
+        action = str((getattr(intent, "args", {}) or {}).get("action") or "")
+        if action not in {"create_artifact", "modify_artifact"}:
+            return False
+        # This is an execution safety gate, not the semantic router. The router may
+        # classify a message as coding, but project creation is only authorized when
+        # the current message itself contains a concrete build/create/modify request.
+        markers = (
+            "بساز", "ساخت", "ایجاد کن", "ایجاد", "درست کن", "پیاده سازی کن",
+            "پیاده‌سازی کن", "کدنویسی کن", "برنامه بنویس", "پروژه بساز",
+            "پروژه ایجاد", "فایل بساز", "کد بنویس",
+            "build", "create", "make", "generate", "implement", "develop",
+            "write code", "write a program", "create a project", "build a project",
+            "modify", "change the code", "update the code", "fix the code",
+        )
+        return any(marker in text for marker in markers)
+
+    @classmethod
+    def _runtime_project_build_requested(cls, message: str, intent: Any) -> bool:
+        if getattr(intent, "name", "") != "coding":
+            return False
+        return cls._explicit_project_request(message, intent)
 
     def _build_project_from_intent(self, message: str, intent: Any, context: str = "") -> str:
         args = getattr(intent, "args", {}) or {}
@@ -203,7 +227,7 @@ class Agent(LegacyAgent):
                 self._persist_shortcut(ctx)
             self._update_state(ctx, answer)
             return answer
-        if self._runtime_project_build_requested(ctx.intent):
+        if self._runtime_project_build_requested(ctx.message, ctx.intent):
             answer = self._build_project_from_intent(ctx.message, ctx.intent, ctx.context)
             if persist_answer:
                 self._persist_shortcut(PreparedChat(ctx.message, ctx.session_id, ctx.attachments, ctx.history, ctx.context, ctx.conversation_state, intent=ctx.intent, shortcut=answer))
