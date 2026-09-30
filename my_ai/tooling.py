@@ -120,29 +120,21 @@ def _project_files(cwd: Path) -> list[Path]:
     return list(dict.fromkeys(p for p in files if p.is_file()))
 
 
-def _semantic_requirements(language: str | None, cwd: Path | None = None) -> list[dict[str, Any]]:
+def _semantic_requirements(language: str | None, cwd: Path | None = None, planned: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """Collect requirements from a semantic descriptor and project metadata.
 
     No language name is used as a dispatch table. Unknown languages remain
     unknown until their plan/descriptor supplies concrete tool requirements.
     """
     requirements: list[dict[str, Any]] = []
+    if planned:
+        requirements.extend(item for item in planned if isinstance(item, dict))
     requirements.extend(_toolchain_descriptors(cwd))
     if cwd:
         # A generated project can declare its own executable/command contract.
         for path in _project_files(cwd):
             if path.name in {"toolchain.json", "toolchains.json"}:
                 continue
-            if path.suffix == ".mq4" or path.suffix == ".mqh":
-                requirements.append({"capabilities": ["mql4"], "executables": ["metaeditor.exe"]})
-            elif path.name == "package.json":
-                requirements.append({"capabilities": ["javascript"], "executables": ["node", "npm"]})
-            elif path.name in {"pyproject.toml"}:
-                requirements.append({"capabilities": ["python"], "executables": ["python"]})
-            elif path.name == "Cargo.toml":
-                requirements.append({"capabilities": ["rust"], "executables": ["cargo", "rustc"]})
-            elif path.name in {"build.gradle", "build.gradle.kts", "AndroidManifest.xml"}:
-                requirements.append({"capabilities": ["gradle"], "executables": ["java", "gradle"]})
     return requirements
 
 
@@ -360,16 +352,7 @@ def run_project_tool(
         )
     reqs = readiness.get("requirements", [])
     argv = _command(language, operation, requirements=reqs, cwd=str(path))
-    if any(path.rglob("*.mq4")) and canonical_language(language).casefold() in {"mql4", "mq4"}:
-        sources = sorted(path.rglob("*.mq4"))
-        if operation in {"test", "lint"}:
-            return {
-                "language": canonical_language(language), "operation": operation, "command": argv,
-                "cwd": str(path), "return_code": 0,
-                "output": "MQL4 validation is delegated to the declared toolchain; compilation is the build operation.",
-                "error": "", "passed": True,
-            }
-        argv = [part.replace("{SOURCE}", str(sources[0])) for part in argv]
+    argv = [part.replace("{PROJECT_ROOT}", str(path)) for part in argv]
     timeout = max(1, min(int(timeout), 600))
     try:
         p = subprocess.run(
