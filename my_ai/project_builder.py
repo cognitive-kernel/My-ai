@@ -119,7 +119,7 @@ def _write_files(workspace: Path, files: dict[str, str]) -> list[str]:
 
 def _run(language: str, operation: str, workspace: Path, timeout: int, tool_requirements: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     try:
-        return run_project_tool(language, operation, str(workspace), timeout)
+        return run_project_tool(language, operation, str(workspace), timeout, requirements=tool_requirements)
     except Exception as exc:
         return {"language": canonical_language(language), "operation": operation, "passed": False, "return_code": -1, "output": "", "error": str(exc)}
 
@@ -205,6 +205,7 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
     last_error = ""
     attempts = max(1, min(int(repair_attempts) + 1, 5))
     semantic_defects: list[str] = []
+    requirements = tool_requirements
     for _ in range(attempts):
         files = _parse_files(llm.chat(_prompt(language, resolved_goal, knowledge, last_error), system="You are a senior software architect and implementation engineer. Generate complete, buildable projects. Return JSON only."))
         _write_files(workspace, files)
@@ -223,7 +224,6 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
         if semantic_defects:
             last_error = "\n".join(semantic_defects)
             continue
-        requirements = tool_requirements
         if requirements is None:
             try:
                 requirements = plan_data.get("tool_requirements") if isinstance(plan_data, dict) else None
