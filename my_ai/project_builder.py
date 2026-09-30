@@ -185,13 +185,17 @@ def _artifact_files(workspace: Path) -> list[str]:
 
 def _supported_language(value: str | None) -> str | None:
     candidate = canonical_language(str(value or "").strip())
-    # "Forex" is a project/domain label, not a compiler language.
-    # MT4 artifacts must be generated and built as MQL4.
+    # Domain labels are not implementation languages.
     if candidate == "Forex":
         candidate = "MQL4"
-    if candidate in {"MQL4", "Python", "C", "PHP", "JavaScript", "Rust", "Kotlin", "Swift", "Android", "iOS", "Pentest", "Cisco", "SQL Server", "MySQL", "SQLite"}:
-        return candidate
-    return None
+    # Do not collapse an unknown/new language to Python. The semantic planner
+    # is allowed to select languages that were not hard-coded into this file.
+    # Build/validation layers decide later whether a local toolchain exists.
+    if not candidate:
+        return None
+    if candidate.casefold() in {"fa", "fa-ir", "فارسی", "en", "en-us", "english"}:
+        return None
+    return candidate
 
 
 def _plan_language(goal: str) -> str | None:
