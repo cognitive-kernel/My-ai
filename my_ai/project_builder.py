@@ -185,7 +185,11 @@ def _artifact_files(workspace: Path) -> list[str]:
 
 def _supported_language(value: str | None) -> str | None:
     candidate = canonical_language(str(value or "").strip())
-    if candidate in {"MQL4", "Python", "C", "PHP", "JavaScript", "Rust", "Kotlin", "Swift", "Android", "iOS", "Forex", "Pentest", "Cisco", "SQL Server", "MySQL", "SQLite"}:
+    # "Forex" is a project/domain label, not a compiler language.
+    # MT4 artifacts must be generated and built as MQL4.
+    if candidate == "Forex":
+        candidate = "MQL4"
+    if candidate in {"MQL4", "Python", "C", "PHP", "JavaScript", "Rust", "Kotlin", "Swift", "Android", "iOS", "Pentest", "Cisco", "SQL Server", "MySQL", "SQLite"}:
         return candidate
     return None
 
