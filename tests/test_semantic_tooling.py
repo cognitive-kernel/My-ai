@@ -65,7 +65,7 @@ def test_command_parser_rejects_shell_composition():
 
 
 def test_selected_provider_command_is_executable():
-    executable = shutil.which(sys.executable) or sys.executable
+    executable = shutil.which("python") or shutil.which(sys.executable) or sys.executable
     executable_name = executable.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
     requirements = [{
         "capabilities": ["execute"],
