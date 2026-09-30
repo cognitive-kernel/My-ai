@@ -29,11 +29,13 @@ PLAN_SCHEMA: dict[str, Any] = {
             "items": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["capabilities", "executables", "commands"],
+                "required": ["capabilities", "commands"],
                 "properties": {
                     "capabilities": {"type": "array", "items": {"type": "string"}, "maxItems": 20},
                     "executables": {"type": "array", "items": {"type": "string"}, "maxItems": 20},
+                    "providers": {"type": "array", "maxItems": 20, "items": {"type": "object", "additionalProperties": False, "required": ["executables", "commands"], "properties": {"executables": {"type": "array", "items": {"type": "string"}, "maxItems": 20}, "commands": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}}}, "install": {"type": ["object", "null"]}, "version": {"type": ["string", "null"]}}}},
                     "commands": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}}},
+                    "install": {"type": ["object", "null"]},
                     "version": {"type": ["string", "null"]},
                 },
             },
@@ -81,7 +83,7 @@ def _plan(request: str, context: str = "") -> dict[str, Any]:
         "If trading is requested but no trading strategy is specified, implement trading capability as explicit opt-in/user-controlled functionality and never invent an automatic entry condition. "
         "If two requested capabilities conflict with a platform's rules, do NOT silently generate an invalid hybrid: record the ambiguity/constraint and design the closest valid architecture (for example, split components when one platform artifact cannot legally perform another artifact's operation). "
         "Choose a language/framework only when justified; otherwise leave it null so implementation can choose. "
-        "Translate the technical plan into concrete tool requirements without hard-coding a finite language/tool list. Each tool requirement must describe capabilities, actual host executable names, and structured commands needed for build/test/lint/run when applicable. An executable name must be a real host process used to perform the operation, not the name of an artifact, language, platform, terminal program, EA, indicator, library, or other generated output. Never invent a synthetic executable name such as <ArtifactName>.exe. If the real host executable is not known with sufficient confidence, leave the executables array empty and preserve the capability/command requirement for later semantic resolution. Do not invent an executable merely to satisfy the schema. Do not include package-manager installation commands; installation is resolved separately through trusted tooling providers. "
+        "Translate the technical plan into concrete tool requirements without hard-coding a finite language/tool list. Each tool requirement must describe capabilities and structured commands needed for build/test/lint/run when applicable. When multiple real host tools can provide the same capability, represent them as provider alternatives under providers; each provider must contain actual host executable names, provider-specific commands, and optional trusted installation metadata. Prefer providers that can be discovered on the current host during resolution rather than assuming a single tool. An executable name must be a real host process used to perform the operation, not the name of an artifact, language, platform, terminal program, EA, indicator, library, or other generated output. Never invent a synthetic executable name such as <ArtifactName>.exe. If the real host executable is not known with sufficient confidence, leave executables empty and preserve the capability/command requirement for later semantic resolution. Do not invent an executable merely to satisfy the schema. Do not include package-manager installation commands; installation is resolved separately through trusted tooling providers. "
         "Every acceptance criterion must be testable. Return only JSON matching the schema. Do not write code yet.\n"
         f"CURRENT REQUEST:\n{request}\nCONTEXT:\n{context[:16000]}"
     )
