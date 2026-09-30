@@ -30,10 +30,8 @@ def test_router_preserves_actual_platform_language():
     assert intent.args.get("language") == "MQL4"
 
 
-def test_chat_runtime_patch_is_injected_into_home_page():
+def test_chat_page_uses_canonical_static_runtime():
     html = page()
-    assert "myAiChatRuntimePatch" in html
-    assert "function loadSession(id)" in html
-    assert "function sendMessage()" in html
+    assert "myAiChatRuntimePatch" not in html
     assert "/chat/history?session_id=" in html
     assert "/chat/sessions?x=" in html
