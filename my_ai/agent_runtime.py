@@ -192,20 +192,29 @@ class Agent(LegacyAgent):
         status = "موفق" if completion.get("completed") else "ناقص"
         return (f"ساخت پروژه: {status}\n- زبان: {result.get('language') or language or 'انتخاب خودکار'}\n- مسیر پروژه: {result.get('project_path') or result.get('project_name') or ''}\n- فایل‌ها: {len(result.get('files') or [])}\n- Build: {bool(completion.get('build'))}\n- Tests: {bool(completion.get('tests'))}\n- Lint: {bool(completion.get('lint'))}\n- Git: {bool(completion.get('git'))}\n- Research sources: {int((result.get('research') or {}).get('source_count') or 0)}\n" + ("- نتیجه: پروژه کامل شد." if completion.get("completed") else "- نتیجه: پروژه هنوز معیارهای اتمام را پاس نکرده است."))
 
-    def chat(self, message, session_id=1, attachments=None, intent=None, persist_user=True):
+    def chat(self, message, session_id=1, attachments=None, intent=None, persist_user=True, persist_answer=True):
         if persist_user:
             execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (session_id, "user", str(message or "")))
             execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
         ctx = self._prepare_chat_context(message, session_id, attachments, intent=intent)
         if ctx.shortcut is not None:
-            answer = self._persist_shortcut(ctx); self._update_state(ctx, answer); return answer
+            answer = str(ctx.shortcut)
+            if persist_answer:
+                self._persist_shortcut(ctx)
+            self._update_state(ctx, answer)
+            return answer
         if self._runtime_project_build_requested(ctx.intent):
             answer = self._build_project_from_intent(ctx.message, ctx.intent, ctx.context)
-            self._persist_shortcut(PreparedChat(ctx.message, ctx.session_id, ctx.attachments, ctx.history, ctx.context, ctx.conversation_state, intent=ctx.intent, shortcut=answer)); self._update_state(ctx, answer); return answer
+            if persist_answer:
+                self._persist_shortcut(PreparedChat(ctx.message, ctx.session_id, ctx.attachments, ctx.history, ctx.context, ctx.conversation_state, intent=ctx.intent, shortcut=answer))
+            self._update_state(ctx, answer)
+            return answer
         answer = ctx.llm.chat(ctx.llm_message, system=ctx.system, history=ctx.history)
         answer = self._handle_unknown(answer, ctx.message, ctx.session_id)
         if ctx.knowledge and "__MYAI_UNKNOWN__" not in str(answer) and ctx.citation_block and not any(f"[K{item.get('id')}]" in str(answer) for item in (ctx.enriched_knowledge or [])[:4]): answer = answer.rstrip() + ctx.citation_block
-        self._persist_answer(ctx, answer); return answer
+        if persist_answer:
+            self._persist_answer(ctx, answer)
+        return answer
 
     def stream_chat(self, message, session_id=1, attachments=None):
         # Persist the user's message before semantic routing, retrieval, tool execution,
