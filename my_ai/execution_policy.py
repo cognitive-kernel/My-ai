@@ -3,9 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 
-# The policy is deliberately small. Semantic interpretation belongs to the
-# router; this module only decides whether that interpretation is sufficiently
-# concrete to cross the side-effect boundary.
 _SIDE_EFFECT_ACTIONS = frozenset({"create_artifact", "modify_artifact"})
 _CONTINUATION_ACTION = "continue_task"
 _MIN_CONFIDENCE = 0.70
@@ -22,11 +19,12 @@ def _text(value: Any) -> str:
 
 
 def authorize_project_execution(message: str, intent: Any, state: dict[str, Any] | None = None) -> bool:
-    """Return True only when the semantic route is concrete enough for a project side effect.
+    """Allow a project side effect only after a concrete semantic route.
 
-    No trigger-word or phrase list is used here. The router owns semantic
-    interpretation; this gate only validates the structured decision and the
-    current conversation state before an executor can mutate the workspace.
+    The router owns semantic interpretation. This gate validates the structured
+    decision and prevents malformed, low-confidence, or non-actionable turns
+    from crossing the side-effect boundary. It intentionally contains no
+    trigger-word or phrase list.
     """
     if getattr(intent, "name", "") != "coding":
         return False
@@ -41,22 +39,18 @@ def authorize_project_execution(message: str, intent: Any, state: dict[str, Any]
     if confidence < _MIN_CONFIDENCE:
         return False
 
-    goal = _text(args.get("goal"))
     current = _text(message)
+    goal = _text(args.get("goal"))
+    if len(current) < _MIN_CONCRETE_REQUEST_LENGTH or len(goal) < _MIN_CONCRETE_REQUEST_LENGTH:
+        return False
+
     if action in _SIDE_EFFECT_ACTIONS:
-        # A real artifact operation needs a concrete semantic goal from the
-        # router and a non-trivial current request. This blocks accidental
-        # execution from greetings, empty/ambiguous turns, or malformed routes.
-        return len(current) >= _MIN_CONCRETE_REQUEST_LENGTH and len(goal) >= _MIN_CONCRETE_REQUEST_LENGTH
+        return True
 
     if action == _CONTINUATION_ACTION:
-        state = state or {}
-        previous_action = _text(state.get("last_action"))
-        previous_goal = _text(state.get("current_goal"))
-        return bool(previous_goal) and previous_action in {
-            "create_artifact",
-            "modify_artifact",
-            "continue_task",
-        }
+        # The router already sees the conversation state. Requiring a concrete
+        # semantic goal here prevents an empty/ambiguous continuation from
+        # becoming a project mutation while keeping the gate keyword-free.
+        return True
 
     return False
