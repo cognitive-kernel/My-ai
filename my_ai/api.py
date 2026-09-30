@@ -780,7 +780,8 @@ def delete_chat_session(session_id:int,request:Request):
     # Remove dependent chat data explicitly; this keeps deletion correct even when SQLite foreign-key cascades are disabled.
     execute("DELETE FROM chat_attachments WHERE session_id=?",(session_id,))
     execute("DELETE FROM conversations WHERE session_id=?",(session_id,))
-    execute("DELETE FROM conversation_state WHERE session_id=?",(session_id,))
+    if fetch_all("SELECT name FROM sqlite_master WHERE type='table' AND name='conversation_state'"):
+        execute("DELETE FROM conversation_state WHERE session_id=?",(session_id,))
     execute("DELETE FROM chat_sessions WHERE id=?",(session_id,))
     return {"status":"deleted","id":session_id}
 @app.post("/chat/sessions")
