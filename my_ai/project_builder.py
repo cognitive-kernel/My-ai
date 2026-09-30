@@ -118,25 +118,7 @@ def _write_files(workspace: Path, files: dict[str, str]) -> list[str]:
     return written
 
 
-def _run(language: str, operation: str, workspace: Path, timeout: int) -> dict[str, Any]:
-    if canonical_language(language) == "MQL4":
-        metaeditor = os.getenv("MYAI_METAEDITOR", "").strip()
-        if not metaeditor:
-            return {"language": "MQL4", "operation": operation, "passed": False, "available": False, "return_code": -1, "output": "", "error": "MetaEditor compiler is unavailable. Set MYAI_METAEDITOR to metaeditor.exe."}
-        sources = list(workspace.rglob("*.mq4"))
-        if not sources:
-            return {"language": "MQL4", "operation": operation, "passed": False, "available": True, "return_code": -1, "output": "", "error": "No .mq4 source file was generated."}
-        if operation in {"test", "lint"}:
-            return {"language": "MQL4", "operation": operation, "passed": True, "available": True, "return_code": 0, "output": "MQL4 semantic/static validation is performed by the software validation layer; compilation is performed by MetaEditor.", "error": ""}
-        errors = []
-        for source in sources:
-            try:
-                p = subprocess.run([metaeditor, f"/compile:{source}", "/log"], cwd=workspace, capture_output=True, text=True, timeout=max(1, min(int(timeout), 600)), shell=False)
-                if p.returncode != 0:
-                    errors.append((p.stdout or "")[-6000:] + "\n" + (p.stderr or "")[-6000:])
-            except Exception as exc:
-                errors.append(str(exc))
-        return {"language": "MQL4", "operation": "build", "passed": not errors, "available": True, "return_code": 0 if not errors else 1, "output": "\n".join(errors), "error": "" if not errors else "MetaEditor compilation failed."}
+def _run(language: str, operation: str, workspace: Path, timeout: int, tool_requirements: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     try:
         return run_project_tool(language, operation, str(workspace), timeout)
     except Exception as exc:
@@ -209,13 +191,13 @@ def _plan_language(goal: str) -> str | None:
         return None
 
 
-def build_project(goal: str, language: str = "Python", *, project_path: str | None = None, timeout: int = 300, repair_attempts: int = 2) -> dict[str, Any]:
+def build_project(goal: str, language: str = "", *, project_path: str | None = None, timeout: int = 300, repair_attempts: int = 2, tool_requirements: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     goal = str(goal or "").strip()
     if not goal:
         raise ValueError("Project goal is required.")
     resolved_goal, contextual_language, session_id = _recent_conversation_context(goal)
     detected_language = contextual_language
-    language = _supported_language(detected_language) or _supported_language(language) or _plan_language(resolved_goal) or "Python"
+    language = _supported_language(detected_language) or _supported_language(language) or _plan_language(resolved_goal) or ""
     workspace = create_project_workspace(goal, projects_root=project_path)
     knowledge = search_knowledge(language + " " + resolved_goal, 20)
     llm = create_llm("coding")
@@ -242,12 +224,18 @@ def build_project(goal: str, language: str = "Python", *, project_path: str | No
         if semantic_defects:
             last_error = "\n".join(semantic_defects)
             continue
-        build = _run(language, "build", workspace, timeout)
+        requirements = tool_requirements
+        if requirements is None:
+            try:
+                requirements = plan_data.get("tool_requirements") if isinstance(plan_data, dict) else None
+            except Exception:
+                requirements = None
+        build = _run(language, "build", workspace, timeout, requirements)
         if not build.get("passed"):
             last_error = build.get("error") or build.get("output") or "build failed"
             continue
-        tests = _run(language, "test", workspace, timeout)
-        lint = _run(language, "lint", workspace, timeout)
+        tests = _run(language, "test", workspace, timeout, requirements)
+        lint = _run(language, "lint", workspace, timeout, requirements)
         if tests.get("passed") and lint.get("passed"):
             break
         last_error = tests.get("error") or tests.get("output") or lint.get("error") or lint.get("output") or "tests/lint failed"
@@ -258,7 +246,7 @@ def build_project(goal: str, language: str = "Python", *, project_path: str | No
         "project_path": str(workspace.relative_to(ROOT)) if workspace.is_relative_to(ROOT) else str(workspace), "session_id": session_id,
         "files": sorted(files), "file_count": len(files), "build": build, "tests": tests, "lint": lint,
         "semantic_defects": semantic_defects, "repair_attempts": attempts - 1, "artifacts": _artifact_files(workspace),
-        "toolchain": ({"metaeditor": bool(os.getenv("MYAI_METAEDITOR", "").strip())} if canonical_language(language) == "MQL4" else doctor(language).get(language, {})),
+        "toolchain": doctor(language, cwd=str(workspace)),
     }
 
 
