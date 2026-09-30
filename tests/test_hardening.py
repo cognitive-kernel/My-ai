@@ -52,6 +52,40 @@ def test_chat_session_isolation(client_db):
     assert response.json()["messages"] == []
 
 
+def test_chat_history_returns_utc_timestamps_and_delete_removes_all_chat_data(client_db):
+    client = client_db
+    owner = auth.create_account("owner", "a-secure-password")
+    sid = client.post("/chat/sessions", json={"message": "سلام"}, cookies=login_cookie(owner)).json()["id"]
+    conversation_id = db.execute(
+        "INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",
+        (sid, "user", "سلام"),
+    )
+    db.execute(
+        "INSERT INTO chat_attachments(conversation_id,session_id,name,path,size,mime_type) VALUES(?,?,?,?,?,?)",
+        (conversation_id, sid, "note.txt", "chat/note.txt", 4, "text/plain"),
+    )
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS conversation_state (session_id INTEGER PRIMARY KEY, topic TEXT NOT NULL DEFAULT '', current_goal TEXT NOT NULL DEFAULT '', language TEXT, last_action TEXT NOT NULL DEFAULT '', summary TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"
+    )
+    db.execute(
+        "INSERT INTO conversation_state(session_id,topic,current_goal,last_action,summary) VALUES(?,?,?,?,?)",
+        (sid, "chat", "سلام", "answer", "chat"),
+    )
+
+    history = client.get(f"/chat/history?session_id={sid}", cookies=login_cookie(owner))
+    assert history.status_code == 200
+    created_at = history.json()["messages"][0]["created_at"]
+    assert created_at.endswith("Z")
+    assert "T" in created_at
+
+    deleted = client.delete(f"/chat/sessions/{sid}", cookies=login_cookie(owner))
+    assert deleted.status_code == 200
+    assert db.fetch_all("SELECT id FROM chat_sessions WHERE id=?", (sid,)) == []
+    assert db.fetch_all("SELECT id FROM conversations WHERE session_id=?", (sid,)) == []
+    assert db.fetch_all("SELECT id FROM chat_attachments WHERE session_id=?", (sid,)) == []
+    assert db.fetch_all("SELECT session_id FROM conversation_state WHERE session_id=?", (sid,)) == []
+
+
 def test_chat_api_persists_assistant_response_when_agent_does_not(monkeypatch, client_db):
     import my_ai.api as api
 
