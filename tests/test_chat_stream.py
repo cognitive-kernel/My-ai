@@ -21,6 +21,11 @@ def test_agent_stream_chat_persists_context(monkeypatch):
     agent = agent_module.Agent(llm=FakeLLM(), router=FakeRouter())
     chunks = list(agent.stream_chat("سلام", session_id=7))
     assert "".join(chunks) == "سلام دنیا"
-    conversation_writes = [item for item in writes if len(item) >= 2 and isinstance(item[1], tuple)]
+    conversation_writes = [
+        item for item in writes
+        if len(item) >= 2
+        and isinstance(item[1], tuple)
+        and item[0].startswith("INSERT INTO conversations")
+    ]
     assert conversation_writes[0][1] == (7, "user", "سلام")
     assert conversation_writes[1][1] == (7, "assistant", "سلام دنیا")
