@@ -111,3 +111,35 @@ def test_mql4_indicator_rejects_trading_api(tmp_path):
         "MQL4",
     )
     assert any("custom indicator" in x.lower() and "ordersend" in x.lower() for x in defects)
+
+
+def test_plan_recovers_explicit_language_when_planner_leaves_it_unknown(monkeypatch):
+    from my_ai import software_agent
+
+    class FakeLLM:
+        def __init__(self):
+            self.calls = 0
+
+        def structured_chat_json(self, message, schema, system=None):
+            self.calls += 1
+            if self.calls == 1:
+                return {
+                    "goal": "Build a small program",
+                    "artifact_type": "application",
+                    "language": None,
+                    "framework": None,
+                    "requirements": ["read a text file"],
+                    "tool_requirements": [],
+                    "architecture": ["single process"],
+                    "phases": ["build"],
+                    "acceptance_criteria": ["program builds"],
+                    "research_queries": [],
+                    "validation": ["build"],
+                    "constraints": [],
+                    "ambiguities": [],
+                }
+            return {"explicit": True, "language": "C"}
+
+    monkeypatch.setattr(software_agent, "create_llm", lambda task: FakeLLM())
+    plan = software_agent._plan("Build a program in C that reads a text file")
+    assert plan["language"] == "C"
