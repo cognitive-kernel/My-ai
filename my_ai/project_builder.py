@@ -44,8 +44,50 @@ def _strip_fence(text: str) -> str:
     return value
 
 
+def _repair_json_string_escapes(text: str) -> str:
+    """Escape invalid backslashes inside JSON strings without changing valid escapes."""
+    valid = {"\\\"", "\\\\", "\\/", "\\b", "\\f", "\\n", "\\r", "\\t", "\\u"}
+    out: list[str] = []
+    in_string = False
+    escaped = False
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if not in_string:
+            out.append(ch)
+            if ch == '\"':
+                in_string = True
+            i += 1
+            continue
+        if escaped:
+            out.append(ch)
+            escaped = False
+            i += 1
+            continue
+        if ch == '\\\\':
+            nxt = text[i + 1] if i + 1 < len(text) else ""
+            if nxt and ("\\\\" + nxt) in valid:
+                out.append(ch)
+            else:
+                out.append("\\\\\\\\")
+            escaped = True if nxt and ("\\\\" + nxt) in valid else False
+            i += 1
+            continue
+        out.append(ch)
+        if ch == '\"':
+            in_string = False
+        i += 1
+    return "".join(out)
+
+
 def _parse_files(raw: str) -> dict[str, str]:
-    data = json.loads(_strip_fence(raw))
+    payload = _strip_fence(raw)
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        if "Invalid \\escape" not in str(exc):
+            raise
+        data = json.loads(_repair_json_string_escapes(payload))
     if isinstance(data, dict) and isinstance(data.get("files"), dict):
         data = data["files"]
     if not isinstance(data, dict):
