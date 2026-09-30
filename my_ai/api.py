@@ -1057,7 +1057,7 @@ def chat(r:ChatRequest, request:Request):
             return {"type":"code","answer":generated_answer,"data":generated_data,"session_id":sid}
         if intent.name == "self_update" and intent.requires_confirmation and user["role"] != "admin":
             raise HTTPException(403,"Self-update requires administrator approval.")
-        answer=agent.chat(msg,sid,attachments=attachments,intent=intent,persist_user=False)
+        answer=agent.chat(msg,sid,attachments=attachments,intent=intent,persist_user=False,persist_answer=False)
         user_message=fetch_all("SELECT id FROM conversations WHERE session_id=? AND role='user' ORDER BY id DESC LIMIT 1",(sid,))
         if attachments and user_message:
             execute("UPDATE chat_attachments SET conversation_id=? WHERE session_id=? AND conversation_id IS NULL",(user_message[0]["id"],sid))
