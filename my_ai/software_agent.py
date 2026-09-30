@@ -91,7 +91,7 @@ def _explicit_language(request: str, context: str = "") -> str | None:
 def _plan(request: str, context: str = "") -> dict[str, Any]:
     llm = create_llm("coding")
     prompt = (
-        "Semantically analyze the software request and preserve explicit user constraints. Identify the artifact type before choosing technology. "
+        "Semantically analyze the software request and preserve explicit user constraints. Do not rely on trigger words or phrase lists. Identify the artifact type before choosing technology. "
         "If a programming language is explicitly named, preserve it; otherwise language may be null. "
         "For MT4, distinguish indicators from Expert Advisors; trade execution or broad terminal/account/chart access belongs in an EA. Never mix MQL5 APIs into MQL4. If trading is requested without a strategy, make trading explicitly user-controlled and do not invent entry logic. "
         "Translate the plan into lifecycle host-tool requirements for build/test/lint/run only. Do not model application behavior as host tools. Use provider alternatives when multiple host tools can provide the same capability; each provider must be one coherent tool family with real executable names and provider-specific lifecycle commands. Prefer host-discoverable alternatives instead of assuming a particular compiler. Installation metadata may contain only trusted manager/package identifiers. Never emit URLs, arbitrary installer commands, shell commands, artifact names, or synthetic executables. "
