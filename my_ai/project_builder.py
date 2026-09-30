@@ -10,7 +10,7 @@ from .config import assert_write_allowed
 from .curriculum import canonical_language
 from .db import execute, fetch_all, search_knowledge
 from .llm import create_llm
-from .project_workspace import create_project_workspace
+from .project_workspace import create_project_workspace, resolve_projects_root
 from .tooling import run_project_tool, doctor
 from .software_validation import validate_generated_project
 
@@ -197,7 +197,9 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
     resolved_goal, contextual_language, session_id = _recent_conversation_context(goal)
     detected_language = contextual_language
     language = _supported_language(detected_language) or _supported_language(language) or _plan_language(resolved_goal) or ""
-    workspace = create_project_workspace(goal, projects_root=project_path)
+    # A supplied project_path identifies the target workspace itself. Do not create
+    # a new child directory: modify_artifact requests must operate on that project.
+    workspace = resolve_projects_root(project_path) if project_path else create_project_workspace(goal)
     knowledge = search_knowledge(language + " " + resolved_goal, 20)
     llm = create_llm("coding")
     files = {}

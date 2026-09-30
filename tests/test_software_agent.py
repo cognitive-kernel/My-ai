@@ -169,3 +169,26 @@ def test_build_project_keeps_requirements_defined_when_semantic_validation_fails
 
     assert result["status"] == "build_failed"
     assert result["semantic_defects"] == ["semantic defect"]
+
+
+def test_explicit_project_path_is_used_as_target_workspace(monkeypatch, tmp_path):
+    from my_ai import project_builder
+
+    monkeypatch.setattr(project_builder, "_recent_conversation_context", lambda goal: (goal, "Python", None))
+    monkeypatch.setattr(project_builder, "search_knowledge", lambda *args: [])
+    monkeypatch.setattr(project_builder, "resolve_projects_root", lambda path: tmp_path)
+    monkeypatch.setattr(project_builder, "create_project_workspace", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not create a child workspace")))
+    monkeypatch.setattr(project_builder, "_write_files", lambda workspace, files: [])
+    monkeypatch.setattr(project_builder, "_run", lambda language, operation, workspace, timeout, requirements=None: {"passed": True, "operation": operation})
+    monkeypatch.setattr(project_builder, "_artifact_files", lambda workspace: [])
+    monkeypatch.setattr(project_builder, "doctor", lambda language, **kwargs: {"python": True})
+    monkeypatch.setattr(project_builder, "execute", lambda *args: 1)
+
+    class FakeLLM:
+        def chat(self, *args, **kwargs):
+            return '{"files":{"main.py":"print(1)"}}'
+
+    monkeypatch.setattr(project_builder, "create_llm", lambda task: FakeLLM())
+    result = project_builder.build_project("modify this project", project_path=str(tmp_path))
+
+    assert result["project_path"] == str(tmp_path)

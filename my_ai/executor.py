@@ -52,4 +52,4 @@ def run_python(code:str)->ExecutionResult:
     if settings.exec_mode=="remote": return _run_remote(code)
     if settings.exec_mode=="container": return _run_container(code)
     if settings.exec_mode=="subprocess": return _run_subprocess(code)
-    raise ValueError("EXECUTOR_MODE must be 'container' or 'subprocess'.")
+    raise ValueError("EXECUTOR_MODE must be 'container', 'subprocess', or 'remote'.")
