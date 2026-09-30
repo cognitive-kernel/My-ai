@@ -1,4 +1,5 @@
 from __future__ import annotations
+import json
 import os
 import re
 import shutil
@@ -10,172 +11,165 @@ from typing import Any
 from .executor import run_python
 from .config import settings
 
-LANGUAGE_TOOLS = {
-    "Python": {"toolchains":["python","pytest","ruff","mypy"],"tests":["python -m pytest"],"build":["python -m compileall"],"lint":["ruff check ."]},
-    "C": {"toolchains":["gcc","clang","make"],"tests":["make test"],"build":["make"],"lint":["clang-tidy"]},
-    "PHP": {"toolchains":["php","composer"],"tests":["composer test","vendor/bin/phpunit"],"build":["composer validate --no-check-publish"],"lint":["php -l"]},
-    "JavaScript": {"toolchains":["node","npm"],"tests":["npm test"],"build":["npm run build"],"lint":["npm run lint"]},
-    "Rust": {"toolchains":["rustc","cargo","rustfmt","clippy"],"tests":["cargo test"],"build":["cargo build --locked"],"lint":["cargo clippy --all-targets --all-features -- -D warnings"]},
-    "Kotlin": {"toolchains":["java","kotlinc","gradle"],"tests":["gradle test"],"build":["gradle build"],"lint":["gradle ktlintCheck"]},
-    "Swift": {"toolchains":["swift","swiftc","xcodebuild"],"tests":["swift test"],"build":["swift build"],"lint":["swift format lint ."]},
-    "Android": {"toolchains":["java","gradle","adb"],"tests":["gradle test"],"build":["gradle assembleDebug"],"lint":["gradle lint"]},
-    "iOS": {"toolchains":["swift","xcodebuild"],"tests":["swift test"],"build":["xcodebuild test"],"lint":["swift format lint ."]},
-    "MQL4": {"toolchains":["metaeditor.exe"],"tests":["metaeditor.exe"],"build":["metaeditor.exe"],"lint":["metaeditor.exe"]},
-    "SQL Server": {"toolchains":["sqlcmd"],"tests":["sqlcmd"],"build":["sqlcmd"],"lint":["sqlcmd"]},
-}
 
-ALIASES={"mql4":"MQL4","mq4":"MQL4","mql 4":"MQL4","متاتریدر 4":"MQL4","متاتریدر۴":"MQL4","js":"JavaScript","node":"JavaScript","py":"Python","kotlin":"Kotlin","kt":"Kotlin","swift":"Swift","rust":"Rust","rs":"Rust","c":"C","php":"PHP","android":"Android","ios":"iOS","sql server":"SQL Server","sqlserver":"SQL Server","sqlcmd":"SQL Server"}
+# Toolchain knowledge is data-driven. The runtime does not maintain a language
+# allow-list: a semantic planner or a project manifest may describe arbitrary
+# executables, commands and installation hints.
+DEFAULT_TOOLCHAIN_FILE_NAMES = (
+    ".myai/toolchain.json",
+    ".myai/toolchains.json",
+    "toolchain.json",
+    "toolchains.json",
+)
 
-# Optional package-manager hints. Discovery always runs first; installation is opt-in.
-# IDs are exact package identifiers, never free-form shell commands.
-TOOL_INSTALL_SPECS = {
-    "git": {"winget": "Git.Git", "choco": "git", "brew": "git", "apt": "git"},
-    "python": {"winget": "Python.Python.3.13", "choco": "python", "brew": "python", "apt": "python3"},
-    "node": {"winget": "OpenJS.NodeJS.LTS", "choco": "nodejs-lts", "brew": "node", "apt": "nodejs"},
-    "npm": {"winget": "OpenJS.NodeJS.LTS", "choco": "nodejs-lts", "brew": "node", "apt": "npm"},
-    "gcc": {"winget": "MSYS2.MSYS2", "choco": "mingw", "brew": "gcc", "apt": "gcc"},
-    "rustc": {"winget": "Rustlang.Rustup", "choco": "rustup.install", "brew": "rustup-init", "apt": "rustc"},
-    "cargo": {"winget": "Rustlang.Rustup", "choco": "rustup.install", "brew": "rustup-init", "apt": "cargo"},
-    "php": {"winget": "PHP.PHP.8.4", "choco": "php", "brew": "php", "apt": "php-cli"},
-    "composer": {"winget": "Composer.Composer", "choco": "composer", "brew": "composer", "apt": "composer"},
-}
+# These are generic project-description files, not language mappings. They let
+# an unknown/new ecosystem describe its own executable requirements.
+PROJECT_DESCRIPTORS = (
+    "pyproject.toml",
+    "package.json",
+    "Cargo.toml",
+    "go.mod",
+    "composer.json",
+    "build.gradle",
+    "build.gradle.kts",
+    "pom.xml",
+    "Makefile",
+    "CMakeLists.txt",
+    "Package.swift",
+    "*.csproj",
+    "*.sln",
+    "*.mq4",
+    "*.mqh",
+    "AndroidManifest.xml",
+)
 
-def canonical_language(name:str)->str:
-    raw=str(name or "").strip()
-    for key in LANGUAGE_TOOLS:
-        if key.lower()==raw.lower(): return key
-    return ALIASES.get(raw.lower(),raw)
 
-def catalog()->dict[str,Any]:
-    return {"languages":LANGUAGE_TOOLS,"databases":{"SQL Server":["schema","tables","columns","readonly_query"],"MySQL":["schema","tables","columns","readonly_query"],"SQLite":["schema","tables","readonly_query"]}}
+def canonical_language(name: str) -> str:
+    """Return the semantic label without restricting it to a built-in list."""
+    return str(name or "").strip()
 
-def _safe_root(cwd:str|None)->Path:
-    root=Path(os.getenv("MYAI_PROJECT_ROOT","projects")).resolve()
-    root.mkdir(parents=True,exist_ok=True)
-    path=(Path(cwd).expanduser().resolve() if cwd else root)
-    try: path.relative_to(root)
-    except ValueError: raise ValueError("Tool working directory must be inside MYAI_PROJECT_ROOT.")
-    if not path.is_dir(): raise ValueError("Tool working directory does not exist.")
+
+def catalog() -> dict[str, Any]:
+    return {
+        "toolchain_model": {
+            "source": "semantic_plan_or_project_descriptor",
+            "requirements": ["executable", "version", "capabilities", "commands", "install"],
+        },
+        "databases": {
+            "SQL Server": ["schema", "tables", "columns", "readonly_query"],
+            "MySQL": ["schema", "tables", "columns", "readonly_query"],
+            "SQLite": ["schema", "tables", "readonly_query"],
+        },
+    }
+
+
+def _safe_root(cwd: str | None) -> Path:
+    root = Path(os.getenv("MYAI_PROJECT_ROOT", "projects")).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    path = Path(cwd).expanduser().resolve() if cwd else root
+    try:
+        path.relative_to(root)
+    except ValueError:
+        raise ValueError("Tool working directory must be inside MYAI_PROJECT_ROOT.")
+    if not path.is_dir():
+        raise ValueError("Tool working directory does not exist.")
     return path
 
-def _windows_roots()->list[Path]:
-    roots=[]
-    for raw in (os.getenv("ProgramFiles"),os.getenv("ProgramFiles(x86)"),os.getenv("LOCALAPPDATA"),os.getenv("ProgramW6432")):
-        if raw:
-            path=Path(raw)
-            if path.is_dir() and path not in roots: roots.append(path)
-    return roots
 
-def discover_tool(executable:str)->str|None:
-    """Resolve a tool without requiring a language-specific environment variable."""
-    name=Path(str(executable or "").strip().strip('"')).name
-    if not name:
-        return None
-    configured=os.getenv("MYAI_TOOL_"+re.sub(r"[^A-Za-z0-9]+","_",name).upper(),"").strip()
-    if configured and Path(configured).is_file():
-        return str(Path(configured).resolve())
-    found=shutil.which(name)
-    if found:
-        return str(Path(found).resolve())
-    if os.name == "nt":
-        for root in _windows_roots():
-            try:
-                matches=root.rglob(name)
-            except OSError:
-                continue
-            for candidate in matches:
-                if candidate.is_file():
-                    return str(candidate.resolve())
-    return None
-
-def _package_manager()->str|None:
-    for manager in ("winget","choco","brew","apt-get"):
-        if shutil.which(manager):
-            return manager
-    return None
-
-def _install_tool(executable:str)->dict[str,Any]:
-    if os.getenv("MYAI_AUTO_INSTALL_TOOLS","").strip().lower() not in {"1","true","yes","on"}:
-        return {"attempted":False,"reason":"automatic installation is disabled"}
-    spec=TOOL_INSTALL_SPECS.get(Path(executable).name.lower())
-    manager=_package_manager()
-    if not spec or not manager:
-        return {"attempted":False,"reason":"no trusted package-manager specification is available"}
-    package=spec.get("apt" if manager=="apt-get" else manager)
-    if not package:
-        return {"attempted":False,"reason":f"no package mapping for {manager}"}
-    if manager=="winget":
-        argv=["winget","install","--id",package,"--exact","--source","winget","--accept-source-agreements","--accept-package-agreements","--disable-interactivity"]
-    elif manager=="choco":
-        argv=["choco","install",package,"-y","--no-progress"]
-    elif manager=="brew":
-        argv=["brew","install",package]
-    else:
-        argv=["apt-get","install","-y",package]
+def _load_json_file(path: Path) -> dict[str, Any]:
     try:
-        p=subprocess.run(argv,capture_output=True,text=True,timeout=900,shell=False)
-        return {"attempted":True,"manager":manager,"package":package,"return_code":p.returncode,"output":(p.stdout+"\n"+p.stderr)[-12000:],"passed":p.returncode==0}
-    except Exception as exc:
-        return {"attempted":True,"manager":manager,"package":package,"error":str(exc),"passed":False}
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
-def resolve_tool(executable:str,auto_install:bool=True)->dict[str,Any]:
-    path=discover_tool(executable)
-    if path:
-        return {"executable":executable,"path":path,"installed":True,"install":None}
-    install=_install_tool(executable) if auto_install else {"attempted":False,"reason":"installation disabled for this operation"}
-    path=discover_tool(executable) if install.get("passed") else None
-    return {"executable":executable,"path":path,"installed":bool(path),"install":install}
 
-def ensure_language_toolchain(language:str,auto_install:bool=True)->dict[str,Any]:
-    lang=canonical_language(language)
-    spec=LANGUAGE_TOOLS.get(lang)
-    if not spec:
-        return {"language":lang,"supported":False,"tools":[]}
-    tools=[resolve_tool(tool,auto_install=auto_install) for tool in spec["toolchains"]]
-    return {"language":lang,"supported":True,"tools":tools,"ready":all(x["installed"] for x in tools)}
+def _toolchain_descriptors(cwd: Path | None = None) -> list[dict[str, Any]]:
+    """Load arbitrary toolchain descriptors without editing Python for new ecosystems."""
+    roots = [cwd] if cwd else []
+    roots.append(Path(os.getenv("MYAI_PROJECT_ROOT", "projects")).resolve())
+    configured = os.getenv("MYAI_TOOLCHAIN_REGISTRY", "").strip()
+    paths = [Path(x.strip()) for x in configured.split(os.pathsep) if x.strip()]
+    for root in roots:
+        if root:
+            for name in DEFAULT_TOOLCHAIN_FILE_NAMES:
+                paths.append(root / name)
+    descriptors: list[dict[str, Any]] = []
+    seen: set[Path] = set()
+    for path in paths:
+        path = path.expanduser().resolve()
+        if path in seen or not path.is_file():
+            continue
+        seen.add(path)
+        data = _load_json_file(path)
+        items = data.get("toolchains", data.get("requirements", []))
+        if isinstance(items, dict):
+            items = [items]
+        if isinstance(items, list):
+            descriptors.extend(x for x in items if isinstance(x, dict))
+    return descriptors
 
-def doctor(language:str|None=None)->dict[str,Any]:
-    names=[canonical_language(language)] if language else list(LANGUAGE_TOOLS)
-    out={}
-    for name in names:
-        state=ensure_language_toolchain(name,auto_install=False)
-        if not state["supported"]: raise ValueError(f"Unsupported language: {language}")
-        out[name]={x["executable"]:x["installed"] for x in state["tools"]}
+
+def _project_files(cwd: Path) -> list[Path]:
+    files: list[Path] = []
+    for pattern in PROJECT_DESCRIPTORS:
+        try:
+            files.extend(cwd.glob(pattern))
+        except OSError:
+            pass
+    return list(dict.fromkeys(p for p in files if p.is_file()))
+
+
+def _semantic_requirements(language: str | None, cwd: Path | None = None) -> list[dict[str, Any]]:
+    """Collect requirements from a semantic descriptor and project metadata.
+
+    No language name is used as a dispatch table. Unknown languages remain
+    unknown until their plan/descriptor supplies concrete tool requirements.
+    """
+    requirements: list[dict[str, Any]] = []
+    requirements.extend(_toolchain_descriptors(cwd))
+    if cwd:
+        # A generated project can declare its own executable/command contract.
+        for path in _project_files(cwd):
+            if path.name in {"toolchain.json", "toolchains.json"}:
+                continue
+            if path.suffix == ".mq4" or path.suffix == ".mqh":
+                requirements.append({"capabilities": ["mql4"], "executables": ["metaeditor.exe"]})
+            elif path.name == "package.json":
+                requirements.append({"capabilities": ["javascript"], "executables": ["node", "npm"]})
+            elif path.name in {"pyproject.toml"}:
+                requirements.append({"capabilities": ["python"], "executables": ["python"]})
+            elif path.name == "Cargo.toml":
+                requirements.append({"capabilities": ["rust"], "executables": ["cargo", "rustc"]})
+            elif path.name in {"build.gradle", "build.gradle.kts", "AndroidManifest.xml"}:
+                requirements.append({"capabilities": ["gradle"], "executables": ["java", "gradle"]})
+    return requirements
+
+
+def _requirement_executables(requirements: list[dict[str, Any]]) -> list[str]:
+    out: list[str] = []
+    for item in requirements:
+        values = item.get("executables", item.get("tools", item.get("toolchains", [])))
+        if isinstance(values, str):
+            values = [values]
+        if isinstance(values, list):
+            for value in values:
+                name = str(value).strip()
+                if name and name not in out:
+                    out.append(name)
     return out
 
-def _command(language:str,operation:str)->list[str]:
-    lang=canonical_language(language)
-    spec=LANGUAGE_TOOLS.get(lang)
-    if not spec: raise ValueError(f"Unsupported language: {language}")
-    commands=spec.get(operation,[])
-    if not commands: raise ValueError(f"Operation {operation} is not defined for {lang}.")
-    for text in commands:
-        exe=text.split()[0]
-        resolved=discover_tool(exe)
-        if resolved:
-            return [resolved,*text.split()[1:]]
-    raise RuntimeError(f"Required toolchain executable was not found: {commands[0].split()[0]}")
 
-def run_project_tool(language:str,operation:str,cwd:str|None=None,timeout:int=120)->dict[str,Any]:
-    path=_safe_root(cwd)
-    readiness=ensure_language_toolchain(language,auto_install=True)
-    if not readiness.get("ready"):
-        missing=[x.get("executable") for x in readiness.get("tools",[]) if not x.get("installed")]
-        raise RuntimeError(f"Required toolchain is unavailable for {canonical_language(language)}: {', '.join(missing)}")
-    argv=_command(language,operation)
-    if canonical_language(language) == "MQL4":
-        sources=sorted(path.rglob("*.mq4"))
-        if not sources:
-            return {"language":"MQL4","operation":operation,"command":argv,"cwd":str(path),"return_code":-1,"output":"","error":"No .mq4 source file was generated.","passed":False}
-        if operation in {"test","lint"}:
-            return {"language":"MQL4","operation":operation,"command":argv,"cwd":str(path),"return_code":0,"output":"MQL4 static validation is handled by the software validation layer; MetaEditor compilation is the build step.","error":"","passed":True}
-        argv=[argv[0], argv[1].replace("{SOURCE}",str(sources[0])), argv[2]]
-    timeout=max(1,min(int(timeout),600))
-    try:
-        p=subprocess.run(argv,cwd=path,capture_output=True,text=True,timeout=timeout,shell=False,env={"PATH":os.environ.get("PATH","")})
-        return {"language":canonical_language(language),"operation":operation,"command":argv,"cwd":str(path),"return_code":p.returncode,"output":p.stdout[-12000:],"error":p.stderr[-12000:],"passed":p.returncode==0}
-    except subprocess.TimeoutExpired:
-        return {"language":canonical_language(language),"operation":operation,"command":argv,"cwd":str(path),"return_code":-1,"output":"","error":"Tool execution timed out.","passed":False}
+def _commands_for(requirements: list[dict[str, Any]], operation: str) -> list[str]:
+    commands: list[str] = []
+    for item in requirements:
+        value = item.get(operation, item.get("commands", {}).get(operation, []) if isinstance(item.get("commands"), dict) else [])
+        if isinstance(value, str):
+            value = [value]
+        if isinstance(value, list):
+            commands.extend(str(x).strip() for x in value if str(x).strip())
+    return commands
+
 
 def run_python_snippet(code:str):
     result=run_python(code)
