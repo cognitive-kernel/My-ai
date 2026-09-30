@@ -3,7 +3,8 @@ from my_ai.domain.router import classify
 
 class FakeRouter:
     def structured_chat_json(self, prompt, schema, system):
-        if "MQL4" in prompt or "فایل رو بساز" in prompt:
+        current_user = prompt.split("CURRENT USER:", 1)[-1].split("CONVERSATION CONTEXT:", 1)[0]
+        if "MQL4" in current_user or "فایل رو بساز" in current_user:
             return {"primary":"coding","intents":["coding"],"action":"create_artifact","confidence":0.99,"language":"MQL4","topic":None,"goal":"create artifact","project_path":None,"urls":[]}
         return {
             "primary": "chat",
