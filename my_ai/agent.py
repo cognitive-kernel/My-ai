@@ -393,19 +393,23 @@ class Agent:
         }
 
     def chat(self, message, session_id=1, attachments=None):
+        # Persist the user message before any routing/LLM work. This guarantees
+        # that pressing Enter creates durable history even if inference is slow,
+        # interrupted, or the browser/server is refreshed while it is running.
+        self._persist_user_message(session_id, message)
         prep = self._prepare_inference(message, session_id, attachments=attachments)
         web_confirmation = self._web_learning_confirmation(message, session_id, prep["intent"])
         if web_confirmation is not None:
-            self._persist_turn(session_id, message, web_confirmation)
+            self._persist_assistant_message(session_id, web_confirmation)
             return web_confirmation
         maintenance = self._semantic_maintenance(prep["intent"])
         if maintenance is not None:
-            self._persist_turn(session_id, message, maintenance)
+            self._persist_assistant_message(session_id, maintenance)
             return maintenance
 
         if self._project_build_requested(message, prep["intent"]):
             answer = self._build_project_from_intent(message, prep["intent"])
-            self._persist_turn(session_id, message, answer)
+            self._persist_assistant_message(session_id, answer)
             return answer
         answer = prep["llm"].chat(
             prep["llm_message"],
@@ -441,7 +445,7 @@ class Agent:
                     )
                 except Exception as exc:
                     answer = str(answer).rstrip() + f"\n\n(ذخیره فایل اندیکاتور ناموفق بود: {exc})"
-        self._persist_turn(session_id, message, answer)
+        self._persist_assistant_message(session_id, answer)
         return answer
 
     def stream_chat(self, message, session_id=1, attachments=None):
