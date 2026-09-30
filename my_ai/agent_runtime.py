@@ -117,6 +117,11 @@ class Agent(LegacyAgent):
         message = str(message or "")
         normalized_attachments = list(attachments if attachments is not None else get_attachments())[:10]
         history = fetch_all("SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 24", (session_id,))[::-1]
+        # stream_chat persists the user message before any expensive planning/LLM work.
+        # Keep that just-persisted turn out of the inference history so the current
+        # request is not duplicated in the prompt.
+        if history and history[-1].get("role") == "user" and str(history[-1].get("content") or "") == message:
+            history.pop()
         self._current_session_id = session_id
         state = self._runtime_conversation_state(history, message)
         context = "\n".join(f"{row['role']}: {row['content']}" for row in history[-20:])
