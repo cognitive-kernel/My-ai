@@ -140,6 +140,7 @@ def test_plan_recovers_explicit_language_when_planner_leaves_it_unknown(monkeypa
                 }
             return {"explicit": True, "language": "C"}
 
-    monkeypatch.setattr(software_agent, "create_llm", lambda task: FakeLLM())
+    fake = FakeLLM()
+    monkeypatch.setattr(software_agent, "create_llm", lambda task: fake)
     plan = software_agent._plan("Build a program in C that reads a text file")
     assert plan["language"] == "C"
