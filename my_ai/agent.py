@@ -393,7 +393,7 @@ class Agent:
             "system": system,
         }
 
-    def chat(self, message, session_id=1, attachments=None, intent=None):
+    def chat(self, message, session_id=1, attachments=None, intent=None, persist_user=True):
         # Persist the user message before any routing/LLM work. This guarantees
         # that pressing Enter creates durable history even if inference is slow,
         # interrupted, or the browser/server is refreshed while it is running.
@@ -401,7 +401,8 @@ class Agent:
             "SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 20",
             (session_id,),
         )[::-1]
-        self._persist_user_message(session_id, message)
+        if persist_user:
+            self._persist_user_message(session_id, message)
         prep = self._prepare_inference(message, session_id, attachments=attachments, history=history, intent=intent)
         web_confirmation = self._web_learning_confirmation(message, session_id, prep["intent"])
         if web_confirmation is not None:
