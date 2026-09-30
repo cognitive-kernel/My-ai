@@ -16,13 +16,28 @@ from .software_validation import validate_plan
 PLAN_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["goal", "artifact_type", "language", "framework", "requirements", "architecture", "phases", "acceptance_criteria", "research_queries", "validation", "constraints", "ambiguities"],
+    "required": ["goal", "artifact_type", "language", "framework", "requirements", "tool_requirements", "architecture", "phases", "acceptance_criteria", "research_queries", "validation", "constraints", "ambiguities"],
     "properties": {
         "goal": {"type": "string"},
         "artifact_type": {"type": "string"},
         "language": {"type": ["string", "null"]},
         "framework": {"type": ["string", "null"]},
         "requirements": {"type": "array", "items": {"type": "string"}, "maxItems": 40},
+        "tool_requirements": {
+            "type": "array",
+            "maxItems": 40,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["capabilities", "executables", "commands"],
+                "properties": {
+                    "capabilities": {"type": "array", "items": {"type": "string"}, "maxItems": 20},
+                    "executables": {"type": "array", "items": {"type": "string"}, "maxItems": 20},
+                    "commands": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}}},
+                    "version": {"type": ["string", "null"]},
+                },
+            },
+        },
         "architecture": {"type": "array", "items": {"type": "string"}, "maxItems": 30},
         "phases": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 30},
         "acceptance_criteria": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 40},
@@ -66,6 +81,7 @@ def _plan(request: str, context: str = "") -> dict[str, Any]:
         "If trading is requested but no trading strategy is specified, implement trading capability as explicit opt-in/user-controlled functionality and never invent an automatic entry condition. "
         "If two requested capabilities conflict with a platform's rules, do NOT silently generate an invalid hybrid: record the ambiguity/constraint and design the closest valid architecture (for example, split components when one platform artifact cannot legally perform another artifact's operation). "
         "Choose a language/framework only when justified; otherwise leave it null so implementation can choose. "
+        "Translate the technical plan into concrete tool requirements without hard-coding a finite language/tool list. Each tool requirement must describe capabilities, executable names, and structured commands needed for build/test/lint/run when applicable. Do not invent an executable if the platform does not require one. Do not include package-manager installation commands; installation is resolved separately through trusted tooling providers. "
         "Every acceptance criterion must be testable. Return only JSON matching the schema. Do not write code yet.\n"
         f"CURRENT REQUEST:\n{request}\nCONTEXT:\n{context[:16000]}"
     )
@@ -163,7 +179,7 @@ def run_software_task(request: str, *, language: str | None = None, project_path
         + "\n\nRESEARCH BUNDLE:\n" + research.as_prompt()
         + "\n\nUSER REQUEST:\n" + request
     )
-    result = build_project(enriched_request, str(plan.get("language") or language or "Python"), project_path=project_path, timeout=timeout, repair_attempts=repair_attempts)
+    result = build_project(enriched_request, str(plan.get("language") or language or ""), project_path=project_path, timeout=timeout, repair_attempts=repair_attempts, tool_requirements=plan.get("tool_requirements"))
     result["plan"] = plan
     result["research"] = {"source_count": len(research.sources), "sources": research.sources}
     workspace_value = result.get("project_path") or result.get("workspace")
