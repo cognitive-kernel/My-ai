@@ -25,6 +25,20 @@ LANGUAGE_TOOLS = {
 
 ALIASES={"mql4":"MQL4","mq4":"MQL4","mql 4":"MQL4","متاتریدر 4":"MQL4","متاتریدر۴":"MQL4","js":"JavaScript","node":"JavaScript","py":"Python","kotlin":"Kotlin","kt":"Kotlin","swift":"Swift","rust":"Rust","rs":"Rust","c":"C","php":"PHP","android":"Android","ios":"iOS"}
 
+# Optional package-manager hints. Discovery always runs first; installation is opt-in.
+# IDs are exact package identifiers, never free-form shell commands.
+TOOL_INSTALL_SPECS = {
+    "git": {"winget": "Git.Git", "choco": "git", "brew": "git", "apt": "git"},
+    "python": {"winget": "Python.Python.3.13", "choco": "python", "brew": "python", "apt": "python3"},
+    "node": {"winget": "OpenJS.NodeJS.LTS", "choco": "nodejs-lts", "brew": "node", "apt": "nodejs"},
+    "npm": {"winget": "OpenJS.NodeJS.LTS", "choco": "nodejs-lts", "brew": "node", "apt": "npm"},
+    "gcc": {"winget": "MSYS2.MSYS2", "choco": "mingw", "brew": "gcc", "apt": "gcc"},
+    "rustc": {"winget": "Rustlang.Rustup", "choco": "rustup.install", "brew": "rustup-init", "apt": "rustc"},
+    "cargo": {"winget": "Rustlang.Rustup", "choco": "rustup.install", "brew": "rustup-init", "apt": "cargo"},
+    "php": {"winget": "PHP.PHP.8.4", "choco": "php", "brew": "php", "apt": "php-cli"},
+    "composer": {"winget": "Composer.Composer", "choco": "composer", "brew": "composer", "apt": "composer"},
+}
+
 def canonical_language(name:str)->str:
     raw=str(name or "").strip()
     for key in LANGUAGE_TOOLS:
@@ -43,35 +57,103 @@ def _safe_root(cwd:str|None)->Path:
     if not path.is_dir(): raise ValueError("Tool working directory does not exist.")
     return path
 
+def _windows_roots()->list[Path]:
+    roots=[]
+    for raw in (os.getenv("ProgramFiles"),os.getenv("ProgramFiles(x86)"),os.getenv("LOCALAPPDATA"),os.getenv("ProgramW6432")):
+        if raw:
+            path=Path(raw)
+            if path.is_dir() and path not in roots: roots.append(path)
+    return roots
+
+def discover_tool(executable:str)->str|None:
+    """Resolve a tool without requiring a language-specific environment variable."""
+    name=Path(str(executable or "").strip().strip('"')).name
+    if not name:
+        return None
+    configured=os.getenv("MYAI_TOOL_"+re.sub(r"[^A-Za-z0-9]+","_",name).upper(),"").strip()
+    if configured and Path(configured).is_file():
+        return str(Path(configured).resolve())
+    found=shutil.which(name)
+    if found:
+        return str(Path(found).resolve())
+    if os.name == "nt":
+        for root in _windows_roots():
+            try:
+                matches=root.rglob(name)
+            except OSError:
+                continue
+            for candidate in matches:
+                if candidate.is_file():
+                    return str(candidate.resolve())
+    return None
+
+def _package_manager()->str|None:
+    for manager in ("winget","choco","brew","apt-get"):
+        if shutil.which(manager):
+            return manager
+    return None
+
+def _install_tool(executable:str)->dict[str,Any]:
+    if os.getenv("MYAI_AUTO_INSTALL_TOOLS","").strip().lower() not in {"1","true","yes","on"}:
+        return {"attempted":False,"reason":"automatic installation is disabled"}
+    spec=TOOL_INSTALL_SPECS.get(Path(executable).name.lower())
+    manager=_package_manager()
+    if not spec or not manager:
+        return {"attempted":False,"reason":"no trusted package-manager specification is available"}
+    package=spec.get("apt" if manager=="apt-get" else manager)
+    if not package:
+        return {"attempted":False,"reason":f"no package mapping for {manager}"}
+    if manager=="winget":
+        argv=["winget","install","--id",package,"--exact","--source","winget","--accept-source-agreements","--accept-package-agreements","--disable-interactivity"]
+    elif manager=="choco":
+        argv=["choco","install",package,"-y","--no-progress"]
+    elif manager=="brew":
+        argv=["brew","install",package]
+    else:
+        argv=["apt-get","install","-y",package]
+    try:
+        p=subprocess.run(argv,capture_output=True,text=True,timeout=900,shell=False)
+        return {"attempted":True,"manager":manager,"package":package,"return_code":p.returncode,"output":(p.stdout+"\n"+p.stderr)[-12000:],"passed":p.returncode==0}
+    except Exception as exc:
+        return {"attempted":True,"manager":manager,"package":package,"error":str(exc),"passed":False}
+
+def resolve_tool(executable:str,auto_install:bool=True)->dict[str,Any]:
+    path=discover_tool(executable)
+    if path:
+        return {"executable":executable,"path":path,"installed":True,"install":None}
+    install=_install_tool(executable) if auto_install else {"attempted":False,"reason":"installation disabled for this operation"}
+    path=discover_tool(executable) if install.get("passed") else None
+    return {"executable":executable,"path":path,"installed":bool(path),"install":install}
+
+def ensure_language_toolchain(language:str,auto_install:bool=True)->dict[str,Any]:
+    lang=canonical_language(language)
+    spec=LANGUAGE_TOOLS.get(lang)
+    if not spec:
+        return {"language":lang,"supported":False,"tools":[]}
+    tools=[resolve_tool(tool,auto_install=auto_install) for tool in spec["toolchains"]]
+    return {"language":lang,"supported":True,"tools":tools,"ready":all(x["installed"] for x in tools)}
+
 def doctor(language:str|None=None)->dict[str,Any]:
     names=[canonical_language(language)] if language else list(LANGUAGE_TOOLS)
     out={}
     for name in names:
-        spec=LANGUAGE_TOOLS.get(name)
-        if not spec: raise ValueError(f"Unsupported language: {language}")
-        if name == "MQL4":
-            configured=os.getenv("MYAI_METAEDITOR","").strip()
-            out[name]={"metaeditor.exe": bool(configured and Path(configured).is_file())}
-        else:
-            out[name]={tool:bool(shutil.which(tool)) for tool in spec["toolchains"]}
+        state=ensure_language_toolchain(name,auto_install=False)
+        if not state["supported"]: raise ValueError(f"Unsupported language: {language}")
+        out[name]={x["executable"]:x["installed"] for x in state["tools"]}
     return out
 
 def _command(language:str,operation:str)->list[str]:
     lang=canonical_language(language)
     spec=LANGUAGE_TOOLS.get(lang)
     if not spec: raise ValueError(f"Unsupported language: {language}")
-    if lang == "MQL4":
-        metaeditor=os.getenv("MYAI_METAEDITOR","").strip()
-        if not metaeditor:
-            raise RuntimeError("MetaEditor compiler is unavailable. Set MYAI_METAEDITOR to metaeditor.exe.")
-        return [metaeditor, "/compile:{SOURCE}", "/log"]
     commands=spec.get(operation,[])
     if not commands: raise ValueError(f"Operation {operation} is not defined for {lang}.")
     for text in commands:
         exe=text.split()[0]
-        if shutil.which(exe) or exe in {"vendor/bin/phpunit","gradle","npm","swift","xcodebuild"}:
-            return text.split()
-    return commands[0].split()
+        resolved=discover_tool(exe)
+        if resolved:
+            return [resolved,*text.split()[1:]]
+    raise RuntimeError(f"Required toolchain executable was not found: {commands[0].split()[0]}")
 
 def run_project_tool(language:str,operation:str,cwd:str|None=None,timeout:int=120)->dict[str,Any]:
     path=_safe_root(cwd)
@@ -83,12 +165,6 @@ def run_project_tool(language:str,operation:str,cwd:str|None=None,timeout:int=12
         if operation in {"test","lint"}:
             return {"language":"MQL4","operation":operation,"command":argv,"cwd":str(path),"return_code":0,"output":"MQL4 static validation is handled by the software validation layer; MetaEditor compilation is the build step.","error":"","passed":True}
         argv=[argv[0], argv[1].replace("{SOURCE}",str(sources[0])), argv[2]]
-    exe=argv[0]
-    if os.sep in exe or "/" in exe:
-        candidate=path/exe
-        if not candidate.exists(): raise RuntimeError(f"Required project tool was not found: {exe}")
-    elif not shutil.which(exe) and not Path(exe).is_file():
-        raise RuntimeError(f"Required toolchain executable was not found: {exe}")
     timeout=max(1,min(int(timeout),600))
     try:
         p=subprocess.run(argv,cwd=path,capture_output=True,text=True,timeout=timeout,shell=False,env={"PATH":os.environ.get("PATH","")})
