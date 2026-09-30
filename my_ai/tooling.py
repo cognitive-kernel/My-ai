@@ -157,6 +157,10 @@ def _command(language:str,operation:str)->list[str]:
 
 def run_project_tool(language:str,operation:str,cwd:str|None=None,timeout:int=120)->dict[str,Any]:
     path=_safe_root(cwd)
+    readiness=ensure_language_toolchain(language,auto_install=True)
+    if not readiness.get("ready"):
+        missing=[x.get("executable") for x in readiness.get("tools",[]) if not x.get("installed")]
+        raise RuntimeError(f"Required toolchain is unavailable for {canonical_language(language)}: {', '.join(missing)}")
     argv=_command(language,operation)
     if canonical_language(language) == "MQL4":
         sources=sorted(path.rglob("*.mq4"))
