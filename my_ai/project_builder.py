@@ -64,7 +64,7 @@ def _repair_json_string_escapes(text: str) -> str:
             escaped = False
             i += 1
             continue
-        if ch == '\\\\':
+        if ch == "\\":
             nxt = text[i + 1] if i + 1 < len(text) else ""
             if nxt and ("\\\\" + nxt) in valid:
                 out.append(ch)
