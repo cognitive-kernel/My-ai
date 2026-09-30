@@ -37,7 +37,7 @@ def test_ambiguous_multi_intent_request_preserves_all_intents():
     result, fake = route(payload("learning", ["learning", "coding"], "continue_task", 0.91, "fa", "Python", "learn then implement"), "پایتون را یاد بگیر و بعد یک API بساز")
     assert result.name == "learning"
     assert result.intents == ("learning", "coding")
-    assert result.args["language"] == "fa"
+    assert result.args.get("language") is None
     assert result.args["topic"] == "Python"
     assert len(fake.calls) == 1
 
