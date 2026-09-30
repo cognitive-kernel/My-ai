@@ -945,8 +945,7 @@ def learning_command(r: ChatRequest, request: Request):
     return _learning_command(r, request)
 
 def _persist_api_chat_turn(session_id: int, message: str, answer: str) -> None:
-    """Persist chat turns handled directly by API branches before/without Agent.chat."""
-    execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (session_id, "user", message))
+    """Persist the assistant side; the user side is saved before routing."""
     execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (session_id, "assistant", str(answer)))
     execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
 
@@ -978,6 +977,10 @@ def chat(r:ChatRequest, request:Request):
         routing_history = []
         if r.session_id is not None:
             routing_history = fetch_all("SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 20",(r.session_id,))[::-1]
+        sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language,user_id) VALUES(?,?,?,?)",(msg[:60] or "گفتگوی جدید","chat",None,user["id"]))
+        # Persist before semantic routing so refreshes never lose the current user turn.
+        execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"user",msg))
+        execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(sid,))
         routing_context = "\n".join(f"{row['role']}: {row['content']}" for row in routing_history)
         intent=classify(msg, routing_context)
         # Learning and image generation have dedicated pages/endpoints. Never execute
@@ -997,7 +1000,6 @@ def chat(r:ChatRequest, request:Request):
         requested=intent.args.get("language") if isinstance(intent.args, dict) else None
         requested=canonical_language(requested) if requested else None
         learn_intent=intent.name == "learning"
-        sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language,user_id) VALUES(?,?,?,?)",(msg[:60] or "گفتگوی جدید","learning" if learn_intent else "chat",requested,user["id"]))
         _save_chat_attachments(sid,attachments)
         semantic_action=str((intent.args or {}).get("action") or "answer")
         security_words=intent.name in {"security_scan","pentest_external"}
@@ -1055,7 +1057,7 @@ def chat(r:ChatRequest, request:Request):
             return {"type":"code","answer":generated_answer,"data":generated_data,"session_id":sid}
         if intent.name == "self_update" and intent.requires_confirmation and user["role"] != "admin":
             raise HTTPException(403,"Self-update requires administrator approval.")
-        answer=agent.chat(msg,sid,attachments=attachments,intent=intent)
+        answer=agent.chat(msg,sid,attachments=attachments,intent=intent,persist_user=False)
         user_message=fetch_all("SELECT id FROM conversations WHERE session_id=? AND role='user' ORDER BY id DESC LIMIT 1",(sid,))
         if attachments and user_message:
             execute("UPDATE chat_attachments SET conversation_id=? WHERE session_id=? AND conversation_id IS NULL",(user_message[0]["id"],sid))
