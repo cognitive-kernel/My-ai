@@ -206,15 +206,32 @@ class Agent(LegacyAgent):
         execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (ctx.session_id, ctx.message)); self._persist_answer(ctx, answer); return answer
 
     def stream_chat(self, message, session_id=1, attachments=None):
+        # Persist the user's message before semantic routing, retrieval, tool execution,
+        # or any other potentially slow operation. The turn therefore survives even if
+        # processing later fails or takes a long time.
+        message = str(message or "")
+        execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (session_id, "user", message))
+        execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
         ctx = self._prepare_chat_context(message, session_id, attachments)
         if ctx.shortcut is not None:
-            answer = self._persist_shortcut(ctx); self._update_state(ctx, answer); yield answer; return
+            answer = self._persist_answer(ctx, str(ctx.shortcut)); yield answer; return
         if self._runtime_project_build_requested(ctx.intent):
             answer = self._build_project_from_intent(ctx.message, ctx.intent, ctx.context)
-            self._persist_shortcut(PreparedChat(ctx.message, ctx.session_id, ctx.attachments, ctx.history, ctx.context, ctx.conversation_state, intent=ctx.intent, shortcut=answer)); self._update_state(ctx, answer); yield answer; return
-        execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (ctx.session_id, "user", ctx.message))
-        if ctx.citation_block and ctx.knowledge: yield ctx.citation_block.lstrip() + "\n\n"
-        chunks: list[str] = []
+            self._persist_answer(ctx, answer); yield answer; return
+
+        answer_id = execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (ctx.session_id, "assistant", ""))
+        answer_parts: list[str] = []
+        if ctx.citation_block and ctx.knowledge:
+            citation = ctx.citation_block.lstrip() + "\n\n"
+            answer_parts.append(citation)
+            execute("UPDATE conversations SET content=? WHERE id=?", ("".join(answer_parts), answer_id))
+            yield citation
         for chunk in ctx.llm.stream_chat(ctx.llm_message, system=ctx.system, history=ctx.history):
-            text_chunk = str(chunk); chunks.append(text_chunk); yield text_chunk
-        self._persist_answer(ctx, self._handle_unknown("".join(chunks), ctx.message, ctx.session_id))
+            text_chunk = str(chunk)
+            answer_parts.append(text_chunk)
+            execute("UPDATE conversations SET content=? WHERE id=?", ("".join(answer_parts), answer_id))
+            yield text_chunk
+        answer = self._handle_unknown("".join(answer_parts), ctx.message, ctx.session_id)
+        execute("UPDATE conversations SET content=? WHERE id=?", (answer, answer_id))
+        execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (ctx.session_id,))
+        self._update_state(ctx, answer)
