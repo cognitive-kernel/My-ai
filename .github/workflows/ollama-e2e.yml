@@ -52,6 +52,24 @@ jobs:
         env:
           OLLAMA_MODEL: qwen2.5:0.5b
         run: python -c "from my_ai.llm import OllamaClient; r=OllamaClient().chat('Reply with exactly OK'); print(r); assert 'OK' in r.upper()"
+      - name: Run semantic software planner smoke
+        env:
+          LLM_PROVIDER: ollama
+          OLLAMA_MODEL: qwen2.5:0.5b
+          CODING_MODEL: qwen2.5:0.5b
+        run: |
+          python - <<'PY'
+          from my_ai.software_agent import _plan
+          plan = _plan("Build a program in C that reads and processes a text file and can be compiled and run.")
+          print(plan)
+          assert plan.get("language") == "C", plan
+          for requirement in plan.get("tool_requirements", []):
+              commands = requirement.get("commands", {})
+              assert set(commands).issubset({"build", "test", "lint", "run"}), requirement
+              for provider in requirement.get("providers", []):
+                  assert provider.get("executables"), provider
+                  assert set(provider.get("commands", {})).issubset({"build", "test", "lint", "run"}), provider
+          PY
       - name: Run automated Persian response baseline
         run: |
           python - <<'PY'
