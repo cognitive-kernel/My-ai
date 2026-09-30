@@ -29,7 +29,7 @@ def _base_plan() -> dict:
 
 
 def test_provider_alternatives_select_an_installed_provider(monkeypatch, tmp_path):
-    executable = shutil.which(sys.executable) or sys.executable
+    executable = shutil.which("python") or shutil.which(sys.executable) or sys.executable
     executable_name = executable.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
 
     requirements = [{
