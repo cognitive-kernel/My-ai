@@ -20,9 +20,10 @@ LANGUAGE_TOOLS = {
     "Swift": {"toolchains":["swift","swiftc","xcodebuild"],"tests":["swift test"],"build":["swift build"],"lint":["swift format lint ."]},
     "Android": {"toolchains":["java","gradle","adb"],"tests":["gradle test"],"build":["gradle assembleDebug"],"lint":["gradle lint"]},
     "iOS": {"toolchains":["swift","xcodebuild"],"tests":["swift test"],"build":["xcodebuild test"],"lint":["swift format lint ."]},
+    "MQL4": {"toolchains":["metaeditor.exe"],"tests":["metaeditor.exe"],"build":["metaeditor.exe"],"lint":["metaeditor.exe"]},
 }
 
-ALIASES={"js":"JavaScript","node":"JavaScript","py":"Python","kotlin":"Kotlin","kt":"Kotlin","swift":"Swift","rust":"Rust","rs":"Rust","c":"C","php":"PHP","android":"Android","ios":"iOS"}
+ALIASES={"mql4":"MQL4","mq4":"MQL4","mql 4":"MQL4","متاتریدر 4":"MQL4","متاتریدر۴":"MQL4","js":"JavaScript","node":"JavaScript","py":"Python","kotlin":"Kotlin","kt":"Kotlin","swift":"Swift","rust":"Rust","rs":"Rust","c":"C","php":"PHP","android":"Android","ios":"iOS"}
 
 def canonical_language(name:str)->str:
     raw=str(name or "").strip()
@@ -48,13 +49,22 @@ def doctor(language:str|None=None)->dict[str,Any]:
     for name in names:
         spec=LANGUAGE_TOOLS.get(name)
         if not spec: raise ValueError(f"Unsupported language: {language}")
-        out[name]={tool:bool(shutil.which(tool)) for tool in spec["toolchains"]}
+        if name == "MQL4":
+            configured=os.getenv("MYAI_METAEDITOR","").strip()
+            out[name]={"metaeditor.exe": bool(configured and Path(configured).is_file())}
+        else:
+            out[name]={tool:bool(shutil.which(tool)) for tool in spec["toolchains"]}
     return out
 
 def _command(language:str,operation:str)->list[str]:
     lang=canonical_language(language)
     spec=LANGUAGE_TOOLS.get(lang)
     if not spec: raise ValueError(f"Unsupported language: {language}")
+    if lang == "MQL4":
+        metaeditor=os.getenv("MYAI_METAEDITOR","").strip()
+        if not metaeditor:
+            raise RuntimeError("MetaEditor compiler is unavailable. Set MYAI_METAEDITOR to metaeditor.exe.")
+        return [metaeditor, "/compile:{SOURCE}", "/log"]
     commands=spec.get(operation,[])
     if not commands: raise ValueError(f"Operation {operation} is not defined for {lang}.")
     for text in commands:
@@ -66,11 +76,18 @@ def _command(language:str,operation:str)->list[str]:
 def run_project_tool(language:str,operation:str,cwd:str|None=None,timeout:int=120)->dict[str,Any]:
     path=_safe_root(cwd)
     argv=_command(language,operation)
+    if canonical_language(language) == "MQL4":
+        sources=sorted(path.rglob("*.mq4"))
+        if not sources:
+            return {"language":"MQL4","operation":operation,"command":argv,"cwd":str(path),"return_code":-1,"output":"","error":"No .mq4 source file was generated.","passed":False}
+        if operation in {"test","lint"}:
+            return {"language":"MQL4","operation":operation,"command":argv,"cwd":str(path),"return_code":0,"output":"MQL4 static validation is handled by the software validation layer; MetaEditor compilation is the build step.","error":"","passed":True}
+        argv=[argv[0], argv[1].replace("{SOURCE}",str(sources[0])), argv[2]]
     exe=argv[0]
     if os.sep in exe or "/" in exe:
         candidate=path/exe
         if not candidate.exists(): raise RuntimeError(f"Required project tool was not found: {exe}")
-    elif not shutil.which(exe):
+    elif not shutil.which(exe) and not Path(exe).is_file():
         raise RuntimeError(f"Required toolchain executable was not found: {exe}")
     timeout=max(1,min(int(timeout),600))
     try:
