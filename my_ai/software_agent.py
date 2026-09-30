@@ -33,9 +33,9 @@ PLAN_SCHEMA: dict[str, Any] = {
                 "properties": {
                     "capabilities": {"type": "array", "items": {"type": "string"}, "maxItems": 20},
                     "executables": {"type": "array", "items": {"type": "string"}, "maxItems": 20},
-                    "providers": {"type": "array", "maxItems": 20, "items": {"type": "object", "additionalProperties": False, "required": ["executables", "commands"], "properties": {"executables": {"type": "array", "items": {"type": "string"}, "maxItems": 20}, "commands": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}}}, "install": {"type": ["object", "null"]}, "version": {"type": ["string", "null"]}}}},
-                    "commands": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}}},
-                    "install": {"type": ["object", "null"]},
+                    "providers": {"type": "array", "maxItems": 20, "items": {"type": "object", "additionalProperties": False, "required": ["executables", "commands"], "properties": {"executables": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 20}, "commands": {"type": "object", "additionalProperties": False, "properties": {"build": {"type": "array", "items": {"type": "string"}}, "test": {"type": "array", "items": {"type": "string"}}, "lint": {"type": "array", "items": {"type": "string"}}, "run": {"type": "array", "items": {"type": "string"}}}}, "install": {"type": ["object", "null"], "additionalProperties": False, "properties": {"manager": {"type": "string"}, "package": {"type": "string"}}}, "version": {"type": ["string", "null"]}}}},
+                    "commands": {"type": "object", "additionalProperties": False, "properties": {"build": {"type": "array", "items": {"type": "string"}}, "test": {"type": "array", "items": {"type": "string"}}, "lint": {"type": "array", "items": {"type": "string"}}, "run": {"type": "array", "items": {"type": "string"}}}},
+                    "install": {"type": ["object", "null"], "additionalProperties": False, "properties": {"manager": {"type": "string"}, "package": {"type": "string"}}},
                     "version": {"type": ["string", "null"]},
                 },
             },
@@ -72,8 +72,35 @@ def _safe_text(value: Any, limit: int = 5000) -> str:
     return str(value or "").strip()[:limit]
 
 
+def _explicit_language(request: str, context: str = "") -> str | None:
+    """Semantically identify a language only when the user explicitly names one."""
+    llm = create_llm("coding")
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["explicit", "language"],
+        "properties": {
+            "explicit": {"type": "boolean"},
+            "language": {"type": ["string", "null"]},
+        },
+    }
+    prompt = (
+        "Determine whether the software request explicitly names a programming language. "
+        "Use semantic meaning, not a hard-coded language list. If a language is explicitly named, return its conventional name exactly enough to preserve the user's constraint. "
+        "Do not infer a language from the artifact type, platform, framework, tools, or examples. "
+        "Return null when no programming language is explicitly requested. Return only JSON matching the schema.\\n"
+        f"REQUEST:\\n{request}\\nCONTEXT:\\n{context[:12000]}"
+    )
+    data = llm.structured_chat_json(prompt, schema, system="You extract explicit software constraints semantically.")
+    if not isinstance(data, dict) or not data.get("explicit"):
+        return None
+    value = str(data.get("language") or "").strip()
+    return value or None
+
+
 def _plan(request: str, context: str = "") -> dict[str, Any]:
     llm = create_llm("coding")
+    explicit_language = _explicit_language(request, context)
     prompt = (
         "Analyze the software request as a senior product owner, domain researcher, and software architect. "
         "Infer intent from meaning, not trigger words or phrase lists. Preserve explicit user constraints and use conversation context only to resolve references. "
@@ -82,14 +109,16 @@ def _plan(request: str, context: str = "") -> dict[str, Any]:
         "For MetaTrader 4, distinguish custom indicators from Expert Advisors. If the request includes trade execution or broad terminal/account/chart access, choose an Expert Advisor as the executable artifact; an indicator may be a separate visualization component. Do not call an indicator an EA or mix MQL5 APIs into MQL4. "
         "If trading is requested but no trading strategy is specified, implement trading capability as explicit opt-in/user-controlled functionality and never invent an automatic entry condition. "
         "If two requested capabilities conflict with a platform's rules, do NOT silently generate an invalid hybrid: record the ambiguity/constraint and design the closest valid architecture (for example, split components when one platform artifact cannot legally perform another artifact's operation). "
-        "Choose a language/framework only when justified; otherwise leave it null so implementation can choose. "
-        "Translate the technical plan into concrete tool requirements without hard-coding a finite language/tool list. Each tool requirement must describe capabilities and structured commands needed for build/test/lint/run when applicable. When a capability has multiple legitimate host-tool providers, you MUST represent the alternatives under providers rather than selecting one arbitrarily. For compiler/build capabilities, include every credible provider family you know that can perform the requested operation on the target platform (for example, GCC, Clang, or a platform-native compiler), with each provider containing its real executable name(s), provider-specific commands, and optional trusted package-manager metadata. The resolver will inspect the current host and select an installed provider, so do not assume gcc merely because the language is C/C++ or another familiar language. If the host tool is platform-specific, its provider commands must be valid for that provider and platform. An executable name must be a real host process used to perform the operation, not the name of an artifact, language, platform, terminal program, EA, indicator, library, or other generated output. Never invent a synthetic executable name such as <ArtifactName>.exe. If the real host executable is not known with sufficient confidence, leave executables empty and preserve the capability/command requirement for later semantic resolution. Do not invent an executable merely to satisfy the schema. Installation metadata may ONLY describe a trusted package-manager identifier using manager/package fields; never emit download URLs, arbitrary installer commands, shell commands, or instructions derived from the user request. Do not include package-manager installation commands; installation is resolved separately through trusted tooling providers. "
+        "If the request explicitly names a programming language, language MUST preserve that explicit constraint and MUST NOT be null. If no language is explicitly requested, language may be null. "
+        "Translate the technical plan into concrete lifecycle tool requirements without hard-coding a finite language/tool list. Tool requirements are for host tooling used by build/test/lint/run; do not model application behavior such as reading files or processing data as host-tool requirements. Commands MUST use only the standard lifecycle keys build, test, lint, and run. When a capability has multiple legitimate host-tool providers, you MUST represent the alternatives under providers rather than selecting one arbitrarily. For compiler/build capabilities, include every credible provider family you know that can perform the requested operation on the target platform (for example, GCC, Clang, or a platform-native compiler), with each provider containing its real executable name(s), provider-specific commands, and optional trusted package-manager metadata. The resolver will inspect the current host and select an installed provider, so do not assume gcc merely because the language is C/C++ or another familiar language. If the host tool is platform-specific, its provider commands must be valid for that provider and platform. An executable name must be a real host process used to perform the operation, not the name of an artifact, language, platform, terminal program, EA, indicator, library, or other generated output. Never invent a synthetic executable name such as <ArtifactName>.exe. If the real host executable is not known with sufficient confidence, leave executables empty and preserve the capability/command requirement for later semantic resolution. Do not invent an executable merely to satisfy the schema. Installation metadata may ONLY describe a trusted package-manager identifier using manager/package fields; never emit download URLs, arbitrary installer commands, shell commands, or instructions derived from the user request. Do not include package-manager installation commands; installation is resolved separately through trusted tooling providers. "
         "Every acceptance criterion must be testable. Return only JSON matching the schema. Do not write code yet.\n"
         f"CURRENT REQUEST:\n{request}\nCONTEXT:\n{context[:16000]}"
     )
     data = llm.structured_chat_json(prompt, PLAN_SCHEMA, system="You are My-AI's semantic software planning and research-planning agent. Never invent platform capabilities.")
     if not isinstance(data, dict):
         raise ValueError("Planner returned an invalid plan.")
+    if explicit_language:
+        data["language"] = explicit_language
     validate_plan(data)
     return data
 
