@@ -27,17 +27,7 @@ PLAN_SCHEMA: dict[str, Any] = {
             "type": "array",
             "maxItems": 40,
             "items": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["capabilities", "commands"],
-                "properties": {
-                    "capabilities": {"type": "array", "items": {"type": "string"}, "maxItems": 20},
-                    "executables": {"type": "array", "items": {"type": "string"}, "maxItems": 20},
-                    "providers": {"type": "array", "maxItems": 20, "items": {"type": "object", "additionalProperties": False, "required": ["executables", "commands"], "properties": {"executables": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 20}, "commands": {"type": "object", "additionalProperties": False, "properties": {"build": {"type": "array", "items": {"type": "string"}}, "test": {"type": "array", "items": {"type": "string"}}, "lint": {"type": "array", "items": {"type": "string"}}, "run": {"type": "array", "items": {"type": "string"}}}}, "install": {"type": ["object", "null"], "additionalProperties": False, "properties": {"manager": {"type": "string"}, "package": {"type": "string"}}}, "version": {"type": ["string", "null"]}}}},
-                    "commands": {"type": "object", "additionalProperties": False, "properties": {"build": {"type": "array", "items": {"type": "string"}}, "test": {"type": "array", "items": {"type": "string"}}, "lint": {"type": "array", "items": {"type": "string"}}, "run": {"type": "array", "items": {"type": "string"}}}},
-                    "install": {"type": ["object", "null"], "additionalProperties": False, "properties": {"manager": {"type": "string"}, "package": {"type": "string"}}},
-                    "version": {"type": ["string", "null"]},
-                },
+                "type": "object"
             },
         },
         "architecture": {"type": "array", "items": {"type": "string"}, "maxItems": 30},
@@ -101,15 +91,10 @@ def _explicit_language(request: str, context: str = "") -> str | None:
 def _plan(request: str, context: str = "") -> dict[str, Any]:
     llm = create_llm("coding")
     prompt = (
-        "Analyze the software request as a senior product owner, domain researcher, and software architect. "
-        "Infer intent from meaning, not trigger words or phrase lists. Preserve explicit user constraints and use conversation context only to resolve references. "
-        "Identify the concrete artifact type (application, website, API, library, CLI, indicator, expert advisor, script, mobile app, etc.) before choosing technology. "
-        "Research questions must resolve platform capabilities, official APIs, compatibility constraints, and ambiguous requirements before implementation. "
-        "For MetaTrader 4, distinguish custom indicators from Expert Advisors. If the request includes trade execution or broad terminal/account/chart access, choose an Expert Advisor as the executable artifact; an indicator may be a separate visualization component. Do not call an indicator an EA or mix MQL5 APIs into MQL4. "
-        "If trading is requested but no trading strategy is specified, implement trading capability as explicit opt-in/user-controlled functionality and never invent an automatic entry condition. "
-        "If two requested capabilities conflict with a platform's rules, do NOT silently generate an invalid hybrid: record the ambiguity/constraint and design the closest valid architecture (for example, split components when one platform artifact cannot legally perform another artifact's operation). "
-        "If the request explicitly names a programming language, language MUST preserve that explicit constraint and MUST NOT be null. If no language is explicitly requested, language may be null. "
-        "Translate the technical plan into concrete lifecycle tool requirements without hard-coding a finite language/tool list. Tool requirements are for host tooling used by build/test/lint/run; do not model application behavior such as reading files or processing data as host-tool requirements. Commands MUST use only the standard lifecycle keys build, test, lint, and run. When a capability has multiple legitimate host-tool providers, you MUST represent the alternatives under providers rather than selecting one arbitrarily. For compiler/build capabilities, include every credible provider family you know that can perform the requested operation on the target platform (for example, GCC, Clang, or a platform-native compiler), with each provider containing its real executable name(s), provider-specific commands, and optional trusted package-manager metadata. The resolver will inspect the current host and select an installed provider, so do not assume gcc merely because the language is C/C++ or another familiar language. If the host tool is platform-specific, its provider commands must be valid for that provider and platform. An executable name must be a real host process used to perform the operation, not the name of an artifact, language, platform, terminal program, EA, indicator, library, or other generated output. Never invent a synthetic executable name such as <ArtifactName>.exe. If the real host executable is not known with sufficient confidence, leave executables empty and preserve the capability/command requirement for later semantic resolution. Do not invent an executable merely to satisfy the schema. Installation metadata may ONLY describe a trusted package-manager identifier using manager/package fields; never emit download URLs, arbitrary installer commands, shell commands, or instructions derived from the user request. Do not include package-manager installation commands; installation is resolved separately through trusted tooling providers. "
+        "Semantically analyze the software request and preserve explicit user constraints. Identify the artifact type before choosing technology. "
+        "If a programming language is explicitly named, preserve it; otherwise language may be null. "
+        "For MT4, distinguish indicators from Expert Advisors; trade execution or broad terminal/account/chart access belongs in an EA. Never mix MQL5 APIs into MQL4. If trading is requested without a strategy, make trading explicitly user-controlled and do not invent entry logic. "
+        "Translate the plan into lifecycle host-tool requirements for build/test/lint/run only. Do not model application behavior as host tools. Use provider alternatives when multiple host tools can provide the same capability; each provider must be one coherent tool family with real executable names and provider-specific lifecycle commands. Prefer host-discoverable alternatives instead of assuming a particular compiler. Installation metadata may contain only trusted manager/package identifiers. Never emit URLs, arbitrary installer commands, shell commands, artifact names, or synthetic executables. "
         "Every acceptance criterion must be testable. Return only JSON matching the schema. Do not write code yet.\n"
         f"CURRENT REQUEST:\n{request}\nCONTEXT:\n{context[:16000]}"
     )
