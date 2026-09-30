@@ -73,7 +73,7 @@ def test_selected_provider_command_is_executable():
         "commands": {"run": [f"{executable_name} -c \"print(1)\""]},
     }]
     result = _command("UnseenLanguage", "run", requirements=requirements)
-    assert os.path.basename(result[0]) == os.path.basename(executable) or result[0].endswith(executable_name)
+    assert os.path.realpath(result[0]) == os.path.realpath(executable)
 
 
 def test_plan_rejects_non_lifecycle_tool_commands():
