@@ -49,7 +49,6 @@ class Agent(LegacyAgent):
 
     def _persist_shortcut(self, ctx: PreparedChat) -> str:
         answer = str(ctx.shortcut or "")
-        execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (ctx.session_id, "user", ctx.message))
         execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (ctx.session_id, "assistant", answer))
         execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (ctx.session_id,))
         return answer
@@ -113,7 +112,7 @@ class Agent(LegacyAgent):
             enriched.append(item)
         return filtered, enriched
 
-    def _prepare_chat_context(self, message, session_id=1, attachments=None) -> PreparedChat:
+    def _prepare_chat_context(self, message, session_id=1, attachments=None, intent=None) -> PreparedChat:
         message = str(message or "")
         normalized_attachments = list(attachments if attachments is not None else get_attachments())[:10]
         history = fetch_all("SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 24", (session_id,))[::-1]
@@ -126,7 +125,7 @@ class Agent(LegacyAgent):
         state = self._runtime_conversation_state(history, message)
         context = "\n".join(f"{row['role']}: {row['content']}" for row in history[-20:])
         routing_context = f"CONVERSATION STATE:\n{state['summary']}\n\nRECENT CHAT:\n{context}"
-        intent = self._classify(message, routing_context)
+        intent = intent if intent is not None else self._classify(message, routing_context)
         web_confirmation = self._web_learning_confirmation(message, session_id, intent)
         if web_confirmation is not None:
             return PreparedChat(message, session_id, normalized_attachments, history, context, state, intent=intent, shortcut=web_confirmation)
@@ -193,8 +192,11 @@ class Agent(LegacyAgent):
         status = "موفق" if completion.get("completed") else "ناقص"
         return (f"ساخت پروژه: {status}\n- زبان: {result.get('language') or language or 'انتخاب خودکار'}\n- مسیر پروژه: {result.get('project_path') or result.get('project_name') or ''}\n- فایل‌ها: {len(result.get('files') or [])}\n- Build: {bool(completion.get('build'))}\n- Tests: {bool(completion.get('tests'))}\n- Lint: {bool(completion.get('lint'))}\n- Git: {bool(completion.get('git'))}\n- Research sources: {int((result.get('research') or {}).get('source_count') or 0)}\n" + ("- نتیجه: پروژه کامل شد." if completion.get("completed") else "- نتیجه: پروژه هنوز معیارهای اتمام را پاس نکرده است."))
 
-    def chat(self, message, session_id=1, attachments=None):
-        ctx = self._prepare_chat_context(message, session_id, attachments)
+    def chat(self, message, session_id=1, attachments=None, intent=None, persist_user=True):
+        if persist_user:
+            execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (session_id, "user", str(message or "")))
+            execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
+        ctx = self._prepare_chat_context(message, session_id, attachments, intent=intent)
         if ctx.shortcut is not None:
             answer = self._persist_shortcut(ctx); self._update_state(ctx, answer); return answer
         if self._runtime_project_build_requested(ctx.intent):
@@ -203,7 +205,7 @@ class Agent(LegacyAgent):
         answer = ctx.llm.chat(ctx.llm_message, system=ctx.system, history=ctx.history)
         answer = self._handle_unknown(answer, ctx.message, ctx.session_id)
         if ctx.knowledge and "__MYAI_UNKNOWN__" not in str(answer) and ctx.citation_block and not any(f"[K{item.get('id')}]" in str(answer) for item in (ctx.enriched_knowledge or [])[:4]): answer = answer.rstrip() + ctx.citation_block
-        execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (ctx.session_id, ctx.message)); self._persist_answer(ctx, answer); return answer
+        self._persist_answer(ctx, answer); return answer
 
     def stream_chat(self, message, session_id=1, attachments=None):
         # Persist the user's message before semantic routing, retrieval, tool execution,
