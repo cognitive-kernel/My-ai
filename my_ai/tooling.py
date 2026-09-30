@@ -2,6 +2,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import shutil
 import sqlite3
 import subprocess
@@ -24,25 +25,6 @@ DEFAULT_TOOLCHAIN_FILE_NAMES = (
 
 # These are generic project-description files, not language mappings. They let
 # an unknown/new ecosystem describe its own executable requirements.
-PROJECT_DESCRIPTORS = (
-    "pyproject.toml",
-    "package.json",
-    "Cargo.toml",
-    "go.mod",
-    "composer.json",
-    "build.gradle",
-    "build.gradle.kts",
-    "pom.xml",
-    "Makefile",
-    "CMakeLists.txt",
-    "Package.swift",
-    "*.csproj",
-    "*.sln",
-    "*.mq4",
-    "*.mqh",
-    "AndroidManifest.xml",
-)
-
 
 def canonical_language(name: str) -> str:
     """Return the semantic label without restricting it to a built-in list."""
@@ -53,13 +35,9 @@ def catalog() -> dict[str, Any]:
     return {
         "toolchain_model": {
             "source": "semantic_plan_or_project_descriptor",
-            "requirements": ["executable", "version", "capabilities", "commands", "install"],
-        },
-        "databases": {
-            "SQL Server": ["schema", "tables", "columns", "readonly_query"],
-            "MySQL": ["schema", "tables", "columns", "readonly_query"],
-            "SQLite": ["schema", "tables", "readonly_query"],
-        },
+            "requirements": ["capabilities", "providers", "executables", "commands", "install"],
+            "lifecycle_operations": ["build", "test", "lint", "run"],
+        }
     }
 
 
@@ -110,16 +88,6 @@ def _toolchain_descriptors(cwd: Path | None = None) -> list[dict[str, Any]]:
     return descriptors
 
 
-def _project_files(cwd: Path) -> list[Path]:
-    files: list[Path] = []
-    for pattern in PROJECT_DESCRIPTORS:
-        try:
-            files.extend(cwd.glob(pattern))
-        except OSError:
-            pass
-    return list(dict.fromkeys(p for p in files if p.is_file()))
-
-
 def _semantic_requirements(language: str | None, cwd: Path | None = None, planned: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """Collect requirements from a semantic descriptor and project metadata.
 
@@ -130,11 +98,6 @@ def _semantic_requirements(language: str | None, cwd: Path | None = None, planne
     if planned:
         requirements.extend(item for item in planned if isinstance(item, dict))
     requirements.extend(_toolchain_descriptors(cwd))
-    if cwd:
-        # A generated project can declare its own executable/command contract.
-        for path in _project_files(cwd):
-            if path.name in {"toolchain.json", "toolchains.json"}:
-                continue
     return requirements
 
 
@@ -240,6 +203,18 @@ def _commands_for(requirements: list[dict[str, Any]], operation: str) -> list[st
         if isinstance(value, list):
             commands.extend(str(x).strip() for x in value if str(x).strip())
     return commands
+
+
+def _parse_command(command: str) -> list[str]:
+    text = str(command or "").strip()
+    if not text:
+        raise ValueError("Empty semantic command.")
+    if any(token in text for token in ("&&", "||", ";", "|", ">", "<")):
+        raise ValueError("Shell operators are not allowed in semantic tool commands; use structured lifecycle commands.")
+    try:
+        return shlex.split(text, posix=os.name != "nt")
+    except ValueError as exc:
+        raise ValueError(f"Invalid semantic command: {text!r}") from exc
 
 
 
@@ -373,9 +348,9 @@ def ensure_language_toolchain(
     }
 
 
-def doctor(language: str | None = None, cwd: str | None = None) -> dict[str, Any]:
+def doctor(language: str | None = None, cwd: str | None = None, requirements: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     root = Path(cwd).resolve() if cwd else None
-    reqs = _semantic_requirements(language, root)
+    reqs = requirements if requirements is not None else _semantic_requirements(language, root)
     if language is not None and not reqs:
         return {canonical_language(language): {"status": "no_requirements_discovered"}}
     readiness = ensure_language_toolchain(
@@ -407,11 +382,13 @@ def _command(
             "Declare it in the semantic plan or project toolchain descriptor."
         )
     for text in commands:
-        exe = text.split()[0]
+        argv = _parse_command(text)
+        exe = argv[0]
         resolved = discover_tool(exe)
         if resolved:
-            return [resolved, *text.split()[1:]]
-    raise RuntimeError(f"Required executable was not found: {commands[0].split()[0]}")
+            return [resolved, *argv[1:]]
+    first = _parse_command(commands[0])[0]
+    raise RuntimeError(f"Required executable was not found: {first}")
 
 
 def run_project_tool(
