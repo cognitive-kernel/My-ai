@@ -144,3 +144,28 @@ def test_plan_recovers_explicit_language_when_planner_leaves_it_unknown(monkeypa
     monkeypatch.setattr(software_agent, "create_llm", lambda task: fake)
     plan = software_agent._plan("Build a program in C that reads a text file")
     assert plan["language"] == "C"
+
+def test_build_project_keeps_requirements_defined_when_semantic_validation_fails(monkeypatch, tmp_path):
+    from my_ai import project_builder
+
+    class FakeLLM:
+        def chat(self, *args, **kwargs):
+            return '{"files":{"main.txt":"generated"}}'
+
+    monkeypatch.setattr(project_builder, "fetch_all", lambda *args: [])
+    monkeypatch.setattr(project_builder, "create_project_workspace", lambda *args, **kwargs: tmp_path)
+    monkeypatch.setattr(project_builder, "search_knowledge", lambda *args: [])
+    monkeypatch.setattr(project_builder, "create_llm", lambda *args: FakeLLM())
+    monkeypatch.setattr(project_builder, "validate_generated_project", lambda *args: ["semantic defect"])
+    monkeypatch.setattr(project_builder, "execute", lambda *args: 1)
+    monkeypatch.setattr(project_builder, "doctor", lambda *args, **kwargs: {})
+
+    result = project_builder.build_project(
+        "test project",
+        language="Python",
+        repair_attempts=0,
+        tool_requirements=[{"capabilities": ["build"], "commands": {"build": ["python"]}}],
+    )
+
+    assert result["status"] == "build_failed"
+    assert result["semantic_defects"] == ["semantic defect"]
