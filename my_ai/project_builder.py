@@ -246,7 +246,7 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
         "project_path": str(workspace.relative_to(ROOT)) if workspace.is_relative_to(ROOT) else str(workspace), "session_id": session_id,
         "files": sorted(files), "file_count": len(files), "build": build, "tests": tests, "lint": lint,
         "semantic_defects": semantic_defects, "repair_attempts": attempts - 1, "artifacts": _artifact_files(workspace),
-        "toolchain": doctor(language, cwd=str(workspace)),
+        "toolchain": doctor(language, cwd=str(workspace), requirements=requirements),
     }
 
 
