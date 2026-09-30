@@ -52,6 +52,43 @@ def test_chat_session_isolation(client_db):
     assert response.json()["messages"] == []
 
 
+def test_chat_api_persists_assistant_response_when_agent_does_not(monkeypatch, client_db):
+    import my_ai.api as api
+
+    owner = auth.create_account("owner", "a-secure-password")
+    db.execute(
+        "INSERT INTO tool_permissions(user_id,tool_name,action,allowed) VALUES(?,?,?,1)",
+        (owner["id"], "chat", "execute"),
+    )
+
+    class Intent:
+        name = "chat"
+        args = {"action": "answer"}
+        requires_confirmation = False
+        intents = ("chat",)
+
+    class FakeAgent:
+        llm = object()
+
+        def chat(self, message, session_id, attachments=None, intent=None, persist_user=True, persist_answer=True):
+            return "durable answer"
+
+    monkeypatch.setattr(api, "classify", lambda *args, **kwargs: Intent())
+    monkeypatch.setattr(api, "agent", FakeAgent())
+
+    response = client_db.post("/chat", json={"message": "hello"}, cookies=login_cookie(owner))
+    assert response.status_code == 200
+    sid = response.json()["session_id"]
+    rows = db.fetch_all(
+        "SELECT role,content FROM conversations WHERE session_id=? ORDER BY id",
+        (sid,),
+    )
+    assert [(x["role"], x["content"]) for x in rows] == [
+        ("user", "hello"),
+        ("assistant", "durable answer"),
+    ]
+
+
 def test_chat_api_has_no_legacy_keyword_command_policy():
     from pathlib import Path
     source = Path("my_ai/api.py").read_text(encoding="utf-8")
