@@ -214,11 +214,16 @@ def _install_tool(executable: str, install: Any = None) -> dict[str, Any]:
     """Install only from an explicit trusted descriptor, never from model text."""
     if os.getenv("MYAI_AUTO_INSTALL_TOOLS", "").strip().lower() not in {"1", "true", "yes", "on"}:
         return {"attempted": False, "reason": "automatic installation is disabled"}
-    manager = _package_manager()
+    detected_manager = _package_manager()
     spec = install if isinstance(install, dict) else {}
-    if not manager or not spec:
+    if not spec:
         return {"attempted": False, "reason": "no trusted installation descriptor is available"}
-    package = spec.get("apt" if manager == "apt-get" else manager)
+    manager = str(spec.get("manager") or detected_manager or "").strip().lower()
+    if not manager or not shutil.which(manager):
+        return {"attempted": False, "reason": f"installation manager is unavailable: {manager or 'none'}"}
+    package = spec.get("package")
+    if not package:
+        package = spec.get("apt" if manager == "apt-get" else manager)
     if not package:
         return {"attempted": False, "reason": f"no package for {manager}"}
     if manager == "winget":
