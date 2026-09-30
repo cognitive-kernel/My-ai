@@ -141,6 +141,22 @@ def _semantic_requirements(language: str | None, cwd: Path | None = None, planne
 def _requirement_executables(requirements: list[dict[str, Any]]) -> list[str]:
     out: list[str] = []
     for item in requirements:
+        providers = item.get("providers", [])
+        if isinstance(providers, dict):
+            providers = [providers]
+        if isinstance(providers, list) and providers:
+            for provider in providers:
+                if not isinstance(provider, dict):
+                    continue
+                values = provider.get("executables", provider.get("tools", []))
+                if isinstance(values, str):
+                    values = [values]
+                if isinstance(values, list):
+                    for value in values:
+                        name = str(value).strip()
+                        if name and name not in out:
+                            out.append(name)
+            continue
         values = item.get("executables", item.get("tools", item.get("toolchains", [])))
         if isinstance(values, str):
             values = [values]
@@ -150,6 +166,69 @@ def _requirement_executables(requirements: list[dict[str, Any]]) -> list[str]:
                 if name and name not in out:
                     out.append(name)
     return out
+
+
+def _resolve_requirement_providers(requirements: list[dict[str, Any]], auto_install: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    resolved: list[dict[str, Any]] = []
+    tools: list[dict[str, Any]] = []
+    for item in requirements:
+        providers = item.get("providers", [])
+        if isinstance(providers, dict):
+            providers = [providers]
+        if isinstance(providers, list) and providers:
+            selected = None
+            candidates: list[dict[str, Any]] = []
+            for provider in providers:
+                if not isinstance(provider, dict):
+                    continue
+                values = provider.get("executables", provider.get("tools", []))
+                if isinstance(values, str):
+                    values = [values]
+                for executable in values or []:
+                    candidate = resolve_tool(str(executable), auto_install=False)
+                    candidates.append(candidate)
+                    if candidate.get("installed") and selected is None:
+                        selected = (provider, candidate)
+            if selected is None and auto_install:
+                for provider in providers:
+                    if not isinstance(provider, dict):
+                        continue
+                    values = provider.get("executables", provider.get("tools", []))
+                    if isinstance(values, str):
+                        values = [values]
+                    for executable in values or []:
+                        candidate = resolve_tool(
+                            str(executable),
+                            auto_install=True,
+                            install=provider.get("install"),
+                        )
+                        candidates.append(candidate)
+                        if candidate.get("installed"):
+                            selected = (provider, candidate)
+                            break
+                    if selected:
+                        break
+            tools.extend(candidates)
+            if selected:
+                provider, candidate = selected
+                resolved_item = dict(item)
+                resolved_item.pop("providers", None)
+                resolved_item["executables"] = [candidate["executable"]]
+                if provider.get("commands") is not None:
+                    resolved_item["commands"] = provider.get("commands")
+                if provider.get("install") is not None:
+                    resolved_item["install"] = provider.get("install")
+                resolved.append(resolved_item)
+            continue
+
+        values = item.get("executables", item.get("tools", item.get("toolchains", [])))
+        if isinstance(values, str):
+            values = [values]
+        for executable in values or []:
+            install = item.get("install")
+            tools.append(resolve_tool(str(executable), auto_install=auto_install, install=install))
+        resolved.append(item)
+    return resolved, tools
 
 
 def _commands_for(requirements: list[dict[str, Any]], operation: str) -> list[str]:
@@ -274,23 +353,23 @@ def ensure_language_toolchain(
             "tools": [],
             "reason": "No concrete tool requirements were discovered. Provide them in the semantic plan or project descriptor.",
         }
-    tools: list[dict[str, Any]] = []
-    for executable in executables:
-        install = None
-        for item in reqs:
-            values = item.get("executables", item.get("tools", item.get("toolchains", [])))
-            if isinstance(values, str):
-                values = [values]
-            if executable in (values or []):
-                install = item.get("install")
-                break
-        tools.append(resolve_tool(executable, auto_install=auto_install, install=install))
+    resolved_requirements, tools = _resolve_requirement_providers(reqs, auto_install)
     return {
         "language": canonical_language(language),
         "supported": True,
         "tools": tools,
-        "ready": all(item["installed"] for item in tools),
-        "requirements": reqs,
+        "ready": bool(resolved_requirements) and all(
+            item["installed"] for item in tools
+            if item["executable"] in _requirement_executables(resolved_requirements)
+        ) and all(
+            any(
+                tool["installed"] and tool["executable"] in item.get("executables", [])
+                for tool in tools
+            )
+            for item in resolved_requirements
+        ),
+        "requirements": resolved_requirements,
+        "planned_requirements": reqs,
     }
 
 
