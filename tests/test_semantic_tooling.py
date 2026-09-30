@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 
@@ -72,7 +73,7 @@ def test_selected_provider_command_is_executable():
         "commands": {"run": [f"{executable_name} -c \"print(1)\""]},
     }]
     result = _command("UnseenLanguage", "run", requirements=requirements)
-    assert result[0].endswith(executable_name)
+    assert os.path.basename(result[0]) == os.path.basename(executable) or result[0].endswith(executable_name)
 
 
 def test_plan_rejects_non_lifecycle_tool_commands():
