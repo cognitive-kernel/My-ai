@@ -68,8 +68,7 @@ document.getElementById('refreshBtn').onclick=refresh;document.getElementById('e
 
 def _inject_global(body: str, path: str) -> str:
     if path == '/':
-        body = body.replace("if(currentSessionId===null&&list.length)await selectChat(Number(list[0].id))", "")
-        body = body.replace("loadLocalHistory();", "")
+        # Preserve automatic restoration of the persisted latest chat session.
     nav = _nav(path)
     if 'id="myAiGlobalNav"' not in body:
         body = body.replace('<body>', '<body>'+NAV_STYLE+nav, 1)
