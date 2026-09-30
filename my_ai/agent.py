@@ -308,16 +308,23 @@ class Agent:
             "workspace_relative": f"data/files/indicators/{path.name}",
         }
 
-    def _persist_turn(self, session_id, message, answer):
+    def _persist_user_message(self, session_id, message):
         execute(
             "INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",
             (session_id, "user", message),
         )
+        execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
+
+    def _persist_assistant_message(self, session_id, answer):
         execute(
             "INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",
             (session_id, "assistant", answer),
         )
         execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
+
+    def _persist_turn(self, session_id, message, answer):
+        self._persist_user_message(session_id, message)
+        self._persist_assistant_message(session_id, answer)
 
     def _prepare_inference(self, message, session_id, attachments=None):
         """Shared pipeline for chat and stream_chat: history, state, intent, knowledge, prompt notes."""
@@ -439,20 +446,21 @@ class Agent:
 
     def stream_chat(self, message, session_id=1, attachments=None):
         prep = self._prepare_inference(message, session_id, attachments=attachments)
+        self._persist_user_message(session_id, message)
         web_confirmation = self._web_learning_confirmation(message, session_id, prep["intent"])
         if web_confirmation is not None:
-            self._persist_turn(session_id, message, web_confirmation)
+            self._persist_assistant_message(session_id, web_confirmation)
             yield web_confirmation
             return
         maintenance = self._semantic_maintenance(prep["intent"])
         if maintenance is not None:
-            self._persist_turn(session_id, message, maintenance)
+            self._persist_assistant_message(session_id, maintenance)
             yield maintenance
             return
 
         if self._project_build_requested(message, prep["intent"]):
             answer = self._build_project_from_intent(message, prep["intent"])
-            self._persist_turn(session_id, message, answer)
+            self._persist_assistant_message(session_id, answer)
             yield answer
             return
         chunks: list[str] = []
