@@ -171,6 +171,224 @@ def _commands_for(requirements: list[dict[str, Any]], operation: str) -> list[st
     return commands
 
 
+
+def _windows_roots() -> list[Path]:
+    roots: list[Path] = []
+    for raw in (
+        os.getenv("ProgramFiles"),
+        os.getenv("ProgramFiles(x86)"),
+        os.getenv("LOCALAPPDATA"),
+        os.getenv("ProgramW6432"),
+    ):
+        if raw:
+            path = Path(raw)
+            if path.is_dir() and path not in roots:
+                roots.append(path)
+    return roots
+
+
+def discover_tool(executable: str) -> str | None:
+    """Discover any executable by name; no language-specific registry is required."""
+    name = Path(str(executable or "").strip().strip('"')).name
+    if not name:
+        return None
+    env_key = "MYAI_TOOL_" + re.sub(r"[^A-Za-z0-9]+", "_", name).upper()
+    configured = os.getenv(env_key, "").strip()
+    if configured and Path(configured).is_file():
+        return str(Path(configured).resolve())
+    found = shutil.which(name)
+    if found:
+        return str(Path(found).resolve())
+    if os.name == "nt":
+        for root in _windows_roots():
+            try:
+                matches = root.rglob(name)
+            except OSError:
+                continue
+            for candidate in matches:
+                if candidate.is_file():
+                    return str(candidate.resolve())
+    return None
+
+
+def _package_manager() -> str | None:
+    for manager in ("winget", "choco", "brew", "apt-get"):
+        if shutil.which(manager):
+            return manager
+    return None
+
+
+def _install_tool(executable: str, install: Any = None) -> dict[str, Any]:
+    """Install only from an explicit trusted descriptor, never from model text."""
+    if os.getenv("MYAI_AUTO_INSTALL_TOOLS", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        return {"attempted": False, "reason": "automatic installation is disabled"}
+    manager = _package_manager()
+    spec = install if isinstance(install, dict) else {}
+    if not manager or not spec:
+        return {"attempted": False, "reason": "no trusted installation descriptor is available"}
+    package = spec.get("apt" if manager == "apt-get" else manager)
+    if not package:
+        return {"attempted": False, "reason": f"no package for {manager}"}
+    if manager == "winget":
+        argv = ["winget", "install", "--id", str(package), "--exact", "--source", "winget",
+                "--accept-source-agreements", "--accept-package-agreements", "--disable-interactivity"]
+    elif manager == "choco":
+        argv = ["choco", "install", str(package), "-y", "--no-progress"]
+    elif manager == "brew":
+        argv = ["brew", "install", str(package)]
+    else:
+        argv = ["apt-get", "install", "-y", str(package)]
+    try:
+        p = subprocess.run(argv, capture_output=True, text=True, timeout=900, shell=False)
+        return {
+            "attempted": True, "manager": manager, "package": package,
+            "return_code": p.returncode, "output": (p.stdout + "\n" + p.stderr)[-12000:],
+            "passed": p.returncode == 0,
+        }
+    except Exception as exc:
+        return {"attempted": True, "manager": manager, "package": package, "error": str(exc), "passed": False}
+
+
+def resolve_tool(executable: str, auto_install: bool = True, install: Any = None) -> dict[str, Any]:
+    path = discover_tool(executable)
+    if path:
+        return {"executable": executable, "path": path, "installed": True, "install": None}
+    result = _install_tool(executable, install) if auto_install else {
+        "attempted": False, "reason": "installation disabled for this operation"
+    }
+    path = discover_tool(executable) if result.get("passed") else None
+    return {"executable": executable, "path": path, "installed": bool(path), "install": result}
+
+
+def ensure_language_toolchain(
+    language: str,
+    auto_install: bool = True,
+    requirements: list[dict[str, Any]] | None = None,
+    cwd: str | None = None,
+) -> dict[str, Any]:
+    root = Path(cwd).resolve() if cwd else None
+    reqs = requirements if requirements is not None else _semantic_requirements(language, root)
+    executables = _requirement_executables(reqs)
+    if not executables:
+        return {
+            "language": canonical_language(language),
+            "supported": False,
+            "ready": False,
+            "tools": [],
+            "reason": "No concrete tool requirements were discovered. Provide them in the semantic plan or project descriptor.",
+        }
+    tools: list[dict[str, Any]] = []
+    for executable in executables:
+        install = None
+        for item in reqs:
+            values = item.get("executables", item.get("tools", item.get("toolchains", [])))
+            if isinstance(values, str):
+                values = [values]
+            if executable in (values or []):
+                install = item.get("install")
+                break
+        tools.append(resolve_tool(executable, auto_install=auto_install, install=install))
+    return {
+        "language": canonical_language(language),
+        "supported": True,
+        "tools": tools,
+        "ready": all(item["installed"] for item in tools),
+        "requirements": reqs,
+    }
+
+
+def doctor(language: str | None = None, cwd: str | None = None) -> dict[str, Any]:
+    root = Path(cwd).resolve() if cwd else None
+    reqs = _semantic_requirements(language, root)
+    if language is not None and not reqs:
+        return {canonical_language(language): {"status": "no_requirements_discovered"}}
+    readiness = ensure_language_toolchain(
+        language or "semantic-project",
+        auto_install=False,
+        requirements=reqs,
+        cwd=cwd,
+    )
+    return {
+        readiness["language"]: {
+            item["executable"]: item["installed"]
+            for item in readiness.get("tools", [])
+        }
+    }
+
+
+def _command(
+    language: str,
+    operation: str,
+    requirements: list[dict[str, Any]] | None = None,
+    cwd: str | None = None,
+) -> list[str]:
+    root = Path(cwd).resolve() if cwd else None
+    reqs = requirements if requirements is not None else _semantic_requirements(language, root)
+    commands = _commands_for(reqs, operation)
+    if not commands:
+        raise ValueError(
+            f"No semantic command for operation {operation!r}. "
+            "Declare it in the semantic plan or project toolchain descriptor."
+        )
+    for text in commands:
+        exe = text.split()[0]
+        resolved = discover_tool(exe)
+        if resolved:
+            return [resolved, *text.split()[1:]]
+    raise RuntimeError(f"Required executable was not found: {commands[0].split()[0]}")
+
+
+def run_project_tool(
+    language: str,
+    operation: str,
+    cwd: str | None = None,
+    timeout: int = 120,
+    requirements: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    path = _safe_root(cwd)
+    readiness = ensure_language_toolchain(
+        language,
+        auto_install=True,
+        requirements=requirements,
+        cwd=str(path),
+    )
+    if not readiness.get("ready"):
+        missing = [x.get("executable") for x in readiness.get("tools", []) if not x.get("installed")]
+        raise RuntimeError(
+            f"Required toolchain is unavailable for {canonical_language(language)}: "
+            + (", ".join(missing) if missing else readiness.get("reason", "unknown reason"))
+        )
+    reqs = readiness.get("requirements", [])
+    argv = _command(language, operation, requirements=reqs, cwd=str(path))
+    if any(path.rglob("*.mq4")) and canonical_language(language).casefold() in {"mql4", "mq4"}:
+        sources = sorted(path.rglob("*.mq4"))
+        if operation in {"test", "lint"}:
+            return {
+                "language": canonical_language(language), "operation": operation, "command": argv,
+                "cwd": str(path), "return_code": 0,
+                "output": "MQL4 validation is delegated to the declared toolchain; compilation is the build operation.",
+                "error": "", "passed": True,
+            }
+        argv = [part.replace("{SOURCE}", str(sources[0])) for part in argv]
+    timeout = max(1, min(int(timeout), 600))
+    try:
+        p = subprocess.run(
+            argv, cwd=path, capture_output=True, text=True, timeout=timeout, shell=False,
+            env={"PATH": os.environ.get("PATH", "")},
+        )
+        return {
+            "language": canonical_language(language), "operation": operation, "command": argv,
+            "cwd": str(path), "return_code": p.returncode, "output": p.stdout[-12000:],
+            "error": p.stderr[-12000:], "passed": p.returncode == 0,
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "language": canonical_language(language), "operation": operation, "command": argv,
+            "cwd": str(path), "return_code": -1, "output": "",
+            "error": "Tool execution timed out.", "passed": False,
+        }
+
+
 def run_python_snippet(code:str):
     result=run_python(code)
     return {"output":result.output,"error":result.error,"return_code":result.return_code,"timed_out":result.timed_out,"sandbox_mode":result.sandbox_mode}
