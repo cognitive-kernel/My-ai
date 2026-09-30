@@ -100,7 +100,6 @@ def _explicit_language(request: str, context: str = "") -> str | None:
 
 def _plan(request: str, context: str = "") -> dict[str, Any]:
     llm = create_llm("coding")
-    explicit_language = _explicit_language(request, context)
     prompt = (
         "Analyze the software request as a senior product owner, domain researcher, and software architect. "
         "Infer intent from meaning, not trigger words or phrase lists. Preserve explicit user constraints and use conversation context only to resolve references. "
@@ -117,8 +116,10 @@ def _plan(request: str, context: str = "") -> dict[str, Any]:
     data = llm.structured_chat_json(prompt, PLAN_SCHEMA, system="You are My-AI's semantic software planning and research-planning agent. Never invent platform capabilities.")
     if not isinstance(data, dict):
         raise ValueError("Planner returned an invalid plan.")
-    if explicit_language:
-        data["language"] = explicit_language
+    if not str(data.get("language") or "").strip():
+        explicit_language = _explicit_language(request, context)
+        if explicit_language:
+            data["language"] = explicit_language
     validate_plan(data)
     return data
 
