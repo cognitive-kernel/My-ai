@@ -246,7 +246,9 @@ def build_project(goal: str, language: str = "Python", *, project_path: str | No
     resolved_goal, contextual_language, session_id = _recent_conversation_context(goal)
     detected_language = contextual_language or _detect_language_from_texts([resolved_goal, goal])
     language = canonical_language(detected_language or language)
-    # A supplied project_path identifies the target workspace itself. Do not create\n    # a new child directory: modify_artifact requests must operate on that project.\n    workspace = resolve_projects_root(project_path) if project_path else create_project_workspace(goal)
+    # A supplied project_path identifies the target workspace itself. Do not create
+    # a new child directory: modify_artifact requests must operate on that project.
+    workspace = resolve_projects_root(project_path) if project_path else create_project_workspace(goal)
     knowledge = search_knowledge(language + " " + resolved_goal, 20)
     llm = create_llm("coding")
     files = {}
