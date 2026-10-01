@@ -14,6 +14,7 @@ from .web_learning import create_pending, pending, learn_confirmed
 from .local_files import inspect_file, read_text, WORKSPACE_ROOT
 from .multimodal import analyze as analyze_file
 from .project_builder import build_project
+from .execution_policy import authorize_project_execution
 
 
 SYSTEM = """You are My-AI, a local-first personal AI assistant.
@@ -143,10 +144,8 @@ class Agent:
 
     @staticmethod
     def _project_build_requested(message: str, intent) -> bool:
-        return (
-            getattr(intent, "name", "") == "coding"
-            and str((getattr(intent, "args", {}) or {}).get("action") or "") == "create_artifact"
-        )
+        """Keep the legacy Agent path behind the same semantic execution gate."""
+        return authorize_project_execution(message, intent, None)
 
     @staticmethod
     def _format_project_build_result(result: dict) -> str:
