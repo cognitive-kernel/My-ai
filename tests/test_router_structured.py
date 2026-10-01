@@ -123,3 +123,10 @@ def test_semantic_target_can_authorize_without_language_or_topic():
     assert result.name == "coding"
     assert result.args["action"] == "create_artifact"
     assert result.args["target"] == "desktop expense tracking application"
+
+
+def test_router_tool_contract_preserves_semantic_target():
+    from my_ai.domain.router import Intent, router_tool_call
+    intent = Intent("coding", 0.95, args={"action": "create_artifact", "goal": "create app", "target": "desktop app"})
+    arguments = router_tool_call(intent)["arguments"]
+    assert arguments["target"] == "desktop app"
