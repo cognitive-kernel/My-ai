@@ -54,3 +54,27 @@ def test_encrypted_export_contains_security_and_learning_state(tmp_path, monkeyp
     assert payload["metadata"]["format_version"] >= 4
     assert payload["metadata"]["encrypted"] is True
     assert {"users", "tool_permissions", "audit_log", "skills", "skill_evidence"}.issubset(payload["tables"])
+
+
+def test_restore_encrypted_backup_roundtrip(tmp_path, monkeypatch):
+    from my_ai import platform
+    monkeypatch.setattr(platform, "BACKUP_ROOT", tmp_path / "backups")
+    db.init_db()
+    db.execute("CREATE TABLE IF NOT EXISTS restore_probe(value TEXT)")
+    db.execute("INSERT INTO restore_probe(value) VALUES(?)", ("before",))
+    source = platform.export_database(str(tmp_path / "backups" / "roundtrip.json"), password="roundtrip-password")
+    destination = str(tmp_path / "backups" / "restored.sqlite")
+    restored = platform.restore_encrypted_backup(source, destination, "roundtrip-password")
+    import sqlite3
+    conn = sqlite3.connect(restored)
+    assert conn.execute("SELECT value FROM restore_probe").fetchone()[0] == "before"
+    conn.close()
+
+
+def test_encrypted_restore_rejects_wrong_password(tmp_path, monkeypatch):
+    from my_ai import platform
+    monkeypatch.setattr(platform, "BACKUP_ROOT", tmp_path / "backups")
+    db.init_db()
+    source = platform.export_database(str(tmp_path / "backups" / "wrong-password.json"), password="correct-password")
+    with pytest.raises(Exception):
+        platform.restore_encrypted_backup(source, str(tmp_path / "backups" / "bad.sqlite"), "wrong-password")
