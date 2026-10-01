@@ -309,6 +309,17 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
                 plan_data = candidate
     except Exception:
         plan_data = {}
+    try:
+        research_marker = "RESEARCH BUNDLE:\n"
+        if research_marker in resolved_goal:
+            research_text = resolved_goal.split(research_marker, 1)[1].split("\n\nUSER REQUEST:", 1)[0]
+            research_data = json.loads(research_text)
+            if isinstance(research_data, dict):
+                research_path = workspace / ".myai" / "research.json"
+                research_path.parent.mkdir(parents=True, exist_ok=True)
+                research_path.write_text(json.dumps(research_data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
     phased = False
     if plan_data:
         matrix_defects = validate_validation_matrix(plan_data, language)
