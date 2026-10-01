@@ -116,3 +116,10 @@ def test_advanced_runtime_enforces_policy_boundary():
     else:
         raise AssertionError("runtime must not bypass policy")
     runtime.authorize("delete", approved=True)
+
+
+def test_context_budget_compacts_large_low_priority_items():
+    manager = ContextBudgetManager()
+    pack = manager.pack([ContextItem("requirement", "important", 1.0, 1), ContextItem("history", " ".join(["word"] * 100), 0.5)], 20)
+    assert any("[compacted]" in item.text for item in pack.items)
+    assert pack.estimated_tokens <= 20
