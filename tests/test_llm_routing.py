@@ -2,7 +2,9 @@ from my_ai.config import settings
 from my_ai.llm import OllamaClient
 
 
-def test_ollama_task_routing():
+def test_ollama_task_routing(monkeypatch):
+    import httpx
+    monkeypatch.setattr("my_ai.infra.llm.httpx.get", lambda *args, **kwargs: httpx.Response(200, json={"models":[{"name":settings.ollama_model},{"name":settings.routing_model},{"name":settings.coding_model}]}, request=httpx.Request("GET","http://127.0.0.1:11434/api/tags")))
     assert OllamaClient("coding").model == settings.coding_model
     assert OllamaClient("patch").model == settings.coding_model
     assert OllamaClient("routing").model == settings.routing_model
