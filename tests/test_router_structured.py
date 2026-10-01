@@ -56,3 +56,35 @@ def test_domain_router_has_no_keyword_tables_or_regex_fallback():
     assert "_INTENT_PATTERNS" not in source
     assert "import re" not in source
     assert "_normalize(" not in source
+
+
+def test_artifact_false_positive_is_demoted_to_chat():
+    payload = valid_payload(
+        primary="coding",
+        intents=["coding"],
+        action="create_artifact",
+        confidence=0.99,
+        language=None,
+        topic=None,
+        goal="create artifact",
+        project_path=None,
+    )
+    result = build_router_service(Client(payload)).classify("سلام")
+    assert result.name == "chat"
+    assert result.args["action"] == "answer"
+
+
+def test_concrete_artifact_goal_remains_coding():
+    payload = valid_payload(
+        primary="coding",
+        intents=["coding"],
+        action="create_artifact",
+        confidence=0.99,
+        language="Python",
+        topic="calculator",
+        goal="create a desktop calculator application with tests",
+        project_path=None,
+    )
+    result = build_router_service(Client(payload)).classify("یک برنامه ماشین حساب دسکتاپ با تست بساز")
+    assert result.name == "coding"
+    assert result.args["action"] == "create_artifact"
