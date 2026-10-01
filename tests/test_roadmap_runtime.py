@@ -1,5 +1,6 @@
 from my_ai.advanced_agent import Capability, OperationRisk, RuntimeMode, TaskProfile
 from my_ai.roadmap_runtime import (
+    benchmark_model_selection, model_management,
     add_memory_lesson,
     add_research_trace,
     benchmark_case,
@@ -65,3 +66,12 @@ def test_personal_benchmark_suite_is_valid():
     result = validate_suite()
     assert result["valid"] is True
     assert result["case_count"] >= 10
+
+
+def test_model_management_and_selection_benchmark():
+    management = model_management()
+    assert management["models"]
+    assert all("health" in item and "resource_fit" in item for item in management["models"])
+    benchmark = benchmark_model_selection()
+    assert benchmark["count"] == 3
+    assert len(benchmark["cases"]) == 3
