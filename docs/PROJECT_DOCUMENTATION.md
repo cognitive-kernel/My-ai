@@ -891,11 +891,11 @@ My-AI برای هر مبحث یک curriculum پایه دارد و پس از آن
 My-AI is offline-first. Network access is an explicit exception, not a default capability.
 
 Allowed online categories:
-- Configured LLM backend when it is online.
-- Explicitly confirmed chat web-learning after the local assistant says it does not know.
-- Explicitly configured educational learning sources and scheduled learning review.
-- Online installation of missing prerequisites and educational tools.
-- Git/GitHub operations.
+- Explicitly confirmed web research / chat learning after the local assistant says it does not know.
+- Explicitly configured educational learning and scheduled learning review.
+- Explicitly confirmed installation of missing prerequisites and educational tools.
+
+The normal assistant, semantic router, model selection, memory, retrieval, software reasoning, validation, diagnostics, UI, and persistence paths remain local/offline. Remote LLM providers are blocked in strict offline mode; the local Ollama endpoint must be loopback. Git/GitHub and other external integrations remain explicit opt-in operations rather than background network dependencies.
 
 Everything else must use local resources and local processing.
 
