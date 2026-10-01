@@ -182,6 +182,91 @@ def _ensure_git_commit(workspace: Path, message: str) -> dict[str, Any]:
         return {"ok": False, "error": str(exc)}
 
 
+
+_SELF_REVIEW_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["passed", "criteria", "defects", "notes"],
+    "properties": {
+        "passed": {"type": "boolean"},
+        "criteria": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["criterion", "passed", "evidence"],
+                "properties": {
+                    "criterion": {"type": "string"},
+                    "passed": {"type": "boolean"},
+                    "evidence": {"type": "string"},
+                },
+            },
+            "maxItems": 40,
+        },
+        "defects": {"type": "array", "items": {"type": "string"}, "maxItems": 40},
+        "notes": {"type": "array", "items": {"type": "string"}, "maxItems": 40},
+    },
+}
+
+
+def _self_review(plan: dict[str, Any], result: dict[str, Any], workspace: Path | None) -> dict[str, Any]:
+    """Review the generated artifact against the plan using only observable evidence."""
+    if workspace is None or not workspace.exists():
+        return {"passed": False, "criteria": [], "defects": ["Generated workspace is unavailable."], "notes": []}
+
+    evidence = {
+        "plan": {
+            "goal": plan.get("goal"),
+            "artifact_type": plan.get("artifact_type"),
+            "requirements": plan.get("requirements"),
+            "acceptance_criteria": plan.get("acceptance_criteria"),
+            "constraints": plan.get("constraints"),
+        },
+        "validation": {
+            "build": result.get("build"),
+            "tests": result.get("tests"),
+            "lint": result.get("lint"),
+            "run": result.get("run"),
+            "semantic_defects": result.get("semantic_defects") or [],
+        },
+        "artifacts": result.get("artifacts") or result.get("files") or [],
+        "git_status": _git_snapshot(workspace),
+    }
+    prompt = (
+        "Perform a strict evidence-based self-review of the generated software artifact. "
+        "Evaluate every acceptance criterion from the plan. A criterion may be marked passed only when the supplied evidence actually demonstrates it; "
+        "do not infer successful execution, browser behavior, APIs, or capabilities that are not evidenced. "
+        "If evidence is missing or contradictory, mark the criterion failed and explain what is missing. "
+        "Do not invent requirements. Unresolved semantic defects are failures. "
+        "Return only JSON matching the schema.\n\n"
+        + json.dumps(evidence, ensure_ascii=False)[:30000]
+    )
+    try:
+        review = create_llm("coding").structured_chat_json(
+            prompt,
+            _SELF_REVIEW_SCHEMA,
+            system="You are a strict software acceptance reviewer. Evidence outranks assumptions.",
+        )
+    except Exception as exc:
+        return {"passed": False, "criteria": [], "defects": [f"Self-review failed: {exc}"], "notes": []}
+    if not isinstance(review, dict):
+        return {"passed": False, "criteria": [], "defects": ["Self-review returned invalid data."], "notes": []}
+
+    criteria = review.get("criteria") if isinstance(review.get("criteria"), list) else []
+    expected = [str(x).strip() for x in plan.get("acceptance_criteria") or [] if str(x).strip()]
+    normalized = {str(x.get("criterion") or "").strip(): x for x in criteria if isinstance(x, dict)}
+    missing = [criterion for criterion in expected if criterion not in normalized]
+    failed = [criterion for criterion in expected if criterion in normalized and not bool(normalized[criterion].get("passed"))]
+    defects = [str(x).strip() for x in review.get("defects") or [] if str(x).strip()]
+    if missing:
+        defects.append("Self-review did not evaluate every acceptance criterion: " + "; ".join(missing))
+    if failed:
+        defects.append("Acceptance criteria failed: " + "; ".join(failed))
+    passed = not defects and len(criteria) >= len(expected) and bool(review.get("passed"))
+    return {**review, "passed": passed, "defects": defects}
+
+
+
 def run_software_task(request: str, *, language: str | None = None, project_path: str | None = None, context: str = "", timeout: int = 300, repair_attempts: int = 3) -> dict[str, Any]:
     request = _safe_text(request, 20000)
     if not request:
@@ -209,11 +294,15 @@ def run_software_task(request: str, *, language: str | None = None, project_path
     research_required = bool(plan.get("research_queries"))
     research_ok = bool(research.sources) if research_required else True
 
+    review = _self_review(plan, result, workspace)
+    result["self_review"] = review
+
     # Never commit an incomplete artifact as "complete".
     pre_commit_ok = bool(
         result.get("status") == "built"
         and build_ok and tests_ok and lint_ok and runtime_ok
         and research_ok and not result.get("semantic_defects")
+        and bool(review.get("passed"))
         and workspace is not None
     )
     if pre_commit_ok:
@@ -231,6 +320,7 @@ def run_software_task(request: str, *, language: str | None = None, project_path
         "tests": tests_ok,
         "lint": lint_ok,
         "runtime": runtime_ok,
+        "self_review": bool(review.get("passed")),
         "git": git_ok,
         "completed": bool(pre_commit_ok and git_ok),
     }
