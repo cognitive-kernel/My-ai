@@ -398,3 +398,23 @@ def test_failure_diagnosis_cannot_bypass_validation(monkeypatch, tmp_path):
     assert result["status"] == "build_failed"
     assert result["semantic_defects"] == ["still invalid"]
     assert result["failure_diagnosis"]["category"] == "implementation"
+
+
+def test_workspace_cleanup_removes_generated_caches_without_touching_source_or_outputs(tmp_path):
+    from my_ai import software_agent
+
+    (tmp_path / "main.py").write_text("print('ok')", encoding="utf-8")
+    (tmp_path / "dist").mkdir()
+    (tmp_path / "dist" / "app.bin").write_text("artifact", encoding="utf-8")
+    (tmp_path / "__pycache__").mkdir()
+    (tmp_path / "__pycache__" / "main.cpython-313.pyc").write_bytes(b"cache")
+    (tmp_path / ".pytest_cache").mkdir()
+    (tmp_path / ".pytest_cache" / "state").write_text("cache", encoding="utf-8")
+
+    result = software_agent._cleanup_workspace(tmp_path)
+
+    assert result["ok"] is True
+    assert not (tmp_path / "__pycache__").exists()
+    assert not (tmp_path / ".pytest_cache").exists()
+    assert (tmp_path / "main.py").exists()
+    assert (tmp_path / "dist" / "app.bin").exists()
