@@ -109,3 +109,36 @@ def test_project_policy_contains_no_phrase_or_keyword_rules():
     assert "startswith(" not in source
     assert "endswith(" not in source
     assert "_MIN_CONCRETE_REQUEST_LENGTH" not in source
+
+def test_project_authorization_is_independent_of_user_wording():
+    intent = Intent(
+        name="coding",
+        confidence=0.95,
+        args={
+            "action": "create_artifact",
+            "goal": "a personal finance desktop application",
+            "language": "Python",
+            "topic": "expense management",
+        },
+        intents=("coding",),
+    )
+    messages = (
+        "I need a small desktop tool for tracking household spending.",
+        "برای مدیریت هزینه‌های خانه یک ابزار دسکتاپ می‌خواهم.",
+        "Build the application described by the structured goal.",
+        "Please implement the requested software.",
+    )
+    assert all(authorize_project_execution(message, intent) for message in messages)
+
+
+def test_project_authorization_rejects_same_semantics_without_structured_target():
+    intent = Intent(
+        name="coding",
+        confidence=0.95,
+        args={
+            "action": "create_artifact",
+            "goal": "a personal finance desktop application",
+        },
+        intents=("coding",),
+    )
+    assert authorize_project_execution("Please implement the requested software.", intent) is False
