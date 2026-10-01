@@ -189,6 +189,58 @@
           "context-fit"
         ]
       }
+    ],
+    "maturity": [
+      {
+        "name": "task-state-machine",
+        "input": "task lifecycle transitions",
+        "expected": "invalid transitions blocked"
+      },
+      {
+        "name": "verify-critique-repair-verify",
+        "input": "failed acceptance criterion",
+        "expected": "repair then re-validation"
+      },
+      {
+        "name": "transaction-rollback",
+        "input": "failed multi-step artifact operation",
+        "expected": "partial artifacts rolled back"
+      },
+      {
+        "name": "workspace-isolation",
+        "input": "two project tasks",
+        "expected": "independent workspace roots"
+      },
+      {
+        "name": "memory-lifecycle",
+        "input": "candidate knowledge",
+        "expected": "validated/stale/archive lifecycle"
+      },
+      {
+        "name": "trace-completeness",
+        "input": "agent task execution",
+        "expected": "state events reconstruct task"
+      },
+      {
+        "name": "tool-contract",
+        "input": "register capability manifest",
+        "expected": "schema/risk/offline metadata"
+      },
+      {
+        "name": "config-versioning",
+        "input": "activate configuration",
+        "expected": "versioned reversible config"
+      },
+      {
+        "name": "offline-execution",
+        "input": "normal task",
+        "expected": "no remote network dependency"
+      },
+      {
+        "name": "resilience-circuit-breaker",
+        "input": "repeated backend failure",
+        "expected": "backend opens circuit"
+      }
     ]
   }
 }
