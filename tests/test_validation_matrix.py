@@ -65,11 +65,11 @@ def test_provider_alternatives_cannot_form_a_synthetic_lifecycle():
         "providers": [
             {"executables": ["tool-a"], "commands": {
                 "build": "tool-a build", "test": "tool-a test",
-                "lint": "tool-a lint", "typecheck": "tool-a typecheck",
+                "lint": "tool-a lint",
             }},
             {"executables": ["tool-b"], "commands": {
                 "build": "tool-b build", "test": "tool-b test",
-                "lint": "tool-b lint", "run": "tool-b run",
+                "typecheck": "tool-b typecheck", "run": "tool-b run",
             }},
         ]
     }]
