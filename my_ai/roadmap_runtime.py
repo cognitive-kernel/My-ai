@@ -173,9 +173,29 @@ def trace(session_id: int | None, run_id: int | None, node_key: str, kind: str, 
     return execute("INSERT INTO agent_traces(session_id,run_id,node_key,kind,value,metadata) VALUES(?,?,?,?,?,?)", (session_id,run_id,node_key,kind,value,json.dumps(metadata or {},ensure_ascii=False)))
 
 
-def completion_report(goal: str, requirements: list[str], validation: list[str], unresolved: list[str] | None = None) -> dict[str, Any]:
+def completion_report(
+    goal: str,
+    requirements: list[str],
+    validation: list[str],
+    unresolved: list[str] | None = None,
+    artifacts: list[str] | None = None,
+    research: list[str] | None = None,
+    limitations: list[str] | None = None,
+) -> dict[str, Any]:
     unresolved = unresolved or []
-    return {"goal": goal, "requirements": requirements, "validation": validation, "unresolved": unresolved, "complete": bool(goal and requirements and validation and not unresolved)}
+    artifacts = artifacts or []
+    research = research or []
+    limitations = limitations or []
+    return {
+        "goal": goal,
+        "requirements": requirements,
+        "validation": validation,
+        "artifacts": artifacts,
+        "research": research,
+        "limitations": limitations,
+        "unresolved": unresolved,
+        "complete": bool(goal and requirements and validation and not unresolved),
+    }
 
 
 def benchmark_case(suite: str, case_name: str, input_text: str, expected: str, evaluator: Callable[[str], Any]) -> dict[str, Any]:
