@@ -38,3 +38,33 @@ def test_voice_status_uses_configured_local_models(monkeypatch, tmp_path):
     monkeypatch.setattr(voice.subprocess, "run", lambda *args, **kwargs: type("R", (), {"returncode": 0})())
     result = voice.status()
     assert result["offline_ready"] is True
+
+
+def test_transcribe_rejects_missing_audio_or_model(monkeypatch, tmp_path):
+    import my_ai.voice as voice
+    binary = tmp_path / "whisper-cli"
+    binary.write_text("binary")
+    binary.chmod(0o755)
+    monkeypatch.setenv("WHISPER_CPP_BIN", str(binary))
+    import pytest
+    with pytest.raises(FileNotFoundError):
+        voice.transcribe(str(tmp_path / "missing.wav"), str(tmp_path / "missing.bin"))
+
+
+def test_synthesize_rejects_missing_piper_model(monkeypatch, tmp_path):
+    import my_ai.voice as voice
+    monkeypatch.setattr(voice, "_piper_binary", lambda: "/usr/bin/piper")
+    import pytest
+    with pytest.raises(FileNotFoundError):
+        voice.synthesize("سلام", str(tmp_path / "missing.onnx"), str(tmp_path / "out.wav"))
+
+
+def test_offline_roundtrip_propagates_timeout(monkeypatch):
+    import my_ai.voice as voice
+    import subprocess
+    def fail(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd="voice", timeout=1)
+    monkeypatch.setattr(voice, "transcribe", fail)
+    import pytest
+    with pytest.raises(subprocess.TimeoutExpired):
+        voice.offline_roundtrip("audio.wav", "whisper.bin", "piper.onnx", "out.wav")
