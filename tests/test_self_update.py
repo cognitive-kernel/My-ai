@@ -44,3 +44,28 @@ def test_database_snapshot_is_restorable(tmp_path, monkeypatch):
     snapshot_conn = sqlite3.connect(snapshot)
     assert snapshot_conn.execute("SELECT value FROM sample").fetchone()[0] == "before"
     snapshot_conn.close()
+
+
+def test_apply_update_runs_isolated_tests_before_activation(monkeypatch, tmp_path):
+    calls = []
+    state = iter(["", "current", "remote"])
+    monkeypatch.setattr(self_update, "ROOT", tmp_path)
+    monkeypatch.setattr(self_update, "STATE_DIR", tmp_path / "self-repair")
+    self_update.STATE_DIR.mkdir()
+    monkeypatch.setattr(self_update, "_git", lambda *args, **kwargs: calls.append(args) or next(state, "ok"))
+    monkeypatch.setattr(self_update, "_snapshot_database", lambda destination: None)
+    monkeypatch.setattr(self_update, "_tests", lambda cwd: (True, "passed"))
+    monkeypatch.setattr(self_update, "_policy_flag", lambda *args: True)
+    monkeypatch.setattr(self_update, "record_decision", lambda *args, **kwargs: None)
+    monkeypatch.setattr(self_update, "notify", lambda *args, **kwargs: None)
+    class Proc:
+        @staticmethod
+        def Popen(*args, **kwargs):
+            calls.append(("watchdog", args[0]))
+    monkeypatch.setattr(self_update.subprocess, "Popen", Proc.Popen)
+    monkeypatch.setattr(self_update, "assert_write_allowed", lambda *args: None)
+    result = self_update.apply_confirmed_update()
+    assert result["status"] == "activated"
+    assert any(args[:3] == ("worktree", "add", "--detach") for args in calls)
+    assert any(args[:2] == ("merge", "--ff-only") for args in calls)
+    assert result["watchdog"] is True
