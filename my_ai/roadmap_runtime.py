@@ -265,12 +265,13 @@ def benchmark_summary(suite: str | None = None) -> dict[str, Any]:
 def maintenance(limit: int = 100) -> dict[str, Any]:
     if not acquire_resource():
         return {"checked": 0, "review_required": 0, "deferred": True, "reason": "interactive resource slot is busy"}
-    rows = fetch_all(
-        "SELECT id,verification_status,verified_at FROM knowledge ORDER BY id DESC LIMIT ?",
-        (max(1, min(limit, 500)),),
-    )
     checked = 0
+    rows: list[dict[str, Any]] = []
     try:
+        rows = fetch_all(
+            "SELECT id,verification_status,verified_at FROM knowledge ORDER BY id DESC LIMIT ?",
+            (max(1, min(limit, 500)),),
+        )
         for row in rows:
             status = "fresh" if row["verification_status"] == "verified" and row["verified_at"] else "review"
             execute(
