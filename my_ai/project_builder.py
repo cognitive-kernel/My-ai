@@ -123,6 +123,20 @@ def _run(language: str, operation: str, workspace: Path, timeout: int, tool_requ
     except Exception as exc:
         return {"language": canonical_language(language), "operation": operation, "passed": False, "return_code": -1, "output": "", "error": str(exc)}
 
+def _has_lifecycle_command(requirements: list[dict[str, Any]] | None, operation: str) -> bool:
+    for item in requirements or []:
+        if not isinstance(item, dict):
+            continue
+        commands = item.get("commands")
+        value = item.get(operation)
+        if value is None and isinstance(commands, dict):
+            value = commands.get(operation)
+        if isinstance(value, str) and value.strip():
+            return True
+        if isinstance(value, list) and any(str(x).strip() for x in value):
+            return True
+    return False
+
 
 def _recent_conversation_context(goal: str) -> tuple[str, str | None, int | None]:
     sessions = fetch_all("SELECT id,language FROM chat_sessions WHERE kind='chat' ORDER BY updated_at DESC,id DESC LIMIT 1")
@@ -237,15 +251,20 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
             continue
         tests = _run(language, "test", workspace, timeout, requirements)
         lint = _run(language, "lint", workspace, timeout, requirements)
-        if tests.get("passed") and lint.get("passed"):
+        run = (
+            _run(language, "run", workspace, timeout, requirements)
+            if _has_lifecycle_command(requirements, "run")
+            else {"operation": "run", "passed": True, "skipped": True, "reason": "No runtime command was declared for this artifact."}
+        )
+        if tests.get("passed") and lint.get("passed") and run.get("passed"):
             break
-        last_error = tests.get("error") or tests.get("output") or lint.get("error") or lint.get("output") or "tests/lint failed"
-    status = "built" if build.get("passed") and tests.get("passed", False) and lint.get("passed", False) and not semantic_defects else "build_failed"
+        last_error = tests.get("error") or tests.get("output") or lint.get("error") or lint.get("output") or run.get("error") or run.get("output") or "tests/lint/runtime validation failed"
+    status = "built" if build.get("passed") and tests.get("passed", False) and lint.get("passed", False) and run.get("passed", False) and not semantic_defects else "build_failed"
     pid = execute("INSERT INTO generated_projects(language,request,code) VALUES(?,?,?)", (language, resolved_goal, json.dumps(files, ensure_ascii=False)))
     return {
         "status": status, "language": language, "request": resolved_goal, "project_id": pid, "project_name": workspace.name,
         "project_path": str(workspace.relative_to(ROOT)) if workspace.is_relative_to(ROOT) else str(workspace), "session_id": session_id,
-        "files": sorted(files), "file_count": len(files), "build": build, "tests": tests, "lint": lint,
+        "files": sorted(files), "file_count": len(files), "build": build, "tests": tests, "lint": lint, "run": run,
         "semantic_defects": semantic_defects, "repair_attempts": attempts - 1, "artifacts": _artifact_files(workspace),
         "toolchain": doctor(language, cwd=str(workspace), requirements=requirements),
     }
