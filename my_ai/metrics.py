@@ -32,6 +32,10 @@ def record_inference(provider: str, model: str, duration: float, *, prompt_token
         if output_tokens is not None:
             _totals[f"output_tokens:{key}"] += max(0, output_tokens)
 
+def record_route(task: str, model: str, reason: str) -> None:
+    with _lock:
+        _counts[f"routing:{task}:{model}:{reason}"] += 1
+
 def record_error(provider: str, model: str) -> None:
     with _lock:
         _counts[f"errors:{provider}:{model}"] += 1
@@ -62,7 +66,7 @@ def snapshot() -> dict[str, Any]:
                 "avg_seconds": round(_totals.get(f"{key}:duration", 0.0) / count, 4) if count else 0.0,
                 "errors": _counts.get(f"http_errors:{path}", 0),
             }
-        return {"inference": inference, "http": http}
+        routing = {key[8:]: count for key, count in _counts.items() if key.startswith("routing:")}\n        return {"inference": inference, "http": http, "routing": routing}
 
 def timer():
     return time.perf_counter()
