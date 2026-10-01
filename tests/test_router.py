@@ -34,7 +34,7 @@ def test_semantic_router_distinguishes_question_from_command():
 
 
 def test_ambiguous_multi_intent_request_preserves_all_intents():
-    result, fake = route(payload("learning", ["learning", "coding"], "continue_task", 0.91, "fa", "Python", "learn then implement"), "پایتون را یاد بگیر و بعد یک API بساز")
+    result, fake = route(payload("learning", ["learning", "coding"], "continue_task", 0.91, None, "Python", "learn then implement"), "پایتون را یاد بگیر و بعد یک API بساز")
     assert result.name == "learning"
     assert result.intents == ("learning", "coding")
     assert result.args.get("language") is None
@@ -43,12 +43,12 @@ def test_ambiguous_multi_intent_request_preserves_all_intents():
 
 
 def test_high_risk_confirmation_is_derived_outside_model_authorization():
-    result, _ = route(payload("git_write", ["git_write"], "modify_artifact", 0.98), "در مخزن تغییر بده")
+    result, _ = route(payload("git_write", ["git_write"], "modify_artifact", 0.98, None, None, "modify repository", None, "repository"), "در مخزن تغییر بده")
     assert result.requires_confirmation is True
 
 
 def test_structured_arguments_are_preserved():
-    result, _ = route(payload("coding", ["coding"], "create_artifact", 0.93, "python", None, "build API", "/projects/demo", ["https://example.com/spec"]), "پروژه را بساز")
+    result, _ = route(payload("coding", ["coding"], "create_artifact", 0.93, "python", None, "build API", "/projects/demo", None, ["https://example.com/spec"]), "پروژه را بساز")
     assert result.args == {
         "action": "create_artifact", "language": "python", "goal": "build API",
         "project_path": "/projects/demo", "target": None, "urls": ["https://example.com/spec"],
@@ -70,7 +70,7 @@ def test_chat_route_does_not_define_keyword_intent_tables():
 
 
 def test_code_generation_request_is_not_code_execution():
-    payload_data = payload("code_execution", ["code_execution"], "create_artifact", 0.99, "mql4", None, "write an indicator that can read MetaTrader data and place trades")
+    payload_data = payload("code_execution", ["code_execution"], "create_artifact", 0.99, "mql4", None, "write an indicator that can read MetaTrader data and place trades", None, "MetaTrader 4 indicator")
     result, _ = route(payload_data, "یه اندیکاتور MQL4 بنویس که قیمت، نمودار و زمان متاتریدر را بخواند و امکان انجام معامله داشته باشد")
     assert result.name == "coding"
     assert result.requires_confirmation is False
@@ -85,6 +85,8 @@ def test_mql4_source_request_stays_in_code_generation_path():
         "mql4",
         None,
         "generate MetaTrader 4 source",
+        None,
+        "MetaTrader 4 source",
     )
     result, _ = route(
         payload_data,
