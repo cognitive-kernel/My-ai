@@ -66,8 +66,8 @@ def main():
             if r.status_code == 200:
                 healthy = True
                 break
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("WATCHDOG_CHILD_TERMINATION_FAILED: %s", exc)
         if child.poll() is not None:
             break
         time.sleep(1)
