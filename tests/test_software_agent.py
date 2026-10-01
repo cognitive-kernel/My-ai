@@ -535,3 +535,11 @@ def test_phase_lifecycle_validation_requires_each_declared_check(monkeypatch, tm
     result = project_builder._phase_lifecycle_validation("python", tmp_path, 30, [{"commands": {"build": "python -m compileall .", "test": "pytest", "lint": "ruff check .", "typecheck": "mypy .", "run": "python main.py"}}], include_runtime=True)
     assert result["passed"] is True
     assert calls == ["build", "test", "lint", "typecheck", "run"]
+
+
+def test_phase_generation_accepts_failure_feedback():
+    from my_ai import project_builder
+    import inspect
+
+    signature = inspect.signature(project_builder._generate_phase)
+    assert "failure" in signature.parameters
