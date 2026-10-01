@@ -17,6 +17,8 @@ def plan(artifact="application"):
 def test_python_requires_strict_typecheck():
     p = plan()
     p["tool_requirements"][0]["commands"]["typecheck"] = "mypy --strict ."
+    p["tool_requirements"][0]["commands"]["build"] = "python -m compileall ."
+    p["tool_requirements"][0]["commands"]["test"] = "python -m pytest"
     assert validate_validation_matrix(p, "Python") == []
     p["tool_requirements"][0]["commands"]["typecheck"] = "python -m compileall ."
     assert "Python validation requires" in " ".join(validate_validation_matrix(p, "Python"))
