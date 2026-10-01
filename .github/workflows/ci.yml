@@ -28,5 +28,6 @@ jobs:
       - run: bandit -r my_ai -q -lll
       - run: pip-audit
       - run: pytest -q
+      - run: python scripts/regression_gate.py
       - run: docker build -t my-ai-ci .
       - run: EXECUTOR_SHARED_TOKEN=ci-test-token docker compose config
