@@ -202,7 +202,7 @@ class Agent(LegacyAgent):
         context = "\n".join(item.text for item in packed_context.items)
         routing_context = (
             f"CONVERSATION STATE:\n{state['summary']}\n\nRECENT CHAT:\n{context}"
-            f"\n\nCONTEXT BUDGET: {context_budget} tokens; estimated={packed_context.estimated_tokens}; omitted={packed_context.omitted}"
+            f"\n\nCONTEXT BUDGET: {base_budget} tokens; estimated={packed_context.estimated_tokens}; omitted={packed_context.omitted}"
             f"\n\nMODEL ROUTING: {json.dumps(model_choice, ensure_ascii=False)}"
         )
         attachment_context = self._attachment_context(normalized_attachments)
