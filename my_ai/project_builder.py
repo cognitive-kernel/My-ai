@@ -318,6 +318,7 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
     llm = create_llm("coding")
     files = {}
     phase_validation: list[dict[str, Any]] = []
+    install = {"operation": "install", "passed": True, "skipped": True, "not_required": True}
     build = tests = lint = typecheck = run = {}
     last_error = ""
     last_diagnosis: dict[str, Any] | None = None
