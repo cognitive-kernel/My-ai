@@ -1,16 +1,16 @@
 """Advanced, dependency-light agent orchestration primitives.
 
-The module intentionally uses only the Python standard library so the local-first
-runtime remains usable on constrained machines. It provides deterministic policy
-and budgeting primitives around an LLM rather than pretending those decisions
-belong to the model itself.
+These deterministic controls sit around the LLM: model choice, context budgets,
+capabilities, policy, evidence, versioning, traceability, scheduling and evals.
+The implementation deliberately uses the standard library for local-first use on
+constrained hardware.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
 from time import monotonic
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 
 class OperationRisk(str, Enum):
@@ -19,6 +19,12 @@ class OperationRisk(str, Enum):
     EXECUTE = "execute"
     NETWORK = "network"
     DESTRUCTIVE = "destructive"
+
+
+class RuntimeMode(str, Enum):
+    OFFLINE = "offline"
+    LOCAL = "local"
+    ONLINE = "online"
 
 
 @dataclass(frozen=True)
@@ -55,7 +61,7 @@ class ModelChoice:
 
 
 class ModelRouter:
-    """Select the smallest viable model while respecting task and resources."""
+    """Select a viable model while respecting capabilities and hardware."""
 
     def choose(self, models: Iterable[ModelProfile], task: TaskProfile, resources: ResourceSnapshot) -> ModelChoice:
         candidates = [m for m in models if task.required_capabilities <= m.capabilities]
@@ -65,7 +71,7 @@ class ModelRouter:
             raise RuntimeError("no model satisfies task capabilities, context, and available resources")
         candidates.sort(key=lambda m: (m.quality * (0.35 + task.complexity), m.speed, -m.ram_gb), reverse=True)
         chosen = candidates[0]
-        return ModelChoice(chosen, f"capabilities={sorted(task.required_capabilities)} complexity={task.complexity:.2f} resources=ram:{resources.ram_available_gb:.1f}GB/vram:{resources.vram_available_gb:.1f}GB")
+        return ModelChoice(chosen, f"complexity={task.complexity:.2f} ram={resources.ram_available_gb:.1f}GB vram={resources.vram_available_gb:.1f}GB")
 
 
 @dataclass(frozen=True)
@@ -86,12 +92,12 @@ class ContextPack:
 
 class ContextBudgetManager:
     def pack(self, items: Iterable[ContextItem], budget: int) -> ContextPack:
+        material = list(items)
         if budget <= 0:
-            return ContextPack((), 0, len(list(items)))
-        ranked = sorted(items, key=lambda x: x.priority, reverse=True)
+            return ContextPack((), 0, len(material))
+        ranked = sorted(material, key=lambda x: x.priority, reverse=True)
         selected: list[ContextItem] = []
-        used = 0
-        omitted = 0
+        used = omitted = 0
         for item in ranked:
             tokens = item.tokens if item.tokens is not None else max(1, len(item.text.split()))
             if used + tokens <= budget:
@@ -111,15 +117,29 @@ class Capability:
     offline: bool = True
 
 
+class CapabilityRegistry:
+    def __init__(self, capabilities: Iterable[Capability] = ()) -> None:
+        self._items = {c.name: c for c in capabilities}
+
+    def register(self, capability: Capability) -> None:
+        self._items[capability.name] = capability
+
+    def get(self, name: str) -> Capability | None:
+        return self._items.get(name)
+
+    def all(self) -> tuple[Capability, ...]:
+        return tuple(self._items.values())
+
+
 @dataclass
 class PolicyEngine:
     capabilities: dict[str, Capability] = field(default_factory=dict)
 
-    def authorize(self, name: str, *, approved: bool = False, online: bool = False) -> None:
+    def authorize(self, name: str, *, approved: bool = False, mode: RuntimeMode = RuntimeMode.LOCAL) -> None:
         cap = self.capabilities.get(name)
         if cap is None or not cap.enabled:
             raise PermissionError(f"capability disabled: {name}")
-        if online and not cap.offline and not approved:
+        if mode is RuntimeMode.ONLINE and not cap.offline and not approved:
             raise PermissionError(f"approval required for online capability: {name}")
         if cap.requires_approval and not approved:
             raise PermissionError(f"approval required: {name}")
@@ -146,8 +166,58 @@ class EvidenceStore:
         return [e for e in self._items if needle in e.claim.casefold()]
 
     def conflicts(self, claim: str) -> bool:
-        values = {e.claim.casefold() for e in self.for_claim(claim)}
-        return len(values) > 1
+        items = self.for_claim(claim)
+        return len({e.claim.casefold() for e in items}) > 1
+
+
+@dataclass(frozen=True)
+class KnowledgeVersion:
+    key: str
+    version: int
+    content: str
+    source: str
+    active: bool = True
+
+
+class KnowledgeVersionStore:
+    def __init__(self) -> None:
+        self._items: dict[str, list[KnowledgeVersion]] = {}
+
+    def add(self, key: str, content: str, source: str) -> KnowledgeVersion:
+        history = self._items.setdefault(key, [])
+        for old in history:
+            object.__setattr__(old, "active", False)
+        item = KnowledgeVersion(key, len(history) + 1, content, source)
+        history.append(item)
+        return item
+
+    def active(self, key: str) -> KnowledgeVersion | None:
+        history = self._items.get(key, [])
+        return next((item for item in reversed(history) if item.active), None)
+
+    def history(self, key: str) -> tuple[KnowledgeVersion, ...]:
+        return tuple(self._items.get(key, ()))
+
+
+@dataclass(frozen=True)
+class TraceNode:
+    node_id: str
+    kind: str
+    value: str
+
+
+class EvidenceGraph:
+    def __init__(self) -> None:
+        self.nodes: dict[str, TraceNode] = {}
+        self.edges: set[tuple[str, str, str]] = set()
+
+    def add_node(self, node: TraceNode) -> None:
+        self.nodes[node.node_id] = node
+
+    def link(self, source: str, relation: str, target: str) -> None:
+        if source not in self.nodes or target not in self.nodes:
+            raise KeyError("trace edge requires existing nodes")
+        self.edges.add((source, relation, target))
 
 
 @dataclass
@@ -166,6 +236,18 @@ class ResourceScheduler:
 
 
 @dataclass(frozen=True)
+class CompletionReport:
+    goal: str
+    requirements: tuple[str, ...]
+    validation: tuple[str, ...]
+    unresolved: tuple[str, ...] = ()
+
+    @property
+    def complete(self) -> bool:
+        return bool(self.goal) and bool(self.requirements) and bool(self.validation) and not self.unresolved
+
+
+@dataclass(frozen=True)
 class EvalCase:
     name: str
     input: str
@@ -181,7 +263,7 @@ class EvalResult:
 
 
 class EvaluationHarness:
-    def run(self, cases: Iterable[EvalCase], evaluator) -> list[EvalResult]:
+    def run(self, cases: Iterable[EvalCase], evaluator: Callable[[str], Any]) -> list[EvalResult]:
         results: list[EvalResult] = []
         for case in cases:
             started = monotonic()
@@ -189,17 +271,16 @@ class EvaluationHarness:
                 actual = str(evaluator(case.input))
                 passed = actual == case.expected
                 detail = "" if passed else f"expected={case.expected!r} actual={actual!r}"
-            except Exception as exc:  # evaluation must report failures, not abort the suite
+            except Exception as exc:
                 passed = False
                 detail = f"{type(exc).__name__}: {exc}"
-            latency = int((monotonic() - started) * 1000)
-            results.append(EvalResult(case.name, passed, latency, detail))
+            results.append(EvalResult(case.name, passed, int((monotonic() - started) * 1000), detail))
         return results
 
 
 __all__ = [
-    "Capability", "ContextBudgetManager", "ContextItem", "ContextPack", "EvalCase",
-    "EvalResult", "EvaluationHarness", "Evidence", "EvidenceStore", "ModelChoice",
-    "ModelProfile", "ModelRouter", "OperationRisk", "PolicyEngine", "ResourceScheduler",
-    "ResourceSnapshot", "TaskProfile",
+    "Capability", "CapabilityRegistry", "CompletionReport", "ContextBudgetManager", "ContextItem", "ContextPack",
+    "EvalCase", "EvalResult", "EvaluationHarness", "Evidence", "EvidenceGraph", "EvidenceStore",
+    "KnowledgeVersion", "KnowledgeVersionStore", "ModelChoice", "ModelProfile", "ModelRouter", "OperationRisk",
+    "PolicyEngine", "ResourceScheduler", "ResourceSnapshot", "RuntimeMode", "TaskProfile", "TraceNode",
 ]
