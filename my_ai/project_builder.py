@@ -246,6 +246,39 @@ def _plan_language(goal: str) -> str | None:
         return None
 
 
+def _phase_workspace_context(workspace: Path, limit: int = 16000) -> str:
+    chunks: list[str] = []
+    used = 0
+    for path in sorted(workspace.rglob("*")):
+        if not path.is_file() or ".git" in path.parts:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        remaining = limit - used
+        if remaining <= 0:
+            break
+        snippet = text[:min(3000, remaining)]
+        chunks.append(f"FILE: {path.relative_to(workspace).as_posix()}\n{snippet}")
+        used += len(snippet)
+    return "\n\n".join(chunks)
+
+
+def _generate_phase(llm: Any, language: str, goal: str, phase: str, workspace: Path, knowledge: list[Any]) -> dict[str, Any]:
+    prompt = (
+        "Implement one phase of an existing software project incrementally. "
+        "Preserve valid existing files. Return only new or changed files as JSON "
+        "with a top-level files object. Do not invent requirements, use placeholders, "
+        "or replace working functionality unrelated to this phase.\n"
+        f"LANGUAGE: {language}\nPHASE: {phase}\nPLAN: {goal}\n"
+        f"CURRENT WORKSPACE:\n{_phase_workspace_context(workspace)}\n"
+        f"RESEARCH:\n{json.dumps(knowledge, ensure_ascii=False)[:10000]}"
+    )
+    return _parse_files(llm.chat(prompt, system="You are an incremental software implementation engineer. Work phase-by-phase and preserve the existing workspace."))
+
+
+
 def build_project(goal: str, language: str = "", *, project_path: str | None = None, timeout: int = 300, repair_attempts: int = 2, tool_requirements: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     goal = str(goal or "").strip()
     if not goal:
@@ -266,6 +299,52 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
     attempts = max(1, min(int(repair_attempts) + 1, 5))
     semantic_defects: list[str] = []
     requirements = tool_requirements
+    plan_data: dict[str, Any] = {}
+    try:
+        marker = "SOFTWARE ENGINEERING PLAN:\\n"
+        if marker in resolved_goal:
+            plan_text = resolved_goal.split(marker, 1)[1].split("\\n\\nRESEARCH BUNDLE:", 1)[0]
+            candidate = json.loads(plan_text)
+            if isinstance(candidate, dict):
+                plan_data = candidate
+    except Exception:
+        plan_data = {}
+    if plan_data:
+        matrix_defects = validate_validation_matrix(plan_data, language)
+        if matrix_defects:
+            return {
+                "status": "build_failed",
+                "language": language,
+                "request": resolved_goal,
+                "project_path": str(workspace.relative_to(ROOT)) if workspace.is_relative_to(ROOT) else str(workspace),
+                "files": [],
+                "file_count": 0,
+                "build": {},
+                "tests": {},
+                "lint": {},
+                "typecheck": {},
+                "run": {},
+                "semantic_defects": matrix_defects,
+                "phase_validation": [],
+                "repair_attempts": 0,
+                "failure_diagnosis": {"category": "validation_plan", "cause": "; ".join(matrix_defects), "repair_strategy": "Declare the required validation commands in the semantic plan.", "research_needed": False},
+                "artifacts": [],
+                "toolchain": doctor(language, cwd=str(workspace), requirements=requirements or []),
+            }
+        phases = [str(item).strip() for item in (plan_data.get("phases") or []) if str(item).strip()]
+        if len(phases) > 1:
+            for index, phase in enumerate(phases, 1):
+                phase_files = _generate_phase(llm, language, resolved_goal, phase, workspace, knowledge)
+                written = _write_files(workspace, phase_files)
+                defects = validate_generated_project(workspace, plan_data, language)
+                phase_validation.append({"phase": index, "name": phase, "files": written, "passed": not bool(defects), "defects": defects})
+                if defects:
+                    semantic_defects = defects
+                    last_error = "\\n".join(defects)
+                    last_diagnosis = _diagnose_failure(llm, "phase_validation", last_error)
+                    break
+            if semantic_defects:
+                phases = []
     for _ in range(attempts):
         files = _parse_files(llm.chat(_prompt(language, resolved_goal, knowledge, last_error, last_diagnosis), system="You are a senior software architect and implementation engineer. Generate complete, buildable projects. Return JSON only."))
         _write_files(workspace, files)
