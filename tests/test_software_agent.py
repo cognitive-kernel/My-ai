@@ -250,3 +250,51 @@ def test_project_builder_performs_declared_runtime_validation(monkeypatch, tmp_p
     )
     assert result["status"] == "built"
     assert calls == ["build", "test", "lint", "run"]
+
+
+def test_acceptance_self_review_is_required_before_commit(monkeypatch, tmp_path):
+    from my_ai import software_agent
+
+    plan = {
+        "goal": "test project", "artifact_type": "application", "language": "Python", "framework": None,
+        "requirements": ["works"], "tool_requirements": [], "architecture": ["main"], "phases": ["build"],
+        "acceptance_criteria": ["application starts"], "research_queries": [], "validation": ["run"],
+        "constraints": [], "ambiguities": [],
+    }
+    monkeypatch.setattr(software_agent, "_plan", lambda *args: plan)
+    monkeypatch.setattr(software_agent, "_research", lambda *args: software_agent.ResearchBundle())
+    monkeypatch.setattr(software_agent, "build_project", lambda *args, **kwargs: {
+        "status": "built", "language": "Python", "project_path": str(tmp_path),
+        "files": ["main.py"], "build": {"passed": True}, "tests": {"passed": True},
+        "lint": {"passed": True}, "run": {"passed": True}, "semantic_defects": [],
+    })
+    monkeypatch.setattr(software_agent, "_self_review", lambda *args: {
+        "passed": False, "criteria": [], "defects": ["criterion not evidenced"], "notes": []
+    })
+    result = software_agent.run_software_task("make it", project_path=str(tmp_path))
+    assert result["completion"]["self_review"] is False
+    assert result["completion"]["completed"] is False
+    assert result["git"]["committed"] is False
+
+
+def test_acceptance_self_review_requires_every_criterion(monkeypatch, tmp_path):
+    from my_ai import software_agent
+
+    class FakeLLM:
+        def structured_chat_json(self, message, schema, system=None):
+            return {
+                "passed": True,
+                "criteria": [{"criterion": "first criterion", "passed": True, "evidence": "tests passed"}],
+                "defects": [],
+                "notes": [],
+            }
+
+    monkeypatch.setattr(software_agent, "create_llm", lambda task: FakeLLM())
+    plan = {
+        "goal": "test", "artifact_type": "application",
+        "acceptance_criteria": ["first criterion", "second criterion"],
+    }
+    result = {"tests": {"passed": True}, "run": {"passed": True}, "semantic_defects": []}
+    review = software_agent._self_review(plan, result, tmp_path)
+    assert review["passed"] is False
+    assert any("second criterion" in item for item in review["defects"])
