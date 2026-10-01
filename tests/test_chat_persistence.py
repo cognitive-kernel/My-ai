@@ -20,7 +20,7 @@ def test_stream_chat_persists_user_before_processing_and_reply_incrementally(mon
     monkeypatch.setattr("my_ai.agent_runtime.execute", fake_execute)
     agent = Agent()
 
-    def prepare(message, session_id, attachments=None):
+    def prepare(message, session_id, attachments=None, intent=None):
         assert events[0][0].startswith("INSERT INTO conversations")
         assert events[0][1] == (session_id, "user", message)
         return PreparedChat(
