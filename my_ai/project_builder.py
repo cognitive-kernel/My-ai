@@ -290,7 +290,7 @@ def _phase_lifecycle_validation(
     return checks
 
 
-def _generate_phase(llm: Any, language: str, goal: str, phase: str, workspace: Path, knowledge: list[Any]) -> dict[str, Any]:
+def _generate_phase(llm: Any, language: str, goal: str, phase: str, workspace: Path, knowledge: list[Any], failure: str = "") -> dict[str, Any]:
     prompt = (
         "Implement one phase of an existing software project incrementally. "
         "Preserve valid existing files. Return only new or changed files as JSON "
