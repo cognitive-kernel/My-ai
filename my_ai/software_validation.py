@@ -77,7 +77,8 @@ def validate_validation_matrix(plan: dict[str, Any], language: str | None) -> li
     for item in declared:
         if not isinstance(item, dict):
             continue
-        values = item.get("commands") if isinstance(item.get("commands"), dict) else {}
+        raw_values = item.get("commands")
+        values = raw_values if isinstance(raw_values, dict) else {}
         for key, value in values.items():
             if isinstance(value, str):
                 commands[key] = value
