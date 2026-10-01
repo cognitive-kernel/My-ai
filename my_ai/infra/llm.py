@@ -8,6 +8,7 @@ import urllib.parse
 import time
 from .metrics import record_inference, record_error, record_route
 from .resource_guard import limits, wait_until_available
+from ..model_manager import ModelManager
 
 def _settings():
     from .. import llm as legacy_llm
@@ -28,6 +29,7 @@ class OllamaClient:
             except ValueError as exc: raise LLMError("Offline strict mode permits only loopback Ollama endpoints.") from exc
         self.default_model = getattr(_settings(), "ollama_model", "qwen2.5:7b")
         self.fallback_model = getattr(_settings(), "fallback_model", self.default_model)
+        self.model_manager = ModelManager()
         self.route_reason = "default"
         requested = self._select_model(task)
         self.model = self._preflight_model(requested, task)
@@ -49,23 +51,26 @@ class OllamaClient:
         return self.default_model
 
     def _preflight_model(self, requested: str, task: str | None) -> str:
-        try:
-            response = httpx.get(f"{self.base_url}/api/tags", timeout=5)
-            response.raise_for_status()
-            available = {str(item.get("name")) for item in response.json().get("models", []) if item.get("name")}
-        except Exception:
+        status = self.model_manager.health(requested)
+        if status.error is not None:
             record_route(task or "general", requested, "preflight_unknown")
             return requested
-        if requested in available:
+        if status.available:
             record_route(task or "general", requested, self.route_reason)
             return requested
-        if self.fallback_model in available and self.fallback_model != requested:
+        fallback = self.model_manager.choose_fallback(requested)
+        if fallback:
             previous = self.route_reason
             self.route_reason = "preflight_fallback"
-            record_route(task or "general", self.fallback_model, previous + ":fallback")
-            return self.fallback_model
+            record_route(task or "general", fallback, previous + ":fallback")
+            return fallback
         record_route(task or "general", requested, self.route_reason + ":unavailable")
         return requested
+
+    def health(self) -> dict[str, object]:
+        status = self.model_manager.health(self.model)
+        return {"provider": status.provider, "model": status.model, "available": status.available, "latency_ms": status.latency_ms, "error": status.error}
+
     def _options(self) -> dict[str, int]:
         cfg=limits(); return {"num_ctx":int(_settings().ollama_num_ctx),"num_thread":int(cfg["cpu_threads"]),"num_gpu":int(cfg["gpu_layers"])}
     def stream_chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None,stop_event=None)->Iterator[str]:
@@ -98,37 +103,22 @@ class OllamaClient:
                 except (httpx.HTTPError,json.JSONDecodeError) as fallback_exc: raise LLMError(f"Ollama streaming request failed for primary and fallback models: {exc}; {fallback_exc}") from fallback_exc
             raise LLMError(f"Ollama streaming request failed: {exc}") from exc
     def structured_chat_json(self, message: str, schema: dict, system: str | None = None) -> dict:
-        """Return schema-constrained JSON from Ollama; used for routing/tool selection."""
         wait_until_available(None)
         messages = []
-        if system:
-            messages.append({"role": "system", "content": system})
+        if system: messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": message})
-        payload = {
-            "model": self.model,
-            "stream": False,
-            "format": schema,
-            "options": self._options(),
-            "keep_alive": _settings().ollama_keep_alive,
-            "messages": messages,
-        }
+        payload = {"model": self.model, "stream": False, "format": schema, "options": self._options(), "keep_alive": _settings().ollama_keep_alive, "messages": messages}
         started = time.perf_counter()
         try:
-            response = httpx.post(f"{self.base_url}/api/chat", json=payload, timeout=120)
-            response.raise_for_status()
-            data = response.json()
-            record_inference("ollama", self.model, time.perf_counter() - started,
-                             prompt_tokens=data.get("prompt_eval_count"), output_tokens=data.get("eval_count"))
+            response = httpx.post(f"{self.base_url}/api/chat", json=payload, timeout=120); response.raise_for_status(); data = response.json()
+            record_inference("ollama", self.model, time.perf_counter() - started, prompt_tokens=data.get("prompt_eval_count"), output_tokens=data.get("eval_count"))
             raw = ((data.get("message") or {}).get("content"))
-            if not isinstance(raw, str):
-                raise LLMError("Structured Ollama response has no message content.")
+            if not isinstance(raw, str): raise LLMError("Structured Ollama response has no message content.")
             parsed = json.loads(raw)
-            if not isinstance(parsed, dict):
-                raise LLMError("Structured Ollama response is not an object.")
+            if not isinstance(parsed, dict): raise LLMError("Structured Ollama response is not an object.")
             return parsed
         except (httpx.HTTPError, json.JSONDecodeError, LLMError) as exc:
-            record_error("ollama", self.model)
-            raise LLMError(f"Structured Ollama request failed: {exc}") from exc
+            record_error("ollama", self.model); raise LLMError(f"Structured Ollama request failed: {exc}") from exc
 
     def chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None,stop_event=None)->str:
         wait_until_available(stop_event); messages: list[HistoryMessage] = []; payload={"model":self.model,"stream":False,"options":self._options(),"keep_alive":_settings().ollama_keep_alive,"messages":messages}
@@ -151,7 +141,6 @@ class OllamaClient:
         except (KeyError,TypeError) as exc: raise LLMError(f"Unexpected Ollama response: {data}") from exc
 
 class OpenAICompatibleClient:
-    """OpenAI Responses API backend, also usable with compatible gateways."""
     def __init__(self)->None:
         if getattr(_settings(),"offline_strict",False): raise LLMError("OpenAI is disabled in offline strict mode.")
         self.base_url=_settings().openai_base_url; self.model=_settings().openai_model; self.api_key=_settings().openai_api_key
