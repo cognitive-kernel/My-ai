@@ -1,5 +1,5 @@
 name: voice-e2e
-run-name: \${{ github.workflow }} @ \${{ github.sha }}
+run-name: ${{ github.workflow }} @ ${{ github.sha }}
 permissions:
   contents: read
 on:
@@ -46,14 +46,14 @@ jobs:
           test -s voice-models/ggml-tiny.bin
       - name: Generate Persian input audio
         env:
-          PIPER_MODEL_PATH: \${{ github.workspace }}/voice-models/fa_IR-amir-medium.onnx
+          PIPER_MODEL_PATH: ${{ github.workspace }}/voice-models/fa_IR-amir-medium.onnx
         run: |
           printf 'سلام، این یک آزمون آفلاین گفتار فارسی برای My-AI است.\n' | piper --model "$PIPER_MODEL_PATH" --output_file voice-input.wav
           test -s voice-input.wav
       - name: Run real offline STT and TTS roundtrip
         env:
-          WHISPER_MODEL_PATH: \${{ github.workspace }}/voice-models/ggml-tiny.bin
-          PIPER_MODEL_PATH: \${{ github.workspace }}/voice-models/fa_IR-amir-medium.onnx
+          WHISPER_MODEL_PATH: ${{ github.workspace }}/voice-models/ggml-tiny.bin
+          PIPER_MODEL_PATH: ${{ github.workspace }}/voice-models/fa_IR-amir-medium.onnx
           MYAI_OFFLINE_STRICT: "true"
         run: |
           python - <<'PY'
@@ -76,8 +76,8 @@ jobs:
           PY
       - name: Verify failure paths
         env:
-          WHISPER_MODEL_PATH: \${{ github.workspace }}/voice-models/ggml-tiny.bin
-          PIPER_MODEL_PATH: \${{ github.workspace }}/voice-models/fa_IR-amir-medium.onnx
+          WHISPER_MODEL_PATH: ${{ github.workspace }}/voice-models/ggml-tiny.bin
+          PIPER_MODEL_PATH: ${{ github.workspace }}/voice-models/fa_IR-amir-medium.onnx
         run: |
           python - <<'PY'
           from pathlib import Path
