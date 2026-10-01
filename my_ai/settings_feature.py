@@ -622,6 +622,14 @@ def course_start(course_id:int,request:Request):
     audit(user,"learning","execute","202",f"course-start:{course_id}")
     return {"status":"started","course_id":course_id}
 
+@router.post("/learning/{course_id}/pause")
+def learning_pause(course_id:int,request:Request):
+    user=require_user(request); _setup()
+    if not _course(course_id): raise HTTPException(404,"Course not found.")
+    execute("UPDATE custom_course_progress SET status='paused',phase='paused',updated_at=CURRENT_TIMESTAMP WHERE course_id=? AND status='started'",(course_id,))
+    audit(user,"learning","write","200",f"course-pause:{course_id}")
+    return {"status":"paused","course_id":course_id}
+
 @router.post("/settings/courses/{course_id}/pause")
 def course_pause(course_id:int,request:Request):
     user=require_admin(request); _setup()
