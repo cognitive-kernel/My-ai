@@ -203,7 +203,12 @@ def test_chat_api_does_not_bypass_execution_policy_for_project_build(monkeypatch
 def test_stream_chat_enforces_coding_permission_before_runtime(monkeypatch, client_db):
     import my_ai.api as api
 
-    owner = auth.create_account("owner", "a-secure-password")
+    auth.create_account("owner", "a-secure-password")
+    member = auth.create_account("member", "another-secure-password")
+    db.execute(
+        "INSERT INTO tool_permissions(user_id,tool_name,action,allowed) VALUES(?,?,?,1)",
+        (member["id"], "chat", "execute"),
+    )
 
     class Intent:
         name = "coding"
@@ -222,7 +227,7 @@ def test_stream_chat_enforces_coding_permission_before_runtime(monkeypatch, clie
     response = client_db.post(
         "/chat/stream",
         json={"message": "یک برنامه پایتون بساز"},
-        cookies=login_cookie(owner),
+        cookies=login_cookie(member),
     )
     assert response.status_code == 403
 
