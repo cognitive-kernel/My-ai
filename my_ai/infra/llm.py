@@ -110,16 +110,23 @@ class OllamaClient:
         messages.append({"role": "user", "content": message})
         payload = {"model": self.model, "stream": False, "format": schema, "options": self._options(), "keep_alive": _settings().ollama_keep_alive, "messages": messages}
         started = time.perf_counter()
-        try:
-            response = httpx.post(f"{self.base_url}/api/chat", json=payload, timeout=120); response.raise_for_status(); data = response.json()
-            record_inference("ollama", self.model, time.perf_counter() - started, prompt_tokens=data.get("prompt_eval_count"), output_tokens=data.get("eval_count"))
-            raw = ((data.get("message") or {}).get("content"))
-            if not isinstance(raw, str): raise LLMError("Structured Ollama response has no message content.")
-            parsed = json.loads(raw)
-            if not isinstance(parsed, dict): raise LLMError("Structured Ollama response is not an object.")
-            return parsed
-        except (httpx.HTTPError, json.JSONDecodeError, LLMError) as exc:
-            record_error("ollama", self.model); raise LLMError(f"Structured Ollama request failed: {exc}") from exc
+        candidates = [self.model] + [m for m in self.fallback_chain if m != self.model]
+        errors = []
+        for candidate in candidates:
+            try:
+                attempt = dict(payload); attempt["model"] = candidate
+                response = httpx.post(f"{self.base_url}/api/chat", json=attempt, timeout=120); response.raise_for_status(); data = response.json()
+                record_inference("ollama", candidate, time.perf_counter() - started, prompt_tokens=data.get("prompt_eval_count"), output_tokens=data.get("eval_count"))
+                raw = ((data.get("message") or {}).get("content"))
+                if not isinstance(raw, str): raise LLMError("Structured Ollama response has no message content.")
+                parsed = json.loads(raw)
+                if not isinstance(parsed, dict): raise LLMError("Structured Ollama response is not an object.")
+                self.model = candidate
+                return parsed
+            except (httpx.HTTPError, json.JSONDecodeError, LLMError) as exc:
+                errors.append(f"{candidate}: {exc}")
+                record_error("ollama", candidate)
+        raise LLMError("Structured Ollama request failed for all model candidates: " + " | ".join(errors))
 
     def chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None,stop_event=None)->str:
         wait_until_available(stop_event); messages: list[HistoryMessage] = []; payload={"model":self.model,"stream":False,"options":self._options(),"keep_alive":_settings().ollama_keep_alive,"messages":messages}
