@@ -482,3 +482,16 @@ def test_learning_page_exposes_course_management(client_db):
     assert "افزودن آموزش" in response.text
     assert "شروع / ادامه یادگیری" in response.text
     assert "توقف یادگیری" in response.text
+
+
+def test_offline_network_policy_requires_explicit_research_or_learning_exception():
+    from my_ai.network import assert_network_allowed
+
+    object.__setattr__(db.settings, "offline_strict", True)
+    with pytest.raises(PermissionError):
+        assert_network_allowed("general")
+    with pytest.raises(PermissionError):
+        assert_network_allowed("research")
+    assert_network_allowed("research", explicit=True)
+    assert_network_allowed("learning", explicit=True)
+    assert_network_allowed("prerequisite_install", explicit=True)
