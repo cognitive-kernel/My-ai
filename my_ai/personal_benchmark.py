@@ -106,15 +106,27 @@ def _run_architecture_case(group: str, name: str) -> tuple[str, dict[str, object
         passed = not first.passed and second.passed
         return ("passed" if passed else "failed", {"initial_failure": not first.passed, "retest": second.passed})
     if group == "research" and name == "research-provenance":
-        return ("passed", {"requirement": True, "source": True, "trace": True})
+        graph = EvidenceGraph()
+        graph.add_node(TraceNode("req", "requirement", "feature"))
+        graph.add_node(TraceNode("source", "source", "local-doc"))
+        graph.add_node(TraceNode("trace", "trace", "research"))
+        graph.link("req", "researched-by", "source")
+        graph.link("source", "recorded-as", "trace")
+        passed = len(graph.nodes) == 3 and len(graph.edges) == 2
+        return ("passed" if passed else "failed", {"nodes": len(graph.nodes), "edges": len(graph.edges)})
     if group == "conflict" and name == "version-conflict-resolution":
-        return ("passed", {"preserve_versions": True, "activate_resolution": True})
+        store = KnowledgeVersionStore()
+        first = store.add("claim", "v1", "source-a")
+        second = store.add("claim", "v2", "source-b")
+        passed = (not first.active) and second.active and len(store.history("claim")) == 2
+        return ("passed" if passed else "failed", {"versions": len(store.history("claim"))})
     if group == "resource-awareness" and name == "model-resource-fit":
         model = ModelProfile("test", 4096, ram_gb=1.0, capabilities=frozenset({"chat"}))
         resources = ResourceSnapshot(2.0, 0.0)
         task = TaskProfile(context_tokens=2048, required_capabilities=frozenset({"chat"}))
-        passed = model.ram_gb <= resources.ram_available_gb and model.context_window >= task.context_tokens
-        return ("passed" if passed else "failed", {"resource_fit": passed, "context_fit": passed})
+        choice = ModelRouter().choose([model], task, resources)
+        passed = choice.model.name == "test"
+        return ("passed" if passed else "failed", {"resource_fit": passed, "context_fit": model.context_window >= task.context_tokens})
     return ("blocked", {"reason": "unsupported local architecture scenario"})
 
 
