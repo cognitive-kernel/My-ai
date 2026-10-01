@@ -231,14 +231,14 @@ class Agent(LegacyAgent):
             self._persist_answer(ctx, answer)
         return answer
 
-    def stream_chat(self, message, session_id=1, attachments=None):
+    def stream_chat(self, message, session_id=1, attachments=None, intent=None):
         # Persist the user's message before semantic routing, retrieval, tool execution,
         # or any other potentially slow operation. The turn therefore survives even if
         # processing later fails or takes a long time.
         message = str(message or "")
         execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (session_id, "user", message))
         execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
-        ctx = self._prepare_chat_context(message, session_id, attachments)
+        ctx = self._prepare_chat_context(message, session_id, attachments, intent=intent)
         if ctx.shortcut is not None:
             answer = self._persist_answer(ctx, str(ctx.shortcut)); yield answer; return
         if self._runtime_project_build_requested(ctx.message, ctx.intent, ctx.conversation_state):
