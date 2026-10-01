@@ -191,8 +191,8 @@ def benchmark_model_selection() -> dict[str, Any]:
 _scheduler = ResourceScheduler(max_concurrent=max(1, int(os.getenv("MYAI_MAX_CONCURRENT", "1"))))
 
 
-def acquire_resource() -> bool:
-    return _scheduler.acquire()
+def acquire_resource(priority: int = 0) -> bool:
+    return _scheduler.acquire(priority=priority)
 
 
 def release_resource() -> None:
