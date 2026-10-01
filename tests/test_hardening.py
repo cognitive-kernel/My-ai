@@ -417,3 +417,36 @@ def test_learning_command_endpoint_accepts_only_learning(client_db, monkeypatch)
     response = client.post("/learning/command", json={"message": "سلام"}, cookies=login_cookie(owner))
     assert response.status_code == 400
 
+
+
+def test_chat_response_is_durably_visible_after_history_reload(client_db, monkeypatch):
+    client = client_db
+    owner = auth.create_account("owner", "a-secure-password")
+    cookies = login_cookie(owner)
+    from my_ai.domain.router import Intent
+
+    monkeypatch.setattr(
+        "my_ai.api.classify",
+        lambda message, context=None: Intent(
+            "chat", 0.99, False, {"action": "answer", "goal": "answer the user"}, ("chat",)
+        ),
+    )
+    monkeypatch.setattr(
+        "my_ai.api.agent.chat",
+        lambda message, session_id, attachments=None, intent=None, persist_user=True, persist_answer=True: "پاسخ پایدار",
+    )
+
+    response = client.post("/chat", json={"message": "سلام"}, cookies=cookies)
+    assert response.status_code == 200
+    session_id = response.json()["session_id"]
+
+    history = client.get(f"/chat/history?session_id={session_id}", cookies=cookies)
+    assert history.status_code == 200
+    messages = history.json()["messages"]
+    assert [(item["role"], item["content"]) for item in messages] == [
+        ("user", "سلام"),
+        ("assistant", "پاسخ پایدار"),
+    ]
+
+    reloaded = client.get(f"/chat/history?session_id={session_id}", cookies=cookies)
+    assert reloaded.json()["messages"] == messages
