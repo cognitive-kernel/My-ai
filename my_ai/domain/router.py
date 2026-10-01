@@ -72,6 +72,7 @@ def _safe_artifact_route(data: dict[str, Any]) -> dict[str, Any]:
 def _intent_from_payload(data:dict[str,Any])->Intent:
     payload=_parse_router_payload(json.dumps(data,ensure_ascii=False)); primary=payload["primary"]; intents=tuple(dict.fromkeys(payload["intents"]))
     args={key:payload[key] for key in ("action","language","topic","goal","project_path","target") if payload[key]}
+    args["target"] = payload["target"]
     if payload["urls"]: args["urls"]=list(payload["urls"])
     requires_confirmation=bool(set(intents)&HIGH_RISK) and payload["action"]!="confirm_high_risk"
     return Intent(name=primary,confidence=round(float(payload["confidence"]),3),requires_confirmation=requires_confirmation,args=args,intents=intents or (primary,))
