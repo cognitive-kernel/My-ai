@@ -45,13 +45,13 @@ def learn_confirmed(session_id: int, question: str, llm, web: WebLearner) -> dic
 
     evidence = []
     try:
-        results = web.search(question, limit=8)
+        results = web.search(question, limit=8, allow_online=True)
     except Exception as exc:
         return {"status": "error", "error": f"جستجوی اینترنتی انجام نشد: {exc}"}
 
     for result in results:
         try:
-            title, text = web.fetch(result["url"])
+            title, text = web.fetch(result["url"], allow_online=True)
             evidence.append({"title": title, "url": result["url"], "text": text[:7000]})
         except Exception:
             continue
