@@ -4,7 +4,7 @@ from my_ai import self_update
 
 
 def test_update_check_detects_remote_revision(monkeypatch):
-    object.__setattr__(self_update.settings, "offline_strict", False)
+    monkeypatch.setattr(self_update, "settings", type("S", (), {"offline_strict": False})())
     values = iter(["", "", "local-sha", "remote-sha"])
     monkeypatch.setattr(self_update, "_git", lambda *args, **kwargs: next(values))
     result = self_update.check_for_update()
