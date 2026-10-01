@@ -41,10 +41,11 @@ def _has_concrete_artifact_goal(data: dict[str, Any]) -> bool:
     goal = str(data.get("goal") or "").strip()
     if not goal:
         return False
-    return any(
-        str(data.get(key) or "").strip()
-        for key in ("language", "topic", "project_path", "target")
-    )
+    if any(str(data.get(key) or "").strip() for key in ("language", "topic", "project_path")):
+        return True
+    target = str(data.get("target") or "").strip()
+    target_words = [word for word in target.split() if word.isalnum() and len(word) >= 3]
+    return len(target_words) >= 3
 
 def _safe_artifact_route(data: dict[str, Any]) -> dict[str, Any]:
     """Fail closed for incomplete coding artifact routes without rewriting high-risk routes."""
