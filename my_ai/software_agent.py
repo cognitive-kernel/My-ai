@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from dataclasses import dataclass, field
@@ -434,7 +435,7 @@ def run_software_task(request: str, *, language: str | None = None, project_path
     # Persist the research-to-code chain for post-run inspection.
     try:
         from .roadmap_runtime import add_research_trace, evidence_edge, evidence_node
-        requirement_key = f"requirement:software:{abs(hash(request))}"
+        requirement_key = f"requirement:software:{hashlib.sha256(request.encode("utf-8")).hexdigest()[:24]}"
         evidence_node(requirement_key, "requirement", request[:1000], {"language": plan.get("language")})
         for idx, source in enumerate(research.sources[:20], 1):
             source_value = json.dumps(source, ensure_ascii=False) if isinstance(source, dict) else str(source)
