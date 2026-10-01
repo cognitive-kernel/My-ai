@@ -75,3 +75,13 @@ def test_model_management_and_selection_benchmark():
     benchmark = benchmark_model_selection()
     assert benchmark["count"] == 3
     assert len(benchmark["cases"]) == 3
+
+
+def test_personal_benchmark_runner_returns_case_results(monkeypatch):
+    from my_ai import personal_benchmark
+    monkeypatch.setattr(personal_benchmark, "load_suite", lambda: {"suites": {"retrieval": [{"name": "x", "input": "x", "expected": "knowledge"}]}})
+    monkeypatch.setattr(personal_benchmark, "validate_suite", lambda: {"valid": True, "case_count": 1})
+    monkeypatch.setattr(personal_benchmark, "recall", lambda query, limit: [{"hybrid_score": 1.0}])
+    result = personal_benchmark.run_suite()
+    assert result["valid"] is True
+    assert result["passed"] == 1
