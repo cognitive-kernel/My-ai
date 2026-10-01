@@ -1209,3 +1209,18 @@ Semantic Router → Execution Authorization → Executor
 10. آیا قابلیت جدید bypass برای Execution Policy ایجاد می‌کند؟
 
 اگر پاسخ هرکدام منفی باشد، قابلیت قبل از merge نیاز به بازبینی معماری دارد.
+
+---
+
+# Source: `ADVANCED_AGENT_MATURITY_ROADMAP.md`
+
+The next maturity stage is formally registered in `docs/ADVANCED_AGENT_MATURITY_ROADMAP.md`.
+
+Current implementation anchors:
+- `my_ai/agent_maturity.py`: task state machine, verify/critique/repair/verify, transactional task workspace, memory lifecycle, tool manifests, configuration versions and circuit breaker.
+- `my_ai/agent_maturity_routes.py`: authenticated task/trace, memory lifecycle, tool manifest, configuration and operational UI endpoints.
+- `tests/test_agent_maturity.py`: regression coverage for the new primitives.
+- `benchmarks/personal_agent_suite.json`: executable maturity scenarios.
+- `my_ai/personal_benchmark.py`: local execution of maturity scenarios.
+
+The implementation preserves the existing strict-offline default and semantic execution boundary. The new layer does not introduce trigger-word routing or a remote runtime dependency.
