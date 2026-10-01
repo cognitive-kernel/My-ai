@@ -200,14 +200,30 @@ def benchmark_summary(suite: str | None = None) -> dict[str, Any]:
 
 
 def maintenance(limit: int = 100) -> dict[str, Any]:
-    rows = fetch_all("SELECT id,verification_status,verified_at FROM knowledge ORDER BY id DESC LIMIT ?", (max(1,min(limit,500)),))
+    if not acquire_resource():
+        return {"checked": 0, "review_required": 0, "deferred": True, "reason": "interactive resource slot is busy"}
+    rows = fetch_all(
+        "SELECT id,verification_status,verified_at FROM knowledge ORDER BY id DESC LIMIT ?",
+        (max(1, min(limit, 500)),),
+    )
     checked = 0
-    for row in rows:
-        status = "fresh" if row["verification_status"] == "verified" and row["verified_at"] else "review"
-        execute("INSERT INTO knowledge_maintenance(knowledge_id,action,status,details) VALUES(?,?,?,?)", (row["id"],"scheduled_review",status,"deterministic freshness check"))
-        checked += 1
-    return {"checked": checked, "review_required": sum(1 for r in rows if not (r["verification_status"] == "verified" and r["verified_at"]))}
-
+    try:
+        for row in rows:
+            status = "fresh" if row["verification_status"] == "verified" and row["verified_at"] else "review"
+            execute(
+                "INSERT INTO knowledge_maintenance(knowledge_id,action,status,details) VALUES(?,?,?,?)",
+                (row["id"], "scheduled_review", status, "deterministic freshness check"),
+            )
+            checked += 1
+    finally:
+        release_resource()
+    return {
+        "checked": checked,
+        "review_required": sum(
+            1 for r in rows if not (r["verification_status"] == "verified" and r["verified_at"])
+        ),
+        "deferred": False,
+    }
 
 def add_memory_lesson(category: str, lesson: str, source: str, regression_case: str | None = None) -> int:
     return execute("INSERT INTO learning_lessons(category,lesson,source,regression_case) VALUES(?,?,?,?)", (category,lesson,source,regression_case))
