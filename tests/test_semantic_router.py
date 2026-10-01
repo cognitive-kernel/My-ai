@@ -13,6 +13,7 @@ class FakeClassifier:
             "topic": "arcade game",
             "goal": "Create a playable point-eating game",
             "project_path": None,
+            "target": "playable arcade game",
             "urls": [],
         }
 
