@@ -12,7 +12,7 @@ from .roadmap_runtime import (
     capabilities, choose_model, completion_report, evidence_edge, evidence_node,
     knowledge_versions, lessons, maintenance, model_catalog, register_capability,
     resource_snapshot, research_trace_rows, resolve_conflict, record_conflict, model_management,
-    system_profile, trace, upsert_knowledge_version,
+    system_profile, trace, upsert_knowledge_version, restore_knowledge_version,
 )
 
 
@@ -109,6 +109,10 @@ def register_roadmap_routes(app, require_user) -> None:
     async def knowledge_version(knowledge_id: int, request: Request):
         data = await request.json()
         return upsert_knowledge_version(knowledge_id, str(data.get("content", "")), data.get("source_url"), data.get("confidence"))
+
+    @router.post("/knowledge/{knowledge_id}/versions/{version_id}/restore")
+    async def knowledge_version_restore(knowledge_id: int, version_id: int):
+        return restore_knowledge_version(knowledge_id, version_id)
 
     @router.get("/knowledge/{knowledge_id}/versions")
     async def knowledge_version_history(knowledge_id: int):
