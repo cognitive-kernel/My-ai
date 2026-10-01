@@ -17,6 +17,7 @@ from .software_agent import run_software_task
 from .execution_policy import authorize_project_execution
 from .advanced_agent import ContextBudgetManager, ContextItem, TaskProfile
 from .roadmap_runtime import acquire_resource, choose_model, release_resource, trace, evidence_node, evidence_edge
+from .agent_maturity import create_task, transition_task
 
 # Compatibility hook for tests/integrations that patch the historical builder.
 build_project = _legacy_build_project
@@ -255,7 +256,10 @@ class Agent(LegacyAgent):
             execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (session_id, "user", str(message or "")))
             execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
         ctx = self._prepare_chat_context(message, session_id, attachments, intent=intent)
-        trace(session_id, None, f"session:{session_id}:request", "requirement", str(message)[:400], {"task": ctx.task})
+        maturity_task = create_task(str(message or ""), session_id, {"task": ctx.task, "intent": getattr(ctx.intent, "name", "")})
+        transition_task(maturity_task["id"], "understood", "semantic-understanding")
+        transition_task(maturity_task["id"], "planned", "execution-plan")
+        trace(session_id, None, f"session:{session_id}:request", "requirement", str(message)[:400], {"task": ctx.task, "maturity_task_id": maturity_task["id"]})
         if ctx.model_choice:
             trace(session_id, None, f"session:{session_id}:model", "decision", str((ctx.model_choice.get("model") or {}).get("name") or ""), ctx.model_choice)
             requirement_key = f"session:{session_id}:request"
@@ -269,18 +273,24 @@ class Agent(LegacyAgent):
                     evidence_node(knowledge_key, "knowledge", str(item.get("title") or item.get("content") or "")[:1000], {"provenance": item.get("provenance")})
                     evidence_edge(requirement_key, "supported-by", knowledge_key)
         if ctx.shortcut is not None:
+            transition_task(maturity_task["id"], "completed", "shortcut-response")
             answer = str(ctx.shortcut)
             if persist_answer:
                 self._persist_shortcut(ctx)
             self._update_state(ctx, answer)
             return answer
         if self._runtime_project_build_requested(ctx.message, ctx.intent, ctx.conversation_state):
+            transition_task(maturity_task["id"], "authorized", "project-policy")
+            transition_task(maturity_task["id"], "running", "project-execution")
             ctx.conversation_state["pending_project_action"] = str((ctx.intent.args or {}).get("action") or "create_artifact")
             answer = self._build_project_from_intent(ctx.message, ctx.intent, ctx.context)
+            transition_task(maturity_task["id"], "validating", "project-result")
             if persist_answer:
                 self._persist_shortcut(PreparedChat(ctx.message, ctx.session_id, ctx.attachments, ctx.history, ctx.context, ctx.conversation_state, intent=ctx.intent, shortcut=answer))
+            transition_task(maturity_task["id"], "completed", "project-response")
             self._update_state(ctx, answer)
             return answer
+        transition_task(maturity_task["id"], "authorized", "model-execution")
         if not acquire_resource(priority=10):
             answer = "منابع اجرای مدل در حال حاضر اشباع است؛ درخواست اجرا نشد."
         else:
@@ -289,10 +299,12 @@ class Agent(LegacyAgent):
             finally:
                 release_resource()
         answer = self._handle_unknown(answer, ctx.message, ctx.session_id)
+        transition_task(maturity_task["id"], "validating", "response-validation")
         if ctx.knowledge and "__MYAI_UNKNOWN__" not in str(answer) and ctx.citation_block and not any(f"[K{item.get('id')}]" in str(answer) for item in (ctx.enriched_knowledge or [])[:4]):
             answer = answer.rstrip() + ctx.citation_block
         if persist_answer:
             self._persist_answer(ctx, answer)
+        transition_task(maturity_task["id"], "completed", "response-complete")
         return answer
 
     def stream_chat(self, message, session_id=1, attachments=None):
