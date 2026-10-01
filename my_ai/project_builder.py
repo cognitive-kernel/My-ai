@@ -374,6 +374,15 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
                     requirements = plan_data.get("tool_requirements") if isinstance(plan_data, dict) else None
                 except Exception:
                     requirements = None
+            install = (
+                _run(language, "install", workspace, timeout, requirements)
+                if _has_lifecycle_command(requirements, "install")
+                else {"operation": "install", "passed": True, "skipped": True, "not_required": True}
+            )
+            if not install.get("passed"):
+                last_error = install.get("error") or install.get("output") or "dependency installation failed"
+                last_diagnosis = _diagnose_failure(llm, "install", last_error)
+                continue
             build = _run(language, "build", workspace, timeout, requirements)
             if not build.get("passed"):
                 last_error = build.get("error") or build.get("output") or "build failed"
@@ -396,7 +405,7 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
     return {
         "status": status, "language": language, "request": resolved_goal, "project_id": pid, "project_name": workspace.name,
         "project_path": str(workspace.relative_to(ROOT)) if workspace.is_relative_to(ROOT) else str(workspace), "session_id": session_id,
-        "files": sorted(files), "file_count": len(files), "build": build, "tests": tests, "lint": lint, "typecheck": typecheck, "run": run, "phase_validation": phase_validation,
+        "files": sorted(files), "file_count": len(files), "install": install, "build": build, "tests": tests, "lint": lint, "typecheck": typecheck, "run": run, "phase_validation": phase_validation,
         "semantic_defects": semantic_defects, "repair_attempts": attempts - 1, "failure_diagnosis": last_diagnosis, "artifacts": _artifact_files(workspace),
         "toolchain": doctor(language, cwd=str(workspace), requirements=requirements),
     }
