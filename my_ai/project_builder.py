@@ -259,7 +259,7 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
     knowledge = search_knowledge(language + " " + resolved_goal, 20)
     llm = create_llm("coding")
     files = {}
-    build = tests = lint = {}
+    build = tests = lint = run = {}
     last_error = ""
     last_diagnosis: dict[str, Any] | None = None
     attempts = max(1, min(int(repair_attempts) + 1, 5))
