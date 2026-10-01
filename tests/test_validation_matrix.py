@@ -48,3 +48,12 @@ def test_mql_requires_real_compiler_command():
     assert validate_validation_matrix(p, "MQL4") == []
     p["tool_requirements"][0]["commands"]["build"] = "echo compile"
     assert "MQL validation requires" in " ".join(validate_validation_matrix(p, "MQL4"))
+
+def test_python_validation_requires_compileall_and_pytest_even_with_strict_typecheck():
+    p = plan()
+    p["tool_requirements"][0]["commands"]["typecheck"] = "mypy --strict ."
+    p["tool_requirements"][0]["commands"]["build"] = "python -m build"
+    p["tool_requirements"][0]["commands"]["test"] = "python -m unittest"
+    errors = validate_validation_matrix(p, "Python")
+    assert "compileall" in " ".join(errors)
+    assert "pytest" in " ".join(errors)
