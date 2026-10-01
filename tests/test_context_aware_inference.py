@@ -86,3 +86,24 @@ def test_agent_dispatches_coding_command_to_project_builder(monkeypatch):
     assert calls["language"] == "MQL4"
     assert calls["kwargs"]["project_path"] == r"D:\Projects\MY-AI\projects"
     assert "پروژه ساخته و تست شد" in answer
+
+def test_legacy_agent_project_gate_rejects_non_actionable_coding_route():
+    from my_ai.agent import Agent
+    from my_ai.domain.router import Intent
+
+    intent = Intent(
+        "coding",
+        0.99,
+        False,
+        {
+            "action": "create_artifact",
+            "goal": "",
+            "language": None,
+            "topic": None,
+            "project_path": None,
+            "target": None,
+        },
+        ("coding",),
+    )
+
+    assert Agent._project_build_requested("هر متنی", intent) is False
