@@ -22,8 +22,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg
           python -m pip install --upgrade pip
-          pip install piper-tts
           pip install -e . --no-deps
+      - name: Install Piper CLI
+        run: |
+          curl -fsSL -o piper.tar.gz https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz
+          tar -xzf piper.tar.gz
+          test -x piper/piper
+          echo "$PWD/piper" >> "$GITHUB_PATH"
       - name: Install whisper.cpp CLI
         run: |
           curl -fsSL -o whisper.zip https://github.com/sjoerdteunisse/whisper.cpp/releases/latest/download/whisper-cpp-linux-x64-cpu.zip
