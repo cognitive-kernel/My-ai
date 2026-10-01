@@ -480,7 +480,7 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
         if not (install.get("passed") and build.get("passed") and tests.get("passed") and lint.get("passed") and typecheck.get("passed") and run.get("passed")):
             if not last_diagnosis:
                 last_diagnosis = _diagnose_failure(llm, "phased_lifecycle", "One or more final lifecycle validations failed.")
-    status = "built" if build.get("passed") and tests.get("passed", False) and lint.get("passed", False) and typecheck.get("passed", False) and run.get("passed", False) and not semantic_defects else "build_failed"
+    status = "built" if install.get("passed", False) and build.get("passed") and tests.get("passed", False) and lint.get("passed", False) and typecheck.get("passed", False) and run.get("passed", False) and not semantic_defects else "build_failed"
     pid = execute("INSERT INTO generated_projects(language,request,code) VALUES(?,?,?)", (language, resolved_goal, json.dumps(files, ensure_ascii=False)))
     return {
         "status": status, "language": language, "request": resolved_goal, "project_id": pid, "project_name": workspace.name,
