@@ -53,6 +53,8 @@ def _safe_artifact_route(data: dict[str, Any]) -> dict[str, Any]:
     primary=str(data.get("primary") or "")
     if primary in HIGH_RISK and primary != "code_execution":
         return data
+    if primary != "coding" and primary != "code_execution":
+        return {**data,"primary":"chat","intents":["chat"],"action":"answer","goal":None,"project_path":None}
     try:
         confidence=float(data.get("confidence") or 0.0)
     except (TypeError,ValueError):
@@ -65,8 +67,9 @@ def _intent_from_payload(data:dict[str,Any])->Intent:
     payload=_parse_router_payload(json.dumps(data,ensure_ascii=False))
     primary=payload["primary"]
     intents=tuple(dict.fromkeys(payload["intents"]))
-    args={key:payload[key] for key in ("action","language","topic","goal","project_path") if payload[key]}
-    args["target"]=payload["target"]
+    args={key:payload[key] for key in ("action","language","topic","goal","project_path","target") if payload[key] is not None}
+    if payload["target"] is None:
+        args["target"]=None
     if payload["urls"]: args["urls"]=list(payload["urls"])
     requires_confirmation=bool(set(intents)&HIGH_RISK) and payload["action"]!="confirm_high_risk"
     return Intent(name=primary,confidence=round(float(payload["confidence"]),3),requires_confirmation=requires_confirmation,args=args,intents=intents or (primary,))
