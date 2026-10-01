@@ -218,6 +218,10 @@ def remember_knowledge(topic: str, title: str, content: str, source_url: str | N
         raise PermissionError("MYAI_READ_ONLY blocks database mutation.")
     digest = _knowledge_hash(topic, content)
     with connect() as conn:
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(knowledge)").fetchall()}
+        if "category" not in columns:
+            conn.execute("ALTER TABLE knowledge ADD COLUMN category TEXT NOT NULL DEFAULT 'project_facts'")
+        conn.execute("""CREATE TABLE IF NOT EXISTS knowledge_versions (id INTEGER PRIMARY KEY AUTOINCREMENT, knowledge_id INTEGER NOT NULL, version INTEGER NOT NULL, content TEXT NOT NULL, source_url TEXT, confidence REAL, status TEXT NOT NULL DEFAULT 'active', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(knowledge_id,version))""")
         row = conn.execute("SELECT id,source_url FROM knowledge WHERE content_hash=?", (digest,)).fetchone()
         if row:
             if not row["source_url"] and source_url:
