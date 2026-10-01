@@ -26,10 +26,10 @@ def test_concrete_semantic_create_route_is_allowed():
     intent = Intent(
         name="coding",
         confidence=0.95,
-        args={"action": "create_artifact", "goal": "build a Python expense manager"},
+        args={"action": "create_artifact", "goal": "a personal finance desktop application", "language": "Python", "topic": "expense management"},
         intents=("coding",),
     )
-    assert authorize_project_execution("یک برنامه مدیریت هزینه با پایتون ایجاد کن", intent) is True
+    assert authorize_project_execution("I need a small desktop tool for tracking household spending", intent) is True
 
 
 def test_non_coding_create_route_is_blocked():
@@ -100,3 +100,12 @@ def test_blocked_create_cannot_poison_continuation_state():
         intents=("coding",),
     )
     assert authorize_project_execution("ادامه بده", continue_intent, state) is False
+\n
+def test_project_policy_contains_no_phrase_or_keyword_rules():
+    from pathlib import Path
+
+    source = Path("my_ai/execution_policy.py").read_text(encoding="utf-8")
+    assert "marker" not in source.casefold()
+    assert "startswith(" not in source
+    assert "endswith(" not in source
+    assert "_MIN_CONCRETE_REQUEST_LENGTH" not in source
