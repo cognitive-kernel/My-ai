@@ -173,7 +173,13 @@ def _git_snapshot(workspace: Path) -> dict[str, Any]:
         return {"initialized": False, "status": "not-a-git-repository"}
     try:
         status = subprocess.run(["git", "status", "--porcelain"], cwd=workspace, capture_output=True, text=True, timeout=30)
-        return {"initialized": True, "dirty": bool(status.stdout.strip()), "status": status.stdout[-12000:]}
+        diff = subprocess.run(["git", "diff", "--no-ext-diff", "--", "."], cwd=workspace, capture_output=True, text=True, timeout=30)
+        return {
+            "initialized": True,
+            "dirty": bool(status.stdout.strip()),
+            "status": status.stdout[-12000:],
+            "diff": diff.stdout[-20000:],
+        }
     except Exception as exc:
         return {"initialized": True, "error": str(exc)}
 
