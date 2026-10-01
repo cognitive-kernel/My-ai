@@ -28,9 +28,10 @@ jobs:
         run: |
           curl -fsSL -o whisper.zip https://github.com/sjoerdteunisse/whisper.cpp/releases/latest/download/whisper-cpp-linux-x64-cpu.zip
           unzip -o whisper.zip -d whisper-bin
-          WHISPER="$(find whisper-bin -type f -name whisper-cli | head -n 1)"
+          WHISPER="$(find whisper-bin -type f -name "whisper-cpp-linux-x64-cpu" | head -n 1)"
           test -n "$WHISPER"
           chmod +x "$WHISPER"
+          "$WHISPER" --help >/dev/null
           echo "WHISPER_CPP_BIN=$PWD/$WHISPER" >> "$GITHUB_ENV"
       - name: Download offline models
         run: |
