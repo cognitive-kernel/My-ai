@@ -783,3 +783,427 @@ POST /files/generate/pptx
 
 ## پرسیدن از My-AI
 در هر موضوع می‌توانید بنویسید: «راهنمای این بخش را توضیح بده». اگر راهنمای محلی کافی نباشد، My-AI می‌تواند مستندات آنلاین را بررسی کند و فقط با تأیید شما پیشنهاد را در راهنمای محلی ثبت کند.
+
+---
+
+# Source: `docs/help/coding.md`
+
+# راهنمای برنامه‌نویسی
+
+برای تولید کد می‌توانید بگویید «یک API با Python بساز» یا «یک برنامه JavaScript بنویس».
+
+اعتبارسنجی و اجرای کد طبق محدودیت‌های اجرایی پروژه انجام می‌شود. برای تغییرات مهم، خروجی را قبل از اجرا بررسی کنید.
+
+---
+
+# Source: `docs/help/docker.md`
+
+# راهنمای Docker
+
+برای اجرای سرویس با Docker Compose از docker compose up --build استفاده کنید. پس از بالا آمدن سرویس، صفحه اصلی و راهنما از همان سرویس در دسترس هستند.
+
+---
+
+# Source: `docs/help/github.md`
+
+# راهنمای Git و GitHub
+
+## ساخت Token
+در GitHub به Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token بروید.
+
+برای مخزن cognitive-kernel/My-ai، در Repository access همان مخزن را انتخاب کنید. برای خواندن کد Contents: Read کافی است. برای تغییر branch یا فایل، مجوز Write متناظر لازم است.
+
+ساخت Token: https://github.com/settings/personal-access-tokens/new
+
+## اتصال در My-AI
+Repository را روی cognitive-kernel/My-ai بگذارید، Token را وارد کنید و «ذخیره و بررسی» را بزنید. Token محلی در data/.github_token نگه‌داری می‌شود و در Git commit نمی‌شود.
+
+## خطای 404
+404 در GitHub API می‌تواند یعنی repository وجود ندارد یا Token اجازه دیدن آن را ندارد. ابتدا /git/whoami را برای اعتبار Token بررسی کنید، سپس Repository access و مجوزهای Token را بررسی کنید.
+
+---
+
+# Source: `docs/help/learning.md`
+
+# یادگیری پیوسته My-AI
+
+My-AI برای هر مبحث یک curriculum پایه دارد و پس از آن از منابع رسمی و منابع تکمیلی استفاده می‌کند.
+
+## چرخه یادگیری
+
+1. انتخاب موضوع و سرفصل
+2. کشف پیش‌نیازها
+3. دریافت منابع رسمی و تکمیلی
+4. استخراج دانش از منابع
+5. ساخت درس، مثال، تمرین و آزمون
+6. ارزیابی و ثبت نتیجه در SQLite
+7. ادامه تا پایان curriculum
+
+## به‌روزرسانی خودکار
+
+پس از تکمیل یک domain، برای آن review هفتگی زمان‌بندی می‌شود. هر ۷ روز منابع و تغییرات جدید بررسی می‌شوند.
+
+اگر موضوع جدیدی واقعاً اضافه شده باشد:
+
+- به curriculum قبلی اضافه می‌شود.
+- تکراری‌ها حذف می‌شوند.
+- آموزش جدید به‌صورت خودکار شروع می‌شود.
+- وضعیت آن در داشبورد اصلی نمایش داده می‌شود.
+
+توقف دستی مسیر یادگیری، شروع خودکار review را برای همان مسیر غیرفعال می‌کند؛ با «ادامه» دوباره فعال می‌شود.
+
+## منابع
+
+منابع پایه حذف نمی‌شوند. منابع رسمی زبان، استانداردها، مستندات اکوسیستم، release notes، testing، performance، tooling و منابع تولیدی متناسب با domain نیز بررسی می‌شوند.
+
+برای Python، علاوه بر مستندات رسمی، Python Packaging User Guide، PEPها و Developer Guide نیز در مجموعه منابع قرار دارند.
+
+## منابع تکمیلی اختصاصی سرفصل
+
+برای هر topic، learner ابتدا منابع تکمیلی اختصاصی همان موضوع را انتخاب می‌کند و سپس منابع رسمی domain را به آن اضافه می‌کند. منابع بر اساس موضوع انتخاب می‌شوند و به یک فهرست ثابت محدود نیستند.
+
+یک تست خودکار نیز وجود دارد که تضمین می‌کند topicهای ثبت‌شده طبق قرارداد منابع پروژه، پوشش کافی داشته باشند.
+
+## کنترل‌ها
+
+- **متوقف کردن:** worker را متوقف می‌کند و auto-learning آن مسیر را غیرفعال می‌کند.
+- **ادامه:** مسیر را دوباره فعال می‌کند.
+- **داشبورد:** وضعیت، مرحله، موضوع فعلی و درصد پیشرفت را نشان می‌دهد.
+- **Review:** تغییرات جدید را بدون حذف دانش قبلی به curriculum اضافه می‌کند.
+
+---
+
+# Source: `docs/help/memory.md`
+
+# راهنمای حافظه
+
+دانش، گفتگوها، جلسات یادگیری و اطلاعات پروژه در SQLite محلی ذخیره می‌شوند. جست‌وجوی دانش از بخش حافظه و endpoint مربوط به memory انجام می‌شود.
+
+---
+
+# Source: `docs/help/network-policy.md`
+
+# Network and Offline Policy
+
+My-AI is offline-first. Network access is an explicit exception, not a default capability.
+
+Allowed online categories:
+- Configured LLM backend when it is online.
+- Explicitly confirmed chat web-learning after the local assistant says it does not know.
+- Explicitly configured educational learning sources and scheduled learning review.
+- Online installation of missing prerequisites and educational tools.
+- Git/GitHub operations.
+
+Everything else must use local resources and local processing.
+
+## Chat unknown -> confirmed learning
+
+1. Search local memory/knowledge first.
+2. If the local LLM cannot answer reliably, emit `__MYAI_UNKNOWN__`.
+3. My-AI tells the user it does not know and asks for confirmation.
+4. Only after confirmation, search the web and fetch permitted public pages.
+5. The local LLM extracts a lesson from the evidence.
+6. Store the source and knowledge locally.
+7. Add the lesson to the matching learning domain.
+8. If the topic does not exist, create a new curriculum topic.
+
+## Prerequisites
+
+`my_ai/runtime_prerequisites.py` checks `requirements.txt` and selected system tools at startup. With `MYAI_AUTO_INSTALL_PREREQUISITES=true` it installs missing Python packages and supported system tools through the local OS package manager. The default is `false` so application startup does not perform package installation.
+
+New network-capable features must be explicitly added to the allowed list and documented here before implementation.
+
+---
+
+# Source: `docs/help/scheduler.md`
+
+# Scheduler و یادگیری خودکار
+
+Scheduler workerهای مستقل یادگیری را در پس‌زمینه اجرا می‌کند.
+
+## رفتار
+
+- چند مسیر یادگیری می‌توانند مستقل از هم وجود داشته باشند.
+- CPU/RAM قبل از اجرای مرحله بررسی می‌شود.
+- خطاها با backoff دوباره امتحان می‌شوند.
+- Stop با event کنترل‌شده انجام می‌شود.
+- پس از تکمیل domain، review هفتگی ثبت می‌شود.
+- Review هر ۷ روز منابع را بررسی می‌کند.
+- اگر مطلب جدید پیدا شود، curriculum به‌روزرسانی و worker همان domain به‌صورت خودکار فعال می‌شود.
+- توقف دستی یک domain، auto-learning آن domain را خاموش می‌کند تا کاربر با «ادامه» آن را دوباره فعال کند.
+
+## API
+
+```
+POST /scheduler/start
+GET  /scheduler/status
+POST /scheduler/stop
+POST /learning/{language}/stop
+POST /learning/{language}/resume
+```
+
+## وضعیت‌های اصلی
+
+`starting`، `running`، `retrying`، `stopping`، `idle` و `completed`.
+
+داشبورد اصلی وضعیت هر مسیر را جداگانه نمایش می‌دهد.
+
+---
+
+# Source: `docs/help/self-development.md`
+
+# Self-Development, Self-Diagnostics and Hardware Adaptation
+
+My-AI is designed to progressively become self-maintaining while keeping the development lifecycle explicit.
+
+## Initial and beta phase
+
+During the initial and beta releases, self-development is report-only.
+
+After every application startup, and periodically while the application is running, My-AI:
+
+- checks its own Python source with compileall;
+- runs the project test suite;
+- checks repository state;
+- records the current commit;
+- records available CPU, RAM, operating system and Python information;
+- stores a diagnostic report in data/diagnostics/ and SQLite;
+- identifies failures and optimization opportunities;
+- does not modify source code automatically.
+
+## Hardware-aware operation
+
+Runtime decisions must be based on the hardware actually available on the machine.
+
+The project should prefer:
+
+1. detecting CPU, RAM and GPU availability at runtime;
+2. selecting model/context/thread/GPU-layer settings accordingly;
+3. reducing background learning concurrency when resources are constrained;
+4. increasing local workloads only when the machine has sufficient capacity;
+5. recording detected hardware in diagnostics so optimization recommendations are reproducible.
+
+The repository must not hard-code a hardware profile when the actual machine can be detected.
+
+## Development lifecycle
+
+### Phase 1 — Initial
+- self-diagnostics: enabled
+- bug detection: enabled
+- optimization analysis: enabled
+- automatic source modification: disabled
+- automatic dependency/configuration changes: disabled
+- report generation: enabled
+
+### Phase 2 — Beta
+The same report-only policy remains in force until the self-development subsystem has sufficient test coverage and rollback validation.
+
+### Phase 3 — Self-maintaining release
+
+The intended controlled workflow is:
+
+detect → diagnose → propose → isolated test → report → approve/policy check → apply → test → rollback if needed
+
+The existing self_repair.py is the foundation for this workflow. Future versions should reuse isolated worktrees, tests, rollback and audit records rather than editing the live tree blindly.
+
+## Future module creation
+
+The long-term goal is that the user can tell My-AI:
+
+"برای خودت یک ماژول X بساز."
+
+My-AI should then:
+
+1. understand the requested capability;
+2. inspect the current architecture and module registry;
+3. determine whether a local implementation already exists;
+4. design the smallest native module;
+5. create the module and tests in an isolated workspace;
+6. run compile/tests/security checks;
+7. generate a change report;
+8. after the self-development policy permits it, apply the change;
+9. register the module/capability and update documentation;
+10. keep rollback information.
+
+Third-party APIs must not be introduced merely for convenience. A third-party service is acceptable only when the capability is inherently dependent on that external system or is explicitly selected as an optional provider.
+
+## Ownership rule
+
+New capabilities should be implemented as My-AI-owned modules with provider interfaces where useful.
+
+Preferred order:
+
+MY-AI native/local implementation → local open-source backend → optional external provider
+
+not:
+
+external API → MY-AI wrapper
+
+LLM and Git/GitHub remain explicit exceptions where external infrastructure is currently useful or technically required.
+
+## Safety of self-development
+
+The initial/beta system must never silently:
+
+- rewrite its own source;
+- install arbitrary packages;
+- change security policy;
+- change user permissions;
+- publish to GitHub;
+- deploy itself;
+- remove audit history.
+
+All such operations remain explicit until a later release deliberately enables a controlled self-development policy.
+
+---
+
+# Source: `docs/help/voice.md`
+
+# راهنمای صدا
+
+ورودی گفتاری از Speech Recognition مرورگر و خروجی از Speech Synthesis استفاده می‌کند. زبان صدا را از انتخابگر فارسی یا English انتخاب کنید. پشتیبانی تشخیص گفتار به مرورگر وابسته است.
+
+---
+
+# Source: `docs/semantic-agent-execution-philosophy.md`
+
+# فلسفه و اصول Semantic Agent در My-AI
+
+## هدف
+هدف این سند ثبت فلسفه تصمیم‌گیری و اجرای Agent است تا توسعه‌های بعدی به سمت یک Semantic Agent قابل اتکا باقی بماند.
+هدف کپی‌کردن کد یا معماری داخلی ChatGPT نیست؛ هدف، پیاده‌سازی همان الگوی رفتاری مهندسی است: فهم معنای درخواست، استفاده از context، برنامه‌ریزی action، جداسازی تشخیص از مجوز اجرا، و جلوگیری از side effect ناشی از خطای مدل.
+
+## 1. تصمیم‌گیری باید Semantic باشد
+Agent نباید برای تشخیص intent یا action به فهرست keywordها و trigger phraseها وابسته باشد. درخواست‌هایی با wording متفاوت اما معنای یکسان باید به نتیجه یکسان برسند.
+
+اصل: Meaning > Keywords
+
+## 2. Router فقط تشخیص می‌دهد
+Semantic Router وظیفه دارد intent، action، goal، target، context و confidence را استخراج کند؛ اما خروجی Router به‌تنهایی اجازه اجرای side effect نیست.
+
+مثلاً create_artifact فقط یعنی مدل تشخیص داده احتمالاً کاربر artifact می‌خواهد، نه اینکه Project Builder مجاز به اجراست.
+
+## 3. Execution Authorization مستقل از Router است
+قبل از هر عملیات دارای side effect باید یک Execution Policy مستقل تصمیم بگیرد.
+
+این policy باید پیام فعلی کاربر، conversation history، current task، conversation state، intent، action، target artifact، confirmation state، سطح ریسک و محدودیت‌های امنیتی را در نظر بگیرد.
+
+Router می‌تواند اشتباه کند؛ خطای Router نباید مستقیماً به اجرای ناخواسته تبدیل شود.
+
+## 4. پیام فعلی کاربر بالاترین اولویت را دارد
+History برای حل referenceها و ادامه task استفاده می‌شود، اما نباید یک درخواست یا پاسخ قدیمی را به دستور جدید تبدیل کند.
+
+مثلاً اگر کاربر قبلاً پروژه ساخته و اکنون فقط بگوید «سلام»، پیام فعلی نباید باعث ادامه build یا modification شود.
+
+## 5. Context برای فهم است، نه ساختن دستور جدید
+Conversation history، memory و knowledge می‌توانند معنای پیام فعلی را کامل کنند؛ اما retrieved knowledge یا پاسخ قبلی assistant نباید خودش تبدیل به user instruction شود.
+
+Context may clarify intent; context must not invent authorization.
+
+## 6. Side Effect باید یک مرز مشخص داشته باشد
+هر عملی که محیط را تغییر می‌دهد باید از Execution Boundary عبور کند؛ از جمله ساخت پروژه، تغییر فایل، اجرای کد، Git write، self-update، database operation و عملیات خارجی.
+
+مسیر مطلوب:
+User Message → Semantic Understanding → Action Planning → Execution Authorization → Executor
+
+نه:
+User Message → keyword/intent → immediate side effect
+
+## 7. Project Builder فقط با مجوز معنایی اجرا شود
+Project Builder نباید مستقیماً بر اساس coding یا create_artifact اجرا شود.
+
+شرط منطقی:
+Router says create_artifact + Execution Policy confirms current user intent + no blocking policy = Project Builder may execute
+
+این policy باید semantic باشد، نه وابسته به markerهایی مانند «بساز»، «create» یا «build».
+
+## 8. خطای Router نباید side effect ایجاد کند
+این یک invariant مهم است.
+
+اگر Router برای «سلام» به‌اشتباه coding + create_artifact برگرداند، Execution Policy باید ناسازگاری را تشخیص دهد و side effect را block کند.
+
+## 9. Continue Task باید semantic باشد
+پیام‌هایی مانند «ادامه بده»، «همون قبلی رو کامل کن»، «برو مرحله بعد» و «نسخه قبلی رو اصلاح کن» ممکن است task قبلی را ادامه دهند.
+
+Continuation باید با conversation state و task context تفسیر شود؛ اما بدون task معتبر و authorization مناسب نباید side effect ایجاد کند.
+
+## 10. Actionها باید از هم تفکیک شوند
+حداقل تفاوت این actionها باید حفظ شود:
+answer، explain، analyze، create_artifact، modify_artifact، execute، inspect، save، report، remediate، continue_task، confirm_high_risk
+
+شباهت کلمات نباید باعث یکی‌شدن actionها شود. مثلاً «چطور یک پروژه Python بسازم؟» با «یک پروژه Python بساز» از نظر action یکسان نیست.
+
+## 11. Confidence مجوز اجرا نیست
+حتی confidence بالا نباید authorization محسوب شود. Confidence برای ارزیابی کیفیت تشخیص است؛ Authorization تصمیمی مستقل است.
+
+## 12. عملیات پرریسک confirmation جداگانه دارند
+برای actionهای پرریسک باید policy مخصوص وجود داشته باشد. وجود intent به‌تنهایی کافی نیست.
+
+## 13. Streaming نباید bypass باشد
+stream_chat و مسیر معمول chat باید از Execution Policy یکسان استفاده کنند. هیچ مسیر جایگزینی نباید policy را دور بزند.
+
+## 14. Persistence بخشی از correctness است
+ثبت user message، assistant response، session state و task state باید مالک مشخص داشته باشد. یک turn نباید دوبار ذخیره، ناقص ذخیره یا پس از refresh ناپدید شود.
+
+## 15. Test Matrix باید بر اساس معنا باشد
+برای هر action باید wordingهای متفاوت، فارسی و انگلیسی، درخواست مستقیم و غیرمستقیم، context قبلی، continuation، درخواست مبهم، پیام عادی، خطای Router و confidence بالا با intent اشتباه آزمایش شود.
+
+هدف: رفتار درست باید نسبت به تغییر wording پایدار بماند.
+
+## معماری مرجع
+User Message
+  ↓
+Conversation + State
+  ↓
+Semantic Router
+  ↓
+Intent + Action + Goal + Target + Context
+  ↓
+Action Planner
+  ↓
+Execution Authorization
+  ├─ Block
+  ├─ Ask / Confirm
+  └─ Allow → Executor / Tool → Result → Persistence / State → Final Response
+
+## قانون طلایی
+مدل می‌تواند پیشنهاد بدهد؛ مدل به‌تنهایی نباید side effect را مجاز کند.
+
+کلمات می‌توانند evidence باشند، اما نباید policy تصمیم‌گیری باشند.
+
+## معیار موفقیت
+1. تغییر wording نباید intent را شکننده کند.
+2. context باید به فهم درخواست کمک کند.
+3. context نباید بدون درخواست فعلی action جدید ایجاد کند.
+4. Router نباید مستقیماً executor را فعال کند.
+5. side effect فقط از Execution Authorization عبور کند.
+6. اشتباه Router نباید باعث ساخت، اجرا یا تغییر ناخواسته شود.
+7. chat و streaming policy یکسان داشته باشند.
+8. persistence deterministic و قابل تست باشد.
+9. regression testها رفتارهای بحرانی را محافظت کنند.
+10. افزودن action جدید نباید نیازمند افزودن keyword به یک لیست مرکزی باشد.
+
+## وضعیت فعلی My-AI
+Router فعلی پروژه از نظر فلسفه semantic پایه مناسبی دارد و prompt آن صراحتاً از trigger-word routing منع شده است.
+
+مرز بین Semantic Router و Execution اکنون با یک Execution Policy مستقل پیاده‌سازی شده است. Project Builder مستقیماً از Router اجرا نمی‌شود و مسیرهای chat و streaming هر دو از همین policy عبور می‌کنند. ادامه task نیز فقط وقتی مجاز است که state یک project action معتبر را نشان دهد.
+
+بنابراین گیت keyword-based قبلی دیگر بخشی از معماری جاری نیست. هر توسعه بعدی باید همین مرز semantic authorization را حفظ کند.
+
+هدف معماری:
+Semantic Router → Execution Authorization → Executor
+
+## دستور توسعه برای آینده
+هر قابلیت جدید Agent باید قبل از merge بررسی کند:
+1. آیا تشخیص semantic است یا keyword-based؟
+2. آیا Router فقط intent را تشخیص می‌دهد؟
+3. آیا execution authorization مستقل است؟
+4. آیا side effect بدون authorization ممکن است؟
+5. آیا context می‌تواند ناخواسته action جدید ایجاد کند؟
+6. آیا streaming همان policy را رعایت می‌کند؟
+7. آیا برای wordingهای متفاوت test وجود دارد؟
+8. آیا خطای Router با test پوشش داده شده است؟
+9. آیا persistence deterministic است؟
+10. آیا قابلیت جدید bypass برای Execution Policy ایجاد می‌کند؟
+
+اگر پاسخ هرکدام منفی باشد، قابلیت قبل از merge نیاز به بازبینی معماری دارد.
