@@ -145,7 +145,9 @@ def _research(plan: dict[str, Any]) -> ResearchBundle:
             url = _safe_text(result.get("url"), 1000)
             if not url:
                 continue
-            source = {"title": _safe_text(result.get("title"), 300), "url": url, "summary": ""}
+            host = (urlparse(url).hostname or "").lower()
+            authority = "official-or-reference" if any(token in host for token in (".gov", ".edu", "developer.", "docs.", "reference.", "learn.")) else "general-web"
+            source = {"title": _safe_text(result.get("title"), 300), "url": url, "summary": "", "authority": authority}
             try:
                 title, text = learner.fetch(url)
                 source["title"] = _safe_text(title, 300)
