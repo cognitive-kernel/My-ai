@@ -80,3 +80,23 @@ def test_non_project_continuation_state_is_blocked():
         "pending_project_action": "",
     }
     assert authorize_project_execution("ادامه بده", intent, state) is False
+
+
+def test_blocked_create_cannot_poison_continuation_state():
+    create_intent = Intent(
+        name="coding",
+        confidence=0.69,
+        args={"action": "create_artifact", "goal": "build a Python expense manager"},
+        intents=("coding",),
+    )
+    state = {}
+    assert authorize_project_execution("یک برنامه مدیریت هزینه بساز", create_intent, state) is False
+    assert state.get("pending_project_action") is None
+
+    continue_intent = Intent(
+        name="coding",
+        confidence=0.95,
+        args={"action": "continue_task", "goal": "continue the Python project"},
+        intents=("coding",),
+    )
+    assert authorize_project_execution("ادامه بده", continue_intent, state) is False
