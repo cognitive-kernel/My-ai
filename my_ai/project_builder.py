@@ -312,7 +312,7 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
         if tests.get("passed") and lint.get("passed") and run.get("passed"):
             break
         last_error = tests.get("error") or tests.get("output") or lint.get("error") or lint.get("output") or run.get("error") or run.get("output") or "tests/lint/runtime validation failed"
-        last_diagnosis = _diagnose_failure(llm, "tests_lint_runtime", last_error)\n        last_diagnosis = _diagnose_failure(llm, "tests_lint_runtime", last_error)
+        last_diagnosis = _diagnose_failure(llm, "tests_lint_runtime", last_error)
     status = "built" if build.get("passed") and tests.get("passed", False) and lint.get("passed", False) and run.get("passed", False) and not semantic_defects else "build_failed"
     pid = execute("INSERT INTO generated_projects(language,request,code) VALUES(?,?,?)", (language, resolved_goal, json.dumps(files, ensure_ascii=False)))
     return {
