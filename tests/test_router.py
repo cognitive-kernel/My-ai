@@ -98,3 +98,20 @@ def test_semantic_artifact_action_does_not_depend_on_trigger_words():
     )
     assert result.name == "coding"
     assert result.args["action"] == "create_artifact"
+
+
+def test_router_regression_corpus_covers_ambiguous_and_high_risk_requests():
+    cases = [
+        ("پایتون را یاد بگیر و بعد API بساز", "learning", {"learning", "coding"}),
+        ("فایل قبلی را بر اساس دستورات قبلی بساز", "coding", {"coding"}),
+        ("این کد را اجرا کن و نتیجه را ذخیره کن", "code_execution", {"code_execution"}),
+        ("در گیت تغییر بده و بعد تست بگیر", "git_write", {"git_write"}),
+        ("دیتابیس را restore کن", "database_import", {"database_import"}),
+    ]
+    for text_value, primary, intents in cases:
+        payload_data = payload(primary, list(intents), "continue_task", 0.95)
+        result, _ = route(payload_data, text_value)
+        assert result.name == primary
+        assert intents.issubset(set(result.intents))
+        if primary in {"code_execution", "git_write", "database_import"}:
+            assert result.requires_confirmation is True
