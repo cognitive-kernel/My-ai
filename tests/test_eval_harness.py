@@ -37,3 +37,22 @@ def test_persian_response_quality_rejects_unknown_marker():
         ResponseEvalCase("سؤال", ("پایتون",), "fa"),
     )
     assert result["passed"] is False
+
+
+def test_regression_gate_enforces_thresholds():
+    from my_ai.eval_harness import evaluate_regression_metrics, compare_regression_baseline
+    metrics = {
+        "retrieval_mrr": 0.8,
+        "persian_response_mean": 0.75,
+        "citation_coverage": 1.0,
+        "confidence_calibration": 0.8,
+        "router_accuracy": 0.95,
+        "skill_verification": 0.9,
+    }
+    result = evaluate_regression_metrics(metrics)
+    assert result["passed"] is True
+    degraded = dict(metrics)
+    degraded["router_accuracy"] = 0.5
+    comparison = compare_regression_baseline(degraded, metrics)
+    assert comparison["passed"] is False
+    assert "router_accuracy" in comparison["regressions"]
