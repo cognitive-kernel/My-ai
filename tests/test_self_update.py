@@ -4,6 +4,7 @@ from my_ai import self_update
 
 
 def test_update_check_detects_remote_revision(monkeypatch):
+    object.__setattr__(self_update.settings, "offline_strict", False)
     values = iter(["", "", "local-sha", "remote-sha"])
     monkeypatch.setattr(self_update, "_git", lambda *args, **kwargs: next(values))
     result = self_update.check_for_update()
@@ -12,6 +13,7 @@ def test_update_check_detects_remote_revision(monkeypatch):
 
 
 def test_update_refuses_dirty_worktree(monkeypatch):
+    object.__setattr__(self_update.settings, "offline_strict", False)
     monkeypatch.setattr(self_update, "_git", lambda *args, **kwargs: "local-change")
     with pytest.raises(RuntimeError, match="تغییرات محلی"):
         self_update.apply_confirmed_update()
