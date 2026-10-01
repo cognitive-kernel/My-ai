@@ -187,7 +187,15 @@ def register_roadmap_routes(app, require_user) -> None:
     @router.post("/completion")
     async def completion(request: Request):
         data = await request.json()
-        return completion_report(str(data.get("goal", "")), [str(x) for x in data.get("requirements") or []], [str(x) for x in data.get("validation") or []], [str(x) for x in data.get("unresolved") or []])
+        return completion_report(
+            str(data.get("goal", "")),
+            [str(x) for x in data.get("requirements") or []],
+            [str(x) for x in data.get("validation") or []],
+            [str(x) for x in data.get("unresolved") or []],
+            [str(x) for x in data.get("artifacts") or []],
+            [str(x) for x in data.get("research") or []],
+            [str(x) for x in data.get("limitations") or []],
+        )
 
     @router.get("/benchmarks")
     async def benchmarks(suite: str | None = None):
