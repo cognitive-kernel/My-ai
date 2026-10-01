@@ -10,6 +10,8 @@ import ipaddress
 from urllib.parse import urlparse
 from datetime import datetime, timezone
 from pathlib import Path
+import logging
+logger = logging.getLogger(__name__)
 from .db import execute
 from .settings_store import get_bool, get_setting
 from .decision_log import record as record_decision
