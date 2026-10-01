@@ -117,12 +117,12 @@ Execution Authorization
 ## وضعیت فعلی My-AI
 Router فعلی پروژه از نظر فلسفه semantic پایه مناسبی دارد و prompt آن صراحتاً از trigger-word routing منع شده است.
 
-قسمتی که باید تکامل پیدا کند، مرز بین Semantic Router و Execution است.
+مرز بین Semantic Router و Execution اکنون با یک Execution Policy مستقل پیاده‌سازی شده است. Project Builder مستقیماً از Router اجرا نمی‌شود و مسیرهای chat و streaming هر دو از همین policy عبور می‌کنند. ادامه task نیز فقط وقتی مجاز است که state یک project action معتبر را نشان دهد.
 
-گیت keyword-based فعلی برای جلوگیری از ساخت ناخواسته پروژه یک راهکار حفاظتی موقت است و نباید معماری نهایی باشد.
+بنابراین گیت keyword-based قبلی دیگر بخشی از معماری جاری نیست. هر توسعه بعدی باید همین مرز semantic authorization را حفظ کند.
 
-هدف توسعه:
-Semantic Router → Execution Planner → Semantic Authorization → Executor
+هدف معماری:
+Semantic Router → Execution Authorization → Executor
 
 ## دستور توسعه برای آینده
 هر قابلیت جدید Agent باید قبل از merge بررسی کند:
