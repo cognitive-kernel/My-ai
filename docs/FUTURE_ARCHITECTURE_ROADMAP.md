@@ -192,3 +192,12 @@ Roadmap APIs cover profile, model selection, resources, capabilities/authorizati
 - **Roadmap API security:** تمام endpointهای roadmap زیر احراز هویت موجود برنامه قرار گرفتند.
 
 موارد زیر عمداً destructive/automatic نشده‌اند: حذف خودکار knowledge، بازنویسی backup، و activation خودکار self-update بدون approval. این‌ها مطابق اصل local-first و حفاظت از داده باقی می‌مانند.
+
+
+### تکمیل audit نهایی — 2026-10-01
+- **Knowledge rollback:** نسخه فعال knowledge اکنون قابل restore است و conflict resolution نیز نسخه انتخاب‌شده را به‌صورت پایدار فعال می‌کند؛ محتوای رکورد اصلی knowledge با نسخه انتخاب‌شده همگام می‌شود.
+- **Research trace identity:** شناسه requirement در research-to-code با SHA-256 پایدار شده تا بین processها و اجراهای جداگانه قابل ردیابی بماند.
+- **Maintenance failure safety:** حتی در خطای fetch اولیه نیز scheduler slot در مسیر finally آزاد می‌شود.
+- **Context compaction:** budgetهای کوچک نیز با compaction قطعی مدیریت می‌شوند و regression test مستقل دارند.
+
+مواردی که به ابزار خارجی وابسته‌اند (برای نمونه اجرای واقعی MQL compiler یا اجرای live LLM/browser) در benchmark به‌جای success جعلی، با وضعیت blocked و دلیل محیطی گزارش می‌شوند؛ این به معنی نقص implementation نیست و مانع ادعای نتیجه‌ای که در محیط موجود قابل اثبات نیست می‌شود.
