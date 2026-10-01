@@ -224,9 +224,26 @@ def remember_knowledge(topic: str, title: str, content: str, source_url: str | N
                 conn.execute("UPDATE knowledge SET source_url=? WHERE id=?", (source_url, row["id"]))
             conn.commit()
             return int(row["id"])
-        cur = conn.execute("INSERT INTO knowledge(topic,title,content,source_url,content_hash,category) VALUES(?,?,?,?,?,?)",(topic,title,content,source_url,digest,category))
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(knowledge)").fetchall()}
+        if "category" in columns:
+            cur = conn.execute(
+                "INSERT INTO knowledge(topic,title,content,source_url,content_hash,category) VALUES(?,?,?,?,?,?)",
+                (topic, title, content, source_url, digest, category),
+            )
+        else:
+            cur = conn.execute(
+                "INSERT INTO knowledge(topic,title,content,source_url,content_hash) VALUES(?,?,?,?,?)",
+                (topic, title, content, source_url, digest),
+            )
         knowledge_id = int(cur.lastrowid or 0)
-        conn.execute("INSERT INTO knowledge_versions(knowledge_id,version,content,source_url,status) VALUES(?,?,?,?,?)",(knowledge_id,1,content,source_url,"active"))
+        version_table = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='knowledge_versions'"
+        ).fetchone()
+        if version_table:
+            conn.execute(
+                "INSERT INTO knowledge_versions(knowledge_id,version,content,source_url,status) VALUES(?,?,?,?,?)",
+                (knowledge_id, 1, content, source_url, "active"),
+            )
         conn.commit()
         return knowledge_id
 
