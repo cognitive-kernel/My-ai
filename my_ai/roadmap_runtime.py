@@ -242,4 +242,16 @@ def research_trace_rows(requirement: str | None = None) -> list[dict[str, Any]]:
 
 
 def system_profile() -> dict[str, Any]:
-    return {"platform": platform.platform(), "python": platform.python_version(), "mode": runtime_mode().value, "models": [asdict(x) for x in model_catalog()], "resources": asdict(resource_snapshot()), "max_concurrent": _scheduler.max_concurrent}
+    models = []
+    for model in model_catalog():
+        item = asdict(model)
+        item["capabilities"] = sorted(model.capabilities)
+        models.append(item)
+    return {
+        "platform": platform.platform(),
+        "python": platform.python_version(),
+        "mode": runtime_mode().value,
+        "models": models,
+        "resources": asdict(resource_snapshot()),
+        "max_concurrent": _scheduler.max_concurrent,
+    }
