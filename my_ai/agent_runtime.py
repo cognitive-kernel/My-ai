@@ -13,6 +13,7 @@ from .self_update import recent_lessons
 from .chat_transport_context import get_attachments
 from .project_builder import build_project as _legacy_build_project
 from .software_agent import run_software_task
+from .execution_policy import authorize_project_execution
 
 # Compatibility hook for tests/integrations that patch the historical builder.
 build_project = _legacy_build_project
@@ -45,7 +46,13 @@ class Agent(LegacyAgent):
     """Unified inference pipeline with explicit conversation state and context-aware retrieval."""
 
     def _ensure_state_table(self) -> None:
-        execute("CREATE TABLE IF NOT EXISTS conversation_state (session_id INTEGER PRIMARY KEY, topic TEXT NOT NULL DEFAULT '', current_goal TEXT NOT NULL DEFAULT '', language TEXT, last_action TEXT NOT NULL DEFAULT '', summary TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
+        execute("CREATE TABLE IF NOT EXISTS conversation_state (session_id INTEGER PRIMARY KEY, topic TEXT NOT NULL DEFAULT '', current_goal TEXT NOT NULL DEFAULT '', language TEXT, last_action TEXT NOT NULL DEFAULT '', last_intent TEXT NOT NULL DEFAULT '', pending_project_action TEXT, summary TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
+        columns = fetch_all("PRAGMA table_info(conversation_state)")
+        names = {str(row.get("name") or "") for row in columns}
+        if "last_intent" not in names:
+            execute("ALTER TABLE conversation_state ADD COLUMN last_intent TEXT NOT NULL DEFAULT ''")
+        if "pending_project_action" not in names:
+            execute("ALTER TABLE conversation_state ADD COLUMN pending_project_action TEXT")
 
     def _persist_shortcut(self, ctx: PreparedChat) -> str:
         answer = str(ctx.shortcut or "")
@@ -61,7 +68,7 @@ class Agent(LegacyAgent):
         recent_users = user_messages[-12:]
         try:
             persisted = fetch_all(
-                "SELECT topic,current_goal,language,last_action,summary FROM conversation_state WHERE session_id=?",
+                "SELECT topic,current_goal,language,last_action,last_intent,pending_project_action,summary FROM conversation_state WHERE session_id=?",
                 (getattr(self, "_current_session_id", 1),),
             )
         except Exception:
@@ -72,7 +79,7 @@ class Agent(LegacyAgent):
         language = saved.get("language")
         last_action = str(saved.get("last_action") or "answer")
         summary = str(saved.get("summary") or f"موضوع جاری: {topic}\nزبان: {language or 'نامشخص'}\nآخرین اقدام: {last_action}\nآخرین درخواست‌های کاربر: {' | '.join(recent_users[-4:])}")
-        return {"topic": topic, "current_goal": current_goal, "language": language, "last_action": last_action, "summary": summary, "assistant_tail": assistant_messages[-2:]}
+        return {"topic": topic, "current_goal": current_goal, "language": language, "last_action": last_action, "last_intent": str(saved.get("last_intent") or ""), "pending_project_action": str(saved.get("pending_project_action") or ""), "summary": summary, "assistant_tail": assistant_messages[-2:]}
 
     def _resolved_message(self, message: str, history: list[dict[str, Any]], state: dict[str, Any]) -> str:
         if str((state.get("last_action") or "") ) != "continue_task":
@@ -87,7 +94,7 @@ class Agent(LegacyAgent):
         summary = state.get("summary", "")
         if answer:
             summary = (summary + "\nآخرین پاسخ تولیدشده: " + str(answer)[:1000])[:5000]
-        execute("INSERT INTO conversation_state(session_id,topic,current_goal,language,last_action,summary,updated_at) VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(session_id) DO UPDATE SET topic=excluded.topic,current_goal=excluded.current_goal,language=excluded.language,last_action=excluded.last_action,summary=excluded.summary,updated_at=CURRENT_TIMESTAMP", (ctx.session_id, state.get("topic", ""), state.get("current_goal", ""), state.get("language"), state.get("last_action", ""), summary))
+        execute("INSERT INTO conversation_state(session_id,topic,current_goal,language,last_action,last_intent,pending_project_action,summary,updated_at) VALUES(?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(session_id) DO UPDATE SET topic=excluded.topic,current_goal=excluded.current_goal,language=excluded.language,last_action=excluded.last_action,last_intent=excluded.last_intent,pending_project_action=excluded.pending_project_action,summary=excluded.summary,updated_at=CURRENT_TIMESTAMP", (ctx.session_id, state.get("topic", ""), state.get("current_goal", ""), state.get("language"), state.get("last_action", ""), state.get("last_intent", ""), state.get("pending_project_action") or None, summary))
 
     def _relevant_knowledge(self, message: str, state: dict[str, Any], intent: Any) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         query = "\n".join((state.get("summary", ""), state.get("topic", ""), str(message), str(getattr(intent, "name", ""))))
@@ -134,6 +141,12 @@ class Agent(LegacyAgent):
             return PreparedChat(message, session_id, normalized_attachments, history, context, state, intent=intent, shortcut=maintenance)
         if getattr(intent, "args", None) is not None:
             state["last_action"] = str((intent.args or {}).get("action") or state.get("last_action") or "answer")
+            state["last_intent"] = str(getattr(intent, "name", "") or state.get("last_intent") or "")
+            action = state["last_action"]
+            if action in {"create_artifact", "modify_artifact"} and getattr(intent, "name", "") == "coding":
+                state["pending_project_action"] = action
+            elif action != "continue_task":
+                state["pending_project_action"] = ""
             if (intent.args or {}).get("language"):
                 state["language"] = str(intent.args["language"])
             state["summary"] = f"موضوع جاری: {state.get('topic', '')}\nزبان: {state.get('language') or 'نامشخص'}\nآخرین اقدام: {state['last_action']}\nآخرین درخواست کاربر: {state.get('current_goal', '')}"
@@ -170,33 +183,9 @@ class Agent(LegacyAgent):
         self._update_state(ctx, answer)
         return answer
 
-    @staticmethod
-    def _explicit_project_request(message: str, intent: Any) -> bool:
-        """Require an explicit current-message request before creating/modifying a project."""
-        text = str(message or "").strip().casefold()
-        if not text:
-            return False
-        action = str((getattr(intent, "args", {}) or {}).get("action") or "")
-        if action not in {"create_artifact", "modify_artifact"}:
-            return False
-        # This is an execution safety gate, not the semantic router. The router may
-        # classify a message as coding, but project creation is only authorized when
-        # the current message itself contains a concrete build/create/modify request.
-        markers = (
-            "بساز", "ساخت", "ایجاد کن", "ایجاد", "درست کن", "پیاده سازی کن",
-            "پیاده‌سازی کن", "کدنویسی کن", "برنامه بنویس", "پروژه بساز",
-            "پروژه ایجاد", "فایل بساز", "کد بنویس",
-            "build", "create", "make", "generate", "implement", "develop",
-            "write code", "write a program", "create a project", "build a project",
-            "modify", "change the code", "update the code", "fix the code",
-        )
-        return any(marker in text for marker in markers)
-
     @classmethod
-    def _runtime_project_build_requested(cls, message: str, intent: Any) -> bool:
-        if getattr(intent, "name", "") != "coding":
-            return False
-        return cls._explicit_project_request(message, intent)
+    def _runtime_project_build_requested(cls, message: str, intent: Any, state: dict[str, Any] | None = None) -> bool:
+        return authorize_project_execution(message, intent, state)
 
     def _build_project_from_intent(self, message: str, intent: Any, context: str = "") -> str:
         args = getattr(intent, "args", {}) or {}
@@ -227,7 +216,7 @@ class Agent(LegacyAgent):
                 self._persist_shortcut(ctx)
             self._update_state(ctx, answer)
             return answer
-        if self._runtime_project_build_requested(ctx.message, ctx.intent):
+        if self._runtime_project_build_requested(ctx.message, ctx.intent, ctx.conversation_state):
             answer = self._build_project_from_intent(ctx.message, ctx.intent, ctx.context)
             if persist_answer:
                 self._persist_shortcut(PreparedChat(ctx.message, ctx.session_id, ctx.attachments, ctx.history, ctx.context, ctx.conversation_state, intent=ctx.intent, shortcut=answer))
@@ -250,7 +239,7 @@ class Agent(LegacyAgent):
         ctx = self._prepare_chat_context(message, session_id, attachments)
         if ctx.shortcut is not None:
             answer = self._persist_answer(ctx, str(ctx.shortcut)); yield answer; return
-        if self._runtime_project_build_requested(ctx.intent):
+        if self._runtime_project_build_requested(ctx.message, ctx.intent, ctx.conversation_state):
             answer = self._build_project_from_intent(ctx.message, ctx.intent, ctx.context)
             self._persist_answer(ctx, answer); yield answer; return
 
