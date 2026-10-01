@@ -998,6 +998,18 @@ def _ensure_chat_history(session_id: int, message: str, answer: str) -> None:
         execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
         return
     _persist_api_chat_turn(session_id, message, answer)
+    verified = fetch_all(
+        "SELECT id FROM conversations WHERE session_id=? AND role='assistant' AND content=? ORDER BY id DESC LIMIT 1",
+        (session_id, str(answer)),
+    )
+    if not verified:
+        _persist_api_chat_turn(session_id, message, answer)
+        verified = fetch_all(
+            "SELECT id FROM conversations WHERE session_id=? AND role='assistant' AND content=? ORDER BY id DESC LIMIT 1",
+            (session_id, str(answer)),
+        )
+    if not verified:
+        raise RuntimeError("Assistant response was not durably persisted.")
 
 @app.post("/chat")
 def chat(r:ChatRequest, request:Request):
