@@ -256,7 +256,7 @@ def _cleanup_workspace(workspace: Path) -> dict[str, Any]:
     removed: list[str] = []
     cache_names = {
         "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache",
-        ".tox", ".nox", ".coverage", ".hypothesis",
+        ".tox", ".nox", ".coverage", ".hypothesis", ".cache", "htmlcov", "playwright-report", "test-results",
     }
     if not workspace.exists():
         return {"ok": False, "removed": removed, "error": "Workspace is unavailable."}
