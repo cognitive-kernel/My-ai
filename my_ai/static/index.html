@@ -121,7 +121,7 @@ html+='<div class="bar"><div class="fill" style="width:'+Math.max(0,Math.min(100
 html+='</details>';
 });
 }else{
-html='<div class="card learning-stopped"><b>موضوع آموزشی ثبت‌شده‌ای وجود ندارد.</b></div>';
+html='<div class="card learning-stopped"><a href="/learning">مدیریت آموزش و مشاهده پیشرفت</a></div>';
 }
 $('dashboard').innerHTML=html;
 document.querySelectorAll('#dashboard details[data-learning-language]').forEach(function(d){
