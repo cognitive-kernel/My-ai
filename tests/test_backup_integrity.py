@@ -61,7 +61,7 @@ def test_restore_encrypted_backup_roundtrip(tmp_path, monkeypatch):
     monkeypatch.setattr(platform, "BACKUP_ROOT", tmp_path / "backups")
     db.init_db()
     db.execute("INSERT INTO knowledge(topic,title,content,content_hash) VALUES(?,?,?,?)", ("restore","probe","before","restore-probe"))
-    source = platform.export_database(str(tmp_path / "backups" / "roundtrip.json"), password="roundtrip-password")
+    source = platform.backup_database(str(tmp_path / "backups" / "roundtrip.sqlite.enc"), password="roundtrip-password")
     destination = str(tmp_path / "backups" / "restored.sqlite")
     restored = platform.restore_encrypted_backup(source, destination, "roundtrip-password")
     import sqlite3
