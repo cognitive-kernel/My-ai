@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Depends, Request
 
 from .advanced_agent import Capability, OperationRisk, RuntimeMode, TaskProfile
@@ -62,6 +64,15 @@ def register_roadmap_routes(app, require_user) -> None:
             bool(data.get("requires_approval", False)), bool(data.get("offline", True))
         )
         register_capability(cap)
+        execute(
+            "UPDATE agent_capabilities SET platform_constraints=?,validation=?,fallback=? WHERE name=?",
+            (
+                json.dumps(data.get("platform_constraints") or {}, ensure_ascii=False),
+                str(data.get("validation") or ""),
+                str(data.get("fallback") or ""),
+                cap.name,
+            ),
+        )
         return {"ok": True, "name": cap.name}
 
     @router.post("/capabilities/authorize")
@@ -108,6 +119,19 @@ def register_roadmap_routes(app, require_user) -> None:
         data = await request.json()
         return {"id": record_conflict(str(data["claim_key"]), int(data["left_version_id"]), int(data["right_version_id"]))}
 
+    @router.get("/knowledge/conflicts/{conflict_id}")
+    async def knowledge_conflict_detail(conflict_id: int):
+        rows = fetch_all(
+            """SELECT c.*, lv.version AS left_version, lv.content AS left_content, lv.source_url AS left_source, lv.confidence AS left_confidence,
+                      rv.version AS right_version, rv.content AS right_content, rv.source_url AS right_source, rv.confidence AS right_confidence
+               FROM knowledge_conflicts c
+               JOIN knowledge_versions lv ON lv.id=c.left_version_id
+               JOIN knowledge_versions rv ON rv.id=c.right_version_id
+               WHERE c.id=?""",
+            (conflict_id,),
+        )
+        return {"item": rows[0] if rows else None}
+
     @router.post("/knowledge/conflicts/{conflict_id}/resolve")
     async def knowledge_conflict_resolve(conflict_id: int, request: Request):
         data = await request.json()
@@ -141,6 +165,15 @@ def register_roadmap_routes(app, require_user) -> None:
     @router.get("/lessons")
     async def lesson_list(category: str | None = None):
         return {"items": lessons(category)}
+\n    @router.post("/lessons/{lesson_id}/lifecycle")
+    async def lesson_lifecycle(lesson_id: int, request: Request):
+        data = await request.json()
+        status = str(data.get("status", "validated"))
+        if status not in {"candidate", "validated", "retired"}:
+            raise ValueError("invalid lesson lifecycle status")
+        execute("UPDATE learning_lessons SET status=? WHERE id=?", (status, lesson_id))
+        return {"id": lesson_id, "status": status}
+
 
     @router.post("/research-trace")
     async def research_add(request: Request):
