@@ -100,8 +100,8 @@ def _plan(request: str, context: str = "") -> dict[str, Any]:
         "Semantically analyze the software request and preserve explicit user constraints. Do not rely on trigger words or phrase lists. Identify the artifact type before choosing technology. "
         "If a programming language is explicitly named, preserve it; otherwise language may be null. "
         "For MT4, distinguish indicators from Expert Advisors; trade execution or broad terminal/account/chart access belongs in an EA. Never mix MQL5 APIs into MQL4. If trading is requested without a strategy, make trading explicitly user-controlled and do not invent entry logic. "
-        "Translate the plan into lifecycle host-tool requirements for build/test/lint/run only. Do not model application behavior as host tools. Use provider alternatives when multiple host tools can provide the same capability; each provider must be one coherent tool family with real executable names and provider-specific lifecycle commands. Prefer host-discoverable alternatives instead of assuming a particular compiler. Installation metadata may contain only trusted manager/package identifiers. Never emit URLs, arbitrary installer commands, shell commands, artifact names, or synthetic executables. "
-        "Every acceptance criterion must be testable. Return only JSON matching the schema. Do not write code yet.\n"
+        "Translate the plan into lifecycle host-tool requirements for build/test/lint/typecheck/run.  Do not model application behavior as host tools. Use provider alternatives when multiple host tools can provide the same capability; each provider must be one coherent tool family with real executable names and provider-specific lifecycle commands. Prefer host-discoverable alternatives instead of assuming a particular compiler. Installation metadata may contain only trusted manager/package identifiers. Never emit URLs, arbitrary installer commands, shell commands, artifact names, or synthetic executables. "
+        "For Python require mypy or pyright; for Rust require cargo clippy; for JavaScript/TypeScript require an explicit typecheck command; for web artifacts require browser/E2E runtime validation; for MQL require the real compiler when available. Every acceptance criterion must be testable. Return only JSON matching the schema. Do not write code yet.\n"
         f"CURRENT REQUEST:\n{request}\nCONTEXT:\n{context[:16000]}"
     )
     data = llm.structured_chat_json(prompt, PLAN_SCHEMA, system="You are My-AI's semantic software planning and research-planning agent. Never invent platform capabilities.")
@@ -397,11 +397,13 @@ def run_software_task(request: str, *, language: str | None = None, project_path
     build_ok = bool((result.get("build") or {}).get("passed"))
     tests_ok = bool((result.get("tests") or {}).get("passed"))
     lint_ok = bool((result.get("lint") or {}).get("passed"))
+    typecheck_ok = bool((result.get("typecheck") or {}).get("passed"))
     runtime_ok = bool((result.get("run") or {}).get("passed"))
+    phases_ok = bool(result.get("phase_validation")) and all(bool(item.get("passed")) for item in result.get("phase_validation") or []) if result.get("phase_validation") else True
     research_required = bool(plan.get("research_queries"))
     research_ok = bool(research.sources) if research_required else True
 
-    if result.get("status") == "built" and build_ok and tests_ok and lint_ok and runtime_ok and not result.get("semantic_defects") and workspace is not None:
+    if result.get("status") == "built" and build_ok and tests_ok and lint_ok and typecheck_ok and runtime_ok and phases_ok and not result.get("semantic_defects") and workspace is not None:
         review = _self_review(plan, result, workspace)
     else:
         review = {"passed": False, "criteria": [], "defects": ["Self-review was not run because prerequisite validation did not complete."], "notes": []}
@@ -417,7 +419,7 @@ def run_software_task(request: str, *, language: str | None = None, project_path
     # Never commit an incomplete artifact as "complete".
     pre_commit_ok = bool(
         result.get("status") == "built"
-        and build_ok and tests_ok and lint_ok and runtime_ok
+        and build_ok and tests_ok and lint_ok and typecheck_ok and runtime_ok and phases_ok
         and research_ok and not result.get("semantic_defects")
         and bool(review.get("passed"))
         and bool(cleanup.get("ok"))
@@ -437,7 +439,9 @@ def run_software_task(request: str, *, language: str | None = None, project_path
         "build": build_ok,
         "tests": tests_ok,
         "lint": lint_ok,
+        "typecheck": typecheck_ok,
         "runtime": runtime_ok,
+        "phases": phases_ok,
         "self_review": bool(review.get("passed")),
         "cleanup": bool(cleanup.get("ok")),
         "git": git_ok,
