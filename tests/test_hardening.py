@@ -137,6 +137,51 @@ def test_chat_api_persists_assistant_response_when_agent_does_not(monkeypatch, c
     ]
 
 
+def test_chat_api_does_not_bypass_execution_policy_for_project_build(monkeypatch, client_db):
+    import my_ai.api as api
+
+    owner = auth.create_account("owner", "a-secure-password")
+    db.execute(
+        "INSERT INTO tool_permissions(user_id,tool_name,action,allowed) VALUES(?,?,?,1)",
+        (owner["id"], "code-generation", "execute"),
+    )
+
+    class Intent:
+        name = "coding"
+        confidence = 0.99
+        args = {
+            "action": "create_artifact",
+            "language": "Python",
+            "goal": "build a Python expense manager",
+        }
+        requires_confirmation = False
+        intents = ("coding",)
+
+    class FakeAgent:
+        llm = object()
+
+        def chat(self, message, session_id, attachments=None, intent=None, persist_user=True, persist_answer=True):
+            assert intent is not None
+            assert intent.args["action"] == "create_artifact"
+            return "project execution delegated to Agent"
+
+    def forbidden_builder(*args, **kwargs):
+        raise AssertionError("API must not call build_project directly")
+
+    monkeypatch.setattr(api, "classify", lambda *args, **kwargs: Intent())
+    monkeypatch.setattr(api, "agent", FakeAgent())
+    monkeypatch.setattr(api, "build_project", forbidden_builder)
+
+    response = client_db.post(
+        "/chat",
+        json={"message": "یک برنامه مدیریت هزینه با پایتون بساز"},
+        cookies=login_cookie(owner),
+    )
+    assert response.status_code == 200
+    assert response.json()["type"] == "project"
+    assert response.json()["answer"] == "project execution delegated to Agent"
+
+
 def test_chat_api_has_no_legacy_keyword_command_policy():
     from pathlib import Path
     source = Path("my_ai/api.py").read_text(encoding="utf-8")
