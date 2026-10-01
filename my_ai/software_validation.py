@@ -101,8 +101,10 @@ def validate_validation_matrix(plan: dict[str, Any], language: str | None) -> li
         errors.append("JavaScript/TypeScript validation requires an explicit typecheck command.")
     if any(x in artifact for x in ("web", "website", "frontend", "browser")) and not any(token in (commands.get("run") or "").casefold() for token in ("playwright", "cypress", "browser", "e2e")):
         errors.append("Web validation requires an explicit browser/E2E runtime command.")
-    if lang in {"mql4", "mql5"} and not any(token in (commands.get("build") or "").casefold() for token in ("metaeditor", "metalang", "compiler", "compile")):
-        errors.append("MQL validation requires an explicit compiler/toolchain build command.")
+    if lang in {"mql4", "mql5"}:
+        build_command = (commands.get("build") or "").casefold()
+        if not any(token in build_command for token in ("metaeditor", "metalang")):
+            errors.append("MQL validation requires an explicit compiler/toolchain build command.")
     if lang in {"javascript", "typescript", "js", "ts"} and not commands.get("install"):
         errors.append("JavaScript/TypeScript validation requires an explicit dependency installation command.")
     if lang in {"php"}:
