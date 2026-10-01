@@ -91,7 +91,7 @@ def _run_traceability_case(name: str, case: dict[str, Any]) -> tuple[str, dict[s
             "unresolved": [],
         }
         complete = bool(report["goal"] and report["requirements"] and report["validation"] and not report["unresolved"])
-        return ("passed" if complete else "failed", report)
+        return ("passed" if complete else "failed", {key: value for key, value in report.items()})
     return ("blocked", {"reason": "unsupported local acceptance scenario"})
 
 
