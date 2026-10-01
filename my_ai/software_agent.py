@@ -450,6 +450,8 @@ def run_software_task(request: str, *, language: str | None = None, project_path
                 str(result.get("project_path") or result.get("workspace") or "")[:2000],
                 "",
             )
+    except Exception as exc:
+        result.setdefault("semantic_defects", []).append(f"Research trace persistence failed: {exc}")
     workspace_value = result.get("project_path") or result.get("workspace")
     workspace = Path(str(workspace_value)).resolve() if workspace_value else None
 
