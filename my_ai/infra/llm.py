@@ -6,7 +6,7 @@ import httpx
 import ipaddress
 import urllib.parse
 import time
-from .metrics import record_inference, record_error
+from .metrics import record_inference, record_error, record_route
 from .resource_guard import limits, wait_until_available
 
 def _settings():
@@ -28,13 +28,44 @@ class OllamaClient:
             except ValueError as exc: raise LLMError("Offline strict mode permits only loopback Ollama endpoints.") from exc
         self.default_model = getattr(_settings(), "ollama_model", "qwen2.5:7b")
         self.fallback_model = getattr(_settings(), "fallback_model", self.default_model)
-        self.model = self._select_model(task)
+        self.route_reason = "default"
+        requested = self._select_model(task)
+        self.model = self._preflight_model(requested, task)
     def _select_model(self, task: str | None) -> str:
-        if not task: return self.default_model
+        if not task:
+            self.route_reason = "default"
+            return self.default_model
         low = task.lower()
-        if any(x in low for x in ("code","python","sql","debug","coding","patch","کد","برنامه","پروژه","رفع باگ")): return getattr(_settings(), "coding_model", self.default_model)
-        if any(x in low for x in ("route","routing","classify","intent","simple","ساده","دسته")): return getattr(_settings(), "routing_model", self.default_model)
+        if any(x in low for x in ("code","python","sql","debug","coding","patch","کد","برنامه","پروژه","رفع باگ")):
+            self.route_reason = "coding_task"
+            return getattr(_settings(), "coding_model", self.default_model)
+        if any(x in low for x in ("route","routing","classify","intent","simple","ساده","دسته")):
+            self.route_reason = "routing_task"
+            return getattr(_settings(), "routing_model", self.default_model)
+        if any(x in low for x in ("complex","reasoning","analysis","معماری","تحلیل","پیچیده")):
+            self.route_reason = "complex_task"
+            return self.default_model
+        self.route_reason = "general_task"
         return self.default_model
+
+    def _preflight_model(self, requested: str, task: str | None) -> str:
+        try:
+            response = httpx.get(f"{self.base_url}/api/tags", timeout=5)
+            response.raise_for_status()
+            available = {str(item.get("name")) for item in response.json().get("models", []) if item.get("name")}
+        except Exception:
+            record_route(task or "general", requested, "preflight_unknown")
+            return requested
+        if requested in available:
+            record_route(task or "general", requested, self.route_reason)
+            return requested
+        if self.fallback_model in available and self.fallback_model != requested:
+            previous = self.route_reason
+            self.route_reason = "preflight_fallback"
+            record_route(task or "general", self.fallback_model, previous + ":fallback")
+            return self.fallback_model
+        record_route(task or "general", requested, self.route_reason + ":unavailable")
+        return requested
     def _options(self) -> dict[str, int]:
         cfg=limits(); return {"num_ctx":int(_settings().ollama_num_ctx),"num_thread":int(cfg["cpu_threads"]),"num_gpu":int(cfg["gpu_layers"])}
     def stream_chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None,stop_event=None)->Iterator[str]:
