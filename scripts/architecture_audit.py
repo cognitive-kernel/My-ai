@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import ast
+import io
+import tokenize
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1] / "my_ai"
@@ -19,9 +21,10 @@ def scan() -> dict[str, list[str]]:
                     silent.append(f"{path}:{node.lineno}")
             if isinstance(node, ast.Name) and node.id == "NotImplemented":
                 unresolved.append(f"{path}:{node.lineno}")
-        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if any(marker in line for marker in ("TODO", "FIXME", "HACK", "XXX")):
-                unresolved.append(f"{path}:{lineno}")
+        source = path.read_text(encoding="utf-8-sig")
+        for token in tokenize.generate_tokens(io.StringIO(source).readline):
+            if token.type == tokenize.COMMENT and any(marker in token.string for marker in ("TODO", "FIXME", "HACK", "XXX")):
+                unresolved.append(f"{path}:{token.start[0]}")
     return {"unresolved": sorted(set(unresolved)), "silent": sorted(set(silent))}
 
 
