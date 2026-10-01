@@ -10,7 +10,6 @@ import os
 import platform
 import time
 from dataclasses import asdict
-from pathlib import Path
 from typing import Any, Callable
 
 from .advanced_agent import (
@@ -176,7 +175,7 @@ def maintenance(limit: int = 100) -> dict[str, Any]:
     checked = 0
     for row in rows:
         status = "fresh" if row["verification_status"] == "verified" and row["verified_at"] else "review"
-        execute("INSERT INTO knowledge_maintenance(knowledge_id,action,status,details) VALUES(?,?,?,?,?)".replace("VALUES(?,?,?,?,?)","VALUES(?,?,?,?)"), (row["id"],"scheduled_review",status,"deterministic freshness check"))
+        execute("INSERT INTO knowledge_maintenance(knowledge_id,action,status,details) VALUES(?,?,?,?)", (row["id"],"scheduled_review",status,"deterministic freshness check"))
         checked += 1
     return {"checked": checked, "review_required": sum(1 for r in rows if not (r["verification_status"] == "verified" and r["verified_at"]))}
 
