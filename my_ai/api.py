@@ -1054,12 +1054,18 @@ def chat(r:ChatRequest, request:Request):
             raise HTTPException(409, "یادگیری فقط در صفحه «پیشرفت و یادگیری» انجام می‌شود.")
         if code_intent:
             language=requested or "Python"
-            if str((intent.args or {}).get("action") or "") in {"create_artifact","modify_artifact","continue_task"}:
-                build_data=build_project(msg,language,timeout=300,repair_attempts=2)
-                build_answer="Application project build completed."
-                _persist_api_chat_turn(sid,msg,build_answer)
-                _ensure_chat_history(sid,msg,build_answer)
-                return {"type":"project","answer":build_answer,"data":build_data,"session_id":sid}
+            semantic_action=str((intent.args or {}).get("action") or "answer")
+            if semantic_action in {"create_artifact","modify_artifact","continue_task"}:
+                answer=agent.chat(
+                    msg,
+                    sid,
+                    attachments=attachments,
+                    intent=intent,
+                    persist_user=False,
+                    persist_answer=False,
+                )
+                _ensure_chat_history(sid,msg,answer)
+                return {"type":"project","answer":answer,"session_id":sid}
             generated_data=learner.generate_program(msg,language)
             generated_answer="Generated program:"
             _persist_api_chat_turn(sid,msg,generated_answer)
