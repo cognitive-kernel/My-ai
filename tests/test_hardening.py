@@ -86,18 +86,36 @@ def test_chat_history_returns_utc_timestamps_and_delete_removes_all_chat_data(cl
     assert db.fetch_all("SELECT session_id FROM conversation_state WHERE session_id=?", (sid,)) == []
 
 
-def test_project_build_requires_explicit_current_user_request():
+def test_project_build_uses_semantic_execution_policy():
     from my_ai.agent_runtime import Agent
 
     class Intent:
         name = "coding"
         confidence = 0.99
-        args = {"action": "create_artifact"}
+        args = {"action": "create_artifact", "goal": "build a Python project"}
 
     assert Agent._runtime_project_build_requested("سلام", Intent()) is False
-    assert Agent._runtime_project_build_requested("میشه درباره پایتون توضیح بدی؟", Intent()) is False
-    assert Agent._runtime_project_build_requested("یک پروژه پایتون بساز", Intent()) is True
-    assert Agent._runtime_project_build_requested("create a Python project", Intent()) is True
+    assert Agent._runtime_project_build_requested("یک برنامه مدیریت هزینه بساز", Intent()) is True
+
+
+def test_project_continuation_requires_pending_state():
+    from my_ai.agent_runtime import Agent
+
+    class Intent:
+        name = "coding"
+        confidence = 0.99
+        args = {"action": "continue_task", "goal": "continue the Python project"}
+
+    assert Agent._runtime_project_build_requested("ادامه بده", Intent(), {}) is False
+    assert Agent._runtime_project_build_requested(
+        "ادامه بده",
+        Intent(),
+        {
+            "current_goal": "build the Python project",
+            "last_intent": "coding",
+            "pending_project_action": "create_artifact",
+        },
+    ) is True
 
 
 def test_chat_api_persists_assistant_response_when_agent_does_not(monkeypatch, client_db):
