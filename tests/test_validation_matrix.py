@@ -36,6 +36,7 @@ def test_web_requires_browser_e2e():
     p = plan("web application")
     p["tool_requirements"][0]["commands"]["typecheck"] = "tsc --noEmit"
     p["tool_requirements"][0]["commands"]["run"] = "npm run e2e:playwright"
+    p["tool_requirements"][0]["commands"]["install"] = "npm ci"
     assert validate_validation_matrix(p, "TypeScript") == []
     p["tool_requirements"][0]["commands"]["run"] = "npm start"
     assert "browser/E2E" in " ".join(validate_validation_matrix(p, "TypeScript"))
