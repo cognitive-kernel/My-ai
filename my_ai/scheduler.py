@@ -373,8 +373,8 @@ class StudyScheduler:
         )
         try:
             execute("ALTER TABLE learning_domains ADD COLUMN auto_learn INTEGER NOT NULL DEFAULT 1")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("LEARNING_DOMAIN_MIGRATION_FAILED: %s", exc)
         execute(
             """INSERT INTO learning_domains(name,topics_json,sources_json,next_review_at)
                VALUES(?,?,?,?) ON CONFLICT(name) DO UPDATE SET
