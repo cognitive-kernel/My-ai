@@ -431,6 +431,25 @@ def run_software_task(request: str, *, language: str | None = None, project_path
 
     result["plan"] = plan
     result["research"] = {"source_count": len(research.sources), "sources": research.sources}
+    # Persist the research-to-code chain for post-run inspection.
+    try:
+        from .roadmap_runtime import add_research_trace, evidence_edge, evidence_node
+        requirement_key = f"requirement:software:{abs(hash(request))}"
+        evidence_node(requirement_key, "requirement", request[:1000], {"language": plan.get("language")})
+        for idx, source in enumerate(research.sources[:20], 1):
+            source_value = json.dumps(source, ensure_ascii=False) if isinstance(source, dict) else str(source)
+            source_key = f"{requirement_key}:source:{idx}"
+            evidence_node(source_key, "source", source_value[:4000])
+            evidence_edge(requirement_key, "researched-by", source_key)
+            add_research_trace(
+                str(plan.get("goal") or request)[:4000],
+                str((plan.get("research_queries") or [""])[0])[:2000],
+                source_value[:4000],
+                source_value[:4000],
+                "",
+                str(result.get("project_path") or result.get("workspace") or "")[:2000],
+                "",
+            )
     workspace_value = result.get("project_path") or result.get("workspace")
     workspace = Path(str(workspace_value)).resolve() if workspace_value else None
 
