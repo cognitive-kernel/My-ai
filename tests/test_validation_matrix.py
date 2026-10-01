@@ -24,12 +24,15 @@ def test_python_requires_strict_typecheck():
     assert "Python validation requires" in " ".join(validate_validation_matrix(p, "Python"))
 
 
-def test_rust_requires_clippy():
+def test_rust_requires_cargo_validation_commands():
     p = plan()
+    p["tool_requirements"][0]["commands"]["build"] = "cargo check"
+    p["tool_requirements"][0]["commands"]["test"] = "cargo test"
     p["tool_requirements"][0]["commands"]["lint"] = "cargo clippy --all-targets --all-features -- -D warnings"
     assert validate_validation_matrix(p, "Rust") == []
-    p["tool_requirements"][0]["commands"]["lint"] = "cargo fmt --check"
-    assert "Rust validation requires clippy" in " ".join(validate_validation_matrix(p, "Rust"))
+    p["tool_requirements"][0]["commands"]["build"] = "rustc main.rs"
+    p["tool_requirements"][0]["commands"]["test"] = "cargo test"
+    assert "Rust validation requires cargo check" in " ".join(validate_validation_matrix(p, "Rust"))
 
 
 def test_web_requires_browser_e2e():
@@ -171,3 +174,12 @@ def test_validate_plan_requires_complete_lifecycle_plan_shape():
         assert "architecture" in str(exc)
     else:
         raise AssertionError("incomplete semantic plan was accepted")
+
+
+def test_sql_requires_schema_and_integration_validation():
+    p = plan("database")
+    p["tool_requirements"][0]["commands"]["build"] = "schema validate"
+    p["tool_requirements"][0]["commands"]["test"] = "integration tests"
+    assert validate_validation_matrix(p, "SQL") == []
+    p["tool_requirements"][0]["commands"]["build"] = "echo ok"
+    assert "SQL validation requires explicit schema/migration validation" in " ".join(validate_validation_matrix(p, "SQL"))
