@@ -202,6 +202,32 @@ def fetch_all(sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
     with connect() as conn:
         return [dict(row) for row in conn.execute(sql, params).fetchall()]
 
+def _semantic_duplicate(topic: str, title: str, content: str, digest: str, conn) -> dict[str, Any] | None:
+    """Return the nearest existing knowledge item when semantic similarity exceeds the configured threshold."""
+    try:
+        from ..platform import cosine_similarity, ollama_embed
+        from ..config import settings
+        query = f"{title}\n{content}\n{topic}"
+        vector = ollama_embed(query, settings.embedding_model)
+        rows = conn.execute(
+            "SELECT k.id,k.title,k.topic,k.content,k.content_hash,e.embedding FROM knowledge k "
+            "JOIN knowledge_embeddings e ON e.knowledge_id=k.id AND e.model=? "
+            "WHERE k.content_hash<>? AND k.verification_status<>'deleted'",
+            (settings.embedding_model, digest),
+        ).fetchall()
+        best = None
+        for row in rows:
+            try:
+                score = cosine_similarity(vector, json.loads(row["embedding"]))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+            if score >= float(settings.knowledge_duplicate_threshold) and (best is None or score > best["similarity"]):
+                best = {"id": int(row["id"]), "title": row["title"], "topic": row["topic"], "similarity": round(float(score), 6)}
+        return best
+    except Exception:
+        return None
+
+
 def remember_knowledge(topic: str, title: str, content: str, source_url: str | None = None) -> int:
     if _write_blocked():
         raise PermissionError("MYAI_READ_ONLY blocks database mutation.")
@@ -211,11 +237,27 @@ def remember_knowledge(topic: str, title: str, content: str, source_url: str | N
         if row:
             if not row["source_url"] and source_url:
                 conn.execute("UPDATE knowledge SET source_url=? WHERE id=?", (source_url, row["id"]))
+            conn.execute("INSERT INTO knowledge_audit(knowledge_id,user_id,action,details) VALUES(?,?,?,?)",
+                         (row["id"], None, "duplicate_exact", "content_hash matched existing knowledge"))
             conn.commit()
             return int(row["id"])
-        cur = conn.execute("INSERT INTO knowledge(topic,title,content,source_url,content_hash) VALUES(?,?,?,?,?)",(topic,title,content,source_url,digest))
+        duplicate = _semantic_duplicate(topic, title, content, digest, conn)
+        if duplicate:
+            conn.execute("INSERT INTO knowledge_audit(knowledge_id,user_id,action,details) VALUES(?,?,?,?)",
+                         (duplicate["id"], None, "duplicate_semantic_rejected",
+                          json.dumps(duplicate, ensure_ascii=False, sort_keys=True)))
+            conn.commit()
+            raise ValueError(
+                f"Semantic duplicate detected for knowledge {duplicate['id']} "
+                f"(similarity={duplicate['similarity']}, threshold={settings.knowledge_duplicate_threshold})."
+            )
+        cur = conn.execute("INSERT INTO knowledge(topic,title,content,source_url,content_hash) VALUES(?,?,?,?,?)",
+                           (topic,title,content,source_url,digest))
+        knowledge_id = int(cur.lastrowid or 0)
+        conn.execute("INSERT INTO knowledge_audit(knowledge_id,user_id,action,details) VALUES(?,?,?,?)",
+                     (knowledge_id, None, "create", "semantic duplicate check passed"))
         conn.commit()
-        return int(cur.lastrowid or 0)
+        return knowledge_id
 
 def search_knowledge(query: str, limit: int = 8) -> list[dict[str, Any]]:
     normalized_query = _normalize_search_text(query)
