@@ -114,6 +114,16 @@ def test_low_confidence_project_route_never_crosses_runtime_gate():
     assert Agent._runtime_project_build_requested("هر متن دیگری", Intent(), {}) is False
 
 
+def test_continuation_context_does_not_filter_by_message_length():
+    from my_ai.agent_runtime import Agent
+
+    agent = Agent()
+    state = {"last_action": "continue_task", "current_goal": "build the project"}
+    history = [{"role": "user", "content": "build"}]
+    resolved = agent._resolved_message("continue", history, state)
+    assert "build" in resolved
+    assert "continue" in resolved
+
 def test_project_continuation_requires_pending_state():
     from my_ai.agent_runtime import Agent
 
