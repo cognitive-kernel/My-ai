@@ -408,11 +408,7 @@ def run_software_task(request: str, *, language: str | None = None, project_path
             retry_plan["failure_feedback"] = _safe_text(diagnosis.get("cause") or diagnosis.get("repair_strategy"), 1200)
             plan = retry_plan
             retry_research = _research(retry_plan)
-            retry_context = (
-                enriched_request
-                + "\n\nADDITIONAL RESEARCH AFTER FAILURE DIAGNOSIS:\n"
-                + retry_research.as_prompt()
-            )
+            retry_context = "SOFTWARE ENGINEERING PLAN:\n" + json.dumps(plan, ensure_ascii=False)[:26000] + "\n\nRESEARCH BUNDLE:\n" + retry_research.as_prompt() + "\n\nFAILURE FEEDBACK:\n" + _safe_text(plan.get("failure_feedback"), 1200) + "\n\nUSER REQUEST:\n" + request
             result = build_project(
                 retry_context,
                 str(plan.get("language") or language or ""),
