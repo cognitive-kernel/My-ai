@@ -208,6 +208,8 @@ def _semantic_duplicate(topic: str, title: str, content: str, digest: str, conn)
     try:
         from ..platform import cosine_similarity, ollama_embed
         from ..config import settings as runtime_settings
+        import os
+        threshold = float(os.getenv("KNOWLEDGE_DUPLICATE_THRESHOLD", str(runtime_settings.knowledge_duplicate_threshold)))
         query = f"{title}\n{content}\n{topic}"
         vector = ollama_embed(query, runtime_settings.embedding_model)
         rows = conn.execute(
@@ -222,7 +224,7 @@ def _semantic_duplicate(topic: str, title: str, content: str, digest: str, conn)
                 score = cosine_similarity(vector, json.loads(row["embedding"]))
             except (TypeError, ValueError, json.JSONDecodeError):
                 continue
-            if score >= float(runtime_settings.knowledge_duplicate_threshold) and (best is None or score > best["similarity"]):
+            if score >= threshold and (best is None or score > best["similarity"]):
                 best = {"id": int(row["id"]), "title": row["title"], "topic": row["topic"], "similarity": round(float(score), 6)}
         return best
     except Exception:
@@ -252,7 +254,7 @@ def remember_knowledge(topic: str, title: str, content: str, source_url: str | N
             conn.commit()
             raise ValueError(
                 f"Semantic duplicate detected for knowledge {duplicate['id']} "
-                f"(similarity={duplicate['similarity']}, threshold={runtime_settings.knowledge_duplicate_threshold})."
+                f"(similarity={duplicate['similarity']}, threshold={threshold})."
             )
         cur = conn.execute("INSERT INTO knowledge(topic,title,content,source_url,content_hash) VALUES(?,?,?,?,?)",
                            (topic,title,content,source_url,digest))
