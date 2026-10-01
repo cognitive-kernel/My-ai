@@ -258,6 +258,8 @@ class Agent(LegacyAgent):
         return answer
 
     def stream_chat(self, message, session_id=1, attachments=None):
+        execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (session_id, "user", str(message or "")))
+        execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
         ctx = self._prepare_chat_context(message, session_id, attachments)
         if ctx.shortcut is not None:
             answer = self._persist_shortcut(ctx); self._update_state(ctx, answer); yield answer; return
@@ -271,15 +273,25 @@ class Agent(LegacyAgent):
         # Emit provenance before model output so consumers can render the evidence
         # context before streaming begins and never lose citations on cancellation.
         if ctx.knowledge and ctx.citation_block:
-            yield ctx.citation_block
+            yield ctx.citation_block.lstrip("\n")
+        assistant_id = execute(
+            "INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",
+            (session_id, "assistant", ""),
+        )
         chunks: list[str] = []
+        streamed_answer = ""
         for chunk in ctx.llm.stream_chat(ctx.llm_message, system=ctx.system, history=ctx.history):
-            chunks.append(str(chunk))
-            yield str(chunk)
+            text_chunk = str(chunk)
+            chunks.append(text_chunk)
+            streamed_answer += text_chunk
+            execute("UPDATE conversations SET content=? WHERE id=?", (streamed_answer, assistant_id))
+            yield text_chunk
         answer = self._handle_unknown("".join(chunks), message, session_id)
         if ctx.knowledge and "__MYAI_UNKNOWN__" not in str(answer) and ctx.citation_block and not any(f"[K{item.get('id')}]" in str(answer) for item in (ctx.enriched_knowledge or [])[:4]):
             if answer != "".join(chunks):
                 yield "\n" + answer
         elif answer != "".join(chunks):
             yield "\n" + answer
-        self._persist_turn(session_id, message, answer)
+        execute("UPDATE conversations SET content=? WHERE id=?", (answer, assistant_id))
+        execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
+        self._update_state(ctx, answer)
