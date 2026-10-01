@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import shutil
+
+from .memory import recall
 from pathlib import Path
 from typing import Any
 
@@ -40,7 +42,6 @@ def run_suite() -> dict[str, object]:
             status = "ready"
             details: dict[str, object] = {}
             if group == "retrieval":
-                from .memory import recall
                 hits = recall(str(case.get("input") or ""), 3)
                 expected = str(case.get("expected") or "")
                 passed = bool(hits) if expected == "knowledge" else (not hits or any(h.get("hybrid_score", 0) > 0 for h in hits))
