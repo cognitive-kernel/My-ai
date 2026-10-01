@@ -135,7 +135,8 @@ def record_conflict(claim_key: str, left_version_id: int, right_version_id: int)
 
 
 def resolve_conflict(conflict_id: int, resolved_version_id: int, resolution: str) -> int:
-    return execute("UPDATE knowledge_conflicts SET status='resolved',resolved_version_id=?,resolution=? WHERE id=?", (resolved_version_id,resolution,conflict_id))
+    execute("UPDATE knowledge_conflicts SET status='resolved',resolved_version_id=?,resolution=? WHERE id=?", (resolved_version_id,resolution,conflict_id))
+    return conflict_id
 
 
 def evidence_node(node_key: str, kind: str, value: str, metadata: dict[str, Any] | None = None) -> int:
