@@ -5,6 +5,7 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from .db import execute, search_knowledge
 from .infra.llm import create_llm
