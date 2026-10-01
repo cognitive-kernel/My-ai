@@ -44,6 +44,13 @@ jobs:
           OLLAMA_HOST=127.0.0.1:11434 ollama list
           cat /tmp/ollama.log || true
           exit 1
+      - name: Pull embedding model
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if OLLAMA_HOST=127.0.0.1:11434 ollama pull nomic-embed-text; then exit 0; fi
+            sleep $((attempt * 10))
+          done
+          exit 1
       - name: Install project
         run: |
           pip install -r requirements.lock
@@ -62,6 +69,15 @@ jobs:
           print(result)
           assert result["baseline_met"], result
           PY
+      - name: Run Ollama regression gate
+        env:
+          OLLAMA_BASE_URL: http://127.0.0.1:11434
+          OLLAMA_MODEL: qwen2.5:0.5b
+          ROUTER_MODEL: qwen2.5:0.5b
+          CODING_MODEL: qwen2.5:0.5b
+          FALLBACK_MODEL: qwen2.5:0.5b
+          EMBEDDING_MODEL: nomic-embed-text
+        run: python scripts/regression_gate.py --ollama
       - name: Start application
         env:
           OLLAMA_MODEL: qwen2.5:0.5b
