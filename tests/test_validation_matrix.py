@@ -127,3 +127,43 @@ def test_install_metadata_accepts_supported_package_identifier():
             "install": {"manager": "apt-get", "package": "python3.11"}
         }],
     })
+
+
+def test_provider_alternatives_do_not_inherit_common_lifecycle_commands():
+    p = plan()
+    p["tool_requirements"] = [{
+        "commands": {"lint": "shared-lint"},
+        "providers": [
+            {"executables": ["tool-a"], "commands": {
+                "build": "tool-a build", "test": "tool-a test",
+                "typecheck": "tool-a typecheck", "run": "tool-a run",
+            }},
+            {"executables": ["tool-b"], "commands": {
+                "build": "tool-b build", "test": "tool-b test",
+                "lint": "tool-b lint", "typecheck": "tool-b typecheck",
+                "run": "tool-b run",
+            }},
+        ],
+    }]
+    errors = validate_validation_matrix(p, "Go")
+    assert any("provider 1" in error and "lint" in error for error in errors)
+
+
+def test_validate_plan_requires_complete_lifecycle_plan_shape():
+    from my_ai.software_validation import SoftwareValidationError, validate_plan
+
+    incomplete = {
+        "goal": "build app",
+        "artifact_type": "application",
+        "language": "Python",
+        "requirements": ["app"],
+        "acceptance_criteria": ["runs"],
+        "research_queries": [],
+        "validation": ["compile", "test"],
+    }
+    try:
+        validate_plan(incomplete)
+    except SoftwareValidationError as exc:
+        assert "architecture" in str(exc)
+    else:
+        raise AssertionError("incomplete semantic plan was accepted")
