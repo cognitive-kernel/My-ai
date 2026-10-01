@@ -281,7 +281,7 @@ class Agent(LegacyAgent):
                 self._persist_shortcut(PreparedChat(ctx.message, ctx.session_id, ctx.attachments, ctx.history, ctx.context, ctx.conversation_state, intent=ctx.intent, shortcut=answer))
             self._update_state(ctx, answer)
             return answer
-        if not acquire_resource():
+        if not acquire_resource(priority=10):
             answer = "منابع اجرای مدل در حال حاضر اشباع است؛ درخواست اجرا نشد."
         else:
             try:
