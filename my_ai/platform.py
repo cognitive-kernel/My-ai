@@ -286,7 +286,8 @@ def _hybrid_search_cached(query: str, limit: int, bucket: int, verified_only: bo
         if embedding_error:
             row["embedding_error"] = embedding_error[:500]
 
-    return sorted(rows, key=lambda item: item["hybrid_score"], reverse=True)[:limit]
+    relevant_rows = [row for row in rows if float(row.get("hybrid_score") or 0.0) > 0.0]
+    return sorted(relevant_rows, key=lambda item: item["hybrid_score"], reverse=True)[:limit]
 
 def invalidate_hybrid_search_cache() -> None:
     _hybrid_search_cached.cache_clear()
