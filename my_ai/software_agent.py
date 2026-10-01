@@ -294,7 +294,10 @@ def run_software_task(request: str, *, language: str | None = None, project_path
     research_required = bool(plan.get("research_queries"))
     research_ok = bool(research.sources) if research_required else True
 
-    review = _self_review(plan, result, workspace)
+    if result.get("status") == "built" and build_ok and tests_ok and lint_ok and runtime_ok and not result.get("semantic_defects") and workspace is not None:
+        review = _self_review(plan, result, workspace)
+    else:
+        review = {"passed": False, "criteria": [], "defects": ["Self-review was not run because prerequisite validation did not complete."], "notes": []}
     result["self_review"] = review
 
     # Never commit an incomplete artifact as "complete".
