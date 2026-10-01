@@ -127,7 +127,7 @@ def status():
 
 def check_for_update():
     try:
-        if os.getenv("MYAI_OFFLINE_STRICT", "false").strip().lower() == "true":
+        if settings.offline_strict:
             return {"ok": False, "update_available": False, "blocked": True, "reason": "offline strict mode enabled"}
         if _git("status", "--porcelain"):
             return {"ok": False, "update_available": False, "blocked": True, "reason": "working tree is not clean"}
