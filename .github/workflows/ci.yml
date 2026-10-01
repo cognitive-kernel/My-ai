@@ -29,5 +29,11 @@ jobs:
       - run: pip-audit
       - run: pytest -q
       - run: python scripts/regression_gate.py
+      - name: Upload regression history
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: regression-history-${{ github.sha }}
+          path: evals/history/
       - run: docker build -t my-ai-ci .
       - run: EXECUTOR_SHARED_TOKEN=ci-test-token docker compose config
