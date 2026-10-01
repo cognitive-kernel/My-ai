@@ -209,6 +209,31 @@ _SELF_REVIEW_SCHEMA: dict[str, Any] = {
 }
 
 
+
+def _cleanup_workspace(workspace: Path) -> dict[str, Any]:
+    """Remove tool-generated caches and temporary artifacts without deleting source or build outputs."""
+    removed: list[str] = []
+    cache_names = {
+        "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache",
+        ".tox", ".nox", ".coverage", ".hypothesis",
+    }
+    if not workspace.exists():
+        return {"ok": False, "removed": removed, "error": "Workspace is unavailable."}
+    try:
+        import shutil
+        for path in sorted(workspace.rglob("*"), key=lambda item: len(item.parts), reverse=True):
+            name = path.name
+            if name in cache_names or name.endswith(".pyc") or name.endswith(".pyo"):
+                if path.is_dir():
+                    shutil.rmtree(path)
+                elif path.is_file():
+                    path.unlink()
+                removed.append(str(path.relative_to(workspace)).replace("\\", "/"))
+        return {"ok": True, "removed": removed, "count": len(removed)}
+    except Exception as exc:
+        return {"ok": False, "removed": removed, "error": str(exc)}
+
+
 def _self_review(plan: dict[str, Any], result: dict[str, Any], workspace: Path | None) -> dict[str, Any]:
     """Review the generated artifact against the plan using only observable evidence."""
     if workspace is None or not workspace.exists():
@@ -300,12 +325,20 @@ def run_software_task(request: str, *, language: str | None = None, project_path
         review = {"passed": False, "criteria": [], "defects": ["Self-review was not run because prerequisite validation did not complete."], "notes": []}
     result["self_review"] = review
 
+    cleanup = _cleanup_workspace(workspace) if workspace is not None and bool(review.get("passed")) else {
+        "ok": False,
+        "removed": [],
+        "error": "Workspace cleanup was skipped because acceptance review did not pass.",
+    }
+    result["cleanup"] = cleanup
+
     # Never commit an incomplete artifact as "complete".
     pre_commit_ok = bool(
         result.get("status") == "built"
         and build_ok and tests_ok and lint_ok and runtime_ok
         and research_ok and not result.get("semantic_defects")
         and bool(review.get("passed"))
+        and bool(cleanup.get("ok"))
         and workspace is not None
     )
     if pre_commit_ok:
@@ -324,6 +357,7 @@ def run_software_task(request: str, *, language: str | None = None, project_path
         "lint": lint_ok,
         "runtime": runtime_ok,
         "self_review": bool(review.get("passed")),
+        "cleanup": bool(cleanup.get("ok")),
         "git": git_ok,
         "completed": bool(pre_commit_ok and git_ok),
     }
