@@ -162,8 +162,8 @@ class StudyScheduler:
                            WHERE id=? AND status!='completed'""",
                         (session_id,),
                     )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("LEARNING_SESSION_RESUME_STATE_UPDATE_FAILED: %s", exc)
 
             if existing and existing[0].is_alive():
                 # Resume must clear the cancellation flag. Otherwise a worker that
