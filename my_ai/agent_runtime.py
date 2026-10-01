@@ -271,7 +271,13 @@ class Agent(LegacyAgent):
                 self._persist_shortcut(PreparedChat(ctx.message, ctx.session_id, ctx.attachments, ctx.history, ctx.context, ctx.conversation_state, intent=ctx.intent, shortcut=answer))
             self._update_state(ctx, answer)
             return answer
-        answer = self.llm.chat(ctx.llm_message, system=ctx.system, history=ctx.history)
+        if not acquire_resource():
+            answer = "منابع اجرای مدل در حال حاضر اشباع است؛ درخواست اجرا نشد."
+        else:
+            try:
+                answer = ctx.llm.chat(ctx.llm_message, system=ctx.system, history=ctx.history)
+            finally:
+                release_resource()
         answer = self._handle_unknown(answer, ctx.message, ctx.session_id)
         if ctx.knowledge and "__MYAI_UNKNOWN__" not in str(answer) and ctx.citation_block and not any(f"[K{item.get('id')}]" in str(answer) for item in (ctx.enriched_knowledge or [])[:4]):
             answer = answer.rstrip() + ctx.citation_block
@@ -303,14 +309,23 @@ class Agent(LegacyAgent):
             "INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",
             (session_id, "assistant", ""),
         )
+        if not acquire_resource():
+            answer = "منابع اجرای مدل در حال حاضر اشباع است؛ درخواست اجرا نشد."
+            execute("UPDATE conversations SET content=? WHERE id=?", (answer, assistant_id))
+            yield answer
+            self._update_state(ctx, answer)
+            return
         chunks: list[str] = []
         streamed_answer = ""
-        for chunk in ctx.llm.stream_chat(ctx.llm_message, system=ctx.system, history=ctx.history):
-            text_chunk = str(chunk)
-            chunks.append(text_chunk)
-            streamed_answer += text_chunk
-            execute("UPDATE conversations SET content=? WHERE id=?", (streamed_answer, assistant_id))
-            yield text_chunk
+        try:
+            for chunk in ctx.llm.stream_chat(ctx.llm_message, system=ctx.system, history=ctx.history):
+                text_chunk = str(chunk)
+                chunks.append(text_chunk)
+                streamed_answer += text_chunk
+                execute("UPDATE conversations SET content=? WHERE id=?", (streamed_answer, assistant_id))
+                yield text_chunk
+        finally:
+            release_resource()
         answer = self._handle_unknown("".join(chunks), message, session_id)
         if ctx.knowledge and "__MYAI_UNKNOWN__" not in str(answer) and ctx.citation_block and not any(f"[K{item.get('id')}]" in str(answer) for item in (ctx.enriched_knowledge or [])[:4]):
             if answer != "".join(chunks):
