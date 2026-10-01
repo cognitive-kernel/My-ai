@@ -265,6 +265,31 @@ def _phase_workspace_context(workspace: Path, limit: int = 16000) -> str:
     return "\n\n".join(chunks)
 
 
+def _phase_lifecycle_validation(
+    language: str,
+    workspace: Path,
+    timeout: int,
+    requirements: list[dict[str, Any]] | None,
+    *,
+    include_runtime: bool = False,
+) -> dict[str, Any]:
+    """Run bounded intermediate validation against the current phase artifact."""
+    checks: dict[str, Any] = {}
+    for operation in ("build", "test", "lint", "typecheck"):
+        if operation == "typecheck" and not _has_lifecycle_command(requirements, operation):
+            checks[operation] = {"operation": operation, "passed": True, "skipped": True, "not_required": True}
+            continue
+        checks[operation] = _run(language, operation, workspace, timeout, requirements)
+    if include_runtime:
+        checks["run"] = (
+            _run(language, "run", workspace, timeout, requirements)
+            if _has_lifecycle_command(requirements, "run")
+            else {"operation": "run", "passed": False, "blocked": True, "reason": "No runtime validation command was declared for this artifact."}
+        )
+    checks["passed"] = all(bool(value.get("passed")) for key, value in checks.items() if key != "passed")
+    return checks
+
+
 def _generate_phase(llm: Any, language: str, goal: str, phase: str, workspace: Path, knowledge: list[Any]) -> dict[str, Any]:
     prompt = (
         "Implement one phase of an existing software project incrementally. "
@@ -354,10 +379,17 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
                     phase_files = _generate_phase(llm, language, resolved_goal, phase, workspace, knowledge)
                     written = _write_files(workspace, phase_files)
                     defects = validate_generated_project(workspace, plan_data, language)
-                    phase_validation.append({"phase": index, "name": phase, "files": written, "passed": not bool(defects), "defects": defects})
-                    if defects:
-                        semantic_defects = defects
-                        last_error = "\n".join(defects)
+                    lifecycle = _phase_lifecycle_validation(
+                        language, workspace, timeout, requirements,
+                        include_runtime=index == len(phases),
+                    ) if not defects else {"passed": False, "skipped": True}
+                    phase_defects = list(defects)
+                    if not lifecycle.get("passed"):
+                        phase_defects.append("Intermediate lifecycle validation failed: " + json.dumps(lifecycle, ensure_ascii=False)[:5000])
+                    phase_validation.append({"phase": index, "name": phase, "files": written, "passed": not phase_defects and bool(lifecycle.get("passed")), "defects": phase_defects, "validation": lifecycle})
+                    if phase_defects:
+                        semantic_defects = phase_defects
+                        last_error = "\n".join(str(item) for item in phase_defects)
                         last_diagnosis = _diagnose_failure(llm, "phase_validation", last_error)
                         break
     if not phased:
