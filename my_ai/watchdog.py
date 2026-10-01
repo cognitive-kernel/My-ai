@@ -125,8 +125,8 @@ def _terminate(pid):
     else:
         try:
             os.kill(pid, 15)
-        except OSError:
-            pass
+        except OSError as exc:
+            logger.warning("WATCHDOG_PROCESS_TERMINATION_FAILED: %s", exc)
 
 
 if __name__ == "__main__":
