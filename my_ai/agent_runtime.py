@@ -16,7 +16,7 @@ from .project_builder import build_project as _legacy_build_project
 from .software_agent import run_software_task
 from .execution_policy import authorize_project_execution
 from .advanced_agent import ContextBudgetManager, ContextItem, TaskProfile
-from .roadmap_runtime import acquire_resource, choose_model, release_resource
+from .roadmap_runtime import acquire_resource, choose_model, release_resource, trace
 
 # Compatibility hook for tests/integrations that patch the historical builder.
 build_project = _legacy_build_project
@@ -255,6 +255,9 @@ class Agent(LegacyAgent):
             execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (session_id, "user", str(message or "")))
             execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
         ctx = self._prepare_chat_context(message, session_id, attachments, intent=intent)
+        trace(session_id, None, f"session:{session_id}:request", "requirement", str(message)[:400], {"task": ctx.task})
+        if ctx.model_choice:
+            trace(session_id, None, f"session:{session_id}:model", "decision", str((ctx.model_choice.get("model") or {}).get("name") or ""), ctx.model_choice)
         if ctx.shortcut is not None:
             answer = str(ctx.shortcut)
             if persist_answer:
@@ -280,6 +283,9 @@ class Agent(LegacyAgent):
         execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (session_id, "user", str(message or "")))
         execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
         ctx = self._prepare_chat_context(message, session_id, attachments)
+        trace(session_id, None, f"session:{session_id}:request", "requirement", str(message)[:400], {"task": ctx.task})
+        if ctx.model_choice:
+            trace(session_id, None, f"session:{session_id}:model", "decision", str((ctx.model_choice.get("model") or {}).get("name") or ""), ctx.model_choice)
         if ctx.shortcut is not None:
             answer = self._persist_shortcut(ctx); self._update_state(ctx, answer); yield answer; return
         if self._runtime_project_build_requested(ctx.message, ctx.intent, ctx.conversation_state):
