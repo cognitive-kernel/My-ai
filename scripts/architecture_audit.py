@@ -11,7 +11,7 @@ def scan() -> dict[str, list[str]]:
     unresolved: list[str] = []
     silent: list[str] = []
     for path in ROOT.rglob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.ExceptHandler):
                 body = node.body
