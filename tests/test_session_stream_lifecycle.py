@@ -20,7 +20,9 @@ def test_session_lifecycle_and_isolation(tmp_path):
         assert client.post(f"/chat/sessions/{sid}/pin", cookies=_login(owner)).status_code == 200
         assert client.get(f"/chat/history?session_id={sid}", cookies=_login(owner)).status_code == 200
         assert client.delete(f"/chat/sessions/{sid}", cookies=_login(owner)).status_code == 200
-        assert client.get(f"/chat/history?session_id={sid}", cookies=_login(owner)).status_code == 404
+        history = client.get(f"/chat/history?session_id={sid}", cookies=_login(owner))
+        assert history.status_code == 200
+        assert history.json()["messages"] == []
     finally:
         object.__setattr__(db.settings, "db_path", old)
 
@@ -33,6 +35,7 @@ def test_stream_requires_owned_session(tmp_path):
         client = TestClient(app)
         owner = auth.create_account("owner", "a-secure-password")
         member = auth.create_account("member", "another-secure-password")
+        db.execute("INSERT INTO tool_permissions(user_id,tool_name,action,allowed) VALUES(?,?,?,1)", (member["id"], "chat", "execute"))
         sid = client.post("/chat/sessions", json={"message": "owned"}, cookies=_login(owner)).json()["id"]
         response = client.post("/chat/stream", json={"message": "x", "session_id": sid}, cookies=_login(member))
         assert response.status_code == 404
