@@ -509,3 +509,29 @@ def test_self_review_collects_bounded_workspace_evidence(tmp_path):
     paths = {item["path"] for item in evidence}
     assert {"main.py", "README.md"}.issubset(paths)
     assert all(set(item) == {"path", "size", "content"} for item in evidence)
+
+
+def test_self_review_rejects_ungrounded_acceptance_evidence(monkeypatch, tmp_path):
+    from my_ai import software_agent
+
+    (tmp_path / "main.py").write_text("print('ok')\n", encoding="utf-8")
+    plan = {"goal": "build a tool", "artifact_type": "application", "requirements": [], "acceptance_criteria": ["runs correctly"], "constraints": []}
+    result = {"build": {"passed": True}, "tests": {"passed": True}, "lint": {"passed": True}, "typecheck": {"passed": True}, "run": {"passed": True}, "phase_validation": [], "semantic_defects": [], "files": ["main.py"]}
+    monkeypatch.setattr(
+        software_agent,
+        "create_llm",
+        lambda *_args, **_kwargs: type("L", (), {"structured_chat_json": lambda self, *a, **k: {"passed": True, "criteria": [{"criterion": "runs correctly", "passed": True, "evidence": "the application works perfectly"}], "defects": [], "notes": []}})(),
+    )
+    review = software_agent._self_review(plan, result, tmp_path)
+    assert review["passed"] is False
+    assert review["defects"]
+
+
+def test_phase_lifecycle_validation_requires_each_declared_check(monkeypatch, tmp_path):
+    from my_ai import project_builder
+
+    calls = []
+    monkeypatch.setattr(project_builder, "_run", lambda language, operation, workspace, timeout, requirements=None: calls.append(operation) or {"operation": operation, "passed": True})
+    result = project_builder._phase_lifecycle_validation("python", tmp_path, 30, [{"commands": {"build": "python -m compileall .", "test": "pytest", "lint": "ruff check .", "typecheck": "mypy .", "run": "python main.py"}}], include_runtime=True)
+    assert result["passed"] is True
+    assert calls == ["build", "test", "lint", "typecheck", "run"]
