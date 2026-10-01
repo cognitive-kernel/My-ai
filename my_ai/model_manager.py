@@ -48,11 +48,18 @@ class ModelManager:
     def available_models(self, *, timeout: float = 5.0) -> set[str]:
         return {status.model for status in self.health_all(timeout=timeout) if status.available}
 
-    def choose_fallback(self, requested: str, *, timeout: float = 5.0) -> str | None:
+    def fallback_chain(self, requested: str, *, timeout: float = 5.0) -> list[str]:
         available = self.available_models(timeout=timeout)
-        if settings.fallback_model in available and settings.fallback_model != requested:
-            return settings.fallback_model
-        return None
+        candidates = [settings.fallback_model, settings.ollama_model, settings.coding_model, settings.routing_model]
+        return list(dict.fromkeys(model for model in candidates if model and model != requested and model in available))
+
+    def choose_fallback(self, requested: str, *, timeout: float = 5.0) -> str | None:
+        chain = self.fallback_chain(requested, timeout=timeout)
+        return chain[0] if chain else None
+
+    def route_snapshot(self, requested: str, *, timeout: float = 5.0) -> dict[str, Any]:
+        status = self.health(requested, timeout=timeout)
+        return {"requested": requested, "requested_available": status.available, "requested_error": status.error, "fallback_chain": self.fallback_chain(requested, timeout=timeout)}
 
     def snapshot(self, *, timeout: float = 5.0) -> dict[str, Any]:
         statuses = self.health_all(timeout=timeout)
