@@ -45,12 +45,10 @@ def model_catalog() -> list[ModelProfile]:
     except json.JSONDecodeError:
         profiles = {}
     result: list[ModelProfile] = []
-    seen: set[str] = set()
     for role, name, quality, speed in configured:
         name = str(name or "").strip()
-        if not name or name in seen:
+        if not name:
             continue
-        seen.add(name)
         profile = profiles.get(name) if isinstance(profiles, dict) else {}
         if not isinstance(profile, dict):
             profile = {}
