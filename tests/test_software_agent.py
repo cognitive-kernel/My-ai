@@ -359,7 +359,7 @@ def test_project_repair_includes_structured_failure_diagnosis(monkeypatch, tmp_p
     )
 
     assert result["status"] == "built"
-    assert result["failure_diagnosis"] is None
+    assert result["failure_diagnosis"]["category"] == "dependency"
     assert calls == ["build", "test", "lint", "run"]
 
 
