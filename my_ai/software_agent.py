@@ -323,7 +323,10 @@ def _self_review(plan: dict[str, Any], result: dict[str, Any], workspace: Path |
     failed = [
         criterion
         for criterion in expected
-        if criterion in normalized and not bool(normalized[criterion].get("passed"))
+        if criterion in normalized and (
+            not bool(normalized[criterion].get("passed"))
+            or not str(normalized[criterion].get("evidence") or "").strip()
+        )
     ]
     raw_defects = review.get("defects")
     defects = (
