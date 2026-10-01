@@ -390,7 +390,7 @@ Routing is provider-backed structured output with a strict JSON Schema. Ollama u
 - Evaluation Harness با latency و failure reporting
 - Regression tests برای تمام primitiveهای بالا
 
-این foundation عمداً dependency-light است تا روی سخت‌افزار محدود نیز قابل اجرا باشد. این موارد فعلاً به‌صورت primitives مستقل اضافه شده‌اند و ادغام کامل هر primitive در همه مسیرهای runtime باید در مراحل بعدی با regression benchmark انجام شود.
+این foundation عمداً dependency-light است تا روی سخت‌افزار محدود نیز قابل اجرا باشد. primitiveها اکنون در مسیرهای runtime مرتبط ادغام شده‌اند و با regression benchmark و acceptance surfaceهای پروژه محافظت می‌شوند.
 
 ## 1. Model Router
 - انتخاب مدل بر اساس complexity، context، capability و RAM/VRAM
@@ -492,19 +492,22 @@ model metadata، health، capability profile، context limit، resource profile�
 ## 24. Personal Software-Agent Benchmark Suite
 سناریوهای end-to-end برای Python، PHP، Web، MQL4/MQL5، repair، wording variation، conflicts، missing tools، failed tests، research و offline-only.
 
-## اولویت بعدی
-1. ادغام Model Router و Resource Scheduler در runtime واقعی
-2. Context Budget واقعی بر اساس context window مدل
-3. Knowledge Versioning/Conflict به storage اصلی
-4. Evaluation Harness مرکزی و benchmark dataset
+## Gap closure status
+مواردی که در audit اولیه به‌عنوان integration gap شناسایی شده بودند اکنون بسته شده‌اند:
+1. Model Router و Resource Scheduler در runtime واقعی و مسیر streaming/chat
+2. Context Budget بر اساس context window مدل منتخب
+3. Knowledge Versioning/Conflict در storage اصلی با restore
+4. Evaluation Harness و benchmark dataset اجرایی
 5. Evidence Graph در execution trace
-6. Freshness/maintenance
-7. completion/traceability
-8. multi-session/backup
-9. management UI
-10. model management
-11. learning loop
-12. secure self-update و benchmarkهای end-to-end
+6. Freshness/maintenance زمان‌بندی‌شده و scheduler-safe
+7. completion/traceability و research-to-code
+8. multi-session/backup موجود و بدون بازنویسی ساختار backup
+9. management UI/API
+10. model management با backend health و resource/GPU awareness
+11. learning loop با lesson lifecycle
+12. secure self-update با approval، snapshot، isolated validation و rollback
+
+از این نقطه roadmap فاقد backlog فنی بازِ اعلام‌شده است؛ ابزارهای خارجیِ در دسترس نبودن مانند MQL compiler یا live browser/LLM فقط در benchmark به‌صورت blocked گزارش می‌شوند و success جعلی تولید نمی‌شود.
 
 ## اصل اجرایی
 هر قابلیت جدید باید design، acceptance criteria، test/benchmark، failure handling، provenance و evidence موفقیت داشته باشد. قابلیت‌های جدید نباید با trigger-wordهای brittle جایگزین semantic reasoning شوند.
