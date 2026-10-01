@@ -432,7 +432,9 @@ def export_database(destination: str, password: str | None = None) -> str:
         for table in tables:
             try:
                 data[table] = [dict(x) for x in conn.execute(f"SELECT * FROM {table}").fetchall()]
-            except Exception:
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).warning("BACKUP_TABLE_EXPORT_FAILED table=%s: %s", table, exc)
                 data[table] = []
     metadata = _backup_manifest(data, encrypted=bool(password))
     payload = {"metadata": metadata, "tables": data}
