@@ -545,3 +545,41 @@ def test_phase_generation_accepts_failure_feedback():
 
     signature = inspect.signature(project_builder._generate_phase)
     assert "failure" in signature.parameters
+
+
+def test_project_builder_requires_install_success_for_built_status(monkeypatch, tmp_path):
+    from my_ai import project_builder
+
+    monkeypatch.setattr(project_builder, "_recent_conversation_context", lambda goal: (goal, "Python", None))
+    monkeypatch.setattr(project_builder, "search_knowledge", lambda *args: [])
+    monkeypatch.setattr(project_builder, "resolve_projects_root", lambda path: tmp_path)
+    monkeypatch.setattr(project_builder, "_write_files", lambda workspace, files: ["main.py"])
+    monkeypatch.setattr(project_builder, "validate_generated_project", lambda *args: [])
+    monkeypatch.setattr(project_builder, "_artifact_files", lambda workspace: [])
+    monkeypatch.setattr(project_builder, "doctor", lambda *args, **kwargs: {})
+    monkeypatch.setattr(project_builder, "execute", lambda *args: 1)
+
+    class FakeLLM:
+        def chat(self, *args, **kwargs):
+            return '{"files":{"main.py":"print(1)"}}'
+
+    monkeypatch.setattr(project_builder, "create_llm", lambda task: FakeLLM())
+    monkeypatch.setattr(project_builder, "_run", lambda language, operation, workspace, timeout, requirements=None: {
+        "operation": operation,
+        "passed": operation != "install",
+    })
+
+    result = project_builder.build_project(
+        "test project",
+        language="Python",
+        project_path=str(tmp_path),
+        repair_attempts=0,
+        tool_requirements=[{"commands": {
+            "install": "python -m pip install -r requirements.txt",
+            "build": "python -m compileall .",
+            "test": "pytest",
+            "lint": "ruff check .",
+            "run": "python main.py",
+        }}],
+    )
+    assert result["status"] == "build_failed"
