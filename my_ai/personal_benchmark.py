@@ -82,9 +82,8 @@ def _run_architecture_case(group: str, name: str) -> tuple[str, dict[str, object
         details: dict[str, object] = {"kinds": sorted(kinds)}
         return ("passed" if passed else "failed", details)
     if group == "planning" and name == "acceptance-plan":
-        plan = {"goal": "deliver feature", "requirements": ["implementation"], "validation": ["pytest"]}
-        passed = all(plan.values())
-        plan_details: dict[str, object] = plan
+        plan_details: dict[str, object] = {"goal": "deliver feature", "requirements": ["implementation"], "validation": ["pytest"]}
+        passed = all(plan_details.values())
         return ("passed" if passed else "failed", plan_details)
     if group == "tools" and name == "capability-approval":
         policy = PolicyEngine({"write": Capability("write", OperationRisk.WRITE, requires_approval=True)})
