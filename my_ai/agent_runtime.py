@@ -16,7 +16,7 @@ from .project_builder import build_project as _legacy_build_project
 from .software_agent import run_software_task
 from .execution_policy import authorize_project_execution
 from .advanced_agent import ContextBudgetManager, ContextItem, TaskProfile
-from .roadmap_runtime import acquire_resource, choose_model, release_resource, trace
+from .roadmap_runtime import acquire_resource, choose_model, release_resource, trace, evidence_node, evidence_edge
 
 # Compatibility hook for tests/integrations that patch the historical builder.
 build_project = _legacy_build_project
@@ -258,6 +258,16 @@ class Agent(LegacyAgent):
         trace(session_id, None, f"session:{session_id}:request", "requirement", str(message)[:400], {"task": ctx.task})
         if ctx.model_choice:
             trace(session_id, None, f"session:{session_id}:model", "decision", str((ctx.model_choice.get("model") or {}).get("name") or ""), ctx.model_choice)
+            requirement_key = f"session:{session_id}:request"
+            model_key = f"session:{session_id}:model"
+            evidence_node(requirement_key, "requirement", str(message)[:400])
+            evidence_node(model_key, "decision", str((ctx.model_choice.get("model") or {}).get("name") or ""))
+            evidence_edge(requirement_key, "model-selected", model_key)
+            for item in (ctx.enriched_knowledge or [])[:8]:
+                if item.get("id") is not None:
+                    knowledge_key = f"knowledge:{item['id']}"
+                    evidence_node(knowledge_key, "knowledge", str(item.get("title") or item.get("content") or "")[:1000], {"provenance": item.get("provenance")})
+                    evidence_edge(requirement_key, "supported-by", knowledge_key)
         if ctx.shortcut is not None:
             answer = str(ctx.shortcut)
             if persist_answer:
@@ -292,6 +302,16 @@ class Agent(LegacyAgent):
         trace(session_id, None, f"session:{session_id}:request", "requirement", str(message)[:400], {"task": ctx.task})
         if ctx.model_choice:
             trace(session_id, None, f"session:{session_id}:model", "decision", str((ctx.model_choice.get("model") or {}).get("name") or ""), ctx.model_choice)
+            requirement_key = f"session:{session_id}:request"
+            model_key = f"session:{session_id}:model"
+            evidence_node(requirement_key, "requirement", str(message)[:400])
+            evidence_node(model_key, "decision", str((ctx.model_choice.get("model") or {}).get("name") or ""))
+            evidence_edge(requirement_key, "model-selected", model_key)
+            for item in (ctx.enriched_knowledge or [])[:8]:
+                if item.get("id") is not None:
+                    knowledge_key = f"knowledge:{item['id']}"
+                    evidence_node(knowledge_key, "knowledge", str(item.get("title") or item.get("content") or "")[:1000], {"provenance": item.get("provenance")})
+                    evidence_edge(requirement_key, "supported-by", knowledge_key)
         if ctx.shortcut is not None:
             answer = self._persist_shortcut(ctx); self._update_state(ctx, answer); yield answer; return
         if self._runtime_project_build_requested(ctx.message, ctx.intent, ctx.conversation_state):
