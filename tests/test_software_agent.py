@@ -496,3 +496,15 @@ def test_failure_diagnosis_allows_only_one_bounded_research_retry(monkeypatch, t
     assert result["research_retry"] is True
     assert result["completion"]["completed"] is True
     assert research_calls[1] == ["missing dependency documentation"]
+
+
+
+def test_self_review_collects_bounded_workspace_evidence(tmp_path):
+    from my_ai import software_agent
+
+    (tmp_path / "main.py").write_text("print('ok')\n", encoding="utf-8")
+    (tmp_path / "README.md").write_text("run the application\n", encoding="utf-8")
+    evidence = software_agent._workspace_evidence(tmp_path)
+    paths = {item["path"] for item in evidence}
+    assert {"main.py", "README.md"}.issubset(paths)
+    assert all(set(item) == {"path", "size", "content"} for item in evidence)
