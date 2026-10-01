@@ -14,6 +14,7 @@ from .chat_transport_context import get_attachments
 from .project_builder import build_project as _legacy_build_project
 from .software_agent import run_software_task
 from .execution_policy import authorize_project_execution
+from .advanced_agent import ContextBudgetManager, ContextItem
 
 # Compatibility hook for tests/integrations that patch the historical builder.
 build_project = _legacy_build_project
@@ -139,8 +140,24 @@ class Agent(LegacyAgent):
             history.pop()
         self._current_session_id = session_id
         state = self._runtime_conversation_state(history, message)
-        context = "\n".join(f"{row['role']}: {row['content']}" for row in history[-20:])
-        routing_context = f"CONVERSATION STATE:\n{state['summary']}\n\nRECENT CHAT:\n{context}"
+        context_budget = max(512, int(os.getenv("AGENT_CONTEXT_BUDGET_TOKENS", "12000")))
+        context_items = [
+            ContextItem("conversation_state", state["summary"], priority=1.0),
+            *[
+                ContextItem(
+                    "recent_history",
+                    f"{row['role']}: {row['content']}",
+                    priority=0.65 + (idx / max(1, min(len(history), 20))) * 0.30,
+                )
+                for idx, row in enumerate(history[-20:])
+            ],
+        ]
+        packed_context = ContextBudgetManager().pack(context_items, context_budget)
+        context = "\n".join(item.text for item in packed_context.items)
+        routing_context = (
+            f"CONVERSATION STATE:\n{state['summary']}\n\nRECENT CHAT:\n{context}"
+            f"\n\nCONTEXT BUDGET: {context_budget} tokens; estimated={packed_context.estimated_tokens}; omitted={packed_context.omitted}"
+        )
         intent = intent if intent is not None else self._classify(message, routing_context)
         web_confirmation = self._web_learning_confirmation(message, session_id, intent)
         if web_confirmation is not None:
