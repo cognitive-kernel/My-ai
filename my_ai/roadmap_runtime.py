@@ -97,6 +97,49 @@ def choose_model(task: TaskProfile) -> dict[str, Any]:
         }
 
 
+def model_management() -> dict[str, Any]:
+    """Expose resource-aware model health and fallback information."""
+    resources = resource_snapshot()
+    models: list[dict[str, Any]] = []
+    for model in model_catalog():
+        resource_fit = (
+            model.ram_gb <= resources.ram_available_gb
+            and model.vram_gb <= resources.vram_available_gb
+        )
+        context_ok = model.context_window > 0
+        models.append({
+            **asdict(model),
+            "capabilities": sorted(model.capabilities),
+            "resource_fit": resource_fit,
+            "context_ok": context_ok,
+            "health": "ready" if resource_fit and context_ok else "constrained",
+        })
+    return {
+        "resources": asdict(resources),
+        "models": models,
+        "fallback_policy": "Use the highest-context viable configured model when the preferred model cannot satisfy resource or capability constraints.",
+    }
+
+
+def benchmark_model_selection() -> dict[str, Any]:
+    """Benchmark deterministic model-selection decisions without invoking a live LLM."""
+    cases = [
+        TaskProfile(complexity=0.8, context_tokens=4096, latency_budget_ms=30000, required_capabilities=frozenset({"code"}), network_allowed=False),
+        TaskProfile(complexity=0.3, context_tokens=2048, latency_budget_ms=10000, required_capabilities=frozenset({"chat"}), network_allowed=False),
+        TaskProfile(complexity=0.6, context_tokens=12000, latency_budget_ms=60000, required_capabilities=frozenset({"chat"}), network_allowed=False),
+    ]
+    results: list[dict[str, Any]] = []
+    for index, task in enumerate(cases, 1):
+        started = time.monotonic()
+        try:
+            choice = choose_model(task)
+            passed = bool(choice.get("model"))
+            results.append({"case": index, "passed": passed, "model": choice.get("model", {}).get("name"), "fallback": bool(choice.get("fallback")), "latency_ms": int((time.monotonic() - started) * 1000)})
+        except Exception as exc:
+            results.append({"case": index, "passed": False, "model": None, "fallback": False, "latency_ms": int((time.monotonic() - started) * 1000), "error": f"{type(exc).__name__}: {exc}"})
+    return {"count": len(results), "passed": sum(bool(item["passed"]) for item in results), "cases": results}
+
+
 _scheduler = ResourceScheduler(max_concurrent=max(1, int(os.getenv("MYAI_MAX_CONCURRENT", "1"))))
 
 
