@@ -17,12 +17,10 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-      - name: Install FFmpeg and Piper
+      - name: Install project and verify FFmpeg
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg
-          python -m pip install --upgrade pip
-          pip install -e . --no-deps
+          ffmpeg -version >/dev/null
+          python -m pip install -e . --no-deps
       - name: Install Piper CLI
         run: |
           curl -fsSL -o piper.tar.gz https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz
