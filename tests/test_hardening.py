@@ -92,10 +92,26 @@ def test_project_build_uses_semantic_execution_policy():
     class Intent:
         name = "coding"
         confidence = 0.99
-        args = {"action": "create_artifact", "goal": "build a Python project"}
+        args = {"action": "create_artifact", "goal": "build a Python project", "language": "Python", "topic": "software application"}
 
     assert Agent._runtime_project_build_requested("سلام", Intent()) is False
     assert Agent._runtime_project_build_requested("یک برنامه مدیریت هزینه بساز", Intent()) is True
+
+
+def test_low_confidence_project_route_never_crosses_runtime_gate():
+    from my_ai.agent_runtime import Agent
+
+    class Intent:
+        name = "coding"
+        confidence = 0.69
+        args = {
+            "action": "create_artifact",
+            "goal": "build a Python project",
+            "language": "Python",
+            "topic": "software application",
+        }
+
+    assert Agent._runtime_project_build_requested("هر متن دیگری", Intent(), {}) is False
 
 
 def test_project_continuation_requires_pending_state():
