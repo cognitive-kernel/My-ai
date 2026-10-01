@@ -92,7 +92,7 @@ def test_project_build_uses_semantic_execution_policy():
     class Intent:
         name = "coding"
         confidence = 0.99
-        args = {"action": "create_artifact", "goal": "build a Python project", "language": "Python", "topic": "software application"}
+        args = {"action": "create_artifact", "goal": "", "language": None, "topic": None, "project_path": None, "target": None}
 
     assert Agent._runtime_project_build_requested("سلام", Intent()) is False
     assert Agent._runtime_project_build_requested("یک برنامه مدیریت هزینه بساز", Intent()) is True
