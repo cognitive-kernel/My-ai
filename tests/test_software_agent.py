@@ -418,3 +418,81 @@ def test_workspace_cleanup_removes_generated_caches_without_touching_source_or_o
     assert not (tmp_path / ".pytest_cache").exists()
     assert (tmp_path / "main.py").exists()
     assert (tmp_path / "dist" / "app.bin").exists()
+
+
+def test_failure_diagnosis_allows_only_one_bounded_research_retry(monkeypatch, tmp_path):
+    from my_ai import software_agent
+
+    plan = {
+        "goal": "build a small application",
+        "artifact_type": "application",
+        "language": "Python",
+        "framework": None,
+        "requirements": ["provide a usable application"],
+        "tool_requirements": [],
+        "architecture": ["simple application"],
+        "phases": ["implement", "validate"],
+        "acceptance_criteria": ["the application runs"],
+        "research_queries": [],
+        "validation": ["build", "test", "run"],
+        "constraints": [],
+        "ambiguities": [],
+    }
+    research_calls = []
+    build_calls = []
+
+    def fake_research(current_plan):
+        research_calls.append(list(current_plan.get("research_queries") or []))
+        return software_agent.ResearchBundle(
+            sources=[{"url": f"https://example.test/{len(research_calls)}", "title": "source", "summary": "evidence"}],
+            notes=["research completed"],
+        )
+
+    def fake_build(*args, **kwargs):
+        build_calls.append(args[0])
+        if len(build_calls) == 1:
+            return {
+                "status": "build_failed",
+                "failure_diagnosis": {
+                    "category": "dependency",
+                    "cause": "missing dependency documentation",
+                    "repair_strategy": "research the dependency requirements",
+                    "research_needed": True,
+                },
+                "project_path": str(tmp_path),
+                "build": {"passed": False},
+                "tests": {"passed": False},
+                "lint": {"passed": False},
+                "run": {"passed": False},
+                "semantic_defects": ["dependency unavailable"],
+            }
+        return {
+            "status": "built",
+            "project_path": str(tmp_path),
+            "build": {"passed": True},
+            "tests": {"passed": True},
+            "lint": {"passed": True},
+            "run": {"passed": True},
+            "semantic_defects": [],
+            "failure_diagnosis": {},
+        }
+
+    monkeypatch.setattr(software_agent, "_plan", lambda request, context: dict(plan))
+    monkeypatch.setattr(software_agent, "_research", fake_research)
+    monkeypatch.setattr(software_agent, "build_project", fake_build)
+    monkeypatch.setattr(software_agent, "_self_review", lambda *args: {
+        "passed": True,
+        "criteria": [{"criterion": "the application runs", "passed": True, "evidence": "run passed"}],
+        "defects": [],
+        "notes": [],
+    })
+    monkeypatch.setattr(software_agent, "_cleanup_workspace", lambda workspace: {"ok": True, "removed": [], "count": 0})
+    monkeypatch.setattr(software_agent, "_ensure_git_commit", lambda workspace, message: {"ok": True, "committed": True})
+
+    result = software_agent.run_software_task("build an application", project_path=str(tmp_path))
+
+    assert len(build_calls) == 2
+    assert len(research_calls) == 2
+    assert result["research_retry"] is True
+    assert result["completion"]["completed"] is True
+    assert research_calls[1] == ["missing dependency documentation"]
