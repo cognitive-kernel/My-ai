@@ -74,6 +74,22 @@ def test_artifact_false_positive_is_demoted_to_chat():
     assert result.args["action"] == "answer"
 
 
+
+def test_artifact_normalization_cannot_reenable_side_effect():
+    payload = valid_payload(
+        primary="learning",
+        intents=["learning"],
+        action="create_artifact",
+        confidence=0.99,
+        language=None,
+        topic=None,
+        goal="create artifact",
+        project_path=None,
+    )
+    result = build_router_service(Client(payload)).classify("سلام")
+    assert result.name == "chat"
+    assert result.args["action"] == "answer"
+
 def test_concrete_artifact_goal_remains_coding():
     payload = valid_payload(
         primary="coding",
