@@ -594,8 +594,8 @@ class StudyScheduler:
                     if slot_acquired:
                         try:
                             self._worker_slots.release()
-                        except ValueError:
-                            pass
+                        except ValueError as exc:
+                            logger.warning("LEARNING_WORKER_SLOT_RELEASE_FAILED: %s", exc)
                         slot_acquired = False
         finally:
             logger.info(
