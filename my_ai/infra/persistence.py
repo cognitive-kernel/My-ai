@@ -213,7 +213,7 @@ def fetch_all(sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
     with connect() as conn:
         return [dict(row) for row in conn.execute(sql, params).fetchall()]
 
-def remember_knowledge(topic: str, title: str, content: str, source_url: str | None = None) -> int:
+def remember_knowledge(topic: str, title: str, content: str, source_url: str | None = None, category: str = "project_facts") -> int:
     if _write_blocked():
         raise PermissionError("MYAI_READ_ONLY blocks database mutation.")
     digest = _knowledge_hash(topic, content)
@@ -224,7 +224,7 @@ def remember_knowledge(topic: str, title: str, content: str, source_url: str | N
                 conn.execute("UPDATE knowledge SET source_url=? WHERE id=?", (source_url, row["id"]))
             conn.commit()
             return int(row["id"])
-        cur = conn.execute("INSERT INTO knowledge(topic,title,content,source_url,content_hash) VALUES(?,?,?,?,?)",(topic,title,content,source_url,digest))
+        cur = conn.execute("INSERT INTO knowledge(topic,title,content,source_url,content_hash,category) VALUES(?,?,?,?,?,?)",(topic,title,content,source_url,digest,category))
         conn.commit()
         return int(cur.lastrowid or 0)
 
@@ -234,7 +234,7 @@ def search_knowledge(query: str, limit: int = 8) -> list[dict[str, Any]]:
     if not tokens: return []
     match = " ".join(f'"{t}"' for t in tokens)
     return fetch_all(
-        """SELECT k.id,k.topic,k.title,k.content,k.source_url,k.verification_status,k.confidence,k.created_at,
+        """SELECT k.id,k.topic,k.title,k.content,k.source_url,k.category,k.verification_status,k.confidence,k.created_at,
                   bm25(knowledge_fts) AS rank
            FROM knowledge_fts JOIN knowledge k ON k.id=knowledge_fts.rowid
            WHERE knowledge_fts MATCH ? ORDER BY rank, k.id DESC LIMIT ?""",
