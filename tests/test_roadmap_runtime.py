@@ -1,6 +1,6 @@
 from my_ai.advanced_agent import Capability, OperationRisk, RuntimeMode, TaskProfile
 from my_ai.roadmap_runtime import (
-    benchmark_model_selection, model_management,
+    benchmark_model_selection, model_management, backend_health,
     add_memory_lesson,
     add_research_trace,
     benchmark_case,
@@ -116,3 +116,20 @@ def test_personal_benchmark_executes_local_acceptance_groups(monkeypatch):
     assert result["failed"] == 0
     assert result["blocked"] == 0
     assert result["passed"] == 8
+
+
+def test_model_management_reports_backend_health(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "unsupported-test-provider")
+    health = backend_health()
+    assert health["healthy"] is False
+    management = model_management()
+    assert "backend" in management
+    assert management["backend"]["provider"] == "unsupported-test-provider"
+
+
+def test_resource_snapshot_exposes_cpu_ram_and_gpu_fields():
+    from my_ai.roadmap_runtime import resource_snapshot
+    snapshot = resource_snapshot()
+    assert snapshot.ram_available_gb >= 0
+    assert snapshot.vram_available_gb >= 0
+    assert snapshot.cpu_percent >= 0
