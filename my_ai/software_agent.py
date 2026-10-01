@@ -292,6 +292,7 @@ def _self_review(plan: dict[str, Any], result: dict[str, Any], workspace: Path |
             "constraints": plan.get("constraints"),
         },
         "validation": {
+            "install": result.get("install"),
             "build": result.get("build"),
             "tests": result.get("tests"),
             "lint": result.get("lint"),
@@ -410,6 +411,7 @@ def run_software_task(request: str, *, language: str | None = None, project_path
     workspace_value = result.get("project_path") or result.get("workspace")
     workspace = Path(str(workspace_value)).resolve() if workspace_value else None
 
+    install_ok = bool((result.get("install") or {}).get("passed"))
     build_ok = bool((result.get("build") or {}).get("passed"))
     tests_ok = bool((result.get("tests") or {}).get("passed"))
     lint_ok = bool((result.get("lint") or {}).get("passed"))
@@ -419,7 +421,7 @@ def run_software_task(request: str, *, language: str | None = None, project_path
     research_required = bool(plan.get("research_queries"))
     research_ok = bool(research.sources) if research_required else True
 
-    if result.get("status") == "built" and build_ok and tests_ok and lint_ok and typecheck_ok and runtime_ok and phases_ok and not result.get("semantic_defects") and workspace is not None:
+    if result.get("status") == "built" and install_ok and build_ok and tests_ok and lint_ok and typecheck_ok and runtime_ok and phases_ok and not result.get("semantic_defects") and workspace is not None:
         review = _self_review(plan, result, workspace)
     else:
         review = {"passed": False, "criteria": [], "defects": ["Self-review was not run because prerequisite validation did not complete."], "notes": []}
@@ -450,8 +452,9 @@ def run_software_task(request: str, *, language: str | None = None, project_path
 
     git_ok = bool((result.get("git") or {}).get("ok"))
     result["completion"] = {
-        "plan": True,
+        "plan": bool(plan.get("goal") and plan.get("acceptance_criteria")),
         "research": research_ok,
+        "install": install_ok,
         "build": build_ok,
         "tests": tests_ok,
         "lint": lint_ok,
