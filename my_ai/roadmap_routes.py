@@ -23,7 +23,7 @@ def register_roadmap_routes(app, require_user) -> None:
 
     @router.get("/models")
     async def models():
-        return {"models": [m.__dict__ for m in model_catalog()]}
+        return {"models": [{**m.__dict__, "capabilities": sorted(m.capabilities)} for m in model_catalog()]}
 
     @router.post("/models/select")
     async def model_select(request: Request):
