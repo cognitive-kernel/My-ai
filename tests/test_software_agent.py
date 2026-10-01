@@ -453,6 +453,7 @@ def test_failure_diagnosis_allows_only_one_bounded_research_retry(monkeypatch, t
         if len(build_calls) == 1:
             return {
                 "status": "build_failed",
+                "install": {"passed": True},
                 "failure_diagnosis": {
                     "category": "dependency",
                     "cause": "missing dependency documentation",
