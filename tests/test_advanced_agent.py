@@ -123,3 +123,13 @@ def test_context_budget_compacts_large_low_priority_items():
     pack = manager.pack([ContextItem("requirement", "important", 1.0, 1), ContextItem("history", " ".join(["word"] * 100), 0.5)], 20)
     assert any("[compacted]" in item.text for item in pack.items)
     assert pack.estimated_tokens <= 20
+
+
+def test_resource_scheduler_prioritizes_interactive_work():
+    from my_ai.advanced_agent import ResourceScheduler
+    scheduler = ResourceScheduler(max_concurrent=1)
+    assert scheduler.acquire(priority=10) is True
+    assert scheduler.acquire(priority=0) is False
+    scheduler.release()
+    assert scheduler.acquire(priority=0) is True
+    scheduler.release()
