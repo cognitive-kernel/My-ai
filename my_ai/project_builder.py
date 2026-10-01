@@ -7,11 +7,10 @@ from pathlib import Path
 from typing import Any
 
 from .config import assert_write_allowed
-from .curriculum import canonical_language
 from .db import execute, fetch_all, search_knowledge
 from .llm import create_llm
 from .project_workspace import create_project_workspace, resolve_projects_root
-from .tooling import run_project_tool, doctor
+from .tooling import canonical_language, run_project_tool, doctor
 from .software_validation import validate_generated_project, validate_validation_matrix
 
 ROOT = Path(__file__).resolve().parent.parent
