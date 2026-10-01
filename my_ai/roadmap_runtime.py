@@ -8,7 +8,10 @@ from __future__ import annotations
 import json
 import os
 import platform
+import subprocess
 import time
+import urllib.parse
+import urllib.request
 from dataclasses import asdict
 from typing import Any, Callable
 
@@ -29,9 +32,53 @@ def resource_snapshot() -> ResourceSnapshot:
     try:
         import psutil
         mem = psutil.virtual_memory()
-        return ResourceSnapshot(mem.available / 1024**3, 0.0, float(psutil.cpu_percent(interval=None)))
+        vram_gb = 0.0
+        try:
+            probe = subprocess.run(
+                ["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"],
+                capture_output=True, text=True, timeout=2, check=False,
+            )
+            if probe.returncode == 0:
+                values = [float(line.strip()) for line in probe.stdout.splitlines() if line.strip()]
+                if values:
+                    vram_gb = max(0.0, max(values) / 1024.0)
+        except (OSError, ValueError, subprocess.SubprocessError):
+            pass
+        return ResourceSnapshot(mem.available / 1024**3, vram_gb, float(psutil.cpu_percent(interval=None)))
     except Exception:
         return ResourceSnapshot(0.0, 0.0, 0.0)
+
+
+def backend_health() -> dict[str, Any]:
+    """Probe the configured LLM backend without invoking generation."""
+    provider = str(os.getenv("LLM_PROVIDER", "ollama")).strip().lower()
+    started = time.monotonic()
+    if provider == "ollama":
+        base = str(os.getenv("OLLAMA_BASE_URL", getattr(settings, "ollama_base_url", "http://127.0.0.1:11434"))).rstrip("/")
+        parsed = urllib.parse.urlparse(base)
+        if getattr(settings, "offline_strict", False) and parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
+            return {"provider": provider, "healthy": False, "error": "offline_strict_requires_loopback", "latency_ms": 0}
+        try:
+            with urllib.request.urlopen(f"{base}/api/tags", timeout=3) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            models = {str(item.get("name") or "") for item in payload.get("models", []) if isinstance(item, dict)}
+            configured = {str(x).strip() for x in (getattr(settings, "ollama_model", ""), getattr(settings, "coding_model", ""), getattr(settings, "routing_model", ""), getattr(settings, "fallback_model", "")) if str(x).strip()}
+            return {"provider": provider, "healthy": True, "reachable": True, "models": sorted(models), "configured_models": sorted(configured), "configured_models_available": sorted(configured & models), "missing_configured_models": sorted(configured - models), "latency_ms": int((time.monotonic() - started) * 1000)}
+        except Exception as exc:
+            return {"provider": provider, "healthy": False, "reachable": False, "error": f"{type(exc).__name__}: {exc}", "latency_ms": int((time.monotonic() - started) * 1000)}
+    if provider == "openai":
+        base = str(getattr(settings, "openai_base_url", "")).rstrip("/")
+        key = str(getattr(settings, "openai_api_key", "") or "")
+        if not base or not key:
+            return {"provider": provider, "healthy": False, "error": "missing_openai_configuration", "latency_ms": 0}
+        try:
+            request = urllib.request.Request(f"{base}/models", headers={"Authorization": f"Bearer {key}"})
+            with urllib.request.urlopen(request, timeout=5) as response:
+                response.read(1024)
+            return {"provider": provider, "healthy": True, "reachable": True, "latency_ms": int((time.monotonic() - started) * 1000)}
+        except Exception as exc:
+            return {"provider": provider, "healthy": False, "reachable": False, "error": f"{type(exc).__name__}: {exc}", "latency_ms": int((time.monotonic() - started) * 1000)}
+    return {"provider": provider, "healthy": False, "error": "unsupported_provider", "latency_ms": 0}
 
 
 def model_catalog() -> list[ModelProfile]:
@@ -116,6 +163,7 @@ def model_management() -> dict[str, Any]:
         })
     return {
         "resources": asdict(resources),
+        "backend": backend_health(),
         "models": models,
         "fallback_policy": "Use the highest-context viable configured model when the preferred model cannot satisfy resource or capability constraints.",
     }
