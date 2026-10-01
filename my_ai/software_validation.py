@@ -26,7 +26,7 @@ def validate_plan(plan: dict[str, Any]) -> None:
     if not plan.get("requirements") or not plan.get("acceptance_criteria"):
         raise SoftwareValidationError("Planner produced no testable requirements or acceptance criteria.")
 
-    lifecycle = {"build", "test", "lint", "typecheck", "run"}
+    lifecycle = {"install", "build", "test", "lint", "typecheck", "run"}
     for index, requirement in enumerate(plan.get("tool_requirements") or []):
         if not isinstance(requirement, dict):
             raise SoftwareValidationError(f"Tool requirement {index} is not an object.")
@@ -98,6 +98,13 @@ def validate_validation_matrix(plan: dict[str, Any], language: str | None) -> li
         errors.append("Web validation requires an explicit browser/E2E runtime command.")
     if lang in {"mql4", "mql5"} and not any(token in (commands.get("build") or "").casefold() for token in ("metaeditor", "metalang", "compiler", "compile")):
         errors.append("MQL validation requires an explicit compiler/toolchain build command.")
+    if lang in {"javascript", "typescript", "js", "ts"} and not commands.get("install"):
+        errors.append("JavaScript/TypeScript validation requires an explicit dependency installation command.")
+    if lang in {"php"}:
+        if "php -l" not in (commands.get("lint") or "").casefold():
+            errors.append("PHP validation requires php -l syntax validation.")
+        if not commands.get("test"):
+            errors.append("PHP validation requires a test command or framework test suite.")
     return errors
 
 
