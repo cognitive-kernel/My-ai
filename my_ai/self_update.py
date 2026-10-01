@@ -232,8 +232,9 @@ def apply_confirmed_update(health_url=None, health_timeout=45):
         if candidate and candidate.exists():
             try:
                 _git("worktree", "remove", "--force", str(candidate), timeout=120)
-            except Exception:
-                pass
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).warning("SELF_UPDATE_WORKTREE_CLEANUP_FAILED: %s", exc)
 
 
 def recent_lessons(limit=20):
