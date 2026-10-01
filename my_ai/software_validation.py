@@ -15,7 +15,7 @@ def validate_plan(plan: dict[str, Any]) -> None:
     plan.setdefault("artifact_type", "software project")
     plan.setdefault("constraints", [])
     plan.setdefault("ambiguities", [])
-    required = ("goal", "artifact_type", "language", "requirements", "acceptance_criteria", "research_queries", "validation")
+    required = ("goal", "artifact_type", "language", "requirements", "architecture", "phases", "acceptance_criteria", "research_queries", "validation", "constraints", "ambiguities")
     missing = [key for key in required if key not in plan]
     if missing:
         raise SoftwareValidationError(f"Planner omitted required fields: {', '.join(missing)}")
@@ -114,15 +114,9 @@ def validate_validation_matrix(plan: dict[str, Any], language: str | None) -> li
         for provider in providers:
             if not isinstance(provider, dict):
                 continue
-            merged = dict(common)
-            provider_commands = provider.get("commands")
-            if isinstance(provider_commands, dict):
-                for key, value in provider_commands.items():
-                    if isinstance(value, str) and value.strip():
-                        merged[key] = value
-                    elif isinstance(value, list) and value:
-                        merged[key] = " ".join(str(x) for x in value if str(x).strip())
-            maps.append(merged)
+            # Providers are alternatives, not additive fragments. Never combine
+            # lifecycle commands from different providers into a synthetic toolchain.
+            maps.append(command_map(provider))
         return maps or [common]
 
     command_sets = [commands for item in declared if isinstance(item, dict) for commands in provider_maps(item)]
