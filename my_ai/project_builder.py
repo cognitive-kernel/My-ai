@@ -230,18 +230,10 @@ def _artifact_files(workspace: Path) -> list[str]:
 
 def _supported_language(value: str | None) -> str | None:
     candidate = canonical_language(str(value or "").strip())
-    # Domain labels are not implementation languages.
-    if candidate == "Forex":
-        candidate = "MQL4"
-    # Do not collapse an unknown/new language to Python. The semantic planner
-    # is allowed to select languages that were not hard-coded into this file.
-    # Build/validation layers decide later whether a local toolchain exists.
-    if not candidate:
-        return None
-    if candidate.casefold() in {"fa", "fa-ir", "فارسی", "en", "en-us", "english"}:
-        return None
-    return candidate
-
+    # Do not collapse an unknown/new language to a hard-coded fallback.
+    # The semantic planner selects the implementation language; build/validation
+    # layers decide later whether a local toolchain exists.
+    return candidate or None
 
 def _plan_language(goal: str) -> str | None:
     try:
