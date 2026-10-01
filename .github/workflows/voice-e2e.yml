@@ -19,7 +19,7 @@ jobs:
           python-version: "3.11"
       - name: Install project and verify FFmpeg
         run: |
-          python -m pip install -e . --no-deps
+          python -m pip install -e . --no-deps python-dotenv
       - name: Install Piper CLI
         run: |
           curl -fsSL -o piper.tar.gz https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz
