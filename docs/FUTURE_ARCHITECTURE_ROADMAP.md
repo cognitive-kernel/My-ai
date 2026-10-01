@@ -173,3 +173,21 @@ model metadata، health، capability profile، context limit، resource profile�
 Roadmap APIs cover profile, model selection, resources, capabilities/authorization, knowledge versions/conflicts, evidence graph, execution trace, maintenance, lessons, research trace, completion reports and benchmark reporting.
 
 این لایه‌ها additive هستند و storage دانش، conversation و backup موجود را حذف یا بازنویسی نمی‌کنند.
+
+## Gap closure audit — 2026-10-01
+
+بازبینی implementation نشان داد که چند مورد در جدول قبلی فقط به‌صورت primitive یا API بودند و ادغام runtime آن‌ها ناقص بود. این موارد اکنون تکمیل شده‌اند:
+
+- **Context compaction:** در ContextBudgetManager فشرده‌سازی deterministic زیر فشار budget اضافه شد؛ داده‌های high-priority حفظ می‌شوند.
+- **Evidence Graph runtime:** درخواست، model decision و knowledge provenance در مسیر chat/stream به node/edgeهای پایدار متصل می‌شوند.
+- **Research-to-Code runtime:** اجرای software agent، sourceهای research را به requirement و artifact در research_trace و evidence graph متصل می‌کند.
+- **Resource-aware maintenance:** maintenance با همان scheduler مشترک اجرا می‌شود و در زمان اشغال interactive slot به‌جای رقابت، deferred می‌شود.
+- **Scheduled freshness:** maintenance به lifecycle برنامه اضافه شد و به‌صورت دوره‌ای در runtime اجرا می‌شود؛ archive همچنان explicit و non-destructive است.
+- **Capability metadata:** platform constraints، validation و fallback برای capabilityها در storage و API قابل ثبت هستند.
+- **Conflict inspection:** علاوه بر resolution، دو نسخه، source و confidence قابل مقایسه و inspection هستند.
+- **Learning lifecycle:** lessonها lifecycle صریح candidate → validated → retired دارند.
+- **Model management:** resource-fit/health profile و model-selection benchmark در runtime/API اضافه شدند.
+- **Knowledge management UI/API:** inventory/search، category filtering، archive، version history و retrieval inspection در سطح roadmap اضافه شدند.
+- **Roadmap API security:** تمام endpointهای roadmap زیر احراز هویت موجود برنامه قرار گرفتند.
+
+موارد زیر عمداً destructive/automatic نشده‌اند: حذف خودکار knowledge، بازنویسی backup، و activation خودکار self-update بدون approval. این‌ها مطابق اصل local-first و حفاظت از داده باقی می‌مانند.
