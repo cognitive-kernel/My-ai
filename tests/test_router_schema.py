@@ -21,7 +21,7 @@ def test_router_tool_call_never_implies_authorization():
 def test_router_payload_requires_schema_fields():
     payload = {
         "primary": "chat", "intents": ["chat"], "action": "answer", "confidence": 0.8,
-        "language": None, "topic": None, "goal": None, "project_path": None, "urls": [],
+        "language": None, "topic": None, "goal": None, "project_path": None, "target": None, "urls": [],
     }
     assert _parse_router_payload(json.dumps(payload))["primary"] == "chat"
 
