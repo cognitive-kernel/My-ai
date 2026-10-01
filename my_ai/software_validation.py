@@ -92,6 +92,10 @@ def validate_validation_matrix(plan: dict[str, Any], language: str | None) -> li
         errors.append("Rust validation requires clippy in the lint command.")
     if lang in {"python", "py"} and not any(token in (commands.get("typecheck") or "").casefold() for token in ("mypy", "pyright")):
         errors.append("Python validation requires an explicit mypy or pyright typecheck command.")
+    if lang in {"python", "py"} and "compileall" not in ((commands.get("build") or "") + " " + (commands.get("test") or "")).casefold():
+        errors.append("Python validation requires explicit compile validation (compileall).")
+    if lang in {"python", "py"} and "pytest" not in (commands.get("test") or "").casefold():
+        errors.append("Python validation requires pytest execution.")
     if lang in {"javascript", "js", "typescript", "ts"} and not any(token in (commands.get("typecheck") or "").casefold() for token in ("tsc", "typecheck")):
         errors.append("JavaScript/TypeScript validation requires an explicit typecheck command.")
     if any(x in artifact for x in ("web", "website", "frontend", "browser")) and not any(token in (commands.get("run") or "").casefold() for token in ("playwright", "cypress", "browser", "e2e")):
@@ -103,6 +107,8 @@ def validate_validation_matrix(plan: dict[str, Any], language: str | None) -> li
     if lang in {"php"}:
         if "php -l" not in (commands.get("lint") or "").casefold():
             errors.append("PHP validation requires php -l syntax validation.")
+        if any(x in artifact for x in ("laravel", "symfony")) and not any(x in (commands.get("test") or "").casefold() for x in ("artisan test", "phpunit", "symfony")):
+            errors.append("PHP framework validation requires the framework test suite.")
         if not commands.get("test"):
             errors.append("PHP validation requires a test command or framework test suite.")
     return errors
