@@ -411,6 +411,31 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
                 break
             last_error = tests.get("error") or tests.get("output") or lint.get("error") or lint.get("output") or typecheck.get("error") or typecheck.get("output") or run.get("error") or run.get("output") or "tests/lint/runtime validation failed"
             last_diagnosis = _diagnose_failure(llm, "tests_lint_runtime", last_error)
+    if phased and not semantic_defects:
+        if requirements is None:
+            requirements = plan_data.get("tool_requirements") if isinstance(plan_data, dict) else None
+        install = (
+            _run(language, "install", workspace, timeout, requirements)
+            if _has_lifecycle_command(requirements, "install")
+            else {"operation": "install", "passed": True, "skipped": True, "not_required": True}
+        )
+        if install.get("passed"):
+            build = _run(language, "build", workspace, timeout, requirements)
+        if build.get("passed"):
+            tests = _run(language, "test", workspace, timeout, requirements)
+            lint = _run(language, "lint", workspace, timeout, requirements)
+            typecheck = _run(language, "typecheck", workspace, timeout, requirements) if _has_lifecycle_command(requirements, "typecheck") else {"operation": "typecheck", "passed": True, "skipped": True, "not_required": True}
+            run = (
+                _run(language, "run", workspace, timeout, requirements)
+                if _has_lifecycle_command(requirements, "run")
+                else {"operation": "run", "passed": False, "skipped": True, "blocked": True, "reason": "No runtime validation command was declared for this artifact."}
+            )
+        else:
+            last_error = install.get("error") or install.get("output") or build.get("error") or build.get("output") or "phased lifecycle validation failed"
+            last_diagnosis = _diagnose_failure(llm, "phased_lifecycle", last_error)
+        if not (install.get("passed") and build.get("passed") and tests.get("passed") and lint.get("passed") and typecheck.get("passed") and run.get("passed")):
+            if not last_diagnosis:
+                last_diagnosis = _diagnose_failure(llm, "phased_lifecycle", "One or more final lifecycle validations failed.")
     status = "built" if build.get("passed") and tests.get("passed", False) and lint.get("passed", False) and typecheck.get("passed", False) and run.get("passed", False) and not semantic_defects else "build_failed"
     pid = execute("INSERT INTO generated_projects(language,request,code) VALUES(?,?,?)", (language, resolved_goal, json.dumps(files, ensure_ascii=False)))
     return {
