@@ -472,6 +472,7 @@ def test_failure_diagnosis_allows_only_one_bounded_research_retry(monkeypatch, t
             "build": {"passed": True},
             "tests": {"passed": True},
             "lint": {"passed": True},
+            "typecheck": {"passed": True},
             "run": {"passed": True},
             "semantic_defects": [],
             "failure_diagnosis": {},
