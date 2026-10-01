@@ -309,83 +309,88 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
                 plan_data = candidate
     except Exception:
         plan_data = {}
+    phased = False
     if plan_data:
         matrix_defects = validate_validation_matrix(plan_data, language)
         if matrix_defects:
             return {
-                "status": "build_failed",
-                "language": language,
-                "request": resolved_goal,
+                "status": "build_failed", "language": language, "request": resolved_goal,
                 "project_path": str(workspace.relative_to(ROOT)) if workspace.is_relative_to(ROOT) else str(workspace),
-                "files": [],
-                "file_count": 0,
-                "build": {},
-                "tests": {},
-                "lint": {},
-                "typecheck": {},
-                "run": {},
-                "semantic_defects": matrix_defects,
-                "phase_validation": [],
-                "repair_attempts": 0,
-                "failure_diagnosis": {"category": "validation_plan", "cause": "; ".join(matrix_defects), "repair_strategy": "Declare the required validation commands in the semantic plan.", "research_needed": False},
-                "artifacts": [],
-                "toolchain": doctor(language, cwd=str(workspace), requirements=requirements or []),
+                "files": [], "file_count": 0, "build": {}, "tests": {}, "lint": {}, "typecheck": {}, "run": {},
+                "semantic_defects": matrix_defects, "phase_validation": [], "repair_attempts": 0,
+                "failure_diagnosis": {"category": "validation_plan", "cause": "; ".join(matrix_defects),
+                "repair_strategy": "Declare the required validation commands in the semantic plan.", "research_needed": False},
+                "artifacts": [], "toolchain": doctor(language, cwd=str(workspace), requirements=requirements or []),
             }
         phases = [str(item).strip() for item in (plan_data.get("phases") or []) if str(item).strip()]
-        if len(phases) > 1:
-            for index, phase in enumerate(phases, 1):
-                phase_files = _generate_phase(llm, language, resolved_goal, phase, workspace, knowledge)
-                written = _write_files(workspace, phase_files)
-                defects = validate_generated_project(workspace, plan_data, language)
-                phase_validation.append({"phase": index, "name": phase, "files": written, "passed": not bool(defects), "defects": defects})
-                if defects:
-                    semantic_defects = defects
-                    last_error = "\n".join(defects)
-                    last_diagnosis = _diagnose_failure(llm, "phase_validation", last_error)
-                    break
-            if semantic_defects:
-                phases = []
-    for _ in range(attempts):
-        files = _parse_files(llm.chat(_prompt(language, resolved_goal, knowledge, last_error, last_diagnosis), system="You are a senior software architect and implementation engineer. Generate complete, buildable projects. Return JSON only."))
-        _write_files(workspace, files)
-        # The plan is embedded in resolved_goal. Validation remains independent of compiler success.
-        artifact_type = ""
-        try:
-            marker = "SOFTWARE ENGINEERING PLAN:\n"
-            if marker in resolved_goal:
-                plan_text = resolved_goal.split(marker, 1)[1].split("\n\nRESEARCH BUNDLE:", 1)[0]
-                plan_data = json.loads(plan_text)
-                artifact_type = str(plan_data.get("artifact_type") or "")
-        except Exception:
-            plan_data = {"artifact_type": artifact_type}
-        plan_data = locals().get("plan_data") or {"artifact_type": artifact_type}
-        semantic_defects = validate_generated_project(workspace, plan_data, language)
-        if semantic_defects:
-            last_error = "\n".join(semantic_defects)
-            last_diagnosis = _diagnose_failure(llm, "semantic_validation", last_error)
-            continue
-        if requirements is None:
+        phased = len(phases) > 1
+        if phased:
+            skeleton_prompt = (
+                "Create only the runnable project skeleton. Include manifest, configuration, entrypoint, "
+                "test scaffold and required directories, but do not implement business features. Return only JSON "
+                "with a top-level files object.\nLANGUAGE: " + language + "\nPLAN: " + resolved_goal
+            )
+            skeleton_files = _parse_files(llm.chat(skeleton_prompt, system="You create minimal runnable software skeletons."))
+            written = _write_files(workspace, skeleton_files)
+            defects = validate_generated_project(workspace, plan_data, language)
+            phase_validation.append({"phase": 0, "name": "skeleton", "files": written, "passed": not bool(defects), "defects": defects})
+            if defects:
+                semantic_defects = defects
+                last_error = "\n".join(defects)
+                last_diagnosis = _diagnose_failure(llm, "skeleton_validation", last_error)
+            else:
+                for index, phase in enumerate(phases, 1):
+                    phase_files = _generate_phase(llm, language, resolved_goal, phase, workspace, knowledge)
+                    written = _write_files(workspace, phase_files)
+                    defects = validate_generated_project(workspace, plan_data, language)
+                    phase_validation.append({"phase": index, "name": phase, "files": written, "passed": not bool(defects), "defects": defects})
+                    if defects:
+                        semantic_defects = defects
+                        last_error = "\n".join(defects)
+                        last_diagnosis = _diagnose_failure(llm, "phase_validation", last_error)
+                        break
+    if not phased:
+        for _ in range(attempts):
+            files = _parse_files(llm.chat(_prompt(language, resolved_goal, knowledge, last_error, last_diagnosis), system="You are a senior software architect and implementation engineer. Generate complete, buildable projects. Return JSON only."))
+            _write_files(workspace, files)
+            # The plan is embedded in resolved_goal. Validation remains independent of compiler success.
+            artifact_type = ""
             try:
-                requirements = plan_data.get("tool_requirements") if isinstance(plan_data, dict) else None
+                marker = "SOFTWARE ENGINEERING PLAN:\n"
+                if marker in resolved_goal:
+                    plan_text = resolved_goal.split(marker, 1)[1].split("\n\nRESEARCH BUNDLE:", 1)[0]
+                    plan_data = json.loads(plan_text)
+                    artifact_type = str(plan_data.get("artifact_type") or "")
             except Exception:
-                requirements = None
-        build = _run(language, "build", workspace, timeout, requirements)
-        if not build.get("passed"):
-            last_error = build.get("error") or build.get("output") or "build failed"
-            last_diagnosis = _diagnose_failure(llm, "build", last_error)
-            continue
-        tests = _run(language, "test", workspace, timeout, requirements)
-        lint = _run(language, "lint", workspace, timeout, requirements)
-        typecheck = _run(language, "typecheck", workspace, timeout, requirements) if _has_lifecycle_command(requirements, "typecheck") else {"operation": "typecheck", "passed": True, "skipped": True, "not_required": True}
-        run = (
-            _run(language, "run", workspace, timeout, requirements)
-            if _has_lifecycle_command(requirements, "run")
-            else {"operation": "run", "passed": False, "skipped": True, "blocked": True, "reason": "No runtime validation command was declared for this artifact."}
-        )
-        if tests.get("passed") and lint.get("passed") and typecheck.get("passed") and run.get("passed"):
-            break
-        last_error = tests.get("error") or tests.get("output") or lint.get("error") or lint.get("output") or typecheck.get("error") or typecheck.get("output") or run.get("error") or run.get("output") or "tests/lint/runtime validation failed"
-        last_diagnosis = _diagnose_failure(llm, "tests_lint_runtime", last_error)
+                plan_data = {"artifact_type": artifact_type}
+            plan_data = locals().get("plan_data") or {"artifact_type": artifact_type}
+            semantic_defects = validate_generated_project(workspace, plan_data, language)
+            if semantic_defects:
+                last_error = "\n".join(semantic_defects)
+                last_diagnosis = _diagnose_failure(llm, "semantic_validation", last_error)
+                continue
+            if requirements is None:
+                try:
+                    requirements = plan_data.get("tool_requirements") if isinstance(plan_data, dict) else None
+                except Exception:
+                    requirements = None
+            build = _run(language, "build", workspace, timeout, requirements)
+            if not build.get("passed"):
+                last_error = build.get("error") or build.get("output") or "build failed"
+                last_diagnosis = _diagnose_failure(llm, "build", last_error)
+                continue
+            tests = _run(language, "test", workspace, timeout, requirements)
+            lint = _run(language, "lint", workspace, timeout, requirements)
+            typecheck = _run(language, "typecheck", workspace, timeout, requirements) if _has_lifecycle_command(requirements, "typecheck") else {"operation": "typecheck", "passed": True, "skipped": True, "not_required": True}
+            run = (
+                _run(language, "run", workspace, timeout, requirements)
+                if _has_lifecycle_command(requirements, "run")
+                else {"operation": "run", "passed": False, "skipped": True, "blocked": True, "reason": "No runtime validation command was declared for this artifact."}
+            )
+            if tests.get("passed") and lint.get("passed") and typecheck.get("passed") and run.get("passed"):
+                break
+            last_error = tests.get("error") or tests.get("output") or lint.get("error") or lint.get("output") or typecheck.get("error") or typecheck.get("output") or run.get("error") or run.get("output") or "tests/lint/runtime validation failed"
+            last_diagnosis = _diagnose_failure(llm, "tests_lint_runtime", last_error)
     status = "built" if build.get("passed") and tests.get("passed", False) and lint.get("passed", False) and typecheck.get("passed", False) and run.get("passed", False) and not semantic_defects else "build_failed"
     pid = execute("INSERT INTO generated_projects(language,request,code) VALUES(?,?,?)", (language, resolved_goal, json.dumps(files, ensure_ascii=False)))
     return {
