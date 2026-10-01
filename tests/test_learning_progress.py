@@ -199,6 +199,23 @@ def test_knowledge_memory_deduplicates_normalized_content(monkeypatch):
     conn.close()
 
 
+def test_knowledge_memory_migrates_legacy_schema(monkeypatch):
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        "CREATE TABLE knowledge (id INTEGER PRIMARY KEY AUTOINCREMENT, topic TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL, source_url TEXT, content_hash TEXT)"
+    )
+    monkeypatch.setattr(db_module, "connect", lambda: conn)
+
+    knowledge_id = db_module.remember_knowledge("Python", "Legacy", "legacy schema")
+
+    row = conn.execute("SELECT category FROM knowledge WHERE id=?", (knowledge_id,)).fetchone()
+    version = conn.execute("SELECT version FROM knowledge_versions WHERE knowledge_id=?", (knowledge_id,)).fetchone()
+    assert row["category"] == "project_facts"
+    assert version["version"] == 1
+    conn.close()
+
+
 def test_status_includes_active_topic_progress():
     original = learner_module.LANGUAGE_CURRICULA
     try:

@@ -57,7 +57,7 @@ Workspace Cleanup + Git Commit
 Evidence-based Completion Report
 ```
 
-جزئیات این lifecycle در `docs/GENERAL_SOFTWARE_AGENT.md` مستند شده است.
+جزئیات این lifecycle در `docs/PROJECT_DOCUMENTATION.md` مستند شده است.
 
 ## معماری کلی
 
@@ -137,7 +137,7 @@ My-AI می‌تواند با repositoryهای Git/GitHub کار کند. برای
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-برای سناریوهای پذیرش Agent، `tests/test_software_agent.py` و `docs/GENERAL_SOFTWARE_AGENT.md` را بررسی کنید.
+برای سناریوهای پذیرش Agent، `tests/test_software_agent.py` و `docs/PROJECT_DOCUMENTATION.md` را بررسی کنید.
 
 ## ساختار کلی
 
@@ -167,3 +167,8 @@ docker-compose.yml
 ## مجوز
 
 این پروژه تحت مجوز MIT منتشر شده است.
+
+
+## Advanced Agent Maturity Roadmap
+
+See `docs/ADVANCED_AGENT_MATURITY_ROADMAP.md` for the registered roadmap and acceptance standard.

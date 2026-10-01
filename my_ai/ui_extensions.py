@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import json
-import re
 from html import escape
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 
 NAV_STYLE = """
 <style id="myAiGlobalNavStyle">
@@ -68,9 +67,6 @@ document.getElementById('refreshBtn').onclick=refresh;document.getElementById('e
 </script></body></html>"""
 
 def _inject_global(body: str, path: str) -> str:
-    if path == '/':
-        body = body.replace("if(currentSessionId===null&&list.length)await selectChat(Number(list[0].id))", "")
-        body = body.replace("loadLocalHistory();", "")
     nav = _nav(path)
     if 'id="myAiGlobalNav"' not in body:
         body = body.replace('<body>', '<body>'+NAV_STYLE+nav, 1)
@@ -96,18 +92,9 @@ def install_ui_extensions(app) -> None:
     @app.middleware('http')
     async def local_feature_ui(request, call_next):
         path=request.url.path
-        if request.method=='POST' and path in {'/chat','/chat/stream'}:
-            try:
-                body=await request.body(); payload=json.loads(body.decode('utf-8') or '{}')
-                msg=str(payload.get('message') or '')
-                low=re.sub(r'\s+',' ',msg.casefold())
-                referer=request.headers.get('referer','')
-                learning_page=bool(re.search(r'/learning(?:[/?#]|$)',referer))
-                learning=bool(re.search(r'(یاد\s*بگیر|یادگیری\s*را\s*شروع|آموزش\s*بده|learn\s+(?:about\s+)?|teach\s+yourself|start\s+learning)',low))
-                image=bool(re.search(r'(ساخت\s*تصویر|ساختن\s*تصویر|تولید\s*تصویر|بساز.*تصویر|generate\s+(?:an?\s+)?image|create\s+(?:an?\s+)?image|make\s+(?:an?\s+)?image)',low))
-                if image:return JSONResponse({'answer':'درخواست ساخت تصویر فقط در صفحه «ساخت تصویر» اجرا می‌شود.','redirect':'/image'},status_code=409)
-                if learning and not learning_page:return JSONResponse({'answer':'این درخواست در صفحه چت اصلی اجرا نمی‌شود. برای یادگیری به «پیشرفت و یادگیری» بروید.','redirect':'/learning'},status_code=409)
-            except json.JSONDecodeError:pass
+        # Chat intent routing is semantic and belongs to the agent/API pipeline.
+        # This UI middleware only decorates HTML responses; it must never classify
+        # chat messages with local keyword lists or redirect valid requests.
         response=await call_next(request)
         if not hasattr(response,'body') or not response.body:return response
         content_type=response.headers.get('content-type','')

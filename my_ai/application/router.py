@@ -30,7 +30,7 @@ class _SafeNoopRouter:
     def structured_chat_json(self, message, schema, system=None):
         return {
             "primary": "chat", "intents": ["chat"], "action": "answer", "confidence": 0.0,
-            "language": None, "topic": None, "goal": None, "project_path": None, "urls": [],
+            "language": None, "topic": None, "goal": None, "project_path": None, "target": None, "urls": [],
         }
 
 

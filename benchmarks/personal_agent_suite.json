@@ -1,0 +1,246 @@
+{
+  "version": 1,
+  "description": "Deterministic acceptance scenarios for the local-first software agent.",
+  "suites": {
+    "retrieval": [
+      {
+        "name": "python-retrieval",
+        "input": "Python list comprehension",
+        "expected": "knowledge"
+      },
+      {
+        "name": "sql-retrieval",
+        "input": "SQL Server execution plan",
+        "expected": "knowledge"
+      },
+      {
+        "name": "isolation",
+        "input": "unrelated quartzalpha query",
+        "expected": "empty_or_relevant"
+      }
+    ],
+    "software": [
+      {
+        "name": "python-build",
+        "language": "Python",
+        "acceptance": [
+          "compile",
+          "test",
+          "lint"
+        ]
+      },
+      {
+        "name": "php-build",
+        "language": "PHP",
+        "acceptance": [
+          "syntax",
+          "test",
+          "lint"
+        ]
+      },
+      {
+        "name": "web-e2e",
+        "language": "Web",
+        "acceptance": [
+          "build",
+          "browser-e2e"
+        ]
+      },
+      {
+        "name": "mql4-toolchain",
+        "language": "MQL4",
+        "acceptance": [
+          "real-compiler-or-blocked"
+        ]
+      },
+      {
+        "name": "mql5-toolchain",
+        "language": "MQL5",
+        "acceptance": [
+          "real-compiler-or-blocked"
+        ]
+      }
+    ],
+    "resilience": [
+      {
+        "name": "missing-tool",
+        "acceptance": [
+          "blocked_with_reason"
+        ]
+      },
+      {
+        "name": "failed-test-repair",
+        "acceptance": [
+          "repair",
+          "retest"
+        ]
+      },
+      {
+        "name": "offline-only",
+        "acceptance": [
+          "no_network"
+        ]
+      },
+      {
+        "name": "conflicting-evidence",
+        "acceptance": [
+          "preserve_both",
+          "explain_resolution"
+        ]
+      },
+      {
+        "name": "wording-variation",
+        "acceptance": [
+          "semantic_routing"
+        ]
+      },
+      {
+        "name": "multi-session",
+        "acceptance": [
+          "isolated_state"
+        ]
+      }
+    ],
+    "traceability": [
+      {
+        "name": "research-to-code",
+        "acceptance": [
+          "requirement",
+          "query",
+          "source",
+          "finding",
+          "decision",
+          "artifact",
+          "validation"
+        ]
+      },
+      {
+        "name": "completion-evidence",
+        "acceptance": [
+          "goal",
+          "requirements",
+          "validation",
+          "limitations"
+        ]
+      }
+    ],
+    "conversation": [
+      {
+        "name": "context-preservation",
+        "acceptance": [
+          "request",
+          "state",
+          "evidence"
+        ]
+      }
+    ],
+    "planning": [
+      {
+        "name": "acceptance-plan",
+        "acceptance": [
+          "goal",
+          "requirements",
+          "validation"
+        ]
+      }
+    ],
+    "tools": [
+      {
+        "name": "capability-approval",
+        "acceptance": [
+          "deny-without-approval",
+          "allow-with-approval"
+        ]
+      }
+    ],
+    "repair": [
+      {
+        "name": "repair-regression",
+        "acceptance": [
+          "failure",
+          "retest"
+        ]
+      }
+    ],
+    "research": [
+      {
+        "name": "research-provenance",
+        "acceptance": [
+          "requirement",
+          "source",
+          "trace"
+        ]
+      }
+    ],
+    "conflict": [
+      {
+        "name": "version-conflict-resolution",
+        "acceptance": [
+          "preserve-versions",
+          "activate-resolution"
+        ]
+      }
+    ],
+    "resource-awareness": [
+      {
+        "name": "model-resource-fit",
+        "acceptance": [
+          "resource-fit",
+          "context-fit"
+        ]
+      }
+    ],
+    "maturity": [
+      {
+        "name": "task-state-machine",
+        "input": "task lifecycle transitions",
+        "expected": "invalid transitions blocked"
+      },
+      {
+        "name": "verify-critique-repair-verify",
+        "input": "failed acceptance criterion",
+        "expected": "repair then re-validation"
+      },
+      {
+        "name": "transaction-rollback",
+        "input": "failed multi-step artifact operation",
+        "expected": "partial artifacts rolled back"
+      },
+      {
+        "name": "workspace-isolation",
+        "input": "two project tasks",
+        "expected": "independent workspace roots"
+      },
+      {
+        "name": "memory-lifecycle",
+        "input": "candidate knowledge",
+        "expected": "validated/stale/archive lifecycle"
+      },
+      {
+        "name": "trace-completeness",
+        "input": "agent task execution",
+        "expected": "state events reconstruct task"
+      },
+      {
+        "name": "tool-contract",
+        "input": "register capability manifest",
+        "expected": "schema/risk/offline metadata"
+      },
+      {
+        "name": "config-versioning",
+        "input": "activate configuration",
+        "expected": "versioned reversible config"
+      },
+      {
+        "name": "offline-execution",
+        "input": "normal task",
+        "expected": "no remote network dependency"
+      },
+      {
+        "name": "resilience-circuit-breaker",
+        "input": "repeated backend failure",
+        "expected": "backend opens circuit"
+      }
+    ]
+  }
+}

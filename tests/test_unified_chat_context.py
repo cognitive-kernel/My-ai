@@ -3,6 +3,7 @@ from my_ai import agent as agent_module
 
 class Intent:
     name = "general"
+    args = {"action": "answer"}
 
 
 class FakeLLM:
@@ -30,11 +31,10 @@ def test_chat_and_stream_share_preparation_order(monkeypatch):
     _patch_common(monkeypatch)
     events = []
     monkeypatch.setattr(agent_module.Agent, "_web_learning_confirmation", lambda self, *a: events.append("web") or None)
-    monkeypatch.setattr(agent_module.Agent, "_self_maintenance", lambda self, *a: events.append("maintenance") or None)
-    monkeypatch.setattr(agent_module.Agent, "_is_identity_question", lambda self, *a: events.append("identity") or False)
+    monkeypatch.setattr(agent_module.Agent, "_semantic_maintenance", lambda self, *a: events.append("maintenance") or None)
     agent = agent_module.Agent(llm=FakeLLM())
     list(agent.stream_chat("hello", 1, attachments=[]))
-    assert events == ["web", "maintenance", "identity"]
+    assert events == ["web", "maintenance"]
 
 
 def test_stream_uses_attachments_and_emits_citations_before_model(monkeypatch):

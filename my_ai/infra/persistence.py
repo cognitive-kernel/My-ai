@@ -17,7 +17,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS chat_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,kind TEXT NOT NULL DEFAULT 'chat',language TEXT,pinned INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS conversations (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS chat_attachments (id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id INTEGER, session_id INTEGER NOT NULL, name TEXT NOT NULL, path TEXT NOT NULL, size INTEGER NOT NULL DEFAULT 0, mime_type TEXT NOT NULL DEFAULT 'application/octet-stream', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE, FOREIGN KEY(session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE);
-CREATE TABLE IF NOT EXISTS knowledge (id INTEGER PRIMARY KEY AUTOINCREMENT, topic TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL, source_url TEXT, content_hash TEXT, verification_status TEXT NOT NULL DEFAULT 'unverified', verified_at TEXT, verified_by INTEGER, confidence REAL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS knowledge (id INTEGER PRIMARY KEY AUTOINCREMENT, topic TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL, source_url TEXT, content_hash TEXT, category TEXT NOT NULL DEFAULT 'project_facts', verification_status TEXT NOT NULL DEFAULT 'unverified', verified_at TEXT, verified_by INTEGER, confidence REAL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS knowledge_embeddings (knowledge_id INTEGER NOT NULL, content_hash TEXT NOT NULL, model TEXT NOT NULL, embedding TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(knowledge_id,model), FOREIGN KEY(knowledge_id) REFERENCES knowledge(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS learning_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, language TEXT NOT NULL, topic TEXT NOT NULL, status TEXT NOT NULL, score REAL, notes TEXT, progress_percent REAL NOT NULL DEFAULT 0, phase TEXT NOT NULL DEFAULT 'starting', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS learning_runtime (id INTEGER PRIMARY KEY CHECK(id=1), language TEXT, session_id INTEGER, status TEXT NOT NULL DEFAULT 'idle', started_at TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(session_id) REFERENCES learning_sessions(id) ON DELETE SET NULL);
@@ -35,6 +35,16 @@ CREATE TABLE IF NOT EXISTS security_scans (id INTEGER PRIMARY KEY AUTOINCREMENT,
 CREATE TABLE IF NOT EXISTS learning_review_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL, status TEXT NOT NULL, added_count INTEGER NOT NULL DEFAULT 0, update_count INTEGER NOT NULL DEFAULT 0, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS fix_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT NOT NULL, patch TEXT, test_result TEXT, activated INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);\nCREATE TABLE IF NOT EXISTS decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT NOT NULL, decision TEXT NOT NULL, details TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);\nCREATE TABLE IF NOT EXISTS retrieval_judgments (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT NOT NULL, knowledge_id INTEGER NOT NULL, relevant INTEGER NOT NULL, score REAL NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS knowledge_versions (id INTEGER PRIMARY KEY AUTOINCREMENT, knowledge_id INTEGER NOT NULL, version INTEGER NOT NULL, content TEXT NOT NULL, source_url TEXT, confidence REAL, status TEXT NOT NULL DEFAULT 'active', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(knowledge_id,version), FOREIGN KEY(knowledge_id) REFERENCES knowledge(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS knowledge_conflicts (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_key TEXT NOT NULL, left_version_id INTEGER NOT NULL, right_version_id INTEGER NOT NULL, resolution TEXT, resolved_version_id INTEGER, status TEXT NOT NULL DEFAULT 'open', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(left_version_id) REFERENCES knowledge_versions(id), FOREIGN KEY(right_version_id) REFERENCES knowledge_versions(id));
+CREATE TABLE IF NOT EXISTS evidence_nodes (id INTEGER PRIMARY KEY AUTOINCREMENT, node_key TEXT NOT NULL UNIQUE, kind TEXT NOT NULL, value TEXT NOT NULL, metadata TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS evidence_edges (source_id INTEGER NOT NULL, relation TEXT NOT NULL, target_id INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(source_id,relation,target_id), FOREIGN KEY(source_id) REFERENCES evidence_nodes(id) ON DELETE CASCADE, FOREIGN KEY(target_id) REFERENCES evidence_nodes(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS agent_capabilities (name TEXT PRIMARY KEY, risk TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, requires_approval INTEGER NOT NULL DEFAULT 0, offline INTEGER NOT NULL DEFAULT 1, platform_constraints TEXT NOT NULL DEFAULT '{}', validation TEXT NOT NULL DEFAULT '', fallback TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS agent_traces (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, run_id INTEGER, node_key TEXT NOT NULL, kind TEXT NOT NULL, value TEXT NOT NULL, metadata TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS agent_benchmarks (id INTEGER PRIMARY KEY AUTOINCREMENT, suite TEXT NOT NULL, case_name TEXT NOT NULL, input TEXT NOT NULL, expected TEXT NOT NULL, actual TEXT, passed INTEGER NOT NULL DEFAULT 0, latency_ms INTEGER NOT NULL DEFAULT 0, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS knowledge_maintenance (id INTEGER PRIMARY KEY AUTOINCREMENT, knowledge_id INTEGER NOT NULL, action TEXT NOT NULL, status TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', checked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(knowledge_id) REFERENCES knowledge(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS learning_lessons (id INTEGER PRIMARY KEY AUTOINCREMENT, category TEXT NOT NULL, lesson TEXT NOT NULL, source TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'candidate', regression_case TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS research_trace (id INTEGER PRIMARY KEY AUTOINCREMENT, requirement TEXT NOT NULL, query TEXT NOT NULL, source TEXT NOT NULL, finding TEXT NOT NULL, decision TEXT, artifact TEXT, validation TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS knowledge_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, knowledge_id INTEGER NOT NULL, user_id INTEGER, action TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(knowledge_id) REFERENCES knowledge(id) ON DELETE CASCADE);
 
 CREATE TABLE IF NOT EXISTS users (
@@ -152,6 +162,7 @@ def init_db() -> None:
             if column not in cols_skills:
                 conn.execute(f"ALTER TABLE skills ADD COLUMN {column} {ddl}")
         cols_knowledge=[r[1] for r in conn.execute("PRAGMA table_info(knowledge)").fetchall()]
+        if "category" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN category TEXT NOT NULL DEFAULT 'project_facts'")
         if "content_hash" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN content_hash TEXT")
         if "verification_status" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN verification_status TEXT NOT NULL DEFAULT 'unverified'")
         if "verified_at" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN verified_at TEXT")
@@ -202,20 +213,43 @@ def fetch_all(sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
     with connect() as conn:
         return [dict(row) for row in conn.execute(sql, params).fetchall()]
 
-def remember_knowledge(topic: str, title: str, content: str, source_url: str | None = None) -> int:
+def remember_knowledge(topic: str, title: str, content: str, source_url: str | None = None, category: str = "project_facts") -> int:
     if _write_blocked():
         raise PermissionError("MYAI_READ_ONLY blocks database mutation.")
     digest = _knowledge_hash(topic, content)
     with connect() as conn:
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(knowledge)").fetchall()}
+        if "category" not in columns:
+            conn.execute("ALTER TABLE knowledge ADD COLUMN category TEXT NOT NULL DEFAULT 'project_facts'")
+        conn.execute("""CREATE TABLE IF NOT EXISTS knowledge_versions (id INTEGER PRIMARY KEY AUTOINCREMENT, knowledge_id INTEGER NOT NULL, version INTEGER NOT NULL, content TEXT NOT NULL, source_url TEXT, confidence REAL, status TEXT NOT NULL DEFAULT 'active', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(knowledge_id,version))""")
         row = conn.execute("SELECT id,source_url FROM knowledge WHERE content_hash=?", (digest,)).fetchone()
         if row:
             if not row["source_url"] and source_url:
                 conn.execute("UPDATE knowledge SET source_url=? WHERE id=?", (source_url, row["id"]))
             conn.commit()
             return int(row["id"])
-        cur = conn.execute("INSERT INTO knowledge(topic,title,content,source_url,content_hash) VALUES(?,?,?,?,?)",(topic,title,content,source_url,digest))
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(knowledge)").fetchall()}
+        if "category" in columns:
+            cur = conn.execute(
+                "INSERT INTO knowledge(topic,title,content,source_url,content_hash,category) VALUES(?,?,?,?,?,?)",
+                (topic, title, content, source_url, digest, category),
+            )
+        else:
+            cur = conn.execute(
+                "INSERT INTO knowledge(topic,title,content,source_url,content_hash) VALUES(?,?,?,?,?)",
+                (topic, title, content, source_url, digest),
+            )
+        knowledge_id = int(cur.lastrowid or 0)
+        version_table = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='knowledge_versions'"
+        ).fetchone()
+        if version_table:
+            conn.execute(
+                "INSERT INTO knowledge_versions(knowledge_id,version,content,source_url,status) VALUES(?,?,?,?,?)",
+                (knowledge_id, 1, content, source_url, "active"),
+            )
         conn.commit()
-        return int(cur.lastrowid or 0)
+        return knowledge_id
 
 def search_knowledge(query: str, limit: int = 8) -> list[dict[str, Any]]:
     normalized_query = _normalize_search_text(query)
@@ -223,7 +257,7 @@ def search_knowledge(query: str, limit: int = 8) -> list[dict[str, Any]]:
     if not tokens: return []
     match = " ".join(f'"{t}"' for t in tokens)
     return fetch_all(
-        """SELECT k.id,k.topic,k.title,k.content,k.source_url,k.verification_status,k.confidence,k.created_at,
+        """SELECT k.id,k.topic,k.title,k.content,k.source_url,k.category,k.verification_status,k.confidence,k.created_at,
                   bm25(knowledge_fts) AS rank
            FROM knowledge_fts JOIN knowledge k ON k.id=knowledge_fts.rowid
            WHERE knowledge_fts MATCH ? ORDER BY rank, k.id DESC LIMIT ?""",

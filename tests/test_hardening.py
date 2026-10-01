@@ -52,13 +52,223 @@ def test_chat_session_isolation(client_db):
     assert response.json()["messages"] == []
 
 
-def test_curly_apostrophe_does_not_request_fix():
-    from my_ai.command_policy import parse_command
-    policy = parse_command("don't fix this")
-    assert policy.security_action != "fix"
-    policy = parse_command("don’t fix this")
-    assert policy.security_action != "fix"
+def test_chat_history_returns_utc_timestamps_and_delete_removes_all_chat_data(client_db):
+    client = client_db
+    owner = auth.create_account("owner", "a-secure-password")
+    sid = client.post("/chat/sessions", json={"message": "سلام"}, cookies=login_cookie(owner)).json()["id"]
+    conversation_id = db.execute(
+        "INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",
+        (sid, "user", "سلام"),
+    )
+    db.execute(
+        "INSERT INTO chat_attachments(conversation_id,session_id,name,path,size,mime_type) VALUES(?,?,?,?,?,?)",
+        (conversation_id, sid, "note.txt", "chat/note.txt", 4, "text/plain"),
+    )
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS conversation_state (session_id INTEGER PRIMARY KEY, topic TEXT NOT NULL DEFAULT '', current_goal TEXT NOT NULL DEFAULT '', language TEXT, last_action TEXT NOT NULL DEFAULT '', summary TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"
+    )
+    db.execute(
+        "INSERT INTO conversation_state(session_id,topic,current_goal,last_action,summary) VALUES(?,?,?,?,?)",
+        (sid, "chat", "سلام", "answer", "chat"),
+    )
 
+    history = client.get(f"/chat/history?session_id={sid}", cookies=login_cookie(owner))
+    assert history.status_code == 200
+    created_at = history.json()["messages"][0]["created_at"]
+    assert created_at.endswith("Z")
+    assert "T" in created_at
+
+    deleted = client.delete(f"/chat/sessions/{sid}", cookies=login_cookie(owner))
+    assert deleted.status_code == 200
+    assert db.fetch_all("SELECT id FROM chat_sessions WHERE id=?", (sid,)) == []
+    assert db.fetch_all("SELECT id FROM conversations WHERE session_id=?", (sid,)) == []
+    assert db.fetch_all("SELECT id FROM chat_attachments WHERE session_id=?", (sid,)) == []
+    assert db.fetch_all("SELECT session_id FROM conversation_state WHERE session_id=?", (sid,)) == []
+
+
+def test_project_build_uses_semantic_execution_policy():
+    from my_ai.agent_runtime import Agent
+
+    class Intent:
+        name = "coding"
+        confidence = 0.99
+        args = {"action": "create_artifact", "goal": "", "language": None, "topic": None, "project_path": None, "target": None}
+
+    assert Agent._runtime_project_build_requested("سلام", Intent()) is False
+
+    class ConcreteIntent:
+        name = "coding"
+        confidence = 0.99
+        args = {"action": "create_artifact", "goal": "build a Python project", "language": "Python", "topic": "software application"}
+
+    assert Agent._runtime_project_build_requested("هر متن دیگری", ConcreteIntent()) is True
+
+
+def test_low_confidence_project_route_never_crosses_runtime_gate():
+    from my_ai.agent_runtime import Agent
+
+    class Intent:
+        name = "coding"
+        confidence = 0.69
+        args = {
+            "action": "create_artifact",
+            "goal": "build a Python project",
+            "language": "Python",
+            "topic": "software application",
+        }
+
+    assert Agent._runtime_project_build_requested("هر متن دیگری", Intent(), {}) is False
+
+
+def test_continuation_context_does_not_filter_by_message_length():
+    from my_ai.agent_runtime import Agent
+
+    agent = Agent()
+    state = {"last_action": "continue_task", "current_goal": "build the project"}
+    history = [{"role": "user", "content": "build"}]
+    resolved = agent._resolved_message("continue", history, state)
+    assert "build" in resolved
+    assert "continue" in resolved
+
+def test_project_continuation_requires_pending_state():
+    from my_ai.agent_runtime import Agent
+
+    class Intent:
+        name = "coding"
+        confidence = 0.99
+        args = {"action": "continue_task", "goal": "continue the Python project"}
+
+    assert Agent._runtime_project_build_requested("ادامه بده", Intent(), {}) is False
+    assert Agent._runtime_project_build_requested(
+        "ادامه بده",
+        Intent(),
+        {
+            "current_goal": "build the Python project",
+            "last_intent": "coding",
+            "pending_project_action": "create_artifact",
+        },
+    ) is True
+
+
+def test_chat_api_persists_assistant_response_when_agent_does_not(monkeypatch, client_db):
+    import my_ai.api as api
+
+    owner = auth.create_account("owner", "a-secure-password")
+    db.execute(
+        "INSERT INTO tool_permissions(user_id,tool_name,action,allowed) VALUES(?,?,?,1)",
+        (owner["id"], "chat", "execute"),
+    )
+
+    class Intent:
+        name = "chat"
+        args = {"action": "answer"}
+        requires_confirmation = False
+        intents = ("chat",)
+
+    class FakeAgent:
+        llm = object()
+
+        def chat(self, message, session_id, attachments=None, intent=None, persist_user=True, persist_answer=True):
+            return "durable answer"
+
+    monkeypatch.setattr(api, "classify", lambda *args, **kwargs: Intent())
+    monkeypatch.setattr(api, "agent", FakeAgent())
+
+    response = client_db.post("/chat", json={"message": "hello"}, cookies=login_cookie(owner))
+    assert response.status_code == 200
+    sid = response.json()["session_id"]
+    rows = db.fetch_all(
+        "SELECT role,content FROM conversations WHERE session_id=? ORDER BY id",
+        (sid,),
+    )
+    assert [(x["role"], x["content"]) for x in rows] == [
+        ("user", "hello"),
+        ("assistant", "durable answer"),
+    ]
+
+
+def test_chat_api_does_not_bypass_execution_policy_for_project_build(monkeypatch, client_db):
+    import my_ai.api as api
+
+    owner = auth.create_account("owner", "a-secure-password")
+    db.execute(
+        "INSERT INTO tool_permissions(user_id,tool_name,action,allowed) VALUES(?,?,?,1)",
+        (owner["id"], "code-generation", "execute"),
+    )
+
+    class Intent:
+        name = "coding"
+        confidence = 0.99
+        args = {
+            "action": "create_artifact",
+            "language": "Python",
+            "goal": "build a Python expense manager",
+        }
+        requires_confirmation = False
+        intents = ("coding",)
+
+    class FakeAgent:
+        llm = object()
+
+        def chat(self, message, session_id, attachments=None, intent=None, persist_user=True, persist_answer=True):
+            assert intent is not None
+            assert intent.args["action"] == "create_artifact"
+            return "project execution delegated to Agent"
+
+    def forbidden_builder(*args, **kwargs):
+        raise AssertionError("API must not call build_project directly")
+
+    monkeypatch.setattr(api, "classify", lambda *args, **kwargs: Intent())
+    monkeypatch.setattr(api, "agent", FakeAgent())
+    monkeypatch.setattr(api, "build_project", forbidden_builder)
+
+    response = client_db.post(
+        "/chat",
+        json={"message": "یک برنامه مدیریت هزینه با پایتون بساز"},
+        cookies=login_cookie(owner),
+    )
+    assert response.status_code == 200
+    assert response.json()["type"] == "chat"
+    assert response.json()["answer"] == "project execution delegated to Agent"
+
+
+def test_stream_chat_enforces_coding_permission_before_runtime(monkeypatch, client_db):
+    import my_ai.api as api
+
+    auth.create_account("owner", "a-secure-password")
+    member = auth.create_account("member", "another-secure-password")
+    db.execute(
+        "INSERT INTO tool_permissions(user_id,tool_name,action,allowed) VALUES(?,?,?,1)",
+        (member["id"], "chat", "execute"),
+    )
+
+    class Intent:
+        name = "coding"
+        confidence = 0.99
+        args = {"action": "create_artifact", "goal": "build a Python application"}
+        requires_confirmation = False
+        intents = ("coding",)
+
+    class ForbiddenAgent:
+        def stream_chat(self, *args, **kwargs):
+            raise AssertionError("stream runtime must not start without coding permission")
+
+    monkeypatch.setattr(api, "classify", lambda *args, **kwargs: Intent())
+    monkeypatch.setattr(api, "agent", ForbiddenAgent())
+
+    response = client_db.post(
+        "/chat/stream",
+        json={"message": "یک برنامه پایتون بساز"},
+        cookies=login_cookie(member),
+    )
+    assert response.status_code == 403
+
+
+def test_chat_api_has_no_legacy_keyword_command_policy():
+    from pathlib import Path
+    source = Path("my_ai/api.py").read_text(encoding="utf-8")
+    assert "parse_command" not in source
+    assert "BUILD_WORDS" not in source
 
 def test_knowledge_triggers_survive_reinit_and_update(client_db):
     knowledge_id = db.remember_knowledge("Python", "عنوان", "محتوا")
@@ -191,10 +401,10 @@ def test_general_chat_does_not_execute_learning_or_image_actions(client_db, monk
     owner = auth.create_account("owner", "a-secure-password")
     cookies = login_cookie(owner)
     from my_ai.domain.router import Intent
-    monkeypatch.setattr("my_ai.api.classify", lambda message: Intent("learning", 0.99, False, {"language": "Python"}, ("learning",)))
+    monkeypatch.setattr("my_ai.api.classify", lambda message, context=None: Intent("learning", 0.99, False, {"language": "Python"}, ("learning",)))
     response = client.post("/chat", json={"message": "یاد بگیر Python"}, cookies=cookies)
     assert response.status_code == 409
-    monkeypatch.setattr("my_ai.api.classify", lambda message: Intent("image_generation", 0.99, False, {}, ("image_generation",)))
+    monkeypatch.setattr("my_ai.api.classify", lambda message, context=None: Intent("image_generation", 0.99, False, {}, ("image_generation",)))
     response = client.post("/chat", json={"message": "یک تصویر بساز"}, cookies=cookies)
     assert response.status_code == 409
 
@@ -207,3 +417,81 @@ def test_learning_command_endpoint_accepts_only_learning(client_db, monkeypatch)
     response = client.post("/learning/command", json={"message": "سلام"}, cookies=login_cookie(owner))
     assert response.status_code == 400
 
+
+
+def test_chat_response_is_durably_visible_after_history_reload(client_db, monkeypatch):
+    client = client_db
+    owner = auth.create_account("owner", "a-secure-password")
+    cookies = login_cookie(owner)
+    from my_ai.domain.router import Intent
+
+    monkeypatch.setattr(
+        "my_ai.api.classify",
+        lambda message, context=None: Intent(
+            "chat", 0.99, False, {"action": "answer", "goal": "answer the user"}, ("chat",)
+        ),
+    )
+    monkeypatch.setattr(
+        "my_ai.api.agent.chat",
+        lambda message, session_id, attachments=None, intent=None, persist_user=True, persist_answer=True: "پاسخ پایدار",
+    )
+
+    response = client.post("/chat", json={"message": "سلام"}, cookies=cookies)
+    assert response.status_code == 200
+    session_id = response.json()["session_id"]
+
+    history = client.get(f"/chat/history?session_id={session_id}", cookies=cookies)
+    assert history.status_code == 200
+    messages = history.json()["messages"]
+    assert [(item["role"], item["content"]) for item in messages] == [
+        ("user", "سلام"),
+        ("assistant", "پاسخ پایدار"),
+    ]
+
+    reloaded = client.get(f"/chat/history?session_id={session_id}", cookies=cookies)
+    assert reloaded.json()["messages"] == messages
+
+
+def test_chat_http_error_is_persisted_for_history(client_db, monkeypatch):
+    client = client_db
+    owner = auth.create_account("owner", "a-secure-password")
+    cookies = login_cookie(owner)
+    from my_ai.domain.router import Intent
+
+    monkeypatch.setattr(
+        "my_ai.api.classify",
+        lambda message, context=None: Intent(
+            "image_generation", 0.99, False,
+            {"action": "create_artifact", "goal": "generate image"},
+            ("image_generation",),
+        ),
+    )
+    response = client.post("/chat", json={"message": "این یک خطای قابل ثبت است"}, cookies=cookies)
+    assert response.status_code == 409
+    sid = db.fetch_all("SELECT id FROM chat_sessions ORDER BY id DESC LIMIT 1")[0]["id"]
+    rows = db.fetch_all("SELECT role,content FROM conversations WHERE session_id=? ORDER BY id", (sid,))
+    assert rows[-1]["role"] == "assistant"
+    assert "ساخت تصویر" in rows[-1]["content"]
+
+
+def test_learning_page_exposes_course_management(client_db):
+    client = client_db
+    owner = auth.create_account("owner", "a-secure-password")
+    response = client.get("/learning", cookies=login_cookie(owner))
+    assert response.status_code == 200
+    assert "افزودن آموزش" in response.text
+    assert "شروع / ادامه یادگیری" in response.text
+    assert "توقف یادگیری" in response.text
+
+
+def test_offline_network_policy_requires_explicit_research_or_learning_exception():
+    from my_ai.network import assert_network_allowed
+
+    object.__setattr__(db.settings, "offline_strict", True)
+    with pytest.raises(PermissionError):
+        assert_network_allowed("general")
+    with pytest.raises(PermissionError):
+        assert_network_allowed("research")
+    assert_network_allowed("research", explicit=True)
+    assert_network_allowed("learning", explicit=True)
+    assert_network_allowed("prerequisite_install", explicit=True)

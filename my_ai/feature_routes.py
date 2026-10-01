@@ -10,6 +10,7 @@ from .file_processing import create_docx, create_pdf, create_pptx, create_xlsx, 
 from .auth import require_admin
 from .access_policy import assert_mutation_allowed
 from .local_files import filesystem_roots, inspect_file, list_directory, read_text, workspace_path
+from .project_workspace import PROJECTS_ROOT
 from .multimodal import analyze
 from .image_generation import generate_image, IMAGE_ROOT, ImageGenerationError
 
@@ -204,6 +205,19 @@ def register_routes(app, scheduler, require_user, audit):
         target.write_bytes(data)
         audit(user, "files", "write", "201", f"uploaded:{target.name}")
         return {"path": str(target), "name": target.name, "size": len(data), "stored_in": str(target.parent)}
+
+    @router.get("/projects/file")
+    def project_file(path: str, request: Request):
+        require_user(request)
+        raw = Path(path).expanduser()
+        candidate = (raw if raw.is_absolute() else (PROJECTS_ROOT.parent / raw)).resolve()
+        try:
+            candidate.relative_to(PROJECTS_ROOT.resolve())
+        except ValueError:
+            raise HTTPException(400, "Project files must stay inside the My-AI projects workspace.")
+        if not candidate.is_file():
+            raise HTTPException(404, "Project file not found.")
+        return FileResponse(candidate, filename=candidate.name, media_type="application/octet-stream")
 
     @router.get("/files/download")
     def files_download(path: str, request: Request):

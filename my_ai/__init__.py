@@ -24,6 +24,7 @@ except Exception:
 # my_ai.agent as the legacy implementation available to agent_runtime itself.
 try:
     from . import agent_runtime as _agent_runtime
+
     sys.modules[__name__ + ".agent"] = _agent_runtime
     agent = _agent_runtime
 except Exception:

@@ -134,26 +134,26 @@ def test_agent_passes_real_history_and_retrieved_knowledge(monkeypatch):
     assert "IDENTITY AND REFERENCE RULES" in captured["system"]
 
 
-def test_agent_answers_identity_about_itself_not_user(monkeypatch):
+def test_agent_identity_is_handled_semantically(monkeypatch):
     captured = {}
+
+    class FakeRouter:
+        def classify(self, text, context=None):
+            from my_ai.domain.router import Intent
+            return Intent("chat", 0.99, False, {"action": "answer", "goal": "describe the assistant identity"}, ("chat",))
 
     class FakeLLM:
         model = "test-model"
-
         def chat(self, *args, **kwargs):
             captured["called"] = True
-            return "نباید استفاده شود"
+            return "My-AI test-model"
 
     monkeypatch.setattr(agent_module, "execute", lambda *args: None)
-    agent = agent_module.Agent(FakeLLM())
-
-    result = agent.chat("درباره خودت بگو", session_id=7)
-
+    agent = agent_module.Agent(FakeLLM(), router=FakeRouter())
+    result = agent.chat("هر طور که می‌پرسم، درباره هویت و قابلیت‌های خودت توضیح بده", session_id=7)
     assert "My-AI" in result
     assert "test-model" in result
-    assert "نباید استفاده شود" not in result
-    assert "called" not in captured
-
+    assert captured["called"] is True
 
 def test_openai_compatible_stream_chat(monkeypatch):
     class Response:

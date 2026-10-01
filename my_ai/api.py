@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 import os
 import sys
+import asyncio
 import subprocess
 import json
 import re
@@ -16,7 +17,6 @@ from pydantic import BaseModel
 from fastapi.responses import HTMLResponse,JSONResponse,RedirectResponse,StreamingResponse,Response
 from fastapi.staticfiles import StaticFiles
 from .agent import Agent
-from .command_policy import parse_command
 from .config import settings
 from .settings_store import get_bool, get_int, get_github_settings, set_setting
 from .curriculum import canonical_language,LANGUAGE_CURRICULA
@@ -61,6 +61,9 @@ from .api_models import (
 )
 from .readiness import build_readiness
 from .project_builder import build_project, project_status
+from .roadmap_routes import register_roadmap_routes
+from .agent_maturity_routes import register_maturity_routes
+from .roadmap_runtime import maintenance as roadmap_maintenance
 
 logger = logging.getLogger("my_ai.api")
 scheduler=StudyScheduler()
@@ -68,6 +71,7 @@ self_diagnostics=SelfDiagnosticsMonitor()
 @asynccontextmanager
 async def lifespan(_):
     init_db()
+    maintenance_task = None
     # Re-check on every application start; installation is limited to the explicit prerequisite manager.
     startup_check()
     under_pytest = (
@@ -76,6 +80,15 @@ async def lifespan(_):
     )
     if not under_pytest:
         self_diagnostics.start()
+        async def _roadmap_maintenance_loop():
+            interval = max(300, int(os.getenv("MYAI_KNOWLEDGE_MAINTENANCE_SECONDS", "3600")))
+            while True:
+                await asyncio.sleep(interval)
+                try:
+                    roadmap_maintenance()
+                except Exception:
+                    logger.exception("Roadmap knowledge maintenance failed")
+        maintenance_task = asyncio.create_task(_roadmap_maintenance_loop())
         scheduler.start_learning_supervisor()
         scheduler.start_review_monitor()
         workers=fetch_all("SELECT language,session_id,status FROM learning_workers WHERE status IN ('running','retrying','paused','stopping')")
@@ -90,6 +103,12 @@ async def lifespan(_):
     if not under_pytest:
         scheduler.stop()
         self_diagnostics.stop()
+        if maintenance_task is not None:
+            maintenance_task.cancel()
+            try:
+                await maintenance_task
+            except asyncio.CancelledError:
+                pass
     shutdown_course_workers()
 configure_logging()
 startup_check()
@@ -99,6 +118,8 @@ app.mount("/static", StaticFiles(directory=Path(__file__).resolve().parent / "st
 register_routes(app, scheduler, require_user, audit)
 install_learning_resilience()
 install_ui_extensions(app)
+register_roadmap_routes(app, require_user)
+register_maturity_routes(app, require_user)
 
 _LOGIN_FAILURES: dict[str, tuple[int, float]] = {}
 _LOGIN_FAILURE_LIMIT = 5
@@ -366,9 +387,32 @@ def chat_stream(r:ChatRequest, request:Request):
         sid=r.session_id
     else:
         sid=execute("INSERT INTO chat_sessions(title,kind,user_id) VALUES(?,?,?)",((r.message or "گفتگوی جدید").strip()[:60],"chat",user["id"]))
+    routing_history = fetch_all(
+        "SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 20",
+        (sid,),
+    )[::-1]
+    intent=classify(r.message, "\n".join(f"{row['role']}: {row['content']}" for row in routing_history))
+    if intent.name in {"learning","image_generation"}:
+        raise HTTPException(409, "این عملیات از مسیر اختصاصی خودش انجام می‌شود.")
+    required_by_intent={
+        "pentest_external":("security","execute"),
+        "git_write":("github","write"),
+        "self_update":("self-update","write"),
+        "database_import":("database","write"),
+        "code_execution":("code-execution","execute"),
+        "self_repair":("self-repair","execute"),
+        "coding":("code-generation","execute"),
+    }
+    if intent.name in required_by_intent:
+        tool,action=required_by_intent[intent.name]
+        if not tool_allowed(user,tool,action):
+            raise HTTPException(403,f"Tool permission denied: {tool}:{action}")
+        semantic_action=str((intent.args or {}).get("action") or "answer")
+        if intent.name in {"code_execution","self_repair","self_update","git_write","database_import"} and semantic_action in {"execute","modify_artifact"}:
+            raise HTTPException(409,"Semantic confirmation required for high-risk intent: "+intent.name)
     def generate():
         try:
-            yield from agent.stream_chat(r.message,sid)
+            yield from agent.stream_chat(r.message,sid,intent=intent)
             audit(user,"chat","stream","200")
         except Exception as exc:
             audit(user,"chat","stream","502",str(exc))
@@ -778,7 +822,11 @@ def delete_chat_session(session_id:int,request:Request):
     user=require_user(request)
     rows=fetch_all("SELECT id FROM chat_sessions WHERE id=? AND user_id=?",(session_id,user["id"]))
     if not rows: raise HTTPException(404,"Chat session not found")
+    # Remove dependent chat data explicitly; this keeps deletion correct even when SQLite foreign-key cascades are disabled.
+    execute("DELETE FROM chat_attachments WHERE session_id=?",(session_id,))
     execute("DELETE FROM conversations WHERE session_id=?",(session_id,))
+    if fetch_all("SELECT name FROM sqlite_master WHERE type='table' AND name='conversation_state'"):
+        execute("DELETE FROM conversation_state WHERE session_id=?",(session_id,))
     execute("DELETE FROM chat_sessions WHERE id=?",(session_id,))
     return {"status":"deleted","id":session_id}
 @app.post("/chat/sessions")
@@ -793,7 +841,13 @@ def chat_history(request:Request,limit:int=100,session_id:int|None=None):
         rows=fetch_all("SELECT c.id,c.role,c.content,c.created_at FROM conversations c JOIN chat_sessions s ON s.id=c.session_id WHERE s.user_id=? ORDER BY c.id DESC LIMIT ?",(user["id"],limit))
     else:
         rows=fetch_all("SELECT c.id,c.role,c.content,c.created_at FROM conversations c JOIN chat_sessions s ON s.id=c.session_id WHERE c.session_id=? AND s.user_id=? ORDER BY c.id DESC LIMIT ?",(session_id,user["id"],limit))
-    rows.reverse();
+    rows.reverse()
+    # SQLite CURRENT_TIMESTAMP is UTC but is stored without an offset. Make that
+    # contract explicit so browsers do not interpret persisted timestamps as local time.
+    for item in rows:
+        value=item.get("created_at")
+        if value and "T" not in str(value):
+            item["created_at"]=str(value).replace(" ","T",1)+"Z"
     attachment_query="SELECT id,conversation_id,name,path,size,mime_type,created_at FROM chat_attachments WHERE session_id=? ORDER BY id"
     attachments=fetch_all(attachment_query,(session_id,)) if session_id is not None else []
     for item in attachments:
@@ -946,10 +1000,38 @@ def learning_command(r: ChatRequest, request: Request):
     return _learning_command(r, request)
 
 def _persist_api_chat_turn(session_id: int, message: str, answer: str) -> None:
-    """Persist chat turns handled directly by API branches before/without Agent.chat."""
-    execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (session_id, "user", message))
+    """Persist the assistant side; the user side is saved before routing."""
     execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (session_id, "assistant", str(answer)))
     execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
+
+def _ensure_chat_history(session_id: int, message: str, answer: str) -> None:
+    """Guarantee that this exact completed request has a durable history turn."""
+    rows=fetch_all(
+        "SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 2",
+        (session_id,),
+    )
+    if (
+        len(rows) >= 2
+        and rows[0]["role"] == "assistant"
+        and rows[0]["content"] == answer
+        and rows[1]["role"] == "user"
+        and rows[1]["content"] == message
+    ):
+        execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (session_id,))
+        return
+    _persist_api_chat_turn(session_id, message, answer)
+    verified = fetch_all(
+        "SELECT id FROM conversations WHERE session_id=? AND role='assistant' AND content=? ORDER BY id DESC LIMIT 1",
+        (session_id, str(answer)),
+    )
+    if not verified:
+        _persist_api_chat_turn(session_id, message, answer)
+        verified = fetch_all(
+            "SELECT id FROM conversations WHERE session_id=? AND role='assistant' AND content=? ORDER BY id DESC LIMIT 1",
+            (session_id, str(answer)),
+        )
+    if not verified:
+        raise RuntimeError("Assistant response was not durably persisted.")
 
 @app.post("/chat")
 def chat(r:ChatRequest, request:Request):
@@ -957,13 +1039,18 @@ def chat(r:ChatRequest, request:Request):
     if r.session_id is not None and not fetch_all("SELECT id FROM chat_sessions WHERE id=? AND user_id=?",(r.session_id,user["id"])):
         raise HTTPException(404,"Chat session not found.")
     try:
-        msg=r.message.strip(); low=msg.lower()
+        msg=r.message.strip()
         attachments=_validate_chat_attachments(r.attachments)
-        intent=classify(msg)
-        # Learning and image generation have dedicated pages/endpoints. Never execute
-        # execute either operation through the general chat endpoint.
-        if intent.name == "learning":
-            raise HTTPException(409, "یادگیری فقط در صفحه «پیشرفت و یادگیری» انجام می‌شود.")
+        routing_history = []
+        if r.session_id is not None:
+            routing_history = fetch_all("SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 20",(r.session_id,))[::-1]
+        sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language,user_id) VALUES(?,?,?,?)",(msg[:60] or "گفتگوی جدید","chat",None,user["id"]))
+        # Persist before semantic routing so refreshes never lose the current user turn.
+        execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"user",msg))
+        execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(sid,))
+        routing_context = "\n".join(f"{row['role']}: {row['content']}" for row in routing_history)
+        intent=classify(msg, routing_context)
+        # Learning-related questions stay in chat; actual learning execution remains behind the dedicated page.
         if intent.name == "image_generation":
             raise HTTPException(409, "ساخت تصویر فقط در صفحه «ساخت تصویر» انجام می‌شود.")
         required_by_intent={"pentest_external":("security","execute"),"git_write":("github","write"),"self_update":("self-update","write"),"database_import":("database","write"),"code_execution":("code-execution","execute"),"self_repair":("self-repair","execute"),"coding":("code-generation","execute")}
@@ -971,13 +1058,16 @@ def chat(r:ChatRequest, request:Request):
             tool,action=required_by_intent[intent.name]
             if not tool_allowed(user,tool,action):
                 raise HTTPException(403,f"Tool permission denied: {tool}:{action}")
-            if intent.name in {"code_execution","self_repair","self_update","git_write","database_import"} and not any(token in low for token in ("confirm","approve","approved","تایید","تأیید")):
-                raise HTTPException(409,"Explicit confirmation required for high-risk intent: "+intent.name)
+            semantic_action=str((intent.args or {}).get("action") or "answer")
+            if intent.name in {"code_execution","self_repair","self_update","git_write","database_import"} and semantic_action in {"execute","modify_artifact"}:
+                raise HTTPException(409,"Semantic confirmation required for high-risk intent: "+intent.name)
         requested=intent.args.get("language") if isinstance(intent.args, dict) else None
         requested=canonical_language(requested) if requested else None
         learn_intent=intent.name == "learning"
-        sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language,user_id) VALUES(?,?,?,?)",(msg[:60] or "گفتگوی جدید","learning" if learn_intent else "chat",requested,user["id"]))
-        _save_chat_attachments(sid,attachments); policy=parse_command(msg); security_words=policy.security; fix_requested=policy.security_action=="fix"
+        _save_chat_attachments(sid,attachments)
+        semantic_action=str((intent.args or {}).get("action") or "answer")
+        security_words=intent.name in {"security_scan","pentest_external"}
+        fix_requested=semantic_action == "modify_artifact"
         if security_words:
             if not tool_allowed(user,"security","execute"):
                 raise HTTPException(403,"Tool permission denied: security:execute")
@@ -985,10 +1075,11 @@ def chat(r:ChatRequest, request:Request):
                 raise HTTPException(403,"Security remediation requires administrator approval.")
         help_intent=intent.name == "help"
         if help_intent:
-            component="git" if any(x in low for x in ("git","github","گیت","گیت‌هاب")) else ("security" if any(x in low for x in ("امنیت","پن‌تست","pentest")) else ("docker" if "docker" in low else ("python" if "python" in low or "پایتون" in low else "general")))
+            component=str((intent.args or {}).get("topic") or "general").strip() or "general"
             help_data=ask_help(msg,component,agent.llm,learner.web)
             help_answer="راهنمای هوشمند آماده شد."
             _persist_api_chat_turn(sid,msg,help_answer)
+            _ensure_chat_history(sid,msg,help_answer)
             return {"type":"help","answer":help_answer,"data":help_data,"session_id":sid}
         code_intent=intent.name == "coding"
         if security_words:
@@ -997,6 +1088,7 @@ def chat(r:ChatRequest, request:Request):
                 dynamic_status=(result.get("dynamic") or {}).get("status")
                 answer=("Static assessment completed; local dynamic DAST requires an approved sandbox." if dynamic_status=="sandbox_required" else ("Security assessment completed." if not fix_requested else "Security assessment and remediation completed."))
                 _persist_api_chat_turn(sid,msg,answer)
+                _ensure_chat_history(sid,msg,answer)
                 return {"type":"security","answer":answer,"data":result,"session_id":sid}
             path=None
             for prefix in ("مسیر:","آدرس:","path:","url:","project:","پروژه:"):
@@ -1016,28 +1108,48 @@ def chat(r:ChatRequest, request:Request):
             raise HTTPException(409, "یادگیری فقط در صفحه «پیشرفت و یادگیری» انجام می‌شود.")
         if code_intent:
             language=requested or "Python"
-            if policy.build:
-                if not any(token in low for token in ("confirm","approve","approved","تایید","تأیید")):
-                    raise HTTPException(409,"Explicit confirmation required before building the application.")
-                build_data=build_project(msg,language,timeout=300,repair_attempts=2)
-                build_answer="Application project build completed."
-                _persist_api_chat_turn(sid,msg,build_answer)
-                return {"type":"project","answer":build_answer,"data":build_data,"session_id":sid}
+            semantic_action=str((intent.args or {}).get("action") or "answer")
+            if semantic_action in {"create_artifact","modify_artifact","continue_task"}:
+                answer=agent.chat(
+                    msg,
+                    sid,
+                    attachments=attachments,
+                    intent=intent,
+                    persist_user=False,
+                    persist_answer=False,
+                )
+                _ensure_chat_history(sid,msg,answer)
+                return {"type":"chat","answer":answer,"session_id":sid}
             generated_data=learner.generate_program(msg,language)
             generated_answer="Generated program:"
             _persist_api_chat_turn(sid,msg,generated_answer)
+            _ensure_chat_history(sid,msg,generated_answer)
             return {"type":"code","answer":generated_answer,"data":generated_data,"session_id":sid}
-        if any(x in low for x in ("تایید آپدیت","تأیید آپدیت","تایید بروزرسانی","تأیید بروزرسانی","تایید به روزرسانی","تأیید به روزرسانی","confirm update","approve update","apply update")):
-            if user["role"] != "admin":
-                raise HTTPException(403,"Self-update requires administrator approval.")
-        answer=agent.chat(msg,sid,attachments=attachments)
+        if intent.name == "self_update" and intent.requires_confirmation and user["role"] != "admin":
+            raise HTTPException(403,"Self-update requires administrator approval.")
+        answer=agent.chat(msg,sid,attachments=attachments,intent=intent,persist_user=False,persist_answer=False)
         user_message=fetch_all("SELECT id FROM conversations WHERE session_id=? AND role='user' ORDER BY id DESC LIMIT 1",(sid,))
         if attachments and user_message:
             execute("UPDATE chat_attachments SET conversation_id=? WHERE session_id=? AND conversation_id IS NULL",(user_message[0]["id"],sid))
+        _ensure_chat_history(sid,msg,answer)
         return {"type":"chat","answer":answer,"session_id":sid,"attachments":[{**item,"download_url":"/files/download?path="+__import__("urllib.parse",fromlist=["quote"]).quote(item["path"],safe="")} for item in attachments]}
-    except HTTPException:
+    except HTTPException as exc:
+        try:
+            if "sid" in locals() and "msg" in locals() and sid and msg:
+                _ensure_chat_history(sid, msg, f"خطا: {exc.detail}")
+        except Exception:
+            logger.exception("Failed to persist HTTP chat error")
         raise
-    except Exception as e: raise HTTPException(502,str(e))
+    except Exception as e:
+        try:
+            if "sid" in locals() and "msg" in locals() and sid and msg:
+                rows=fetch_all("SELECT id FROM conversations WHERE session_id=? AND role='user' LIMIT 1",(sid,))
+                if not rows:
+                    execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)",(sid,"user",msg))
+                    execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(sid,))
+        except Exception:
+            logger.exception("Failed to persist failed chat turn")
+        raise HTTPException(502,str(e))
 
 @app.post("/learn/url")
 def learn_url(r:URLRequest, request:Request):

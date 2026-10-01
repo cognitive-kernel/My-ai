@@ -8,7 +8,7 @@ from urllib import robotparser
 import httpx
 from bs4 import BeautifulSoup
 from .config import settings
-from .network import assert_public_hostname, pinned_client
+from .network import assert_public_hostname, assert_network_allowed, pinned_client
 
 logger = logging.getLogger("my_ai.web_learner")
 
@@ -33,7 +33,8 @@ class WebLearner:
                 now = time.monotonic()
             cls._last_fetch[host] = now
 
-    def search(self,query,domains=None,limit=6):
+    def search(self,query,domains=None,limit=6,*,allow_online=False):
+        assert_network_allowed("research", explicit=allow_online)
         q=query+((" site:"+" OR site:".join(domains)) if domains else "")
         r=httpx.get("https://html.duckduckgo.com/html/?q="+quote_plus(q),timeout=20,follow_redirects=True,headers={"User-Agent":"My-AI/0.2"}); r.raise_for_status()
         soup=BeautifulSoup(r.text,"html.parser")
@@ -74,8 +75,9 @@ class WebLearner:
         except Exception:
             return False
 
-    def fetch(self,url,stop_event=None):
+    def fetch(self,url,stop_event=None,*,allow_online=False):
         self._validate_url(url)
+        assert_network_allowed("research", explicit=allow_online)
         self._rate_limit(urlparse(url).hostname or "", stop_event)
         if not self._robots_allowed(url):
             raise ValueError("robots.txt disallows this URL or could not be verified.")
