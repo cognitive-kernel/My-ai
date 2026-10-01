@@ -15,7 +15,8 @@ from .chat_transport_context import get_attachments
 from .project_builder import build_project as _legacy_build_project
 from .software_agent import run_software_task
 from .execution_policy import authorize_project_execution
-from .advanced_agent import ContextBudgetManager, ContextItem
+from .advanced_agent import ContextBudgetManager, ContextItem, TaskProfile
+from .roadmap_runtime import acquire_resource, choose_model, release_resource
 
 # Compatibility hook for tests/integrations that patch the historical builder.
 build_project = _legacy_build_project
@@ -38,6 +39,7 @@ class PreparedChat:
     system: str = SYSTEM
     citation_block: str = ""
     shortcut: str | None = None
+    model_choice: dict[str, Any] | None = None
 
 
 def _tokens(text: str) -> set[str]:
@@ -141,7 +143,7 @@ class Agent(LegacyAgent):
             history.pop()
         self._current_session_id = session_id
         state = self._runtime_conversation_state(history, message)
-        context_budget = max(512, int(os.getenv("AGENT_CONTEXT_BUDGET_TOKENS", "12000")))
+        base_budget = max(512, int(os.getenv("AGENT_CONTEXT_BUDGET_TOKENS", "12000")))
         context_items = [
             ContextItem("conversation_state", state["summary"], priority=1.0),
             *[
@@ -153,7 +155,7 @@ class Agent(LegacyAgent):
                 for idx, row in enumerate(history[-20:])
             ],
         ]
-        packed_context = ContextBudgetManager().pack(context_items, context_budget)
+        packed_context = ContextBudgetManager().pack(context_items, base_budget)
         context = "\n".join(item.text for item in packed_context.items)
         routing_context = (
             f"CONVERSATION STATE:\n{state['summary']}\n\nRECENT CHAT:\n{context}"
@@ -185,7 +187,24 @@ class Agent(LegacyAgent):
             except Exception:
                 pass
         task = "coding" if getattr(intent, "name", "") in {"coding", "code_execution", "git_write"} or "coding" in getattr(intent, "intents", ()) else "general"
+        required = frozenset({"code"} if task == "coding" else {"chat"})
+        complexity = float(getattr(intent, "confidence", 0.5) or 0.5)
+        complexity = max(0.1, min(1.0, complexity))
+        task_profile = TaskProfile(complexity=complexity, context_tokens=max(512, min(base_budget, 32768)), required_capabilities=required, network_allowed=False)
+        model_choice = choose_model(task_profile)
+        chosen_name = str((model_choice.get("model") or {}).get("name") or "")
         llm = self.llm if task == "general" else create_llm(task)
+        if chosen_name and hasattr(llm, "model"):
+            llm.model = chosen_name
+        selected_window = int((model_choice.get("model") or {}).get("context_window") or base_budget)
+        context_budget = max(512, min(base_budget, selected_window))
+        packed_context = ContextBudgetManager().pack(context_items, context_budget)
+        context = "\n".join(item.text for item in packed_context.items)
+        routing_context = (
+            f"CONVERSATION STATE:\n{state['summary']}\n\nRECENT CHAT:\n{context}"
+            f"\n\nCONTEXT BUDGET: {context_budget} tokens; estimated={packed_context.estimated_tokens}; omitted={packed_context.omitted}"
+            f"\n\nMODEL ROUTING: {json.dumps(model_choice, ensure_ascii=False)}"
+        )
         attachment_context = self._attachment_context(normalized_attachments)
         resolved_message = self._resolved_message(message, history, state)
         llm_message = resolved_message + ("\n\n" + attachment_context if attachment_context else "")
@@ -202,7 +221,7 @@ class Agent(LegacyAgent):
             lessons = recent_lessons(12)
             if lessons:
                 lesson_note = "\nRECENT SELF-REPAIR LESSONS (constraints only):\n" + json.dumps(lessons, ensure_ascii=False)
-        return PreparedChat(message=message, session_id=session_id, attachments=normalized_attachments, history=history, context=context, conversation_state=state, intent=intent, task=task, llm=llm, llm_message=llm_message, knowledge=knowledge, enriched_knowledge=enriched, system=SYSTEM + "\n\n" + context_note + lesson_note, citation_block=self._required_citations(enriched))
+        return PreparedChat(message=message, session_id=session_id, attachments=normalized_attachments, history=history, context=context, conversation_state=state, intent=intent, task=task, llm=llm, model_choice=model_choice, llm_message=llm_message, knowledge=knowledge, enriched_knowledge=enriched, system=SYSTEM + "\n\n" + context_note + lesson_note, citation_block=self._required_citations(enriched))
 
     def _persist_answer(self, ctx: PreparedChat, answer: str) -> str:
         execute("INSERT INTO conversations(session_id,role,content) VALUES(?,?,?)", (ctx.session_id, "assistant", answer))
