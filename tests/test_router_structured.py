@@ -69,6 +69,7 @@ def test_artifact_false_positive_is_demoted_to_chat():
         topic=None,
         goal="create artifact",
         project_path=None,
+        target=None,
     )
     result = build_router_service(Client(payload)).classify("سلام")
     assert result.name == "chat"
