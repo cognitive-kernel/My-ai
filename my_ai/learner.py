@@ -123,7 +123,7 @@ class LearningEngine:
         learned_urls=[]
         for url in topic_sources:
             def fetch_and_extract(url=url):
-                title,source=self.web.fetch(url, stop_event=stop_event)
+                title,source=self.web.fetch(url, stop_event=stop_event, allow_online=True)
                 # Web fetching is optional. Store the source as evidence; the single
                 # lesson call later performs synthesis. This removes one LLM call per URL.
                 compact_source=str(source)[:settings.learning_source_max_chars]
@@ -166,7 +166,7 @@ class LearningEngine:
         return knowledge
 
     def study_url(self,url,topic="Python"):
-        title,source=self.web.fetch(url)
+        title,source=self.web.fetch(url, allow_online=True)
         note=self.llm.chat(
             "Study the supplied source and produce a concise, accurate learning note. "
             "Use only information supported by the source; identify uncertainty instead of inventing facts. "
