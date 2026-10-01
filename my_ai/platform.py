@@ -158,13 +158,32 @@ def _hybrid_search_cached(query: str, limit: int, bucket: int, verified_only: bo
     ) if tokens else []
     lexical_scores: dict[int, float] = {}
     if lexical:
-        ranks = [float(row["fts_rank"]) for row in lexical]
-        best, worst = min(ranks), max(ranks)
-        span = worst - best
-        lexical_scores = {
-            int(row["id"]): 1.0 if span == 0 else max(0.0, min(1.0, (worst - float(row["fts_rank"])) / span))
-            for row in lexical
-        }
+        # FTS indexes can be stale after a direct knowledge-table mutation. Validate
+        # candidates against the current row text before trusting the FTS rank.
+        current_rows = fetch_all(
+            "SELECT id,title,content,topic FROM knowledge WHERE id IN (%s)"
+            % ",".join("?" for _ in lexical),
+            tuple(int(row["id"]) for row in lexical),
+        )
+        current_by_id = {int(row["id"]): row for row in current_rows}
+        valid_lexical = []
+        for item in lexical:
+            current = current_by_id.get(int(item["id"]))
+            if current is None:
+                continue
+            current_text = _normalize_search_text(
+                f"{current.get('title', '')} {current.get('content', '')} {current.get('topic', '')}"
+            )
+            if all(token in current_text.split() for token in tokens):
+                valid_lexical.append(item)
+        ranks = [float(row["fts_rank"]) for row in valid_lexical]
+        if ranks:
+            best, worst = min(ranks), max(ranks)
+            span = worst - best
+            lexical_scores = {
+                int(row["id"]): 1.0 if span == 0 else max(0.0, min(1.0, (worst - float(row["fts_rank"])) / span))
+                for row in valid_lexical
+            }
 
     rows = fetch_all(
         "SELECT * FROM knowledge WHERE verification_status IN ('verified','approved') ORDER BY id DESC"
