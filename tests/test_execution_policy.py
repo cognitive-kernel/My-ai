@@ -100,7 +100,8 @@ def test_blocked_create_cannot_poison_continuation_state():
         intents=("coding",),
     )
     assert authorize_project_execution("ادامه بده", continue_intent, state) is False
-\n
+
+
 def test_project_policy_contains_no_phrase_or_keyword_rules():
     from pathlib import Path
 
