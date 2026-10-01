@@ -130,7 +130,7 @@ def _research(plan: dict[str, Any]) -> ResearchBundle:
     learner = WebLearner()
     for query in list(plan.get("research_queries") or [])[:10]:
         try:
-            results = learner.search(_safe_text(query, 700), limit=10)
+            results = learner.search(_safe_text(query, 700), limit=10, allow_online=True)
         except Exception as exc:
             bundle.notes.append(f"Research search failed for {query!r}: {exc}")
             continue
@@ -150,7 +150,7 @@ def _research(plan: dict[str, Any]) -> ResearchBundle:
             authority = "official-or-reference" if any(token in host for token in (".gov", ".edu", "developer.", "docs.", "reference.", "learn.")) else "general-web"
             source = {"title": _safe_text(result.get("title"), 300), "url": url, "summary": "", "authority": authority}
             try:
-                title, text = learner.fetch(url)
+                title, text = learner.fetch(url, allow_online=True)
                 source["title"] = _safe_text(title, 300)
                 source["summary"] = _safe_text(text, 2200)
             except Exception as exc:
