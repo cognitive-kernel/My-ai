@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Request
 
 from .advanced_agent import Capability, OperationRisk, RuntimeMode, TaskProfile
 from .personal_benchmark import validate_suite
+from .db import execute, fetch_all
 from .roadmap_runtime import (
     add_memory_lesson, add_research_trace, authorize_capability, benchmark_summary, benchmark_model_selection,
     capabilities, choose_model, completion_report, evidence_edge, evidence_node,
@@ -70,6 +71,28 @@ def register_roadmap_routes(app, require_user) -> None:
         mode = RuntimeMode(mode_raw) if mode_raw in {x.value for x in RuntimeMode} else RuntimeMode.LOCAL
         authorize_capability(str(data["name"]), approved=bool(data.get("approved", False)), mode=mode)
         return {"authorized": True}
+
+    @router.get("/knowledge")
+    async def knowledge_list(query: str | None = None, category: str | None = None, limit: int = 50):
+        needle = f"%{str(query or '').strip()}%"
+        rows = fetch_all(
+            """SELECT id,topic,title,content,source_url,category,verification_status,verified_at,confidence,created_at
+               FROM knowledge
+               WHERE (?='' OR title LIKE ? OR topic LIKE ? OR content LIKE ?)
+                 AND (? IS NULL OR category=?)
+               ORDER BY id DESC LIMIT ?""",
+            (str(query or "").strip(), needle, needle, needle, category, category, max(1, min(limit, 200))),
+        )
+        return {"items": rows}
+
+    @router.post("/knowledge/{knowledge_id}/archive")
+    async def knowledge_archive(knowledge_id: int):
+        execute("UPDATE knowledge SET verification_status='archived' WHERE id=?", (knowledge_id,))
+        return {"archived": True, "id": knowledge_id}
+
+    @router.get("/knowledge/{knowledge_id}/retrieval")
+    async def knowledge_retrieval(knowledge_id: int):
+        return {"items": fetch_all("SELECT * FROM retrieval_judgments WHERE knowledge_id=? ORDER BY id DESC LIMIT 100", (knowledge_id,))}
 
     @router.post("/knowledge/{knowledge_id}/versions")
     async def knowledge_version(knowledge_id: int, request: Request):
