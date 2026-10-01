@@ -178,8 +178,35 @@ def test_chat_api_does_not_bypass_execution_policy_for_project_build(monkeypatch
         cookies=login_cookie(owner),
     )
     assert response.status_code == 200
-    assert response.json()["type"] == "project"
+    assert response.json()["type"] == "chat"
     assert response.json()["answer"] == "project execution delegated to Agent"
+
+
+def test_stream_chat_enforces_coding_permission_before_runtime(monkeypatch, client_db):
+    import my_ai.api as api
+
+    owner = auth.create_account("owner", "a-secure-password")
+
+    class Intent:
+        name = "coding"
+        confidence = 0.99
+        args = {"action": "create_artifact", "goal": "build a Python application"}
+        requires_confirmation = False
+        intents = ("coding",)
+
+    class ForbiddenAgent:
+        def stream_chat(self, *args, **kwargs):
+            raise AssertionError("stream runtime must not start without coding permission")
+
+    monkeypatch.setattr(api, "classify", lambda *args, **kwargs: Intent())
+    monkeypatch.setattr(api, "agent", ForbiddenAgent())
+
+    response = client_db.post(
+        "/chat/stream",
+        json={"message": "یک برنامه پایتون بساز"},
+        cookies=login_cookie(owner),
+    )
+    assert response.status_code == 403
 
 
 def test_chat_api_has_no_legacy_keyword_command_policy():
