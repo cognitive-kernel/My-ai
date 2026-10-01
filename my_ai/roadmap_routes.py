@@ -171,8 +171,8 @@ def register_roadmap_routes(app, require_user) -> None:
         <h1>مدیریت دانش</h1><p>نسخه‌ها، conflictها، provenance و maintenance بدون حذف خودکار داده نمایش داده می‌شوند.</p>
         <pre id="out">در حال بارگذاری...</pre>
         <script>
-        Promise.all([fetch('/roadmap/profile').then(r=>r.json()),fetch('/roadmap/lessons').then(r=>r.json()),fetch('/roadmap/research-trace').then(r=>r.json())])
-        .then(x=>document.getElementById('out').textContent=JSON.stringify({profile:x[0],lessons:x[1],research:x[2]},null,2))
+        Promise.all([fetch('/roadmap/knowledge').then(r=>r.json()),fetch('/roadmap/lessons').then(r=>r.json()),fetch('/roadmap/research-trace').then(r=>r.json())])
+        .then(x=>document.getElementById('out').textContent=JSON.stringify({knowledge:x[0],lessons:x[1],research:x[2]},null,2))
         .catch(e=>document.getElementById('out').textContent=String(e));
         </script></body></html>"""
 
