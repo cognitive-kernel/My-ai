@@ -188,11 +188,40 @@ def knowledge_versions(knowledge_id: int) -> list[dict[str, Any]]:
     return fetch_all("SELECT * FROM knowledge_versions WHERE knowledge_id=? ORDER BY version DESC", (knowledge_id,))
 
 
+def restore_knowledge_version(knowledge_id: int, version_id: int) -> dict[str, Any]:
+    rows = fetch_all(
+        "SELECT * FROM knowledge_versions WHERE id=? AND knowledge_id=?",
+        (version_id, knowledge_id),
+    )
+    if not rows:
+        raise KeyError("knowledge version not found")
+    version = rows[0]
+    execute("UPDATE knowledge_versions SET status='superseded' WHERE knowledge_id=?", (knowledge_id,))
+    execute("UPDATE knowledge_versions SET status='active' WHERE id=?", (version_id,))
+    execute(
+        "UPDATE knowledge SET content=?, source_url=?, confidence=? WHERE id=?",
+        (version["content"], version["source_url"], version["confidence"], knowledge_id),
+    )
+    return {"knowledge_id": knowledge_id, "version_id": version_id, "version": version["version"], "status": "active"}
+
+
 def record_conflict(claim_key: str, left_version_id: int, right_version_id: int) -> int:
     return execute("INSERT INTO knowledge_conflicts(claim_key,left_version_id,right_version_id) VALUES(?,?,?)", (claim_key,left_version_id,right_version_id))
 
 
 def resolve_conflict(conflict_id: int, resolved_version_id: int, resolution: str) -> int:
+    conflicts = fetch_all("SELECT * FROM knowledge_conflicts WHERE id=?", (conflict_id,))
+    if not conflicts:
+        raise KeyError("knowledge conflict not found")
+    conflict = conflicts[0]
+    versions = fetch_all(
+        "SELECT * FROM knowledge_versions WHERE id=? AND id IN (?,?)",
+        (resolved_version_id, conflict["left_version_id"], conflict["right_version_id"]),
+    )
+    if not versions:
+        raise ValueError("resolved version must be one side of the conflict")
+    version = versions[0]
+    restore_knowledge_version(int(version["knowledge_id"]), int(resolved_version_id))
     execute("UPDATE knowledge_conflicts SET status='resolved',resolved_version_id=?,resolution=? WHERE id=?", (resolved_version_id,resolution,conflict_id))
     return conflict_id
 
