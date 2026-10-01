@@ -143,6 +143,8 @@ class Agent(LegacyAgent):
             state["last_action"] = str((intent.args or {}).get("action") or state.get("last_action") or "answer")
             state["last_intent"] = str(getattr(intent, "name", "") or state.get("last_intent") or "")
             action = state["last_action"]
+            if action != "continue_task":
+                state["current_goal"] = message
             if action in {"create_artifact", "modify_artifact"} and getattr(intent, "name", "") == "coding":
                 state["pending_project_action"] = action
             elif action != "continue_task":
