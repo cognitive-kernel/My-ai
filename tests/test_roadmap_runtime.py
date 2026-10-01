@@ -85,3 +85,19 @@ def test_personal_benchmark_runner_returns_case_results(monkeypatch):
     result = personal_benchmark.run_suite()
     assert result["valid"] is True
     assert result["passed"] == 1
+
+
+def test_knowledge_version_restore_and_conflict_activation():
+    from my_ai.db import execute, fetch_all
+    from my_ai.roadmap_runtime import record_conflict, restore_knowledge_version, resolve_conflict, upsert_knowledge_version
+
+    knowledge_id = execute("INSERT INTO knowledge(topic,title,content,verification_status,category) VALUES(?,?,?,?,?)", ("roadmap-test", "restore", "v1", "verified", "project_facts"))
+    v1 = upsert_knowledge_version(knowledge_id, "v1", "source-1", 0.6)
+    v2 = upsert_knowledge_version(knowledge_id, "v2", "source-2", 0.8)
+    assert restore_knowledge_version(knowledge_id, v1["id"])["version"] == 1
+    row = fetch_all("SELECT content FROM knowledge WHERE id=?", (knowledge_id,))[0]
+    assert row["content"] == "v1"
+    conflict_id = record_conflict("restore-claim", v1["id"], v2["id"])
+    resolve_conflict(conflict_id, v2["id"], "selected newer source")
+    row = fetch_all("SELECT content FROM knowledge WHERE id=?", (knowledge_id,))[0]
+    assert row["content"] == "v2"
