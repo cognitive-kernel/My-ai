@@ -120,7 +120,7 @@ class ContextBudgetManager:
                 compacted = self.compact_text(item.text, remaining)
                 compacted_tokens = max(1, len(compacted.split()))
                 if compacted_tokens <= remaining:
-                    selected.append(ContextItem(item.name, compacted, item.priority, compacted_tokens))
+                    selected.append(ContextItem(item.kind, compacted, item.priority, compacted_tokens))
                     used += compacted_tokens
                     continue
             omitted += 1
