@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from time import monotonic
+import threading
 from typing import Any, Callable, Iterable
 
 
@@ -242,15 +243,18 @@ class EvidenceGraph:
 class ResourceScheduler:
     max_concurrent: int = 1
     _active: int = 0
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def acquire(self) -> bool:
-        if self._active >= self.max_concurrent:
-            return False
-        self._active += 1
-        return True
+        with self._lock:
+            if self._active >= self.max_concurrent:
+                return False
+            self._active += 1
+            return True
 
     def release(self) -> None:
-        self._active = max(0, self._active - 1)
+        with self._lock:
+            self._active = max(0, self._active - 1)
 
 
 @dataclass(frozen=True)
