@@ -17,11 +17,11 @@ def route(payload, text, context=None):
     return result, fake
 
 
-def payload(primary="chat", intents=None, action="answer", confidence=0.9, language=None, topic=None, goal=None, project_path=None, urls=None):
+def payload(primary="chat", intents=None, action="answer", confidence=0.9, language=None, topic=None, goal=None, project_path=None, target=None, urls=None):
     return {
         "primary": primary, "intents": intents or [primary], "action": action, "confidence": confidence,
         "language": language, "topic": topic, "goal": goal,
-        "project_path": project_path, "urls": urls or [],
+        "project_path": project_path, "target": target, "urls": urls or [],
     }
 
 
@@ -51,7 +51,7 @@ def test_structured_arguments_are_preserved():
     result, _ = route(payload("coding", ["coding"], "create_artifact", 0.93, "python", None, "build API", "/projects/demo", ["https://example.com/spec"]), "پروژه را بساز")
     assert result.args == {
         "action": "create_artifact", "language": "python", "goal": "build API",
-        "project_path": "/projects/demo", "urls": ["https://example.com/spec"],
+        "project_path": "/projects/demo", "target": None, "urls": ["https://example.com/spec"],
     }
 
 
