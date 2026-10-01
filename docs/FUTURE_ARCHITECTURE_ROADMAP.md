@@ -187,7 +187,7 @@ Roadmap APIs cover profile, model selection, resources, capabilities/authorizati
 - **Conflict inspection:** علاوه بر resolution، دو نسخه، source و confidence قابل مقایسه و inspection هستند.
 - **Learning lifecycle:** lessonها lifecycle صریح candidate → validated → retired دارند.
 - **Model management:** resource-fit/health profile و model-selection benchmark در runtime/API اضافه شدند.
-- **Personal benchmark execution:** suite علاوه بر schema validation، runner اجرایی برای retrieval/toolchain readiness و گزارش blocked/failed/ready دارد؛ سناریوهای live-agent به‌صراحت به اجرای live نیاز دارند.
+- **Personal benchmark execution:** suite علاوه بر schema validation، runner اجرایی برای retrieval، toolchain readiness، resilience و traceability دارد و سناریوهای قابل اجرای local را واقعاً اجرا می‌کند؛ وابستگی‌های واقعی به compiler/LLM/browser با blocked و دلیل محیطی گزارش می‌شوند.
 - **Knowledge management UI/API:** inventory/search، category filtering، archive، version history و retrieval inspection در سطح roadmap اضافه شدند.
 - **Roadmap API security:** تمام endpointهای roadmap زیر احراز هویت موجود برنامه قرار گرفتند.
 
@@ -200,4 +200,4 @@ Roadmap APIs cover profile, model selection, resources, capabilities/authorizati
 - **Maintenance failure safety:** حتی در خطای fetch اولیه نیز scheduler slot در مسیر finally آزاد می‌شود.
 - **Context compaction:** budgetهای کوچک نیز با compaction قطعی مدیریت می‌شوند و regression test مستقل دارند.
 
-مواردی که به ابزار خارجی وابسته‌اند (برای نمونه اجرای واقعی MQL compiler یا اجرای live LLM/browser) در benchmark به‌جای success جعلی، با وضعیت blocked و دلیل محیطی گزارش می‌شوند؛ این به معنی نقص implementation نیست و مانع ادعای نتیجه‌ای که در محیط موجود قابل اثبات نیست می‌شود.
+مواردی که به ابزار خارجی وابسته‌اند (برای نمونه اجرای واقعی MQL compiler یا live LLM/browser) به‌جای success جعلی، با وضعیت blocked و دلیل محیطی گزارش می‌شوند؛ سایر سناریوهای قابل اجرای local در runner واقعاً اجرا و نتیجه‌گذاری می‌شوند.
