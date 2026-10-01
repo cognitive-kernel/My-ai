@@ -365,9 +365,32 @@ def chat_stream(r:ChatRequest, request:Request):
         sid=r.session_id
     else:
         sid=execute("INSERT INTO chat_sessions(title,kind,user_id) VALUES(?,?,?)",((r.message or "گفتگوی جدید").strip()[:60],"chat",user["id"]))
+    routing_history = fetch_all(
+        "SELECT role,content FROM conversations WHERE session_id=? ORDER BY id DESC LIMIT 20",
+        (sid,),
+    )[::-1]
+    intent=classify(r.message, "\n".join(f"{row['role']}: {row['content']}" for row in routing_history))
+    if intent.name in {"learning","image_generation"}:
+        raise HTTPException(409, "این عملیات از مسیر اختصاصی خودش انجام می‌شود.")
+    required_by_intent={
+        "pentest_external":("security","execute"),
+        "git_write":("github","write"),
+        "self_update":("self-update","write"),
+        "database_import":("database","write"),
+        "code_execution":("code-execution","execute"),
+        "self_repair":("self-repair","execute"),
+        "coding":("code-generation","execute"),
+    }
+    if intent.name in required_by_intent:
+        tool,action=required_by_intent[intent.name]
+        if not tool_allowed(user,tool,action):
+            raise HTTPException(403,f"Tool permission denied: {tool}:{action}")
+        semantic_action=str((intent.args or {}).get("action") or "answer")
+        if intent.name in {"code_execution","self_repair","self_update","git_write","database_import"} and semantic_action in {"execute","modify_artifact"}:
+            raise HTTPException(409,"Semantic confirmation required for high-risk intent: "+intent.name)
     def generate():
         try:
-            yield from agent.stream_chat(r.message,sid)
+            yield from agent.stream_chat(r.message,sid,intent=intent)
             audit(user,"chat","stream","200")
         except Exception as exc:
             audit(user,"chat","stream","502",str(exc))
@@ -1065,7 +1088,7 @@ def chat(r:ChatRequest, request:Request):
                     persist_answer=False,
                 )
                 _ensure_chat_history(sid,msg,answer)
-                return {"type":"project","answer":answer,"session_id":sid}
+                return {"type":"chat","answer":answer,"session_id":sid}
             generated_data=learner.generate_program(msg,language)
             generated_answer="Generated program:"
             _persist_api_chat_turn(sid,msg,generated_answer)
