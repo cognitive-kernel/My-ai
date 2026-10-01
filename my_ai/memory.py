@@ -21,6 +21,9 @@ def remember(topic, title, content, source_url=None):
 
 
 def recall(query, limit=8):
+    # Direct DB mutations are a supported maintenance/test path, so invalidate the
+    # lower-level retrieval cache before reading rather than returning stale knowledge.
+    invalidate_hybrid_search_cache()
     limit = max(1, min(limit, 50))
     bucket = int(time.monotonic() // max(1, settings.cache_ttl_seconds))
     return _recall_cached(str(query).strip(), limit, bucket)
