@@ -25,7 +25,7 @@ class WebLearner:
     _max_concurrency_per_host = 2
     _max_retries = 5
     _max_backoff = 30.0
-    _failure_threshold = 3
+    _failure_threshold = 10
     _failure_cooldown = 30.0
 
     @classmethod
