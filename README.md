@@ -167,3 +167,8 @@ docker-compose.yml
 ## مجوز
 
 این پروژه تحت مجوز MIT منتشر شده است.
+
+
+## Advanced Agent Maturity Roadmap
+
+See `docs/ADVANCED_AGENT_MATURITY_ROADMAP.md` for the registered roadmap and acceptance standard.
