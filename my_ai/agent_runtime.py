@@ -159,7 +159,7 @@ class Agent(LegacyAgent):
         context = "\n".join(item.text for item in packed_context.items)
         routing_context = (
             f"CONVERSATION STATE:\n{state['summary']}\n\nRECENT CHAT:\n{context}"
-            f"\n\nCONTEXT BUDGET: {context_budget} tokens; estimated={packed_context.estimated_tokens}; omitted={packed_context.omitted}"
+            f"\n\nCONTEXT BUDGET: {base_budget} tokens; estimated={packed_context.estimated_tokens}; omitted={packed_context.omitted}"
         )
         intent = intent if intent is not None else self._classify(message, routing_context)
         web_confirmation = self._web_learning_confirmation(message, session_id, intent)
