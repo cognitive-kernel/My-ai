@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "description": "Deterministic acceptance scenarios for the local-first software agent.",
+  "suites": {
+    "retrieval": [
+      {"name": "python-retrieval", "input": "Python list comprehension", "expected": "knowledge"},
+      {"name": "sql-retrieval", "input": "SQL Server execution plan", "expected": "knowledge"},
+      {"name": "isolation", "input": "unrelated quartzalpha query", "expected": "empty_or_relevant"}
+    ],
+    "software": [
+      {"name": "python-build", "language": "Python", "acceptance": ["compile", "test", "lint"]},
+      {"name": "php-build", "language": "PHP", "acceptance": ["syntax", "test", "lint"]},
+      {"name": "web-e2e", "language": "Web", "acceptance": ["build", "browser-e2e"]},
+      {"name": "mql4-toolchain", "language": "MQL4", "acceptance": ["real-compiler-or-blocked"]},
+      {"name": "mql5-toolchain", "language": "MQL5", "acceptance": ["real-compiler-or-blocked"]}
+    ],
+    "resilience": [
+      {"name": "missing-tool", "acceptance": ["blocked_with_reason"]},
+      {"name": "failed-test-repair", "acceptance": ["repair", "retest"]},
+      {"name": "offline-only", "acceptance": ["no_network"]},
+      {"name": "conflicting-evidence", "acceptance": ["preserve_both", "explain_resolution"]},
+      {"name": "wording-variation", "acceptance": ["semantic_routing"]},
+      {"name": "multi-session", "acceptance": ["isolated_state"]}
+    ],
+    "traceability": [
+      {"name": "research-to-code", "acceptance": ["requirement", "query", "source", "finding", "decision", "artifact", "validation"]},
+      {"name": "completion-evidence", "acceptance": ["goal", "requirements", "validation", "limitations"]}
+    ]
+  }
+}
