@@ -339,7 +339,6 @@ def _self_review(plan: dict[str, Any], result: dict[str, Any], workspace: Path |
             grounded_tokens.add(key)
             if value.get("passed") is True:
                 grounded_tokens.add(f"{key}:passed")
-                grounded_tokens.add("passed")
     for item in evidence.get("workspace_files") or []:
         if isinstance(item, dict):
             path = str(item.get("path") or "").strip()
@@ -406,6 +405,8 @@ def run_software_task(request: str, *, language: str | None = None, project_path
         if research_query:
             retry_plan = dict(plan)
             retry_plan["research_queries"] = _string_list(plan.get("research_queries")) + [research_query]
+            retry_plan["failure_feedback"] = _safe_text(diagnosis.get("cause") or diagnosis.get("repair_strategy"), 1200)
+            plan = retry_plan
             retry_research = _research(retry_plan)
             retry_context = (
                 enriched_request
@@ -438,6 +439,8 @@ def run_software_task(request: str, *, language: str | None = None, project_path
     phases_ok = bool(result.get("phase_validation")) and all(bool(item.get("passed")) for item in result.get("phase_validation") or []) if result.get("phase_validation") else True
     research_required = bool(plan.get("research_queries"))
     research_ok = bool(research.sources) if research_required else True
+    if research_required and not research_ok:
+        result.setdefault("semantic_defects", []).append("Required research produced no usable sources.")
 
     if result.get("status") == "built" and install_ok and build_ok and tests_ok and lint_ok and typecheck_ok and runtime_ok and phases_ok and not result.get("semantic_defects") and workspace is not None:
         review = _self_review(plan, result, workspace)
