@@ -13,8 +13,8 @@ def _recall_cached(query: str, limit: int, bucket: int):
     return hybrid_search(query, limit, verified_only=True)
 
 
-def remember(topic, title, content, source_url=None):
-    result = remember_knowledge(topic, title, content, source_url)
+def remember(topic, title, content, source_url=None, category="project_facts"):
+    result = remember_knowledge(topic, title, content, source_url, category)
     _recall_cached.cache_clear()
     invalidate_hybrid_search_cache()
     return result
