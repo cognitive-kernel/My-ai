@@ -252,7 +252,7 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
         raise ValueError("Project goal is required.")
     resolved_goal, contextual_language, session_id = _recent_conversation_context(goal)
     detected_language = contextual_language
-    language = _supported_language(detected_language) or _supported_language(language) or _plan_language(resolved_goal) or ""
+    language = _plan_language(resolved_goal) or _supported_language(detected_language) or _supported_language(language) or ""
     # A supplied project_path identifies the target workspace itself. Do not create
     # a new child directory: modify_artifact requests must operate on that project.
     workspace = resolve_projects_root(project_path) if project_path else create_project_workspace(goal)
