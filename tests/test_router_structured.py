@@ -92,6 +92,23 @@ def test_artifact_normalization_cannot_reenable_side_effect():
     assert result.name == "chat"
     assert result.args["action"] == "answer"
 
+def test_high_risk_artifact_route_is_not_downgraded():
+    payload = valid_payload(
+        primary="git_write",
+        intents=["git_write"],
+        action="create_artifact",
+        confidence=0.99,
+        language="Python",
+        topic="repository",
+        goal="modify repository artifact",
+        project_path="/projects/demo",
+        target="repository artifact",
+    )
+    result = build_router_service(Client(payload)).classify("apply the approved repository change")
+    assert result.name == "git_write"
+    assert result.requires_confirmation is True
+
+
 def test_concrete_artifact_goal_remains_coding():
     payload = valid_payload(
         primary="coding",
