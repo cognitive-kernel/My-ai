@@ -48,9 +48,15 @@ def authorize_project_execution(message: str, intent: Any, state: dict[str, Any]
         return True
 
     if action == _CONTINUATION_ACTION:
-        # The router already sees the conversation state. Requiring a concrete
-        # semantic goal here prevents an empty/ambiguous continuation from
-        # becoming a project mutation while keeping the gate keyword-free.
-        return True
+        # Continuation is never an independent authorization to build. It may
+        # cross the project boundary only when persisted state proves that a
+        # project-side-effect task is already pending.
+        runtime_state = state if isinstance(state, dict) else {}
+        pending = _text(runtime_state.get("pending_project_action"))
+        last_intent = _text(runtime_state.get("last_intent"))
+        if pending not in _SIDE_EFFECT_ACTIONS or last_intent != "coding":
+            return False
+        prior_goal = _text(runtime_state.get("current_goal"))
+        return len(prior_goal) >= _MIN_CONCRETE_REQUEST_LENGTH
 
     return False
