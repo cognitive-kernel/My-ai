@@ -131,24 +131,36 @@ def validate_validation_matrix(plan: dict[str, Any], language: str | None) -> li
         for key in lifecycle:
             if key not in commands:
                 errors.append(f"Missing required lifecycle validation command: {key}{suffix}")
-        if lang in {"rust", "rs"} and "clippy" not in (commands.get("lint") or "").casefold():
-            errors.append(f"Rust validation requires clippy in the lint command{suffix}.")
+        if lang in {"rust", "rs"}:
+            if "cargo check" not in (commands.get("build") or "").casefold():
+                errors.append(f"Rust validation requires cargo check in the build command{suffix}.")
+            if "cargo test" not in (commands.get("test") or "").casefold():
+                errors.append(f"Rust validation requires cargo test in the test command{suffix}.")
+            if "clippy" not in (commands.get("lint") or "").casefold():
+                errors.append(f"Rust validation requires clippy in the lint command{suffix}.")
         if lang in {"python", "py"} and not any(token in (commands.get("typecheck") or "").casefold() for token in ("mypy", "pyright")):
             errors.append(f"Python validation requires an explicit mypy or pyright typecheck command{suffix}.")
         if lang in {"python", "py"} and "compileall" not in ((commands.get("build") or "") + " " + (commands.get("test") or "")).casefold():
             errors.append(f"Python validation requires explicit compile validation (compileall){suffix}.")
         if lang in {"python", "py"} and "pytest" not in (commands.get("test") or "").casefold():
             errors.append(f"Python validation requires pytest execution{suffix}.")
-        if lang in {"javascript", "js", "typescript", "ts"} and not any(token in (commands.get("typecheck") or "").casefold() for token in ("tsc", "typecheck")):
-            errors.append(f"JavaScript/TypeScript validation requires an explicit typecheck command{suffix}.")
+        if lang in {"javascript", "js", "typescript", "ts"}:
+            if not any(token in (commands.get("typecheck") or "").casefold() for token in ("tsc", "typecheck")):
+                errors.append(f"JavaScript/TypeScript validation requires an explicit typecheck command{suffix}.")
+            if not commands.get("install"):
+                errors.append(f"JavaScript/TypeScript validation requires an explicit dependency installation command{suffix}.")
+            if not commands.get("build"):
+                errors.append(f"JavaScript/TypeScript validation requires an explicit build command{suffix}.")
+            if not commands.get("test"):
+                errors.append(f"JavaScript/TypeScript validation requires an explicit test command{suffix}.")
+            if not commands.get("lint"):
+                errors.append(f"JavaScript/TypeScript validation requires an explicit lint command{suffix}.")
         if any(x in artifact for x in ("web", "website", "frontend", "browser")) and not any(token in (commands.get("run") or "").casefold() for token in ("playwright", "cypress", "browser", "e2e")):
             errors.append(f"Web validation requires an explicit browser/E2E runtime command{suffix}.")
         if lang in {"mql4", "mql5"}:
             build_command = (commands.get("build") or "").casefold()
             if not any(token in build_command for token in ("metaeditor", "metalang")):
                 errors.append(f"MQL validation requires an explicit compiler/toolchain build command{suffix}.")
-        if lang in {"javascript", "typescript", "js", "ts"} and not commands.get("install"):
-            errors.append(f"JavaScript/TypeScript validation requires an explicit dependency installation command{suffix}.")
         if lang == "php":
             if "php -l" not in (commands.get("lint") or "").casefold():
                 errors.append(f"PHP validation requires php -l syntax validation{suffix}.")
@@ -156,6 +168,12 @@ def validate_validation_matrix(plan: dict[str, Any], language: str | None) -> li
                 errors.append(f"PHP framework validation requires the framework test suite{suffix}.")
             if not commands.get("test"):
                 errors.append(f"PHP validation requires a test command or framework test suite{suffix}.")
+        if lang == "sql":
+            combined_schema = " ".join(commands.get(key) or "" for key in ("build", "lint", "typecheck")).casefold()
+            if not any(token in combined_schema for token in ("migration", "migrate", "schema", "validate")):
+                errors.append(f"SQL validation requires explicit schema/migration validation{suffix}.")
+            if not any(token in (commands.get("test") or "").casefold() for token in ("integration", "sql", "pytest", "test")):
+                errors.append(f"SQL validation requires an integration/schema test command{suffix}.")
     return list(dict.fromkeys(errors))
 
 
