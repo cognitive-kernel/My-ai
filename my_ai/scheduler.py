@@ -463,8 +463,8 @@ class StudyScheduler:
                         domain_rows = fetch_all("SELECT auto_learn FROM learning_domains WHERE name=?", (name,))
                         if domain_rows and int(domain_rows[0]["auto_learn"] or 0) != 1:
                             continue
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.warning("LEARNING_DOMAIN_READ_FAILED: %s", exc)
                     self.update_progress("weekly_review", name)
                     engine = LearningEngine()
                     result = weekly_review(name, engine.web, engine.llm)
