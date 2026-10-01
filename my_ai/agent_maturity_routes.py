@@ -97,9 +97,10 @@ def register_maturity_routes(app, require_user) -> None:
         <script>
         Promise.all([
           fetch('/roadmap/maturity/summary').then(r=>r.json()),
+          fetch('/roadmap/maturity/tasks').then(r=>r.json()),
           fetch('/roadmap/maturity/tools').then(r=>r.json()),
           fetch('/roadmap/maturity/config').then(r=>r.json())
-        ]).then(([s,t,c])=>{summary.textContent=JSON.stringify(s,null,2);tools.textContent=JSON.stringify(t,null,2);config.textContent=JSON.stringify(c,null,2)})
+        ]).then(([s,t,toolsData,c])=>{summary.textContent=JSON.stringify(s,null,2);tasks.textContent=JSON.stringify(t,null,2);tools.textContent=JSON.stringify(toolsData,null,2);config.textContent=JSON.stringify(c,null,2)})
         .catch(e=>summary.textContent=String(e));
         </script></html>"""
 
