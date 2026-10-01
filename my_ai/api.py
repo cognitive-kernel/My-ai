@@ -20,8 +20,8 @@ from .command_policy import parse_command
 from .config import settings
 from .settings_store import get_bool, get_int, get_github_settings, set_setting
 from .curriculum import canonical_language,LANGUAGE_CURRICULA
-from .db import fetch_all,init_db,execute,remember_knowledge,connect,_knowledge_hash
-from .infra.persistence import _semantic_duplicate
+from .db import fetch_all,init_db,execute,remember_knowledge,connect
+from .infra.persistence import _semantic_duplicate, _knowledge_hash
 from .learner import LearningEngine
 from .dynamic_learning import resolve_learning_target
 from .router import classify
