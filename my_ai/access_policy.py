@@ -38,6 +38,7 @@ TOOL_RULES = (
     ("/tools/", "tools"),
     ("/files/", "files"),
     ("/image/", "image-generation"),
+    ("/roadmap/", "roadmap"),
 )
 
 PATH_ACTIONS = {
