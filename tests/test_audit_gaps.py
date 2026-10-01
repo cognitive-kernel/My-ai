@@ -1,5 +1,6 @@
 from pathlib import Path
-import re
+import io
+import tokenize
 
 from my_ai.access_policy import is_mutation, permission_for_path
 from my_ai.eval_harness import DEFAULT_REGRESSION_THRESHOLDS, evaluate_regression_metrics
@@ -14,7 +15,7 @@ def test_sensitive_paths_have_explicit_permission_mapping():
         ("/tools/python", "POST"),
         ("/skills/revalidate", "POST"),
     }
-    for method, path in required:
+    for path, method in required:
         result = permission_for_path(path, method)
         assert result is not None
         assert result[1] in {"write", "execute"}
@@ -41,9 +42,10 @@ def test_dependency_declaration_has_single_install_entrypoint():
 
 def test_architecture_has_no_unresolved_placeholder_markers():
     root = Path("my_ai")
-    markers = re.compile(r"\b(?:TODO|FIXME|HACK|XXX|NotImplemented)\b")
     hits = []
     for path in root.rglob("*.py"):
-        text = path.read_text(encoding="utf-8", errors="ignore")
-        hits.extend((str(path), line) for line in text.splitlines() if markers.search(line))
+        source = path.read_text(encoding="utf-8-sig", errors="ignore")
+        for token in tokenize.generate_tokens(io.StringIO(source).readline):
+            if token.type == tokenize.COMMENT and any(marker in token.string for marker in ("TODO", "FIXME", "HACK", "XXX", "NotImplemented")):
+                hits.append((str(path), token.start[0]))
     assert not hits, hits
