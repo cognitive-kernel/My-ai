@@ -376,7 +376,7 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
             continue
         tests = _run(language, "test", workspace, timeout, requirements)
         lint = _run(language, "lint", workspace, timeout, requirements)
-        typecheck = _run(language, "typecheck", workspace, timeout, requirements)
+        typecheck = _run(language, "typecheck", workspace, timeout, requirements) if _has_lifecycle_command(requirements, "typecheck") else {"operation": "typecheck", "passed": True, "skipped": True, "not_required": True}
         run = (
             _run(language, "run", workspace, timeout, requirements)
             if _has_lifecycle_command(requirements, "run")
