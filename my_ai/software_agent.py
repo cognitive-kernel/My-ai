@@ -307,6 +307,40 @@ def run_software_task(request: str, *, language: str | None = None, project_path
         + "\n\nUSER REQUEST:\n" + request
     )
     result = build_project(enriched_request, str(plan.get("language") or language or ""), project_path=project_path, timeout=timeout, repair_attempts=repair_attempts, tool_requirements=plan.get("tool_requirements"))
+
+    # A bounded second research cycle is allowed only when the repair diagnosis
+    # explicitly says the available evidence is insufficient.
+    diagnosis = result.get("failure_diagnosis") or {}
+    if (
+        result.get("status") != "built"
+        and bool(diagnosis.get("research_needed"))
+        and not bool(result.get("research_retry"))
+    ):
+        research_query = _safe_text(
+            diagnosis.get("cause") or diagnosis.get("repair_strategy"),
+            700,
+        )
+        if research_query:
+            retry_plan = dict(plan)
+            retry_plan["research_queries"] = list(plan.get("research_queries") or []) + [research_query]
+            retry_research = _research(retry_plan)
+            retry_context = (
+                enriched_request
+                + "\n\nADDITIONAL RESEARCH AFTER FAILURE DIAGNOSIS:\n"
+                + retry_research.as_prompt()
+            )
+            result = build_project(
+                retry_context,
+                str(plan.get("language") or language or ""),
+                project_path=project_path,
+                timeout=timeout,
+                repair_attempts=repair_attempts,
+                tool_requirements=plan.get("tool_requirements"),
+            )
+            result["research_retry"] = True
+            research.sources.extend(retry_research.sources)
+            research.notes.extend(retry_research.notes)
+
     result["plan"] = plan
     result["research"] = {"source_count": len(research.sources), "sources": research.sources}
     workspace_value = result.get("project_path") or result.get("workspace")
