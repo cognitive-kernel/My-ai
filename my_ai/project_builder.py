@@ -154,7 +154,55 @@ def _recent_conversation_context(goal: str) -> tuple[str, str | None, int | None
     if conversation_context:
         resolved_goal += "\n\nFULL CHAT CONTEXT FOR THIS PROJECT REQUEST:\n" + conversation_context
     return resolved_goal, language, session_id
-def _prompt(language: str, goal: str, knowledge: list[Any], previous_error: str = "") -> str:
+_FAILURE_DIAGNOSIS_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["category", "cause", "repair_strategy", "research_needed"],
+    "properties": {
+        "category": {"type": "string"},
+        "cause": {"type": "string"},
+        "repair_strategy": {"type": "string"},
+        "research_needed": {"type": "boolean"},
+    },
+}
+
+
+def _diagnose_failure(llm: Any, operation: str, evidence: str) -> dict[str, Any]:
+    """Classify observable validation evidence to guide the next repair attempt."""
+    fallback = {
+        "category": "unknown",
+        "cause": "Validation failed without a structured diagnosis.",
+        "repair_strategy": "Reinspect the generated artifact and the reported validation evidence.",
+        "research_needed": False,
+    }
+    try:
+        data = llm.structured_chat_json(
+            "Diagnose the software validation failure from observable evidence only. "
+            "Do not claim that a repair was performed. Do not invent missing facts. "
+            "Choose a concise category such as requirements, dependency, environment, "
+            "implementation, test, platform, or unknown. Return only JSON matching the schema.\n"
+            f"OPERATION: {operation}\nEVIDENCE:\n{str(evidence or '')[:18000]}",
+            _FAILURE_DIAGNOSIS_SCHEMA,
+            system="You diagnose software engineering failures for the next repair attempt.",
+        )
+        if not isinstance(data, dict):
+            return fallback
+        category = str(data.get("category") or "").strip()
+        cause = str(data.get("cause") or "").strip()
+        strategy = str(data.get("repair_strategy") or "").strip()
+        if not category or not cause or not strategy:
+            return fallback
+        return {
+            "category": category,
+            "cause": cause,
+            "repair_strategy": strategy,
+            "research_needed": bool(data.get("research_needed")),
+        }
+    except Exception:
+        return fallback
+
+
+def _prompt(language: str, goal: str, knowledge: list[Any], previous_error: str = "", diagnosis: dict[str, Any] | None = None) -> str:
     suffix = f"\nPREVIOUS VALIDATION/BUILD/TEST/LINT DEFECTS (fix every one; do not merely explain them):\n{previous_error[:18000]}" if previous_error else ""
     return (
         "Generate a complete runnable software project, not a single source file. Return ONLY valid JSON: {\"files\":{\"relative/path\":\"file contents\"}}. "
@@ -223,7 +271,7 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
     semantic_defects: list[str] = []
     requirements = tool_requirements
     for _ in range(attempts):
-        files = _parse_files(llm.chat(_prompt(language, resolved_goal, knowledge, last_error), system="You are a senior software architect and implementation engineer. Generate complete, buildable projects. Return JSON only."))
+        files = _parse_files(llm.chat(_prompt(language, resolved_goal, knowledge, last_error, last_diagnosis), system="You are a senior software architect and implementation engineer. Generate complete, buildable projects. Return JSON only."))
         _write_files(workspace, files)
         # The plan is embedded in resolved_goal. Validation remains independent of compiler success.
         artifact_type = ""
@@ -258,14 +306,14 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
         )
         if tests.get("passed") and lint.get("passed") and run.get("passed"):
             break
-        last_error = tests.get("error") or tests.get("output") or lint.get("error") or lint.get("output") or run.get("error") or run.get("output") or "tests/lint/runtime validation failed"
+        last_error = tests.get("error") or tests.get("output") or lint.get("error") or lint.get("output") or run.get("error") or run.get("output") or "tests/lint/runtime validation failed"\n        last_diagnosis = _diagnose_failure(llm, "tests_lint_runtime", last_error)
     status = "built" if build.get("passed") and tests.get("passed", False) and lint.get("passed", False) and run.get("passed", False) and not semantic_defects else "build_failed"
     pid = execute("INSERT INTO generated_projects(language,request,code) VALUES(?,?,?)", (language, resolved_goal, json.dumps(files, ensure_ascii=False)))
     return {
         "status": status, "language": language, "request": resolved_goal, "project_id": pid, "project_name": workspace.name,
         "project_path": str(workspace.relative_to(ROOT)) if workspace.is_relative_to(ROOT) else str(workspace), "session_id": session_id,
         "files": sorted(files), "file_count": len(files), "build": build, "tests": tests, "lint": lint, "run": run,
-        "semantic_defects": semantic_defects, "repair_attempts": attempts - 1, "artifacts": _artifact_files(workspace),
+        "semantic_defects": semantic_defects, "repair_attempts": attempts - 1, "failure_diagnosis": last_diagnosis, "artifacts": _artifact_files(workspace),
         "toolchain": doctor(language, cwd=str(workspace), requirements=requirements),
     }
 
