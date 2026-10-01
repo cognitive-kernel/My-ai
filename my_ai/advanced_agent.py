@@ -243,11 +243,23 @@ class EvidenceGraph:
 class ResourceScheduler:
     max_concurrent: int = 1
     _active: int = 0
+    _waiting_interactive: int = 0
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
-    def acquire(self) -> bool:
+    def acquire(self, priority: int = 0) -> bool:
+        priority = int(priority)
+        if priority > 0:
+            with self._lock:
+                self._waiting_interactive += 1
+                try:
+                    if self._active >= self.max_concurrent:
+                        return False
+                    self._active += 1
+                    return True
+                finally:
+                    self._waiting_interactive = max(0, self._waiting_interactive - 1)
         with self._lock:
-            if self._active >= self.max_concurrent:
+            if self._waiting_interactive > 0 or self._active >= self.max_concurrent:
                 return False
             self._active += 1
             return True
