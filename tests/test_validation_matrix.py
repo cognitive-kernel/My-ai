@@ -127,9 +127,13 @@ def test_install_metadata_accepts_supported_package_identifier():
         "artifact_type": "application",
         "language": "Python",
         "requirements": ["app"],
+        "architecture": ["application"],
+        "phases": ["implement", "validate"],
         "acceptance_criteria": ["runs"],
         "research_queries": [],
         "validation": ["compile", "test"],
+        "constraints": [],
+        "ambiguities": [],
         "tool_requirements": [{
             "install": {"manager": "apt-get", "package": "python3.11"}
         }],
