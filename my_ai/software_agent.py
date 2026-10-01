@@ -216,6 +216,33 @@ _SELF_REVIEW_SCHEMA: dict[str, Any] = {
 
 
 
+def _workspace_evidence(workspace: Path, limit: int = 30000) -> list[dict[str, str]]:
+    """Collect bounded, language-neutral evidence for acceptance review."""
+    evidence: list[dict[str, str]] = []
+    used = 0
+    try:
+        paths = sorted(path for path in workspace.rglob("*") if path.is_file())
+    except OSError:
+        return evidence
+    for path in paths[:160]:
+        try:
+            relative = str(path.relative_to(workspace)).replace("\\", "/")
+            size = path.stat().st_size
+            if size > 20000:
+                evidence.append({"path": relative, "size": str(size), "content": "[binary-or-large-file-omitted]"})
+                continue
+            content = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        remaining = limit - used
+        if remaining <= 0:
+            break
+        snippet = content[:min(6000, remaining)]
+        used += len(snippet)
+        evidence.append({"path": relative, "size": str(size), "content": snippet})
+    return evidence
+
+
 def _cleanup_workspace(workspace: Path) -> dict[str, Any]:
     """Remove tool-generated caches and temporary artifacts without deleting source or build outputs."""
     removed: list[str] = []
@@ -261,6 +288,7 @@ def _self_review(plan: dict[str, Any], result: dict[str, Any], workspace: Path |
             "semantic_defects": result.get("semantic_defects") or [],
         },
         "artifacts": result.get("artifacts") or result.get("files") or [],
+        "workspace_files": _workspace_evidence(workspace),
         "git_status": _git_snapshot(workspace),
     }
     prompt = (
@@ -269,7 +297,7 @@ def _self_review(plan: dict[str, Any], result: dict[str, Any], workspace: Path |
         "do not infer successful execution, browser behavior, APIs, or capabilities that are not evidenced. "
         "If evidence is missing or contradictory, mark the criterion failed and explain what is missing. "
         "Do not invent requirements. Unresolved semantic defects are failures. "
-        "Return only JSON matching the schema.\n\n"
+        "Inspect the supplied workspace file evidence as well as validation results. Review dependency declarations for consistency with the generated artifact, but do not invent or remove dependencies without evidence. Return only JSON matching the schema.\n\n"
         + json.dumps(evidence, ensure_ascii=False)[:30000]
     )
     try:
