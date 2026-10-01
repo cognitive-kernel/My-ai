@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
 
+from .db import fetch_all
 from .agent_maturity import (
     config_version,
     config_versions,
@@ -30,6 +31,12 @@ def register_maturity_routes(app, require_user) -> None:
     async def task_create(request: Request):
         data = await request.json()
         return create_task(str(data.get("goal", "")), data.get("session_id"), data.get("metadata"))
+
+    @router.get("/tasks")
+    async def task_list(state: str | None = None, limit: int = 100):
+        if state:
+            return {"items": fetch_all("SELECT * FROM agent_tasks WHERE state=? ORDER BY id DESC LIMIT ?", (state, max(1, min(limit, 500))))}
+        return {"items": fetch_all("SELECT * FROM agent_tasks ORDER BY id DESC LIMIT ?", (max(1, min(limit, 500)),))}
 
     @router.get("/tasks/{task_id}")
     async def task_get(task_id: int):
