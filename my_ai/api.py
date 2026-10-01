@@ -20,7 +20,8 @@ from .command_policy import parse_command
 from .config import settings
 from .settings_store import get_bool, get_int, get_github_settings, set_setting
 from .curriculum import canonical_language,LANGUAGE_CURRICULA
-from .db import fetch_all,init_db,execute
+from .db import fetch_all,init_db,execute,remember_knowledge,connect,_knowledge_hash
+from .infra.persistence import _semantic_duplicate
 from .learner import LearningEngine
 from .dynamic_learning import resolve_learning_target
 from .router import classify
@@ -378,17 +379,17 @@ def chat_stream(r:ChatRequest, request:Request):
 @app.post("/memory/knowledge")
 def knowledge_create(r:KnowledgeUpdateRequest, request:Request):
     user=require_admin(request)
-    import hashlib
     if not r.title.strip() or not r.content.strip() or not r.topic.strip():
         raise HTTPException(400,"title, topic and content are required.")
-    normalized = " ".join(f"{r.topic}\n{r.content}".replace("ي","ی").replace("ى","ی").replace("ك","ک").split()).casefold()
-    content_hash = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
-    knowledge_id = execute(
-        "INSERT INTO knowledge(topic,title,content,source_url,content_hash,verification_status) VALUES(?,?,?,?,?,'unverified')",
-        (r.topic,r.title,r.content,r.source_url,content_hash),
-    )
-    execute("INSERT INTO knowledge_audit(knowledge_id,user_id,action,details) VALUES(?,?,?,?)",(knowledge_id,user["id"],"create",f"source_url={r.source_url or ''}"))
-    audit(user,"knowledge","write","201",f"created:{knowledge_id}")
+    content_hash = _knowledge_hash(r.topic, r.content)
+    try:
+        knowledge_id = remember_knowledge(r.topic, r.title, r.content, r.source_url)
+    except ValueError as exc:
+        audit(user,"knowledge","write","409",str(exc))
+        raise HTTPException(409, str(exc)) from exc
+    execute("INSERT INTO knowledge_audit(knowledge_id,user_id,action,details) VALUES(?,?,?,?)",
+            (knowledge_id,user["id"],"create",f"source_url={r.source_url or ''}"))
+    audit(user,"knowledge","write","201",f"created_or_reused:{knowledge_id}")
     return {"id":knowledge_id,"verification_status":"unverified","content_hash":content_hash}
 
 @app.get("/memory/knowledge")
@@ -408,9 +409,13 @@ def knowledge_list(request: Request, status: str | None = None, limit: int = 200
 def knowledge_update(knowledge_id:int, r:KnowledgeUpdateRequest, request:Request):
     user=require_admin(request)
     if not fetch_all("SELECT id FROM knowledge WHERE id=?",(knowledge_id,)): raise HTTPException(404,"Knowledge item not found.")
-    import hashlib
-    normalized = " ".join(f"{r.topic}\n{r.content}".replace("ي","ی").replace("ى","ی").replace("ك","ک").split()).casefold()
-    content_hash = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    content_hash = _knowledge_hash(r.topic, r.content)
+    with connect() as conn:
+        duplicate = _semantic_duplicate(r.topic, r.title, r.content, content_hash, conn)
+        if duplicate and int(duplicate["id"]) != knowledge_id:
+            execute("INSERT INTO knowledge_audit(knowledge_id,user_id,action,details) VALUES(?,?,?,?)",
+                    (duplicate["id"],user["id"],"duplicate_semantic_rejected",json.dumps(duplicate,ensure_ascii=False,sort_keys=True)))
+            raise HTTPException(409, f"Semantic duplicate detected for knowledge {duplicate['id']} (similarity={duplicate['similarity']}).")
     execute("UPDATE knowledge SET title=?,content=?,topic=?,source_url=?,content_hash=?,verification_status='unverified',verified_at=NULL,verified_by=NULL,confidence=NULL WHERE id=?",(r.title,r.content,r.topic,r.source_url,content_hash,knowledge_id))
     execute("INSERT INTO knowledge_audit(knowledge_id,user_id,action,details) VALUES(?,?,?,?)",(knowledge_id,user["id"],"update",f"source_url={r.source_url or ''}"))
     audit(user,"knowledge","write","200",f"updated:{knowledge_id}")
