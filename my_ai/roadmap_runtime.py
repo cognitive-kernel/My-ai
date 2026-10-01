@@ -74,7 +74,9 @@ def choose_model(task: TaskProfile) -> dict[str, Any]:
         raise RuntimeError("no configured models")
     try:
         choice = ModelRouter().choose(models, task, resources)
-        return {"model": asdict(choice.model), "reason": choice.reason, "fallback": False, "resources": asdict(resources)}
+        model_data = asdict(choice.model)
+        model_data["capabilities"] = sorted(choice.model.capabilities)
+        return {"model": model_data, "reason": choice.reason, "fallback": False, "resources": asdict(resources)}
     except RuntimeError as exc:
         viable = [
             m for m in models
@@ -85,8 +87,10 @@ def choose_model(task: TaskProfile) -> dict[str, Any]:
         fallback = max(viable, key=lambda m: (m.context_window, m.quality, m.speed), default=None)
         if fallback is None:
             raise
+        model_data = asdict(fallback)
+        model_data["capabilities"] = sorted(fallback.capabilities)
         return {
-            "model": asdict(fallback),
+            "model": model_data,
             "reason": f"fallback: {exc}; context capped to {fallback.context_window}",
             "fallback": True,
             "resources": asdict(resources),
