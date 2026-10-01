@@ -175,8 +175,8 @@ class StudyScheduler:
                 )
                 try:
                     execute("UPDATE learning_domains SET auto_learn=1 WHERE lower(name)=?", (key,))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("LEARNING_DOMAIN_AUTOLEARN_UPDATE_FAILED: %s", exc)
                 return
             worker_stop = threading.Event()
             thread = threading.Thread(
