@@ -5,7 +5,7 @@ class FakeRouter:
     def structured_chat_json(self, prompt, schema, system):
         current_user = prompt.split("CURRENT USER:", 1)[-1].split("CONVERSATION CONTEXT:", 1)[0]
         if "MQL4" in current_user or "فایل رو بساز" in current_user:
-            return {"primary":"coding","intents":["coding"],"action":"create_artifact","confidence":0.99,"language":"MQL4","topic":None,"goal":"create artifact","project_path":None,"urls":[]}
+            return {"primary":"coding","intents":["coding"],"action":"create_artifact","confidence":0.99,"language":"MQL4","topic":None,"goal":"create artifact","project_path":None,"target":"MQL4 indicator","urls":[]}
         return {
             "primary": "chat",
             "intents": ["chat"],
@@ -15,6 +15,7 @@ class FakeRouter:
             "topic": None,
             "goal": None,
             "project_path": None,
+            "target": None,
             "urls": [],
         }
 
