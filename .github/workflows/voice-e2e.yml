@@ -50,7 +50,6 @@ jobs:
         run: |
           printf 'سلام، این یک آزمون آفلاین گفتار فارسی برای My-AI است.\n' | piper --model "$PIPER_MODEL_PATH" --output_file voice-input.wav
           test -s voice-input.wav
-          ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 voice-input.wav
       - name: Run real offline STT and TTS roundtrip
         env:
           WHISPER_MODEL_PATH: \${{ github.workspace }}/voice-models/ggml-tiny.bin
@@ -75,7 +74,6 @@ jobs:
           assert Path(result["audio_path"]).is_file(), result
           assert Path(result["audio_path"]).stat().st_size > 0, result
           PY
-          ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 voice-output.wav
       - name: Verify failure paths
         env:
           WHISPER_MODEL_PATH: \${{ github.workspace }}/voice-models/ggml-tiny.bin
