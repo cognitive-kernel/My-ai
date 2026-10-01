@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
 from .advanced_agent import Capability, OperationRisk, RuntimeMode, TaskProfile
 from .personal_benchmark import validate_suite
 from .roadmap_runtime import (
-    add_memory_lesson, add_research_trace, authorize_capability, benchmark_summary,
+    add_memory_lesson, add_research_trace, authorize_capability, benchmark_summary, benchmark_model_selection,
     capabilities, choose_model, completion_report, evidence_edge, evidence_node,
     knowledge_versions, lessons, maintenance, model_catalog, register_capability,
-    resource_snapshot, research_trace_rows, resolve_conflict, record_conflict,
+    resource_snapshot, research_trace_rows, resolve_conflict, record_conflict, model_management,
     system_profile, trace, upsert_knowledge_version,
 )
 
 
 def register_roadmap_routes(app, require_user) -> None:
-    router = APIRouter(prefix="/roadmap", tags=["roadmap"])
+    router = APIRouter(prefix="/roadmap", tags=["roadmap"], dependencies=[Depends(require_user)])
 
     @router.get("/profile")
     async def profile():
@@ -35,6 +35,14 @@ def register_roadmap_routes(app, require_user) -> None:
             network_allowed=bool(data.get("network_allowed", False)),
         )
         return choose_model(task)
+
+    @router.get("/models/management")
+    async def models_management():
+        return model_management()
+
+    @router.get("/models/benchmark")
+    async def models_benchmark():
+        return benchmark_model_selection()
 
     @router.get("/resources")
     async def resources():
@@ -150,5 +158,5 @@ def register_roadmap_routes(app, require_user) -> None:
         return """<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><title>My-AI Model Management</title>
         <body style="font-family:system-ui;max-width:1000px;margin:40px auto;padding:20px"><h1>مدیریت مدل</h1>
         <pre id="out">در حال بارگذاری...</pre>
-        <script>Promise.all([fetch('/roadmap/models').then(r=>r.json()),fetch('/roadmap/resources').then(r=>r.json())]).then(x=>document.getElementById('out').textContent=JSON.stringify({models:x[0],resources:x[1]},null,2));</script></body></html>"""
+        <script>Promise.all([fetch('/roadmap/models/management').then(r=>r.json()),fetch('/roadmap/models/benchmark').then(r=>r.json()),fetch('/roadmap/resources').then(r=>r.json())]).then(x=>document.getElementById('out').textContent=JSON.stringify({models:x[0],resources:x[1]},null,2));</script></body></html>"""
     app.include_router(router)
