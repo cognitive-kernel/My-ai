@@ -334,7 +334,9 @@ def _self_review(plan: dict[str, Any], result: dict[str, Any], workspace: Path |
     expected = _string_list(plan.get("acceptance_criteria"))
     normalized = {str(x.get("criterion") or "").strip(): x for x in criteria}
     grounded_tokens: set[str] = set()
-    for key, value in (evidence.get("validation") or {}).items():
+    raw_validation = evidence.get("validation")
+    validation = raw_validation if isinstance(raw_validation, dict) else {}
+    for key, value in validation.items():
         if isinstance(value, dict):
             grounded_tokens.add(key)
             if value.get("passed") is True:
