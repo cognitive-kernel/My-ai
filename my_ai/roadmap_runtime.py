@@ -76,10 +76,21 @@ def choose_model(task: TaskProfile) -> dict[str, Any]:
         choice = ModelRouter().choose(models, task, resources)
         return {"model": asdict(choice.model), "reason": choice.reason, "fallback": False, "resources": asdict(resources)}
     except RuntimeError as exc:
-        fallback = next((m for m in models if m.context_window >= task.context_tokens), None)
+        viable = [
+            m for m in models
+            if task.required_capabilities <= m.capabilities
+            and m.ram_gb <= resources.ram_available_gb
+            and m.vram_gb <= resources.vram_available_gb
+        ]
+        fallback = max(viable, key=lambda m: (m.context_window, m.quality, m.speed), default=None)
         if fallback is None:
             raise
-        return {"model": asdict(fallback), "reason": f"fallback: {exc}", "fallback": True, "resources": asdict(resources)}
+        return {
+            "model": asdict(fallback),
+            "reason": f"fallback: {exc}; context capped to {fallback.context_window}",
+            "fallback": True,
+            "resources": asdict(resources),
+        }
 
 
 _scheduler = ResourceScheduler(max_concurrent=max(1, int(os.getenv("MYAI_MAX_CONCURRENT", "1"))))
