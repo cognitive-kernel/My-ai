@@ -30,6 +30,7 @@ class OllamaClient:
         self.default_model = getattr(_settings(), "ollama_model", "qwen2.5:7b")
         self.fallback_model = getattr(_settings(), "fallback_model", self.default_model)
         self.model_manager = ModelManager()
+        self.fallback_chain = self.model_manager.fallback_chain(self.default_model)
         self.route_reason = "default"
         requested = self._select_model(task)
         self.model = self._preflight_model(requested, task)
@@ -131,11 +132,20 @@ class OllamaClient:
             response=httpx.post(f"{self.base_url}/api/chat",json=payload,timeout=300); response.raise_for_status()
         except httpx.HTTPError as exc:
             record_error("ollama",self.model)
-            if self.model!=self.fallback_model:
-                wait_until_available(stop_event); fallback_payload=dict(payload); fallback_payload["model"]=self.fallback_model; fallback_payload["options"]=self._options()
-                try: response=httpx.post(f"{self.base_url}/api/chat",json=fallback_payload,timeout=300); response.raise_for_status(); self.model=self.fallback_model
-                except httpx.HTTPError as fallback_exc: raise LLMError(f"Ollama request failed for primary and fallback models: {exc}; {fallback_exc}") from fallback_exc
-            else: raise LLMError(f"Ollama request failed: {exc}") from exc
+            errors = [str(exc)]
+            for fallback in self.fallback_chain:
+                if fallback == self.model:
+                    continue
+                wait_until_available(stop_event)
+                fallback_payload = dict(payload); fallback_payload["model"] = fallback; fallback_payload["options"] = self._options()
+                try:
+                    response = httpx.post(f"{self.base_url}/api/chat", json=fallback_payload, timeout=300)
+                    response.raise_for_status(); self.model = fallback
+                    break
+                except httpx.HTTPError as fallback_exc:
+                    errors.append(f"{fallback}: {fallback_exc}")
+            else:
+                raise LLMError("Ollama request failed for all model candidates: " + " | ".join(errors)) from exc
         data=response.json(); record_inference("ollama",self.model,time.perf_counter()-started,prompt_tokens=data.get("prompt_eval_count"),output_tokens=data.get("eval_count"))
         try: return str(data["message"]["content"])
         except (KeyError,TypeError) as exc: raise LLMError(f"Unexpected Ollama response: {data}") from exc
