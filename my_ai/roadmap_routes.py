@@ -128,4 +128,22 @@ def register_roadmap_routes(app, require_user) -> None:
     async def benchmarks(suite: str | None = None):
         return benchmark_summary(suite)
 
+    @router.get("/knowledge-ui")
+    async def knowledge_ui():
+        return """<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><title>My-AI Knowledge Management</title>
+        <body style="font-family:system-ui;max-width:1000px;margin:40px auto;padding:20px">
+        <h1>مدیریت دانش</h1><p>نسخه‌ها، conflictها، provenance و maintenance بدون حذف خودکار داده نمایش داده می‌شوند.</p>
+        <pre id="out">در حال بارگذاری...</pre>
+        <script>
+        Promise.all([fetch('/roadmap/profile').then(r=>r.json()),fetch('/roadmap/lessons').then(r=>r.json()),fetch('/roadmap/research-trace').then(r=>r.json())])
+        .then(x=>document.getElementById('out').textContent=JSON.stringify({profile:x[0],lessons:x[1],research:x[2]},null,2))
+        .catch(e=>document.getElementById('out').textContent=String(e));
+        </script></body></html>"""
+
+    @router.get("/model-ui")
+    async def model_ui():
+        return """<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><title>My-AI Model Management</title>
+        <body style="font-family:system-ui;max-width:1000px;margin:40px auto;padding:20px"><h1>مدیریت مدل</h1>
+        <pre id="out">در حال بارگذاری...</pre>
+        <script>Promise.all([fetch('/roadmap/models').then(r=>r.json()),fetch('/roadmap/resources').then(r=>r.json())]).then(x=>document.getElementById('out').textContent=JSON.stringify({models:x[0],resources:x[1]},null,2));</script></body></html>"""
     app.include_router(router)
