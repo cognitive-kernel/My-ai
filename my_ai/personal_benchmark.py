@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 
-from .advanced_agent import Capability, EvaluationHarness, Evidence, EvidenceStore, OperationRisk, PolicyEngine, RuntimeMode
+from .advanced_agent import Capability, EvalCase, EvaluationHarness, Evidence, EvidenceStore, OperationRisk, PolicyEngine, RuntimeMode
 
 from .memory import recall
 from pathlib import Path
@@ -41,8 +41,8 @@ def _run_resilience_case(name: str, case: dict[str, Any]) -> tuple[str, dict[str
         return ("passed" if missing is None else "failed", {"blocked": missing is None, "reason": "toolchain unavailable; execution must remain blocked"})
     if name == "failed-test-repair":
         harness = EvaluationHarness()
-        first = harness.run([__import__("my_ai.advanced_agent", fromlist=["EvalCase"]).EvalCase("initial", "x", "PASS")], lambda _: "FAIL")[0]
-        repaired = harness.run([__import__("my_ai.advanced_agent", fromlist=["EvalCase"]).EvalCase("retest", "x", "PASS")], lambda _: "PASS")[0]
+        first = harness.run([EvalCase("initial", "x", "PASS")], lambda _: "FAIL")[0]
+        repaired = harness.run([EvalCase("retest", "x", "PASS")], lambda _: "PASS")[0]
         passed = (not first.passed) and repaired.passed
         return ("passed" if passed else "failed", {"initial_failed": not first.passed, "retest_passed": repaired.passed})
     if name == "offline-only":
