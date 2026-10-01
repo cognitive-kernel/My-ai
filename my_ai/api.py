@@ -62,6 +62,7 @@ from .api_models import (
 from .readiness import build_readiness
 from .project_builder import build_project, project_status
 from .roadmap_routes import register_roadmap_routes
+from .agent_maturity_routes import register_maturity_routes
 from .roadmap_runtime import maintenance as roadmap_maintenance
 
 logger = logging.getLogger("my_ai.api")
@@ -118,6 +119,7 @@ register_routes(app, scheduler, require_user, audit)
 install_learning_resilience()
 install_ui_extensions(app)
 register_roadmap_routes(app, require_user)
+register_maturity_routes(app, require_user)
 
 _LOGIN_FAILURES: dict[str, tuple[int, float]] = {}
 _LOGIN_FAILURE_LIMIT = 5
