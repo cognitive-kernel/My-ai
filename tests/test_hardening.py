@@ -95,7 +95,13 @@ def test_project_build_uses_semantic_execution_policy():
         args = {"action": "create_artifact", "goal": "", "language": None, "topic": None, "project_path": None, "target": None}
 
     assert Agent._runtime_project_build_requested("سلام", Intent()) is False
-    assert Agent._runtime_project_build_requested("یک برنامه مدیریت هزینه بساز", Intent()) is True
+
+    class ConcreteIntent:
+        name = "coding"
+        confidence = 0.99
+        args = {"action": "create_artifact", "goal": "build a Python project", "language": "Python", "topic": "software application"}
+
+    assert Agent._runtime_project_build_requested("هر متن دیگری", ConcreteIntent()) is True
 
 
 def test_low_confidence_project_route_never_crosses_runtime_gate():
