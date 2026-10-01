@@ -52,7 +52,7 @@ def _safe_artifact_route(data: dict[str, Any]) -> dict[str, Any]:
     if action not in {"create_artifact", "modify_artifact"}:
         return data
     primary = str(data.get("primary") or "")
-    if primary in HIGH_RISK and primary != "code_execution":
+    if primary in HIGH_RISK and primary not in {"git_write","self_update","database_import","pentest_external","self_repair"}:
         return data
     try:
         confidence = float(data.get("confidence") or 0.0)
