@@ -469,6 +469,7 @@ def test_failure_diagnosis_allows_only_one_bounded_research_retry(monkeypatch, t
             }
         return {
             "status": "built",
+            "install": {"passed": True},
             "project_path": str(tmp_path),
             "build": {"passed": True},
             "tests": {"passed": True},
