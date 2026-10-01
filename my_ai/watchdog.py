@@ -23,8 +23,9 @@ def _record_lesson(event, **data):
     try:
         execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",
                 (event, data.get("failed_tag") or data.get("rollback"), data.get("error") or data.get("health_url"), 0))
-    except Exception:
-        pass
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("WATCHDOG_ROLLBACK_LESSON_FAILED: %s", exc)
 
 
 def _git(*args):
