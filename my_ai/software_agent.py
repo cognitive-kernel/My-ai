@@ -256,7 +256,7 @@ def _cleanup_workspace(workspace: Path) -> dict[str, Any]:
         import shutil
         for path in sorted(workspace.rglob("*"), key=lambda item: len(item.parts), reverse=True):
             name = path.name
-            if name in cache_names or name.endswith(".pyc") or name.endswith(".pyo"):
+            if name in cache_names or name.endswith(".pyc") or name.endswith(".pyo") or name.endswith(".tmp") or name.endswith(".temp") or name.endswith(".swp") or name in {"coverage.xml", "npm-debug.log", "yarn-debug.log", "pnpm-debug.log"}:
                 if path.is_dir():
                     shutil.rmtree(path)
                 elif path.is_file():
