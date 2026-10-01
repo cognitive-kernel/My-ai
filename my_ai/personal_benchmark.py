@@ -79,7 +79,8 @@ def _run_architecture_case(group: str, name: str) -> tuple[str, dict[str, object
         ], 12)
         kinds = {item.kind for item in pack.items}
         passed = {"request", "state", "evidence"} <= kinds
-        return ("passed" if passed else "failed", {"kinds": sorted(kinds)})
+        details: dict[str, object] = {"kinds": sorted(kinds)}
+        return ("passed" if passed else "failed", details)
     if group == "planning" and name == "acceptance-plan":
         plan = {"goal": "deliver feature", "requirements": ["implementation"], "validation": ["pytest"]}
         passed = all(plan.values())
@@ -100,10 +101,10 @@ def _run_architecture_case(group: str, name: str) -> tuple[str, dict[str, object
         return ("passed" if passed else "failed", {"denied_without_approval": denied, "allowed_with_approval": allowed})
     if group == "repair" and name == "repair-regression":
         harness = EvaluationHarness()
-        first = harness.run([EvalCase("failure", "x", "ok")], lambda _: "bad")[0]
-        second = harness.run([EvalCase("retest", "x", "ok")], lambda _: "ok")[0]
-        passed = not first.passed and second.passed
-        return ("passed" if passed else "failed", {"initial_failure": not first.passed, "retest": second.passed})
+        repair_initial = harness.run([EvalCase("failure", "x", "ok")], lambda _: "bad")[0]
+        repair_retest = harness.run([EvalCase("retest", "x", "ok")], lambda _: "ok")[0]
+        passed = not repair_initial.passed and repair_retest.passed
+        return ("passed" if passed else "failed", {"initial_failure": not repair_initial.passed, "retest": repair_retest.passed})
     if group == "research" and name == "research-provenance":
         graph = EvidenceGraph()
         graph.add_node(TraceNode("req", "requirement", "feature"))
@@ -115,9 +116,9 @@ def _run_architecture_case(group: str, name: str) -> tuple[str, dict[str, object
         return ("passed" if passed else "failed", {"nodes": len(graph.nodes), "edges": len(graph.edges)})
     if group == "conflict" and name == "version-conflict-resolution":
         store = KnowledgeVersionStore()
-        first = store.add("claim", "v1", "source-a")
-        second = store.add("claim", "v2", "source-b")
-        passed = (not first.active) and second.active and len(store.history("claim")) == 2
+        version_a = store.add("claim", "v1", "source-a")
+        version_b = store.add("claim", "v2", "source-b")
+        passed = (not version_a.active) and version_b.active and len(store.history("claim")) == 2
         return ("passed" if passed else "failed", {"versions": len(store.history("claim"))})
     if group == "resource-awareness" and name == "model-resource-fit":
         model = ModelProfile("test", 4096, ram_gb=1.0, capabilities=frozenset({"chat"}))
