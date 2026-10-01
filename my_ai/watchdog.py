@@ -81,8 +81,8 @@ def main():
     except Exception:
         try:
             child.kill()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("SILENT_FAILURE_REPLACED: %s", exc)
 
     failed_tag = f"myai-failed-activation-{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}"
     if args.db_snapshot and args.db_path:
