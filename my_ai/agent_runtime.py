@@ -111,7 +111,7 @@ class Agent(LegacyAgent):
         for item in candidates:
             text = " ".join(str(item.get(k) or "") for k in ("title", "topic", "content"))
             overlap = len(query_tokens & _tokens(text))
-            if overlap >= 1 or len(filtered) < 2:
+            if overlap >= 1:
                 filtered.append(item)
             if len(filtered) >= 8:
                 break
