@@ -192,3 +192,61 @@ def test_explicit_project_path_is_used_as_target_workspace(monkeypatch, tmp_path
     result = project_builder.build_project("modify this project", project_path=str(tmp_path))
 
     assert result["project_path"] == str(tmp_path)
+
+
+def test_failed_project_is_not_committed(monkeypatch, tmp_path):
+    from my_ai import software_agent
+
+    monkeypatch.setattr(software_agent, "_plan", lambda *args: {
+        "goal": "test project", "artifact_type": "application", "language": "Python", "framework": None,
+        "requirements": ["works"], "tool_requirements": [], "architecture": ["main"], "phases": ["build"],
+        "acceptance_criteria": ["tests pass"], "research_queries": [], "validation": ["pytest"],
+        "constraints": [], "ambiguities": [],
+    })
+    monkeypatch.setattr(software_agent, "_research", lambda *args: software_agent.ResearchBundle())
+    monkeypatch.setattr(software_agent, "build_project", lambda *args, **kwargs: {
+        "status": "build_failed", "language": "Python", "project_path": str(tmp_path),
+        "files": [], "build": {"passed": False}, "tests": {"passed": False},
+        "lint": {"passed": False}, "run": {"passed": False}, "semantic_defects": [],
+    })
+    result = software_agent.run_software_task("make it", project_path=str(tmp_path))
+    assert result["completion"]["completed"] is False
+    assert result["git"]["committed"] is False
+    assert "not committed" in result["git"]["reason"]
+
+
+def test_project_builder_performs_declared_runtime_validation(monkeypatch, tmp_path):
+    from my_ai import project_builder
+
+    monkeypatch.setattr(project_builder, "_recent_conversation_context", lambda goal: (goal, "Python", None))
+    monkeypatch.setattr(project_builder, "search_knowledge", lambda *args: [])
+    monkeypatch.setattr(project_builder, "resolve_projects_root", lambda path: tmp_path)
+    monkeypatch.setattr(project_builder, "_write_files", lambda workspace, files: [])
+    calls = []
+    def fake_run(language, operation, workspace, timeout, requirements=None):
+        calls.append(operation)
+        return {"passed": True, "operation": operation}
+    monkeypatch.setattr(project_builder, "_run", fake_run)
+    monkeypatch.setattr(project_builder, "validate_generated_project", lambda *args: [])
+    monkeypatch.setattr(project_builder, "_artifact_files", lambda workspace: [])
+    monkeypatch.setattr(project_builder, "doctor", lambda language, **kwargs: {})
+    monkeypatch.setattr(project_builder, "execute", lambda *args: 1)
+
+    class FakeLLM:
+        def chat(self, *args, **kwargs):
+            return '{"files":{"main.py":"print(1)"}}'
+    monkeypatch.setattr(project_builder, "create_llm", lambda task: FakeLLM())
+
+    result = project_builder.build_project(
+        "test project",
+        language="Python",
+        repair_attempts=0,
+        tool_requirements=[{"executables": ["python"], "commands": {
+            "build": ["python -m py_compile main.py"],
+            "test": ["python -m pytest"],
+            "lint": ["python -m compileall ."],
+            "run": ["python main.py"],
+        }}],
+    )
+    assert result["status"] == "built"
+    assert calls == ["build", "test", "lint", "run"]
