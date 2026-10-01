@@ -301,9 +301,9 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
     requirements = tool_requirements
     plan_data: dict[str, Any] = {}
     try:
-        marker = "SOFTWARE ENGINEERING PLAN:\\n"
+        marker = "SOFTWARE ENGINEERING PLAN:\n"
         if marker in resolved_goal:
-            plan_text = resolved_goal.split(marker, 1)[1].split("\\n\\nRESEARCH BUNDLE:", 1)[0]
+            plan_text = resolved_goal.split(marker, 1)[1].split("\n\nRESEARCH BUNDLE:", 1)[0]
             candidate = json.loads(plan_text)
             if isinstance(candidate, dict):
                 plan_data = candidate
@@ -340,7 +340,7 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
                 phase_validation.append({"phase": index, "name": phase, "files": written, "passed": not bool(defects), "defects": defects})
                 if defects:
                     semantic_defects = defects
-                    last_error = "\\n".join(defects)
+                    last_error = "\n".join(defects)
                     last_diagnosis = _diagnose_failure(llm, "phase_validation", last_error)
                     break
             if semantic_defects:
