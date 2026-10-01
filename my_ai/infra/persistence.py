@@ -233,6 +233,7 @@ def remember_knowledge(topic: str, title: str, content: str, source_url: str | N
     if _write_blocked():
         raise PermissionError("MYAI_READ_ONLY blocks database mutation.")
     digest = _knowledge_hash(topic, content)
+    from ..config import settings as runtime_settings
     with connect() as conn:
         conn.execute("CREATE TABLE IF NOT EXISTS knowledge_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, knowledge_id INTEGER NOT NULL, user_id INTEGER, action TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
         row = conn.execute("SELECT id,source_url FROM knowledge WHERE content_hash=?", (digest,)).fetchone()
@@ -251,7 +252,7 @@ def remember_knowledge(topic: str, title: str, content: str, source_url: str | N
             conn.commit()
             raise ValueError(
                 f"Semantic duplicate detected for knowledge {duplicate['id']} "
-                f"(similarity={duplicate['similarity']}, threshold={__import__("my_ai.config", fromlist=["settings"]).settings.knowledge_duplicate_threshold})."
+                f"(similarity={duplicate['similarity']}, threshold={runtime_settings.knowledge_duplicate_threshold})."
             )
         cur = conn.execute("INSERT INTO knowledge(topic,title,content,source_url,content_hash) VALUES(?,?,?,?,?)",
                            (topic,title,content,source_url,digest))
