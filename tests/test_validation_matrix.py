@@ -57,3 +57,73 @@ def test_python_validation_requires_compileall_and_pytest_even_with_strict_typec
     errors = validate_validation_matrix(p, "Python")
     assert "compileall" in " ".join(errors)
     assert "pytest" in " ".join(errors)
+
+
+def test_provider_alternatives_cannot_form_a_synthetic_lifecycle():
+    p = plan()
+    p["tool_requirements"] = [{
+        "providers": [
+            {"executables": ["tool-a"], "commands": {
+                "build": "tool-a build", "test": "tool-a test",
+                "lint": "tool-a lint", "typecheck": "tool-a typecheck",
+            }},
+            {"executables": ["tool-b"], "commands": {
+                "build": "tool-b build", "test": "tool-b test",
+                "lint": "tool-b lint", "run": "tool-b run",
+            }},
+        ]
+    }]
+    errors = validate_validation_matrix(p, "Go")
+    assert any("typecheck" in error and "provider 1" in error for error in errors)
+    assert any("lint" in error and "provider 2" in error for error in errors)
+
+
+def test_install_metadata_rejects_unsupported_manager_and_invalid_package():
+    from my_ai.software_validation import SoftwareValidationError, validate_plan
+
+    base = {
+        "goal": "build app",
+        "artifact_type": "application",
+        "language": "Python",
+        "requirements": ["app"],
+        "acceptance_criteria": ["runs"],
+        "research_queries": [],
+        "validation": ["compile", "test"],
+        "tool_requirements": [],
+    }
+    bad_manager = dict(base, tool_requirements=[{
+        "install": {"manager": "shell", "package": "anything"}
+    }])
+    try:
+        validate_plan(bad_manager)
+    except SoftwareValidationError as exc:
+        assert "manager" in str(exc).lower()
+    else:
+        raise AssertionError("unsupported installation manager was accepted")
+
+    bad_package = dict(base, tool_requirements=[{
+        "install": {"manager": "apt-get", "package": "python3;rm"}
+    }])
+    try:
+        validate_plan(bad_package)
+    except SoftwareValidationError as exc:
+        assert "package" in str(exc).lower()
+    else:
+        raise AssertionError("unsafe package identifier was accepted")
+
+
+def test_install_metadata_accepts_supported_package_identifier():
+    from my_ai.software_validation import validate_plan
+
+    validate_plan({
+        "goal": "build app",
+        "artifact_type": "application",
+        "language": "Python",
+        "requirements": ["app"],
+        "acceptance_criteria": ["runs"],
+        "research_queries": [],
+        "validation": ["compile", "test"],
+        "tool_requirements": [{
+            "install": {"manager": "apt-get", "package": "python3.11"}
+        }],
+    })
