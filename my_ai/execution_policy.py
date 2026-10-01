@@ -6,7 +6,6 @@ from typing import Any
 _SIDE_EFFECT_ACTIONS = frozenset({"create_artifact", "modify_artifact"})
 _CONTINUATION_ACTION = "continue_task"
 _MIN_CONFIDENCE = 0.70
-_MIN_CONCRETE_REQUEST_LENGTH = 8
 
 
 def _args(intent: Any) -> dict[str, Any]:
@@ -39,13 +38,18 @@ def authorize_project_execution(message: str, intent: Any, state: dict[str, Any]
     if confidence < _MIN_CONFIDENCE:
         return False
 
-    current = _text(message)
     goal = _text(args.get("goal"))
-    if len(current) < _MIN_CONCRETE_REQUEST_LENGTH or len(goal) < _MIN_CONCRETE_REQUEST_LENGTH:
+    # Authorization consumes structured semantic output; it never interprets
+    # the user's wording with phrase/keyword rules.
+    if not goal:
         return False
 
     if action in _SIDE_EFFECT_ACTIONS:
-        return True
+        has_target = any(
+            _text(args.get(key))
+            for key in ("language", "topic", "project_path")
+        )
+        return has_target
 
     if action == _CONTINUATION_ACTION:
         # Continuation is never an independent authorization to build. It may
@@ -57,6 +61,6 @@ def authorize_project_execution(message: str, intent: Any, state: dict[str, Any]
         if pending not in _SIDE_EFFECT_ACTIONS or last_intent != "coding":
             return False
         prior_goal = _text(runtime_state.get("current_goal"))
-        return len(prior_goal) >= _MIN_CONCRETE_REQUEST_LENGTH
+        return bool(prior_goal)
 
     return False
