@@ -86,9 +86,13 @@ def test_install_metadata_rejects_unsupported_manager_and_invalid_package():
         "artifact_type": "application",
         "language": "Python",
         "requirements": ["app"],
+        "architecture": ["application"],
+        "phases": ["implement", "validate"],
         "acceptance_criteria": ["runs"],
         "research_queries": [],
         "validation": ["compile", "test"],
+        "constraints": [],
+        "ambiguities": [],
         "tool_requirements": [],
     }
     bad_manager = dict(base, tool_requirements=[{
