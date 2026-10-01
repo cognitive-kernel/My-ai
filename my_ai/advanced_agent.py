@@ -116,7 +116,7 @@ class ContextBudgetManager:
                 used += tokens
                 continue
             remaining = budget - used
-            if remaining >= 32:
+            if remaining >= 5:
                 compacted = self.compact_text(item.text, remaining)
                 compacted_tokens = max(1, len(compacted.split()))
                 if compacted_tokens <= remaining:
