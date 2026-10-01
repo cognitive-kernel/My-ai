@@ -204,6 +204,8 @@ def _diagnose_failure(llm: Any, operation: str, evidence: str) -> dict[str, Any]
 
 def _prompt(language: str, goal: str, knowledge: list[Any], previous_error: str = "", diagnosis: dict[str, Any] | None = None) -> str:
     suffix = f"\nPREVIOUS VALIDATION/BUILD/TEST/LINT DEFECTS (fix every one; do not merely explain them):\n{previous_error[:18000]}" if previous_error else ""
+    if diagnosis:
+        suffix += f"\nSTRUCTURED FAILURE DIAGNOSIS (guidance only; validation remains authoritative):\n{json.dumps(diagnosis, ensure_ascii=False)[:6000]}"
     return (
         "Generate a complete runnable software project, not a single source file. Return ONLY valid JSON: {\"files\":{\"relative/path\":\"file contents\"}}. "
         "The embedded software plan and research are authoritative design inputs, but independently check their consistency. "
@@ -267,6 +269,7 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
     files = {}
     build = tests = lint = {}
     last_error = ""
+    last_diagnosis: dict[str, Any] | None = None
     attempts = max(1, min(int(repair_attempts) + 1, 5))
     semantic_defects: list[str] = []
     requirements = tool_requirements
@@ -287,6 +290,7 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
         semantic_defects = validate_generated_project(workspace, plan_data, language)
         if semantic_defects:
             last_error = "\n".join(semantic_defects)
+            last_diagnosis = _diagnose_failure(llm, "semantic_validation", last_error)
             continue
         if requirements is None:
             try:
@@ -296,6 +300,7 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
         build = _run(language, "build", workspace, timeout, requirements)
         if not build.get("passed"):
             last_error = build.get("error") or build.get("output") or "build failed"
+            last_diagnosis = _diagnose_failure(llm, "build", last_error)
             continue
         tests = _run(language, "test", workspace, timeout, requirements)
         lint = _run(language, "lint", workspace, timeout, requirements)
@@ -306,7 +311,8 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
         )
         if tests.get("passed") and lint.get("passed") and run.get("passed"):
             break
-        last_error = tests.get("error") or tests.get("output") or lint.get("error") or lint.get("output") or run.get("error") or run.get("output") or "tests/lint/runtime validation failed"\n        last_diagnosis = _diagnose_failure(llm, "tests_lint_runtime", last_error)
+        last_error = tests.get("error") or tests.get("output") or lint.get("error") or lint.get("output") or run.get("error") or run.get("output") or "tests/lint/runtime validation failed"
+        last_diagnosis = _diagnose_failure(llm, "tests_lint_runtime", last_error)\n        last_diagnosis = _diagnose_failure(llm, "tests_lint_runtime", last_error)
     status = "built" if build.get("passed") and tests.get("passed", False) and lint.get("passed", False) and run.get("passed", False) and not semantic_defects else "build_failed"
     pid = execute("INSERT INTO generated_projects(language,request,code) VALUES(?,?,?)", (language, resolved_goal, json.dumps(files, ensure_ascii=False)))
     return {
