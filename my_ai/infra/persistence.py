@@ -207,14 +207,14 @@ def _semantic_duplicate(topic: str, title: str, content: str, digest: str, conn)
     """Return the nearest existing knowledge item when semantic similarity exceeds the configured threshold."""
     try:
         from ..platform import cosine_similarity, ollama_embed
-        from ..config import settings
+        from ..config import settings as runtime_settings
         query = f"{title}\n{content}\n{topic}"
-        vector = ollama_embed(query, settings.embedding_model)
+        vector = ollama_embed(query, runtime_settings.embedding_model)
         rows = conn.execute(
             "SELECT k.id,k.title,k.topic,k.content,k.content_hash,e.embedding FROM knowledge k "
             "JOIN knowledge_embeddings e ON e.knowledge_id=k.id AND e.model=? "
             "WHERE k.content_hash<>? AND k.verification_status<>'deleted'",
-            (settings.embedding_model, digest),
+            (runtime_settings.embedding_model, digest),
         ).fetchall()
         best = None
         for row in rows:
@@ -222,7 +222,7 @@ def _semantic_duplicate(topic: str, title: str, content: str, digest: str, conn)
                 score = cosine_similarity(vector, json.loads(row["embedding"]))
             except (TypeError, ValueError, json.JSONDecodeError):
                 continue
-            if score >= float(settings.knowledge_duplicate_threshold) and (best is None or score > best["similarity"]):
+            if score >= float(runtime_settings.knowledge_duplicate_threshold) and (best is None or score > best["similarity"]):
                 best = {"id": int(row["id"]), "title": row["title"], "topic": row["topic"], "similarity": round(float(score), 6)}
         return best
     except Exception:
@@ -234,6 +234,7 @@ def remember_knowledge(topic: str, title: str, content: str, source_url: str | N
         raise PermissionError("MYAI_READ_ONLY blocks database mutation.")
     digest = _knowledge_hash(topic, content)
     with connect() as conn:
+        conn.execute("CREATE TABLE IF NOT EXISTS knowledge_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, knowledge_id INTEGER NOT NULL, user_id INTEGER, action TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
         row = conn.execute("SELECT id,source_url FROM knowledge WHERE content_hash=?", (digest,)).fetchone()
         if row:
             if not row["source_url"] and source_url:
@@ -250,7 +251,7 @@ def remember_knowledge(topic: str, title: str, content: str, source_url: str | N
             conn.commit()
             raise ValueError(
                 f"Semantic duplicate detected for knowledge {duplicate['id']} "
-                f"(similarity={duplicate['similarity']}, threshold={settings.knowledge_duplicate_threshold})."
+                f"(similarity={duplicate['similarity']}, threshold={__import__("my_ai.config", fromlist=["settings"]).settings.knowledge_duplicate_threshold})."
             )
         cur = conn.execute("INSERT INTO knowledge(topic,title,content,source_url,content_hash) VALUES(?,?,?,?,?)",
                            (topic,title,content,source_url,digest))
