@@ -198,8 +198,8 @@ class StudyScheduler:
                     current_topic = rows[0]["topic"]
             try:
                 execute("UPDATE learning_domains SET auto_learn=1 WHERE lower(name)=?", (key,))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("SILENT_FAILURE_REPLACED: %s", exc)
             execute(
                 """INSERT INTO learning_workers(language,session_id,status,stage,current_topic,started_at,updated_at)
                    VALUES(?,?,?,'starting',?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
@@ -230,8 +230,8 @@ class StudyScheduler:
                 execute("CREATE TABLE IF NOT EXISTS learning_domains (name TEXT PRIMARY KEY, topics_json TEXT NOT NULL, sources_json TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, last_review_at TEXT, next_review_at TEXT, auto_learn INTEGER NOT NULL DEFAULT 1)")
                 try:
                     execute("UPDATE learning_domains SET auto_learn=0 WHERE lower(name)=?", (lang,))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("SILENT_FAILURE_REPLACED: %s", exc)
             execute("UPDATE learning_runtime SET status='stopping',updated_at=CURRENT_TIMESTAMP WHERE id=1")
         self.stage = "stopping"
 
@@ -605,8 +605,8 @@ class StudyScheduler:
             if slot_acquired:
                 try:
                     self._worker_slots.release()
-                except ValueError:
-                    pass
+                except ValueError as exc:
+                    logger.warning("SILENT_FAILURE_REPLACED: %s", exc)
             self._release_lease(language)
             unexpected_exit = not stop_event.is_set()
             with self._lock:
