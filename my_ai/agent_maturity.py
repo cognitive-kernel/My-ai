@@ -214,7 +214,7 @@ def cleanup_task_workspace(task_id: int) -> None:
 class TaskTransaction:
     task_id: int
     root: Path
-    _files: dict[Path, bytes] = field(default_factory=dict)
+    _files: dict[Path, bytes | None] = field(default_factory=dict)
     _committed: bool = False
 
     def stage_write(self, relative: str, content: str | bytes) -> Path:
@@ -223,7 +223,7 @@ class TaskTransaction:
         if target.exists() and target not in self._files:
             self._files[target] = target.read_bytes()
         elif target not in self._files:
-            self._files[target] = b""
+            self._files[target] = None
         data = content.encode("utf-8") if isinstance(content, str) else bytes(content)
         target.write_bytes(data)
         return target
@@ -233,7 +233,7 @@ class TaskTransaction:
 
     def rollback(self) -> None:
         for path, original in self._files.items():
-            if original:
+            if original is not None:
                 path.write_bytes(original)
             elif path.exists():
                 path.unlink()
@@ -376,7 +376,10 @@ class CircuitBreaker:
 
     def status(self) -> dict[str, Any]:
         with self._lock:
-            return {"failures": self._failures, "open": bool(self._opened_at) and not self.allow()}
+            opened = bool(self._opened_at)
+            if opened and time.monotonic() - self._opened_at >= self.reset_seconds:
+                opened = False
+            return {"failures": self._failures, "open": opened}
 
 _CIRCUITS: dict[str, CircuitBreaker] = {}
 _CIRCUITS_LOCK = threading.Lock()
