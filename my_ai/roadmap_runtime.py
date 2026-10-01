@@ -57,7 +57,7 @@ def model_catalog() -> list[ModelProfile]:
             capabilities.add("code")
         result.append(ModelProfile(
             name,
-            int(profile.get("context_window") or os.getenv("OLLAMA_NUM_CTX", "8192")),
+            int(str(profile.get("context_window") or os.getenv("OLLAMA_NUM_CTX", "8192"))),
             ram_gb=float(profile.get("ram_gb") or 0.0),
             vram_gb=float(profile.get("vram_gb") or 0.0),
             quality=float(profile.get("quality") or quality),
