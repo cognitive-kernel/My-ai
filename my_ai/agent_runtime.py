@@ -190,7 +190,7 @@ class Agent(LegacyAgent):
         required = frozenset({"code"} if task == "coding" else {"chat"})
         complexity = float(getattr(intent, "confidence", 0.5) or 0.5)
         complexity = max(0.1, min(1.0, complexity))
-        task_profile = TaskProfile(complexity=complexity, context_tokens=max(512, min(base_budget, 32768)), required_capabilities=required, network_allowed=False)
+        task_profile = TaskProfile(complexity=complexity, context_tokens=max(512, min(base_budget, 8192)), required_capabilities=required, network_allowed=False)
         model_choice = choose_model(task_profile)
         chosen_name = str((model_choice.get("model") or {}).get("name") or "")
         llm = self.llm if task == "general" else create_llm(task)
