@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 import os
 import sys
+import asyncio
 import subprocess
 import json
 import re
@@ -61,6 +62,7 @@ from .api_models import (
 from .readiness import build_readiness
 from .project_builder import build_project, project_status
 from .roadmap_routes import register_roadmap_routes
+from .roadmap_runtime import maintenance as roadmap_maintenance
 
 logger = logging.getLogger("my_ai.api")
 scheduler=StudyScheduler()
@@ -68,6 +70,7 @@ self_diagnostics=SelfDiagnosticsMonitor()
 @asynccontextmanager
 async def lifespan(_):
     init_db()
+    maintenance_task = None
     # Re-check on every application start; installation is limited to the explicit prerequisite manager.
     startup_check()
     under_pytest = (
@@ -76,6 +79,15 @@ async def lifespan(_):
     )
     if not under_pytest:
         self_diagnostics.start()
+        async def _roadmap_maintenance_loop():
+            interval = max(300, int(os.getenv("MYAI_KNOWLEDGE_MAINTENANCE_SECONDS", "3600")))
+            while True:
+                await asyncio.sleep(interval)
+                try:
+                    roadmap_maintenance()
+                except Exception:
+                    logger.exception("Roadmap knowledge maintenance failed")
+        maintenance_task = asyncio.create_task(_roadmap_maintenance_loop())
         scheduler.start_learning_supervisor()
         scheduler.start_review_monitor()
         workers=fetch_all("SELECT language,session_id,status FROM learning_workers WHERE status IN ('running','retrying','paused','stopping')")
@@ -90,6 +102,12 @@ async def lifespan(_):
     if not under_pytest:
         scheduler.stop()
         self_diagnostics.stop()
+        if maintenance_task is not None:
+            maintenance_task.cancel()
+            try:
+                await maintenance_task
+            except asyncio.CancelledError:
+                pass
     shutdown_course_workers()
 configure_logging()
 startup_check()
