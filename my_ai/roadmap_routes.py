@@ -165,7 +165,8 @@ def register_roadmap_routes(app, require_user) -> None:
     @router.get("/lessons")
     async def lesson_list(category: str | None = None):
         return {"items": lessons(category)}
-\n    @router.post("/lessons/{lesson_id}/lifecycle")
+
+    @router.post("/lessons/{lesson_id}/lifecycle")
     async def lesson_lifecycle(lesson_id: int, request: Request):
         data = await request.json()
         status = str(data.get("status", "validated"))
