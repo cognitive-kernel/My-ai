@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 
 from .advanced_agent import Capability, OperationRisk, RuntimeMode, TaskProfile
 from .roadmap_runtime import (
@@ -16,7 +16,7 @@ def register_roadmap_routes(app, require_user) -> None:
     router = APIRouter(prefix="/roadmap", tags=["roadmap"])
 
     @router.get("/profile")
-    async def profile(user=__import__("typing").cast(object, None)):
+    async def profile():
         return system_profile()
 
     @router.get("/models")
