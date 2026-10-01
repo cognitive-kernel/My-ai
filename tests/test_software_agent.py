@@ -298,3 +298,103 @@ def test_acceptance_self_review_requires_every_criterion(monkeypatch, tmp_path):
     review = software_agent._self_review(plan, result, tmp_path)
     assert review["passed"] is False
     assert any("second criterion" in item for item in review["defects"])
+
+
+
+def test_project_repair_includes_structured_failure_diagnosis(monkeypatch, tmp_path):
+    from my_ai import project_builder
+
+    class FakeLLM:
+        def __init__(self):
+            self.chat_calls = 0
+
+        def chat(self, message, **kwargs):
+            self.chat_calls += 1
+            if self.chat_calls == 2:
+                assert "STRUCTURED FAILURE DIAGNOSIS" in message
+                assert "dependency" in message
+            return '{"files":{"main.py":"print(1)"}}'
+
+        def structured_chat_json(self, message, schema, system=None):
+            assert "observable evidence" in message
+            return {
+                "category": "dependency",
+                "cause": "missing dependency",
+                "repair_strategy": "adjust the declared dependency and regenerate the artifact",
+                "research_needed": False,
+            }
+
+    fake = FakeLLM()
+    calls = []
+
+    monkeypatch.setattr(project_builder, "_recent_conversation_context", lambda goal: (goal, "Python", None))
+    monkeypatch.setattr(project_builder, "search_knowledge", lambda *args: [])
+    monkeypatch.setattr(project_builder, "resolve_projects_root", lambda path: tmp_path)
+    monkeypatch.setattr(project_builder, "_write_files", lambda workspace, files: [])
+    monkeypatch.setattr(project_builder, "create_llm", lambda task: fake)
+    monkeypatch.setattr(project_builder, "doctor", lambda *args, **kwargs: {})
+    monkeypatch.setattr(project_builder, "_artifact_files", lambda workspace: [])
+    monkeypatch.setattr(project_builder, "execute", lambda *args: 1)
+
+    validation_calls = iter([["semantic defect"], []])
+    monkeypatch.setattr(project_builder, "validate_generated_project", lambda *args: next(validation_calls))
+
+    def fake_run(language, operation, workspace, timeout, requirements=None):
+        calls.append(operation)
+        return {"passed": True, "operation": operation}
+
+    monkeypatch.setattr(project_builder, "_run", fake_run)
+
+    result = project_builder.build_project(
+        "test project",
+        language="Python",
+        project_path=str(tmp_path),
+        repair_attempts=1,
+        tool_requirements=[{"commands": {
+            "build": ["python -m py_compile main.py"],
+            "test": ["python -m pytest"],
+            "lint": ["python -m compileall ."],
+            "run": ["python main.py"],
+        }}],
+    )
+
+    assert result["status"] == "built"
+    assert result["failure_diagnosis"] is None
+    assert calls == ["build", "test", "lint", "run"]
+
+
+def test_failure_diagnosis_cannot_bypass_validation(monkeypatch, tmp_path):
+    from my_ai import project_builder
+
+    class FakeLLM:
+        def chat(self, *args, **kwargs):
+            return '{"files":{"main.py":"print(1)"}}'
+
+        def structured_chat_json(self, *args, **kwargs):
+            return {
+                "category": "implementation",
+                "cause": "looks repairable",
+                "repair_strategy": "change the implementation",
+                "research_needed": False,
+            }
+
+    monkeypatch.setattr(project_builder, "_recent_conversation_context", lambda goal: (goal, "Python", None))
+    monkeypatch.setattr(project_builder, "search_knowledge", lambda *args: [])
+    monkeypatch.setattr(project_builder, "resolve_projects_root", lambda path: tmp_path)
+    monkeypatch.setattr(project_builder, "_write_files", lambda workspace, files: [])
+    monkeypatch.setattr(project_builder, "create_llm", lambda task: FakeLLM())
+    monkeypatch.setattr(project_builder, "validate_generated_project", lambda *args: ["still invalid"])
+    monkeypatch.setattr(project_builder, "execute", lambda *args: 1)
+    monkeypatch.setattr(project_builder, "doctor", lambda *args, **kwargs: {})
+    monkeypatch.setattr(project_builder, "_artifact_files", lambda workspace: [])
+
+    result = project_builder.build_project(
+        "test project",
+        language="Python",
+        project_path=str(tmp_path),
+        repair_attempts=0,
+    )
+
+    assert result["status"] == "build_failed"
+    assert result["semantic_defects"] == ["still invalid"]
+    assert result["failure_diagnosis"]["category"] == "implementation"
