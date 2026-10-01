@@ -14,7 +14,7 @@ from .db import execute
 from .settings_store import get_bool, get_setting
 from .decision_log import record as record_decision
 from .notifications import notify
-from .config import assert_write_allowed
+from .config import assert_write_allowed, settings
 
 ROOT = Path(__file__).resolve().parent.parent
 STATE_DIR = ROOT / "self-repair"
