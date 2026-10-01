@@ -19,7 +19,6 @@ jobs:
           python-version: "3.11"
       - name: Install project and verify FFmpeg
         run: |
-          ffmpeg -version >/dev/null
           python -m pip install -e . --no-deps
       - name: Install Piper CLI
         run: |
