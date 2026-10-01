@@ -47,7 +47,7 @@ def authorize_project_execution(message: str, intent: Any, state: dict[str, Any]
     if action in _SIDE_EFFECT_ACTIONS:
         has_target = any(
             _text(args.get(key))
-            for key in ("language", "topic", "project_path")
+            for key in ("language", "topic", "project_path", "target")
         )
         return has_target
 
