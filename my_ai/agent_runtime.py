@@ -82,9 +82,16 @@ class Agent(LegacyAgent):
         return {"topic": topic, "current_goal": current_goal, "language": language, "last_action": last_action, "last_intent": str(saved.get("last_intent") or ""), "pending_project_action": str(saved.get("pending_project_action") or ""), "summary": summary, "assistant_tail": assistant_messages[-2:]}
 
     def _resolved_message(self, message: str, history: list[dict[str, Any]], state: dict[str, Any]) -> str:
-        if str((state.get("last_action") or "") ) != "continue_task":
+        if str((state.get("last_action") or "")) != "continue_task":
             return message
-        prior = next((str(x.get("content") or "").strip() for x in reversed(history) if x.get("role") == "user" and len(str(x.get("content") or "").strip()) >= 8), None)
+        prior = next(
+            (
+                str(x.get("content") or "").strip()
+                for x in reversed(history)
+                if x.get("role") == "user"
+            ),
+            None,
+        )
         prior = prior or state.get("current_goal") or ""
         return f"PREVIOUS CONCRETE USER REQUIREMENTS:\n{prior}\n\nCURRENT USER FOLLOW-UP:\n{message}"
 
