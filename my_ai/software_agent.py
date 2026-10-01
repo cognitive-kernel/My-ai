@@ -333,13 +333,31 @@ def _self_review(plan: dict[str, Any], result: dict[str, Any], workspace: Path |
     )
     expected = _string_list(plan.get("acceptance_criteria"))
     normalized = {str(x.get("criterion") or "").strip(): x for x in criteria}
+    grounded_tokens: set[str] = set()
+    for key, value in (evidence.get("validation") or {}).items():
+        if isinstance(value, dict):
+            grounded_tokens.add(key)
+            if value.get("passed") is True:
+                grounded_tokens.add(f"{key}:passed")
+                grounded_tokens.add("passed")
+    for item in evidence.get("workspace_files") or []:
+        if isinstance(item, dict):
+            path = str(item.get("path") or "").strip()
+            if path:
+                grounded_tokens.add(path)
+    def _grounded(text: Any) -> bool:
+        value = str(text or "").strip()
+        if not value:
+            return False
+        lowered = value.casefold()
+        return any(token.casefold() in lowered for token in grounded_tokens if len(token) >= 3)
     missing = [criterion for criterion in expected if criterion not in normalized]
     failed = [
         criterion
         for criterion in expected
         if criterion in normalized and (
             not bool(normalized[criterion].get("passed"))
-            or not str(normalized[criterion].get("evidence") or "").strip()
+            or not _grounded(normalized[criterion].get("evidence"))
         )
     ]
     raw_defects = review.get("defects")
