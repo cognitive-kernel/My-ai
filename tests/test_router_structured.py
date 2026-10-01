@@ -12,6 +12,7 @@ def valid_payload(**overrides):
         "topic": "Python",
         "goal": "learn then implement",
         "project_path": None,
+        "target": "software artifact",
         "urls": [],
     }
     value.update(overrides)
@@ -104,3 +105,21 @@ def test_concrete_artifact_goal_remains_coding():
     result = build_router_service(Client(payload)).classify("یک برنامه ماشین حساب دسکتاپ با تست بساز")
     assert result.name == "coding"
     assert result.args["action"] == "create_artifact"
+
+
+def test_semantic_target_can_authorize_without_language_or_topic():
+    payload = valid_payload(
+        primary="coding",
+        intents=["coding"],
+        action="create_artifact",
+        confidence=0.99,
+        language=None,
+        topic=None,
+        goal="create a desktop application for tracking expenses",
+        project_path=None,
+        target="desktop expense tracking application",
+    )
+    result = build_router_service(Client(payload)).classify("I need an application for tracking expenses")
+    assert result.name == "coding"
+    assert result.args["action"] == "create_artifact"
+    assert result.args["target"] == "desktop expense tracking application"
