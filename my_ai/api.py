@@ -1028,10 +1028,7 @@ def chat(r:ChatRequest, request:Request):
         execute("UPDATE chat_sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?",(sid,))
         routing_context = "\n".join(f"{row['role']}: {row['content']}" for row in routing_history)
         intent=classify(msg, routing_context)
-        # Learning and image generation have dedicated pages/endpoints. Never execute
-        # execute either operation through the general chat endpoint.
-        if intent.name == "learning":
-            raise HTTPException(409, "یادگیری فقط در صفحه «پیشرفت و یادگیری» انجام می‌شود.")
+        # Learning-related questions stay in chat; actual learning execution remains behind the dedicated page.
         if intent.name == "image_generation":
             raise HTTPException(409, "ساخت تصویر فقط در صفحه «ساخت تصویر» انجام می‌شود.")
         required_by_intent={"pentest_external":("security","execute"),"git_write":("github","write"),"self_update":("self-update","write"),"database_import":("database","write"),"code_execution":("code-execution","execute"),"self_repair":("self-repair","execute"),"coding":("code-generation","execute")}
@@ -1114,7 +1111,12 @@ def chat(r:ChatRequest, request:Request):
             execute("UPDATE chat_attachments SET conversation_id=? WHERE session_id=? AND conversation_id IS NULL",(user_message[0]["id"],sid))
         _ensure_chat_history(sid,msg,answer)
         return {"type":"chat","answer":answer,"session_id":sid,"attachments":[{**item,"download_url":"/files/download?path="+__import__("urllib.parse",fromlist=["quote"]).quote(item["path"],safe="")} for item in attachments]}
-    except HTTPException:
+    except HTTPException as exc:
+        try:
+            if "sid" in locals() and "msg" in locals() and sid and msg:
+                _ensure_chat_history(sid, msg, f"خطا: {exc.detail}")
+        except Exception:
+            logger.exception("Failed to persist HTTP chat error")
         raise
     except Exception as e:
         try:
