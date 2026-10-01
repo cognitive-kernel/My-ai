@@ -145,9 +145,7 @@ class Agent(LegacyAgent):
             action = state["last_action"]
             if action != "continue_task":
                 state["current_goal"] = message
-            if action in {"create_artifact", "modify_artifact"} and getattr(intent, "name", "") == "coding":
-                state["pending_project_action"] = action
-            elif action != "continue_task":
+            if action != "continue_task":
                 state["pending_project_action"] = ""
             if (intent.args or {}).get("language"):
                 state["language"] = str(intent.args["language"])
@@ -219,6 +217,7 @@ class Agent(LegacyAgent):
             self._update_state(ctx, answer)
             return answer
         if self._runtime_project_build_requested(ctx.message, ctx.intent, ctx.conversation_state):
+            ctx.conversation_state["pending_project_action"] = str((ctx.intent.args or {}).get("action") or "create_artifact")
             answer = self._build_project_from_intent(ctx.message, ctx.intent, ctx.context)
             if persist_answer:
                 self._persist_shortcut(PreparedChat(ctx.message, ctx.session_id, ctx.attachments, ctx.history, ctx.context, ctx.conversation_state, intent=ctx.intent, shortcut=answer))
@@ -242,6 +241,7 @@ class Agent(LegacyAgent):
         if ctx.shortcut is not None:
             answer = self._persist_answer(ctx, str(ctx.shortcut)); yield answer; return
         if self._runtime_project_build_requested(ctx.message, ctx.intent, ctx.conversation_state):
+            ctx.conversation_state["pending_project_action"] = str((ctx.intent.args or {}).get("action") or "create_artifact")
             answer = self._build_project_from_intent(ctx.message, ctx.intent, ctx.context)
             self._persist_answer(ctx, answer); yield answer; return
 
