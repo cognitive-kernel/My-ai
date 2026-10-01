@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 
 from .advanced_agent import Capability, OperationRisk, RuntimeMode, TaskProfile
+from .personal_benchmark import validate_suite
 from .roadmap_runtime import (
     add_memory_lesson, add_research_trace, authorize_capability, benchmark_summary,
     capabilities, choose_model, completion_report, evidence_edge, evidence_node,
@@ -127,6 +128,10 @@ def register_roadmap_routes(app, require_user) -> None:
     @router.get("/benchmarks")
     async def benchmarks(suite: str | None = None):
         return benchmark_summary(suite)
+
+    @router.get("/benchmarks/suite")
+    async def benchmark_suite():
+        return validate_suite()
 
     @router.get("/knowledge-ui")
     async def knowledge_ui():
