@@ -16,6 +16,7 @@ class FakeRouter:
             "topic": "MetaTrader 4",
             "goal": "create indicator",
             "project_path": None,
+            "target": "MetaTrader 4 indicator",
             "urls": [],
         }
 
