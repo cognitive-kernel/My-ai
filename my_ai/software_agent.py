@@ -293,6 +293,8 @@ def _self_review(plan: dict[str, Any], result: dict[str, Any], workspace: Path |
             "tests": result.get("tests"),
             "lint": result.get("lint"),
             "run": result.get("run"),
+            "typecheck": result.get("typecheck"),
+            "phase_validation": result.get("phase_validation"),
             "semantic_defects": result.get("semantic_defects") or [],
         },
         "artifacts": result.get("artifacts") or result.get("files") or [],
