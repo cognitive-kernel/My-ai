@@ -15,6 +15,7 @@ from .agent_maturity import (
     task_trace,
     tool_manifests,
     transition_task,
+    save_config_version,
 )
 
 
@@ -77,7 +78,7 @@ def register_maturity_routes(app, require_user) -> None:
     @router.post("/config")
     async def config_add(request: Request):
         data = await request.json()
-        return {"version": str(data["version"]), "config": config_version(str(data["version"])) if data.get("activate") is False and False else __import__("my_ai.agent_maturity", fromlist=["save_config_version"]).save_config_version(str(data["version"]), data.get("config") or {}, bool(data.get("activate", False)))}
+        return {"version": str(data["version"]), "config": save_config_version(str(data["version"]), data.get("config") or {}, bool(data.get("activate", False)))}
 
     @router.get("/ui")
     async def maturity_ui():
