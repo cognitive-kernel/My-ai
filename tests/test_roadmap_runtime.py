@@ -133,3 +133,14 @@ def test_resource_snapshot_exposes_cpu_ram_and_gpu_fields():
     assert snapshot.ram_available_gb >= 0
     assert snapshot.vram_available_gb >= 0
     assert snapshot.cpu_percent >= 0
+
+
+def test_memory_categories_are_explicit():
+    from my_ai.memory import MEMORY_CATEGORIES, remember
+    assert {"user_preferences", "project_facts", "technical_decisions", "lessons_learned", "research_evidence", "known_failures", "successful_patterns", "temporary_context"} <= MEMORY_CATEGORIES
+    try:
+        remember("test", "invalid", "value", category="unsupported")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("unsupported memory category must be rejected")
