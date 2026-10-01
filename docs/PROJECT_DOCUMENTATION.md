@@ -166,12 +166,11 @@ SQLite دیتابیس فعلی خود My-AI است و curriculum مستقل دا
 
 Backendها:
 
-- پیش‌فرض: Ollama محلی.
-- اختیاری: OpenAI-compatible Responses API.
-- فعال‌سازی: `LLM_PROVIDER=openai`.
-- کلید فقط از `OPENAI_API_KEY` خوانده می‌شود و نباید در Git ذخیره شود.
-- مدل پیش‌فرض: `gpt-5.6-luna` و قابل تنظیم با `OPENAI_MODEL`.
-- اتصال مستقیم به runtime همین گفت‌وگو وجود ندارد؛ اتصال از طریق API انجام می‌شود.
+- مسیر اصلی و پیش‌فرض: Ollama محلی روی loopback.
+- حالت strict آفلاین به‌صورت پیش‌فرض فعال است و providerهای راه‌دور را مسدود می‌کند.
+- OpenAI-compatible فقط به‌عنوان adapter اختیاری برای محیطی که عمداً strict offline را غیرفعال کرده باشد وجود دارد؛ بخشی از مسیر عادی آفلاین نیست.
+- `OPENAI_API_KEY` نباید در Git ذخیره شود.
+- تمام routing، memory، retrieval، planning، validation و persistence عادی بدون اینترنت اجرا می‌شوند.
 
 ### Progress
 
