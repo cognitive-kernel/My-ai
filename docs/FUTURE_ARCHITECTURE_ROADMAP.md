@@ -136,3 +136,40 @@ model metadata، health، capability profile، context limit، resource profile�
 
 ## اصل اجرایی
 هر قابلیت جدید باید design، acceptance criteria، test/benchmark، failure handling، provenance و evidence موفقیت داشته باشد. قابلیت‌های جدید نباید با trigger-wordهای brittle جایگزین semantic reasoning شوند.
+
+## وضعیت تکمیل معماری — 2026-10-01
+
+تمام 24 محور roadmap اکنون دارای implementation یا integration عملی در runtime هستند:
+
+| محور | implementation |
+|---|---|
+| 1 Model Router | persistent runtime selection + agent integration |
+| 2 Context Budget | budget + context-window-aware packing |
+| 3 Knowledge Versioning | knowledge_versions + version history API |
+| 4 Conflict Resolution | conflict records + explicit resolution |
+| 5 Evidence Graph | persistent nodes/edges |
+| 6 Regression Knowledge Tests | retrieval regressions + roadmap tests |
+| 7 Categorized Memory | knowledge categories + learning lessons |
+| 8 Resource Scheduler | shared runtime scheduler |
+| 9 Runtime Modes | offline/local/online authorization |
+| 10 Personal Benchmark | persistent benchmark cases/results |
+| 11 Semantic Retrieval | hybrid retrieval + candidate validation |
+| 12 Freshness | scheduled maintenance/review records |
+| 13 Evaluation Harness | evaluation primitive + persistent reports |
+| 14 Resource-Aware Selection | RAM/VRAM/context/capability selection |
+| 15 Evidence Completion | completion report with validation/limitations |
+| 16 Capability Registry | persistent capability registry |
+| 17 Policy Layer | approval + online permission boundary |
+| 18 Secure Self-Update | snapshot/worktree/validation/watchdog/rollback |
+| 19 Personal Learning Loop | lessons with provenance/regression case |
+| 20 Research-to-Code | persistent research_trace |
+| 21 Multi-Session & Backup | session isolation + existing backup/restore preserved |
+| 22 Knowledge UI | roadmap knowledge management page |
+| 23 Model Management | model/resource APIs and management page |
+| 24 Agent Benchmark Suite | personal_agent_suite.json |
+
+### Runtime acceptance surface
+
+Roadmap APIs cover profile, model selection, resources, capabilities/authorization, knowledge versions/conflicts, evidence graph, execution trace, maintenance, lessons, research trace, completion reports and benchmark reporting.
+
+این لایه‌ها additive هستند و storage دانش، conversation و backup موجود را حذف یا بازنویسی نمی‌کنند.
