@@ -96,8 +96,9 @@ class ContextBudgetManager:
         words = str(text or "").split()
         if len(words) <= max_tokens:
             return str(text or "")
-        head = max(1, max_tokens // 2)
-        tail = max(1, max_tokens - head)
+        available = max(2, max_tokens - 3)
+        head = max(1, available // 2)
+        tail = max(1, available - head)
         return " ".join(words[:head]) + " … [compacted] … " + " ".join(words[-tail:])
 
     def pack(self, items: Iterable[ContextItem], budget: int) -> ContextPack:
