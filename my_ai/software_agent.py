@@ -311,12 +311,26 @@ def _self_review(plan: dict[str, Any], result: dict[str, Any], workspace: Path |
     if not isinstance(review, dict):
         return {"passed": False, "criteria": [], "defects": ["Self-review returned invalid data."], "notes": []}
 
-    criteria = review.get("criteria") if isinstance(review.get("criteria"), list) else []
+    raw_criteria = review.get("criteria")
+    criteria: list[dict[str, Any]] = (
+        [x for x in raw_criteria if isinstance(x, dict)]
+        if isinstance(raw_criteria, list)
+        else []
+    )
     expected = _string_list(plan.get("acceptance_criteria"))
-    normalized = {str(x.get("criterion") or "").strip(): x for x in criteria if isinstance(x, dict)}
+    normalized = {str(x.get("criterion") or "").strip(): x for x in criteria}
     missing = [criterion for criterion in expected if criterion not in normalized]
-    failed = [criterion for criterion in expected if criterion in normalized and not bool(normalized[criterion].get("passed"))]
-    defects = [str(x).strip() for x in review.get("defects") or [] if str(x).strip()]
+    failed = [
+        criterion
+        for criterion in expected
+        if criterion in normalized and not bool(normalized[criterion].get("passed"))
+    ]
+    raw_defects = review.get("defects")
+    defects = (
+        [str(x).strip() for x in raw_defects if str(x).strip()]
+        if isinstance(raw_defects, list)
+        else []
+    )
     if missing:
         defects.append("Self-review did not evaluate every acceptance criterion: " + "; ".join(missing))
     if failed:
