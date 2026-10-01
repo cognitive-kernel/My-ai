@@ -101,3 +101,18 @@ def test_knowledge_version_restore_and_conflict_activation():
     resolve_conflict(conflict_id, v2["id"], "selected newer source")
     row = fetch_all("SELECT content FROM knowledge WHERE id=?", (knowledge_id,))[0]
     assert row["content"] == "v2"
+
+
+
+def test_personal_benchmark_executes_local_acceptance_groups(monkeypatch):
+    from my_ai import personal_benchmark
+    suite = {"suites": {"resilience": [
+        {"name": "missing-tool"}, {"name": "failed-test-repair"}, {"name": "offline-only"},
+        {"name": "conflicting-evidence"}, {"name": "wording-variation"}, {"name": "multi-session"}],
+        "traceability": [{"name": "research-to-code"}, {"name": "completion-evidence"}]}}
+    monkeypatch.setattr(personal_benchmark, "load_suite", lambda: suite)
+    monkeypatch.setattr(personal_benchmark, "validate_suite", lambda: {"valid": True})
+    result = personal_benchmark.run_suite()
+    assert result["failed"] == 0
+    assert result["blocked"] == 0
+    assert result["passed"] == 8
