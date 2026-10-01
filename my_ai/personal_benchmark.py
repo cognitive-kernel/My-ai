@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 
-from .advanced_agent import Capability, ContextBudgetManager, ContextItem, EvalCase, EvaluationHarness, Evidence, EvidenceGraph, EvidenceStore, KnowledgeVersionStore, ModelProfile, ModelRouter, OperationRisk, PolicyEngine, ResourceSnapshot, RuntimeMode, TaskProfile, TraceNode
+from .advanced_agent import Capability, EvalCase, EvaluationHarness, Evidence, EvidenceGraph, EvidenceStore, KnowledgeVersionStore, ModelRouter, OperationRisk, PolicyEngine, RuntimeMode, TraceNode
 
 from .memory import recall
 from pathlib import Path
@@ -71,7 +71,6 @@ def _run_resilience_case(name: str, case: dict[str, Any]) -> tuple[str, dict[str
 
 
 def _run_architecture_case(group: str, name: str) -> tuple[str, dict[str, object]]:
-    from .advanced_agent import Capability, ContextBudgetManager, ContextItem, ModelProfile, PolicyEngine, ResourceSnapshot, TaskProfile
     if group == "conversation" and name == "context-preservation":
         pack = ContextBudgetManager().pack([
             ContextItem("request", "current request", 1.0),
