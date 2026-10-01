@@ -44,11 +44,26 @@ def validate_plan(plan: dict[str, Any]) -> None:
                 if any(key not in lifecycle for key in provider_commands):
                     raise SoftwareValidationError(f"Tool provider {index}:{provider_index} contains non-lifecycle command keys.")
                 install = provider.get("install")
-                if install is not None and (not isinstance(install, dict) or set(install) - {"manager", "package"}):
-                    raise SoftwareValidationError(f"Tool provider {index}:{provider_index} contains unsafe installation metadata.")
+                if install is not None:
+                    _validate_install_spec(install, f"Tool provider {index}:{provider_index}")
         install = requirement.get("install")
-        if install is not None and (not isinstance(install, dict) or set(install) - {"manager", "package"}):
-            raise SoftwareValidationError(f"Tool requirement {index} contains unsafe installation metadata.")
+        if install is not None:
+            _validate_install_spec(install, f"Tool requirement {index}")
+
+
+def _validate_install_spec(spec: Any, label: str) -> None:
+    """Validate model-supplied installation metadata before it reaches a package manager."""
+    if not isinstance(spec, dict) or set(spec) - {"manager", "package"}:
+        raise SoftwareValidationError(f"{label} contains unsafe installation metadata.")
+    manager = str(spec.get("manager") or "").strip().casefold()
+    package = str(spec.get("package") or "").strip()
+    allowed_managers = {"apt-get", "brew", "choco", "winget"}
+    if manager and manager not in allowed_managers:
+        raise SoftwareValidationError(f"{label} specifies an unsupported installation manager.")
+    if package and (len(package) > 160 or not re.fullmatch(r"[A-Za-z0-9._+@:/-]+", package)):
+        raise SoftwareValidationError(f"{label} contains an invalid package identifier.")
+    if not manager and not package:
+        raise SoftwareValidationError(f"{label} must specify an installation manager or package.")
 
 
 def validation_matrix_requirements(plan: dict[str, Any], language: str | None) -> list[str]:
@@ -70,51 +85,84 @@ def validation_matrix_requirements(plan: dict[str, Any], language: str | None) -
 
 
 def validate_validation_matrix(plan: dict[str, Any], language: str | None) -> list[str]:
-    """Reject plans that omit required language/artifact-specific validation."""
+    """Reject plans that omit required language/artifact-specific validation.
+
+    Provider alternatives are validated independently. Commands from different
+    providers must never be merged into a synthetic lifecycle.
+    """
     errors: list[str] = []
     declared = plan.get("tool_requirements") or []
-    commands: dict[str, str] = {}
-    for item in declared:
-        if not isinstance(item, dict):
-            continue
-        raw_values = item.get("commands")
-        values = raw_values if isinstance(raw_values, dict) else {}
-        for key, value in values.items():
-            if isinstance(value, str):
-                commands[key] = value
-            elif isinstance(value, list) and value:
-                commands[key] = " ".join(str(x) for x in value)
+    lifecycle = ("build", "test", "lint", "typecheck", "run")
+
+    def command_map(item: dict[str, Any]) -> dict[str, str]:
+        commands: dict[str, str] = {}
+        raw = item.get("commands")
+        if isinstance(raw, dict):
+            for key, value in raw.items():
+                if isinstance(value, str) and value.strip():
+                    commands[key] = value
+                elif isinstance(value, list) and value:
+                    commands[key] = " ".join(str(x) for x in value if str(x).strip())
+        return commands
+
+    def provider_maps(item: dict[str, Any]) -> list[dict[str, str]]:
+        providers = item.get("providers")
+        if not isinstance(providers, list) or not providers:
+            return [command_map(item)]
+        maps: list[dict[str, str]] = []
+        common = command_map(item)
+        for provider in providers:
+            if not isinstance(provider, dict):
+                continue
+            merged = dict(common)
+            provider_commands = provider.get("commands")
+            if isinstance(provider_commands, dict):
+                for key, value in provider_commands.items():
+                    if isinstance(value, str) and value.strip():
+                        merged[key] = value
+                    elif isinstance(value, list) and value:
+                        merged[key] = " ".join(str(x) for x in value if str(x).strip())
+            maps.append(merged)
+        return maps or [common]
+
+    command_sets = [commands for item in declared if isinstance(item, dict) for commands in provider_maps(item)]
+    if not command_sets:
+        command_sets = [{}]
+
     lang = str(language or "").strip().casefold()
-    artifact = re.sub(r"[\\s_-]+", " ", str(plan.get("artifact_type") or "").casefold()).strip()
-    for key in ("build", "test", "lint", "typecheck", "run"):
-        if key not in commands:
-            errors.append(f"Missing required lifecycle validation command: {key}")
-    if lang in {"rust", "rs"} and "clippy" not in (commands.get("lint") or "").casefold():
-        errors.append("Rust validation requires clippy in the lint command.")
-    if lang in {"python", "py"} and not any(token in (commands.get("typecheck") or "").casefold() for token in ("mypy", "pyright")):
-        errors.append("Python validation requires an explicit mypy or pyright typecheck command.")
-    if lang in {"python", "py"} and "compileall" not in ((commands.get("build") or "") + " " + (commands.get("test") or "")).casefold():
-        errors.append("Python validation requires explicit compile validation (compileall).")
-    if lang in {"python", "py"} and "pytest" not in (commands.get("test") or "").casefold():
-        errors.append("Python validation requires pytest execution.")
-    if lang in {"javascript", "js", "typescript", "ts"} and not any(token in (commands.get("typecheck") or "").casefold() for token in ("tsc", "typecheck")):
-        errors.append("JavaScript/TypeScript validation requires an explicit typecheck command.")
-    if any(x in artifact for x in ("web", "website", "frontend", "browser")) and not any(token in (commands.get("run") or "").casefold() for token in ("playwright", "cypress", "browser", "e2e")):
-        errors.append("Web validation requires an explicit browser/E2E runtime command.")
-    if lang in {"mql4", "mql5"}:
-        build_command = (commands.get("build") or "").casefold()
-        if not any(token in build_command for token in ("metaeditor", "metalang")):
-            errors.append("MQL validation requires an explicit compiler/toolchain build command.")
-    if lang in {"javascript", "typescript", "js", "ts"} and not commands.get("install"):
-        errors.append("JavaScript/TypeScript validation requires an explicit dependency installation command.")
-    if lang in {"php"}:
-        if "php -l" not in (commands.get("lint") or "").casefold():
-            errors.append("PHP validation requires php -l syntax validation.")
-        if any(x in artifact for x in ("laravel", "symfony")) and not any(x in (commands.get("test") or "").casefold() for x in ("artisan test", "phpunit", "symfony")):
-            errors.append("PHP framework validation requires the framework test suite.")
-        if not commands.get("test"):
-            errors.append("PHP validation requires a test command or framework test suite.")
-    return errors
+    artifact = re.sub(r"[\s_-]+", " ", str(plan.get("artifact_type") or "").casefold()).strip()
+
+    for provider_index, commands in enumerate(command_sets):
+        suffix = f" (provider {provider_index + 1})" if len(command_sets) > 1 else ""
+        for key in lifecycle:
+            if key not in commands:
+                errors.append(f"Missing required lifecycle validation command: {key}{suffix}")
+        if lang in {"rust", "rs"} and "clippy" not in (commands.get("lint") or "").casefold():
+            errors.append(f"Rust validation requires clippy in the lint command{suffix}.")
+        if lang in {"python", "py"} and not any(token in (commands.get("typecheck") or "").casefold() for token in ("mypy", "pyright")):
+            errors.append(f"Python validation requires an explicit mypy or pyright typecheck command{suffix}.")
+        if lang in {"python", "py"} and "compileall" not in ((commands.get("build") or "") + " " + (commands.get("test") or "")).casefold():
+            errors.append(f"Python validation requires explicit compile validation (compileall){suffix}.")
+        if lang in {"python", "py"} and "pytest" not in (commands.get("test") or "").casefold():
+            errors.append(f"Python validation requires pytest execution{suffix}.")
+        if lang in {"javascript", "js", "typescript", "ts"} and not any(token in (commands.get("typecheck") or "").casefold() for token in ("tsc", "typecheck")):
+            errors.append(f"JavaScript/TypeScript validation requires an explicit typecheck command{suffix}.")
+        if any(x in artifact for x in ("web", "website", "frontend", "browser")) and not any(token in (commands.get("run") or "").casefold() for token in ("playwright", "cypress", "browser", "e2e")):
+            errors.append(f"Web validation requires an explicit browser/E2E runtime command{suffix}.")
+        if lang in {"mql4", "mql5"}:
+            build_command = (commands.get("build") or "").casefold()
+            if not any(token in build_command for token in ("metaeditor", "metalang")):
+                errors.append(f"MQL validation requires an explicit compiler/toolchain build command{suffix}.")
+        if lang in {"javascript", "typescript", "js", "ts"} and not commands.get("install"):
+            errors.append(f"JavaScript/TypeScript validation requires an explicit dependency installation command{suffix}.")
+        if lang == "php":
+            if "php -l" not in (commands.get("lint") or "").casefold():
+                errors.append(f"PHP validation requires php -l syntax validation{suffix}.")
+            if any(x in artifact for x in ("laravel", "symfony")) and not any(x in (commands.get("test") or "").casefold() for x in ("artisan test", "phpunit", "symfony")):
+                errors.append(f"PHP framework validation requires the framework test suite{suffix}.")
+            if not commands.get("test"):
+                errors.append(f"PHP validation requires a test command or framework test suite{suffix}.")
+    return list(dict.fromkeys(errors))
 
 
 
