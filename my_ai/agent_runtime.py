@@ -291,6 +291,7 @@ class Agent(LegacyAgent):
             self._update_state(ctx, answer)
             return answer
         transition_task(maturity_task["id"], "authorized", "model-execution")
+        transition_task(maturity_task["id"], "running", "model-runtime")
         if not acquire_resource(priority=10):
             answer = "منابع اجرای مدل در حال حاضر اشباع است؛ درخواست اجرا نشد."
         else:
