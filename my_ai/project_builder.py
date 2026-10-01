@@ -12,7 +12,7 @@ from .db import execute, fetch_all, search_knowledge
 from .llm import create_llm
 from .project_workspace import create_project_workspace, resolve_projects_root
 from .tooling import run_project_tool, doctor
-from .software_validation import validate_generated_project
+from .software_validation import validate_generated_project, validate_validation_matrix
 
 ROOT = Path(__file__).resolve().parent.parent
 MAX_FILES = 80
@@ -259,7 +259,7 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
     knowledge = search_knowledge(language + " " + resolved_goal, 20)
     llm = create_llm("coding")
     files = {}
-    build = tests = lint = run = {}
+    build = tests = lint = typecheck = run = {}
     last_error = ""
     last_diagnosis: dict[str, Any] | None = None
     attempts = max(1, min(int(repair_attempts) + 1, 5))
@@ -296,21 +296,22 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
             continue
         tests = _run(language, "test", workspace, timeout, requirements)
         lint = _run(language, "lint", workspace, timeout, requirements)
+        typecheck = _run(language, "typecheck", workspace, timeout, requirements)
         run = (
             _run(language, "run", workspace, timeout, requirements)
             if _has_lifecycle_command(requirements, "run")
             else {"operation": "run", "passed": False, "skipped": True, "blocked": True, "reason": "No runtime validation command was declared for this artifact."}
         )
-        if tests.get("passed") and lint.get("passed") and run.get("passed"):
+        if tests.get("passed") and lint.get("passed") and typecheck.get("passed") and run.get("passed"):
             break
-        last_error = tests.get("error") or tests.get("output") or lint.get("error") or lint.get("output") or run.get("error") or run.get("output") or "tests/lint/runtime validation failed"
+        last_error = tests.get("error") or tests.get("output") or lint.get("error") or lint.get("output") or typecheck.get("error") or typecheck.get("output") or run.get("error") or run.get("output") or "tests/lint/runtime validation failed"
         last_diagnosis = _diagnose_failure(llm, "tests_lint_runtime", last_error)
-    status = "built" if build.get("passed") and tests.get("passed", False) and lint.get("passed", False) and run.get("passed", False) and not semantic_defects else "build_failed"
+    status = "built" if build.get("passed") and tests.get("passed", False) and lint.get("passed", False) and typecheck.get("passed", False) and run.get("passed", False) and not semantic_defects else "build_failed"
     pid = execute("INSERT INTO generated_projects(language,request,code) VALUES(?,?,?)", (language, resolved_goal, json.dumps(files, ensure_ascii=False)))
     return {
         "status": status, "language": language, "request": resolved_goal, "project_id": pid, "project_name": workspace.name,
         "project_path": str(workspace.relative_to(ROOT)) if workspace.is_relative_to(ROOT) else str(workspace), "session_id": session_id,
-        "files": sorted(files), "file_count": len(files), "build": build, "tests": tests, "lint": lint, "run": run,
+        "files": sorted(files), "file_count": len(files), "build": build, "tests": tests, "lint": lint, "typecheck": typecheck, "run": run, "phase_validation": phase_validation,
         "semantic_defects": semantic_defects, "repair_attempts": attempts - 1, "failure_diagnosis": last_diagnosis, "artifacts": _artifact_files(workspace),
         "toolchain": doctor(language, cwd=str(workspace), requirements=requirements),
     }
