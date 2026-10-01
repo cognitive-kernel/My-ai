@@ -1,5 +1,3 @@
-import json
-
 from my_ai.advanced_agent import Capability, OperationRisk, RuntimeMode, TaskProfile
 from my_ai.roadmap_runtime import (
     add_memory_lesson,
@@ -60,3 +58,10 @@ def test_learning_trace_completion_and_benchmark():
     result = benchmark_case("unit", "uppercase", "abc", "ABC", str.upper)
     assert result["passed"] is True
     assert benchmark_summary("unit")["passed"] >= 1
+
+
+def test_personal_benchmark_suite_is_valid():
+    from my_ai.personal_benchmark import validate_suite
+    result = validate_suite()
+    assert result["valid"] is True
+    assert result["case_count"] >= 10
