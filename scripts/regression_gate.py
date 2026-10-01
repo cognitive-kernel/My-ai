@@ -5,6 +5,7 @@ import json
 import os
 import tempfile
 from pathlib import Path
+from datetime import datetime, timezone
 
 from my_ai.eval_harness import (
     BASELINE_CASES,
@@ -112,6 +113,10 @@ def main() -> int:
     parser.add_argument("--ollama", action="store_true")
     args = parser.parse_args()
     result = ollama() if args.ollama else deterministic()
+    history = Path(__file__).resolve().parents[1] / "evals" / "history"
+    history.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    (history / f"{stamp}.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0 if result["passed"] else 1
 
