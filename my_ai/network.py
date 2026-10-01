@@ -6,6 +6,17 @@ import socket
 import httpx
 
 
+def assert_network_allowed(category: str, *, explicit: bool = False) -> None:
+    """Block outbound network by default; only explicit research/learning/install flows may opt in."""
+    from .config import settings
+    if not getattr(settings, "offline_strict", True):
+        return
+    allowed = {"research", "learning", "prerequisite_install"}
+    if explicit and str(category).strip().lower() in allowed:
+        return
+    raise PermissionError(f"Outbound network is blocked in offline-strict mode: {category}")
+
+
 def resolve_public_ip(hostname: str) -> str:
     """Resolve once and return a globally routable IP that can be pinned for the request."""
     try:
