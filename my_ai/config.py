@@ -18,6 +18,7 @@ class Settings:
     coding_model: str = os.getenv("CODING_MODEL", "qwen2.5:7b")
     fallback_model: str = os.getenv("FALLBACK_MODEL", "qwen2.5:7b")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
+    knowledge_duplicate_threshold: float = float(os.getenv("KNOWLEDGE_DUPLICATE_THRESHOLD", "0.92"))
     cache_ttl_seconds: int = int(os.getenv("MYAI_CACHE_TTL", "60"))
     llm_provider: str = os.getenv("LLM_PROVIDER", "auto").strip().lower()
     openai_base_url: str = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
