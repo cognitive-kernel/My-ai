@@ -96,3 +96,44 @@ def test_hybrid_confidence_calibration_is_monotonic(tmp_path, monkeypatch):
     ]
     curve = platform._isotonic_calibration(judgments)
     assert all(left[1] <= right[1] for left, right in zip(curve, curve[1:]))
+
+
+def test_semantic_duplicate_rejects_paraphrase_and_audits(tmp_path, monkeypatch):
+    monkeypatch.setenv("DB_PATH", str(tmp_path / "dup.db"))
+    import importlib
+    import my_ai.config as config
+    import my_ai.db as db
+    config.settings = config.Settings()
+    importlib.reload(db)
+    db.init_db()
+    first = db.remember_knowledge("python", "lists", "Python lists preserve insertion order and allow duplicate values.")
+    monkeypatch.setattr("my_ai.platform.ollama_embed", lambda text, model=None: [1.0, 0.0])
+    monkeypatch.setattr("my_ai.platform.cosine_similarity", lambda a, b: 0.96)
+    db.execute(
+        "INSERT INTO knowledge_embeddings(knowledge_id,content_hash,model,embedding) VALUES(?,?,?,?)",
+        (first, db.fetch_all("SELECT content_hash FROM knowledge WHERE id=?", (first,))[0]["content_hash"], config.settings.embedding_model, "[1.0,0.0]"),
+    )
+    import pytest
+    with pytest.raises(ValueError, match="Semantic duplicate"):
+        db.remember_knowledge("python", "ordered lists", "Python lists keep insertion order and can contain repeated values.")
+    audit = db.fetch_all("SELECT action,details FROM knowledge_audit WHERE knowledge_id=? ORDER BY id DESC", (first,))
+    assert audit[0]["action"] == "duplicate_semantic_rejected"
+    assert "similarity" in audit[0]["details"]
+
+
+def test_semantic_duplicate_threshold_is_configurable(tmp_path, monkeypatch):
+    monkeypatch.setenv("DB_PATH", str(tmp_path / "threshold.db"))
+    monkeypatch.setenv("KNOWLEDGE_DUPLICATE_THRESHOLD", "0.99")
+    import importlib
+    import my_ai.config as config
+    import my_ai.db as db
+    config.settings = config.Settings()
+    importlib.reload(db)
+    db.init_db()
+    first = db.remember_knowledge("topic", "a", "content")
+    monkeypatch.setattr("my_ai.platform.ollama_embed", lambda text, model=None: [1.0, 0.0])
+    monkeypatch.setattr("my_ai.platform.cosine_similarity", lambda a, b: 0.96)
+    db.execute("INSERT INTO knowledge_embeddings(knowledge_id,content_hash,model,embedding) VALUES(?,?,?,?)",
+               (first, db.fetch_all("SELECT content_hash FROM knowledge WHERE id=?", (first,))[0]["content_hash"], config.settings.embedding_model, "[1.0,0.0]"))
+    second = db.remember_knowledge("topic", "b", "different content")
+    assert second != first
