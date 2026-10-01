@@ -450,3 +450,35 @@ def test_chat_response_is_durably_visible_after_history_reload(client_db, monkey
 
     reloaded = client.get(f"/chat/history?session_id={session_id}", cookies=cookies)
     assert reloaded.json()["messages"] == messages
+
+
+def test_chat_http_error_is_persisted_for_history(client_db, monkeypatch):
+    client = client_db
+    owner = auth.create_account("owner", "a-secure-password")
+    cookies = login_cookie(owner)
+    from my_ai.domain.router import Intent
+
+    monkeypatch.setattr(
+        "my_ai.api.classify",
+        lambda message, context=None: Intent(
+            "image_generation", 0.99, False,
+            {"action": "create_artifact", "goal": "generate image"},
+            ("image_generation",),
+        ),
+    )
+    response = client.post("/chat", json={"message": "این یک خطای قابل ثبت است"}, cookies=cookies)
+    assert response.status_code == 409
+    sid = db.fetch_all("SELECT id FROM chat_sessions ORDER BY id DESC LIMIT 1")[0]["id"]
+    rows = db.fetch_all("SELECT role,content FROM conversations WHERE session_id=? ORDER BY id", (sid,))
+    assert rows[-1]["role"] == "assistant"
+    assert "ساخت تصویر" in rows[-1]["content"]
+
+
+def test_learning_page_exposes_course_management(client_db):
+    client = client_db
+    owner = auth.create_account("owner", "a-secure-password")
+    response = client.get("/learning", cookies=login_cookie(owner))
+    assert response.status_code == 200
+    assert "افزودن آموزش" in response.text
+    assert "شروع / ادامه یادگیری" in response.text
+    assert "توقف یادگیری" in response.text
