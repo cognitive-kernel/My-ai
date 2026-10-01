@@ -42,11 +42,41 @@ def test_non_coding_create_route_is_blocked():
     assert authorize_project_execution("یک برنامه مدیریت هزینه ایجاد کن", intent) is False
 
 
-def test_continuation_requires_concrete_goal():
+def test_continuation_without_pending_project_state_is_blocked():
     intent = Intent(
         name="coding",
         confidence=0.95,
         args={"action": "continue_task", "goal": "continue the existing Python project"},
         intents=("coding",),
     )
-    assert authorize_project_execution("ادامه بده", intent) is True
+    assert authorize_project_execution("ادامه بده", intent, {}) is False
+
+
+def test_continuation_requires_pending_project_state():
+    intent = Intent(
+        name="coding",
+        confidence=0.95,
+        args={"action": "continue_task", "goal": "continue the existing Python project"},
+        intents=("coding",),
+    )
+    state = {
+        "current_goal": "build the existing Python project",
+        "last_intent": "coding",
+        "pending_project_action": "create_artifact",
+    }
+    assert authorize_project_execution("ادامه بده", intent, state) is True
+
+
+def test_non_project_continuation_state_is_blocked():
+    intent = Intent(
+        name="coding",
+        confidence=0.95,
+        args={"action": "continue_task", "goal": "continue the existing Python project"},
+        intents=("coding",),
+    )
+    state = {
+        "current_goal": "explain Python decorators",
+        "last_intent": "chat",
+        "pending_project_action": "",
+    }
+    assert authorize_project_execution("ادامه بده", intent, state) is False
