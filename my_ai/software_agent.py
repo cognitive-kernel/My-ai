@@ -62,6 +62,12 @@ def _safe_text(value: Any, limit: int = 5000) -> str:
     return str(value or "").strip()[:limit]
 
 
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
 def _explicit_language(request: str, context: str = "") -> str | None:
     """Semantically identify a language only when the user explicitly names one."""
     llm = create_llm("coding")
@@ -278,7 +284,7 @@ def _self_review(plan: dict[str, Any], result: dict[str, Any], workspace: Path |
         return {"passed": False, "criteria": [], "defects": ["Self-review returned invalid data."], "notes": []}
 
     criteria = review.get("criteria") if isinstance(review.get("criteria"), list) else []
-    expected = [str(x).strip() for x in plan.get("acceptance_criteria") or [] if str(x).strip()]
+    expected = _string_list(plan.get("acceptance_criteria"))
     normalized = {str(x.get("criterion") or "").strip(): x for x in criteria if isinstance(x, dict)}
     missing = [criterion for criterion in expected if criterion not in normalized]
     failed = [criterion for criterion in expected if criterion in normalized and not bool(normalized[criterion].get("passed"))]
@@ -322,7 +328,7 @@ def run_software_task(request: str, *, language: str | None = None, project_path
         )
         if research_query:
             retry_plan = dict(plan)
-            retry_plan["research_queries"] = list(plan.get("research_queries") or []) + [research_query]
+            retry_plan["research_queries"] = _string_list(plan.get("research_queries")) + [research_query]
             retry_research = _research(retry_plan)
             retry_context = (
                 enriched_request
@@ -375,7 +381,7 @@ def run_software_task(request: str, *, language: str | None = None, project_path
         and bool(cleanup.get("ok"))
         and workspace is not None
     )
-    if pre_commit_ok:
+    if pre_commit_ok and workspace is not None:
         result["git"] = _ensure_git_commit(workspace, "feat: complete generated project")
     elif workspace is not None:
         result["git"] = {"ok": False, "committed": False, "status": _git_snapshot(workspace), "reason": "Completion prerequisites were not satisfied; workspace was not committed."}
