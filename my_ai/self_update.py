@@ -78,8 +78,9 @@ def _record_lesson(event, **data):
     try:
         execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",
                 (event, data.get("candidate") or data.get("attempted"), data.get("details") or data.get("error"), 1 if event == "update_activated" else 0))
-    except Exception:
-        pass
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("SELF_UPDATE_LESSON_PERSIST_FAILED: %s", exc)
 
 
 def _tests(cwd):
