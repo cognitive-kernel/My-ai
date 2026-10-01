@@ -40,6 +40,10 @@ def model_catalog() -> list[ModelProfile]:
         ("coding", os.getenv("CODING_MODEL", settings.ollama_model), 0.8, 0.65),
         ("fallback", os.getenv("FALLBACK_MODEL", settings.ollama_model), 0.45, 0.85),
     ]
+    try:
+        profiles = json.loads(os.getenv("MYAI_MODEL_PROFILES", "{}"))
+    except json.JSONDecodeError:
+        profiles = {}
     result: list[ModelProfile] = []
     seen: set[str] = set()
     for role, name, quality, speed in configured:
@@ -47,11 +51,21 @@ def model_catalog() -> list[ModelProfile]:
         if not name or name in seen:
             continue
         seen.add(name)
-        capabilities = {"chat"}
+        profile = profiles.get(name) if isinstance(profiles, dict) else {}
+        if not isinstance(profile, dict):
+            profile = {}
+        capabilities = set(profile.get("capabilities") or {"chat"})
         if role == "coding":
             capabilities.add("code")
-        result.append(ModelProfile(name, int(os.getenv("OLLAMA_NUM_CTX", "8192")), quality=quality, speed=speed, capabilities=frozenset(capabilities)))
-    return result
+        result.append(ModelProfile(
+            name,
+            int(profile.get("context_window") or os.getenv("OLLAMA_NUM_CTX", "8192")),
+            ram_gb=float(profile.get("ram_gb") or 0.0),
+            vram_gb=float(profile.get("vram_gb") or 0.0),
+            quality=float(profile.get("quality") or quality),
+            speed=float(profile.get("speed") or speed),
+            capabilities=frozenset(map(str, capabilities)),
+        ))    return result
 
 
 def choose_model(task: TaskProfile) -> dict[str, Any]:
