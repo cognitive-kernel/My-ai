@@ -254,7 +254,7 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
         run = (
             _run(language, "run", workspace, timeout, requirements)
             if _has_lifecycle_command(requirements, "run")
-            else {"operation": "run", "passed": True, "skipped": True, "reason": "No runtime command was declared for this artifact."}
+            else {"operation": "run", "passed": False, "skipped": True, "blocked": True, "reason": "No runtime validation command was declared for this artifact."}
         )
         if tests.get("passed") and lint.get("passed") and run.get("passed"):
             break
