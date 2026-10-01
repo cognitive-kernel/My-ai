@@ -1,0 +1,96 @@
+name: voice-e2e
+run-name: \${{ github.workflow }} @ \${{ github.sha }}
+permissions:
+  contents: read
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  voice:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install FFmpeg and Piper
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          python -m pip install --upgrade pip
+          pip install piper-tts
+      - name: Install whisper.cpp CLI
+        run: |
+          curl -fsSL -o whisper.zip https://github.com/sjoerdteunisse/whisper.cpp/releases/latest/download/whisper-cpp-linux-x64-cpu.zip
+          unzip -o whisper.zip -d whisper-bin
+          WHISPER="$(find whisper-bin -type f -name whisper-cli | head -n 1)"
+          test -n "$WHISPER"
+          chmod +x "$WHISPER"
+          echo "WHISPER_CPP_BIN=$PWD/$WHISPER" >> "$GITHUB_ENV"
+      - name: Download offline models
+        run: |
+          mkdir -p voice-models
+          curl -fsSL -o voice-models/fa_IR-amir-medium.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/fa/fa_IR/amir/medium/fa_IR-amir-medium.onnx
+          curl -fsSL -o voice-models/fa_IR-amir-medium.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/fa/fa_IR/amir/medium/fa_IR-amir-medium.onnx.json
+          curl -fsSL -o voice-models/ggml-tiny.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin
+          test -s voice-models/fa_IR-amir-medium.onnx
+          test -s voice-models/fa_IR-amir-medium.onnx.json
+          test -s voice-models/ggml-tiny.bin
+      - name: Generate Persian input audio
+        env:
+          PIPER_MODEL_PATH: \${{ github.workspace }}/voice-models/fa_IR-amir-medium.onnx
+        run: |
+          printf 'سلام، این یک آزمون آفلاین گفتار فارسی برای My-AI است.\n' | piper --model "$PIPER_MODEL_PATH" --output_file voice-input.wav
+          test -s voice-input.wav
+          ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 voice-input.wav
+      - name: Run real offline STT and TTS roundtrip
+        env:
+          WHISPER_MODEL_PATH: \${{ github.workspace }}/voice-models/ggml-tiny.bin
+          PIPER_MODEL_PATH: \${{ github.workspace }}/voice-models/fa_IR-amir-medium.onnx
+          MYAI_OFFLINE_STRICT: "true"
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from my_ai.voice import status, offline_roundtrip
+          s = status()
+          print(s)
+          assert s["offline_ready"] is True, s
+          result = offline_roundtrip(
+              "voice-input.wav",
+              str(Path("voice-models/ggml-tiny.bin").resolve()),
+              str(Path("voice-models/fa_IR-amir-medium.onnx").resolve()),
+              str(Path("voice-output.wav").resolve()),
+              language="fa",
+          )
+          print(result)
+          assert result["text"].strip(), result
+          assert Path(result["audio_path"]).is_file(), result
+          assert Path(result["audio_path"]).stat().st_size > 0, result
+          PY
+          ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 voice-output.wav
+      - name: Verify failure paths
+        env:
+          WHISPER_MODEL_PATH: \${{ github.workspace }}/voice-models/ggml-tiny.bin
+          PIPER_MODEL_PATH: \${{ github.workspace }}/voice-models/fa_IR-amir-medium.onnx
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from my_ai import voice
+          assert voice.status()["offline_ready"] is True
+          try:
+              voice.transcribe("missing-audio.wav", str(Path("voice-models/ggml-tiny.bin").resolve()))
+          except FileNotFoundError:
+              pass
+          else:
+              raise AssertionError("missing audio must fail")
+          try:
+              voice.synthesize("سلام", "missing-model.onnx", "voice-output-invalid.wav")
+          except FileNotFoundError:
+              pass
+          else:
+              raise AssertionError("missing piper model must fail")
+          PY
