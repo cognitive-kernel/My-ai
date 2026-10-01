@@ -26,7 +26,7 @@ def validate_plan(plan: dict[str, Any]) -> None:
     if not plan.get("requirements") or not plan.get("acceptance_criteria"):
         raise SoftwareValidationError("Planner produced no testable requirements or acceptance criteria.")
 
-    lifecycle = {"build", "test", "lint", "run"}
+    lifecycle = {"build", "test", "lint", "typecheck", "run"}
     for index, requirement in enumerate(plan.get("tool_requirements") or []):
         if not isinstance(requirement, dict):
             raise SoftwareValidationError(f"Tool requirement {index} is not an object.")
@@ -49,6 +49,57 @@ def validate_plan(plan: dict[str, Any]) -> None:
         install = requirement.get("install")
         if install is not None and (not isinstance(install, dict) or set(install) - {"manager", "package"}):
             raise SoftwareValidationError(f"Tool requirement {index} contains unsafe installation metadata.")
+
+
+def validation_matrix_requirements(plan: dict[str, Any], language: str | None) -> list[str]:
+    """Return validation capabilities required by the resolved artifact."""
+    lang = str(language or "").strip().casefold()
+    artifact = re.sub(r"[\\s_-]+", " ", str(plan.get("artifact_type") or "").casefold()).strip()
+    requirements = ["build", "test", "lint", "typecheck", "run"]
+    if lang in {"rust", "rs"}:
+        requirements.append("clippy")
+    if lang in {"python", "py"}:
+        requirements.append("strict_typecheck")
+    if lang in {"javascript", "typescript", "js", "ts"}:
+        requirements.append("browser_e2e" if any(x in artifact for x in ("web", "website", "frontend", "browser", "ui")) else "typecheck")
+    if lang in {"mql4", "mql5"}:
+        requirements.append("compiler")
+    if any(x in artifact for x in ("web", "website", "web application", "frontend")):
+        requirements.append("browser_e2e")
+    return list(dict.fromkeys(requirements))
+
+
+def validate_validation_matrix(plan: dict[str, Any], language: str | None) -> list[str]:
+    """Reject plans that omit required language/artifact-specific validation."""
+    errors: list[str] = []
+    declared = plan.get("tool_requirements") or []
+    commands: dict[str, str] = {}
+    for item in declared:
+        if not isinstance(item, dict):
+            continue
+        values = item.get("commands") if isinstance(item.get("commands"), dict) else {}
+        for key, value in values.items():
+            if isinstance(value, str):
+                commands[key] = value
+            elif isinstance(value, list) and value:
+                commands[key] = " ".join(str(x) for x in value)
+    lang = str(language or "").strip().casefold()
+    artifact = re.sub(r"[\\s_-]+", " ", str(plan.get("artifact_type") or "").casefold()).strip()
+    for key in ("build", "test", "lint", "typecheck", "run"):
+        if key not in commands:
+            errors.append(f"Missing required lifecycle validation command: {key}")
+    if lang in {"rust", "rs"} and "clippy" not in (commands.get("lint") or "").casefold():
+        errors.append("Rust validation requires clippy in the lint command.")
+    if lang in {"python", "py"} and not any(token in (commands.get("typecheck") or "").casefold() for token in ("mypy", "pyright")):
+        errors.append("Python validation requires an explicit mypy or pyright typecheck command.")
+    if lang in {"javascript", "js", "typescript", "ts"} and not any(token in (commands.get("typecheck") or "").casefold() for token in ("tsc", "typecheck")):
+        errors.append("JavaScript/TypeScript validation requires an explicit typecheck command.")
+    if any(x in artifact for x in ("web", "website", "frontend", "browser")) and not any(token in (commands.get("run") or "").casefold() for token in ("playwright", "cypress", "browser", "e2e")):
+        errors.append("Web validation requires an explicit browser/E2E runtime command.")
+    if lang in {"mql4", "mql5"} and not any(token in (commands.get("build") or "").casefold() for token in ("metaeditor", "metalang", "compiler", "compile")):
+        errors.append("MQL validation requires an explicit compiler/toolchain build command.")
+    return errors
+
 
 
 def _read_text_files(workspace: Path) -> str:
