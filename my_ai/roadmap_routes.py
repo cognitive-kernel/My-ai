@@ -9,7 +9,7 @@ from .roadmap_runtime import (
     capabilities, choose_model, completion_report, evidence_edge, evidence_node,
     knowledge_versions, lessons, maintenance, model_catalog, register_capability,
     resource_snapshot, research_trace_rows, resolve_conflict, record_conflict,
-    system_profile, trace, upsert_knowledge_version, benchmark_case,
+    system_profile, trace, upsert_knowledge_version,
 )
 
 
