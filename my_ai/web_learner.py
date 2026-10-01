@@ -3,6 +3,9 @@ import re
 import time
 import threading
 import logging
+import random
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse, quote_plus
 from urllib import robotparser
 import httpx
@@ -15,7 +18,24 @@ logger = logging.getLogger("my_ai.web_learner")
 class WebLearner:
     _rate_lock = threading.Lock()
     _last_fetch: dict[str, float] = {}
+    _host_failures: dict[str, int] = {}
+    _host_last_failure: dict[str, float] = {}
+    _host_semaphores: dict[str, threading.BoundedSemaphore] = {}
     _min_interval = 1.0
+    _max_concurrency_per_host = 2
+    _max_retries = 5
+    _max_backoff = 30.0
+    _failure_threshold = 3
+    _failure_cooldown = 30.0
+
+    @classmethod
+    def _host_semaphore(cls, host: str) -> threading.BoundedSemaphore:
+        with cls._rate_lock:
+            semaphore = cls._host_semaphores.get(host)
+            if semaphore is None:
+                semaphore = threading.BoundedSemaphore(cls._max_concurrency_per_host)
+                cls._host_semaphores[host] = semaphore
+            return semaphore
 
     @classmethod
     def _rate_limit(cls, host: str, stop_event=None) -> None:
@@ -23,15 +43,49 @@ class WebLearner:
         with cls._rate_lock:
             previous = cls._last_fetch.get(host, 0.0)
             wait = cls._min_interval - (now - previous)
-            if wait > 0:
-                logger.info("web fetch rate limit wait", extra={"host": host, "wait": round(wait, 3)})
-                if stop_event is not None:
-                    if stop_event.wait(wait):
-                        raise InterruptedError("learning stopped")
-                else:
-                    time.sleep(wait)
-                now = time.monotonic()
+            failures = cls._host_failures.get(host, 0)
+            last_failure = cls._host_last_failure.get(host, 0.0)
+            if failures >= cls._failure_threshold and now - last_failure < cls._failure_cooldown:
+                raise RuntimeError(f"Host temporarily blocked after repeated fetch failures: {host}")
+        if wait > 0:
+            logger.info("web fetch rate limit wait", extra={"host": host, "wait": round(wait, 3)})
+            if stop_event is not None:
+                if stop_event.wait(wait):
+                    raise InterruptedError("learning stopped")
+            else:
+                time.sleep(wait)
+            now = time.monotonic()
+        with cls._rate_lock:
             cls._last_fetch[host] = now
+
+    @classmethod
+    def _record_failure(cls, host: str) -> None:
+        with cls._rate_lock:
+            cls._host_failures[host] = cls._host_failures.get(host, 0) + 1
+            cls._host_last_failure[host] = time.monotonic()
+
+    @classmethod
+    def _record_success(cls, host: str) -> None:
+        with cls._rate_lock:
+            cls._host_failures.pop(host, None)
+            cls._host_last_failure.pop(host, None)
+
+    @classmethod
+    def _retry_delay(cls, attempt: int, response: httpx.Response | None = None) -> float:
+        retry_after = response.headers.get("Retry-After") if response is not None else None
+        if retry_after:
+            try:
+                return min(cls._max_backoff, max(0.0, float(retry_after)))
+            except ValueError:
+                try:
+                    target = parsedate_to_datetime(retry_after)
+                    if target.tzinfo is None:
+                        target = target.replace(tzinfo=timezone.utc)
+                    return min(cls._max_backoff, max(0.0, target.timestamp() - datetime.now(timezone.utc).timestamp()))
+                except (TypeError, ValueError, OverflowError):
+                    pass
+        base = min(cls._max_backoff, 2.0 ** attempt)
+        return min(cls._max_backoff, base * random.uniform(0.5, 1.0))
 
     def search(self,query,domains=None,limit=6):
         q=query+((" site:"+" OR site:".join(domains)) if domains else "")
@@ -76,34 +130,69 @@ class WebLearner:
 
     def fetch(self,url,stop_event=None):
         self._validate_url(url)
-        self._rate_limit(urlparse(url).hostname or "", stop_event)
+        host = (urlparse(url).hostname or "").lower()
+        self._rate_limit(host, stop_event)
         if not self._robots_allowed(url):
+            self._record_failure(host)
             raise ValueError("robots.txt disallows this URL or could not be verified.")
         timeout=httpx.Timeout(settings.learning_source_timeout_seconds, connect=min(3.0, settings.learning_source_timeout_seconds))
-        with pinned_client(timeout=timeout,follow_redirects=False,headers={"User-Agent":"My-AI/0.2"}) as client:
-            for _ in range(6):
-                self._validate_url(url)
-                r=client.get(url)
-                if r.status_code in {429, 500, 502, 503, 504}:
-                    delay = min(8.0, 2.0 ** _)
-                    logger.warning("web fetch backoff", extra={"url": url, "status": r.status_code, "delay": delay})
-                    if stop_event is not None:
-                        if stop_event.wait(delay):
-                            raise InterruptedError("learning stopped")
-                    else:
-                        time.sleep(delay)
-                    continue
-                if r.status_code not in {301,302,303,307,308}: break
-                location=r.headers.get("location")
-                if not location: break
-                url=str(httpx.URL(url).join(location)); self._validate_url(url)
-                self._rate_limit(urlparse(url).hostname or "", stop_event)
-                if not self._robots_allowed(url): raise ValueError("robots.txt disallows redirect target.")
-        r.raise_for_status()
-        if "text/html" not in r.headers.get("content-type","") and "text/plain" not in r.headers.get("content-type",""): raise ValueError("URL does not contain HTML/text.")
-        soup=BeautifulSoup(r.text,"html.parser")
-        for n in soup(["script","style","noscript","svg","nav","footer"]): n.decompose()
-        title=soup.title.get_text(" ",strip=True) if soup.title else url
-        return title,re.sub(r"\s+"," ",soup.get_text(" ",strip=True))[:settings.max_web_chars]
-
-
+        semaphore = self._host_semaphore(host)
+        acquired = semaphore.acquire(timeout=settings.learning_source_timeout_seconds)
+        if not acquired:
+            raise TimeoutError(f"Timed out waiting for host concurrency slot: {host}")
+        try:
+            with pinned_client(timeout=timeout,follow_redirects=False,headers={"User-Agent":"My-AI/0.2"}) as client:
+                last_error = None
+                for attempt in range(self._max_retries + 1):
+                    self._validate_url(url)
+                    current_host = (urlparse(url).hostname or "").lower()
+                    self._rate_limit(current_host, stop_event)
+                    try:
+                        r=client.get(url)
+                    except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
+                        last_error = exc
+                        self._record_failure(current_host)
+                        if attempt >= self._max_retries:
+                            raise
+                        delay = self._retry_delay(attempt)
+                        logger.warning("web fetch retry after transport failure", extra={"url": url, "attempt": attempt + 1, "delay": round(delay, 3), "error": type(exc).__name__})
+                        if stop_event is not None:
+                            if stop_event.wait(delay): raise InterruptedError("learning stopped")
+                        else: time.sleep(delay)
+                        continue
+                    if r.status_code in {429, 500, 502, 503, 504}:
+                        self._record_failure(current_host)
+                        if attempt >= self._max_retries:
+                            r.raise_for_status()
+                        delay = self._retry_delay(attempt, r)
+                        logger.warning("web fetch backoff", extra={"url": url, "status": r.status_code, "attempt": attempt + 1, "delay": round(delay, 3)})
+                        if stop_event is not None:
+                            if stop_event.wait(delay): raise InterruptedError("learning stopped")
+                        else: time.sleep(delay)
+                        continue
+                    if r.status_code not in {301,302,303,307,308}:
+                        if r.status_code >= 400:
+                            self._record_failure(current_host)
+                        else:
+                            self._record_success(current_host)
+                        break
+                    location=r.headers.get("location")
+                    if not location:
+                        self._record_failure(current_host)
+                        break
+                    url=str(httpx.URL(url).join(location)); self._validate_url(url)
+                    redirect_host = (urlparse(url).hostname or "").lower()
+                    self._rate_limit(redirect_host, stop_event)
+                    if not self._robots_allowed(url):
+                        self._record_failure(redirect_host)
+                        raise ValueError("robots.txt disallows redirect target.")
+                else:
+                    raise RuntimeError(f"Web fetch retry budget exhausted: {url}") from last_error
+            r.raise_for_status()
+            if "text/html" not in r.headers.get("content-type","") and "text/plain" not in r.headers.get("content-type",""): raise ValueError("URL does not contain HTML/text.")
+            soup=BeautifulSoup(r.text,"html.parser")
+            for n in soup(["script","style","noscript","svg","nav","footer"]): n.decompose()
+            title=soup.title.get_text(" ",strip=True) if soup.title else url
+            return title,re.sub(r"\s+"," ",soup.get_text(" ",strip=True))[:settings.max_web_chars]
+        finally:
+            semaphore.release()
