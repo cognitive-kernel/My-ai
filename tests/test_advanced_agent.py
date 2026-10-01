@@ -93,3 +93,26 @@ def test_evaluation_harness_reports_failures_without_aborting():
     results = EvaluationHarness().run(cases, lambda x: x.upper() if x == "a" else "wrong")
     assert [r.passed for r in results] == [True, False]
     assert results[1].detail
+
+
+def test_advanced_runtime_is_non_destructive_and_selects_model():
+    from my_ai.advanced_runtime import AdvancedRuntime, RuntimeResources
+
+    runtime = AdvancedRuntime(mode=RuntimeMode.LOCAL)
+    runtime.register_model(ModelProfile("local-small", 8192, ram_gb=2, quality=.7, speed=.9, capabilities=frozenset({"chat"})))
+    choice = runtime.choose_model(TaskProfile(context_tokens=4096, required_capabilities=frozenset({"chat"})), RuntimeResources(4))
+    assert choice.model.name == "local-small"
+
+
+def test_advanced_runtime_enforces_policy_boundary():
+    from my_ai.advanced_runtime import AdvancedRuntime
+
+    runtime = AdvancedRuntime()
+    runtime.register_capability(Capability("delete", OperationRisk.DESTRUCTIVE, requires_approval=True))
+    try:
+        runtime.authorize("delete")
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("runtime must not bypass policy")
+    runtime.authorize("delete", approved=True)
