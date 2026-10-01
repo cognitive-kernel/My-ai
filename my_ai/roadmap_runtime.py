@@ -63,7 +63,8 @@ def model_catalog() -> list[ModelProfile]:
             quality=float(profile.get("quality") or quality),
             speed=float(profile.get("speed") or speed),
             capabilities=frozenset(map(str, capabilities)),
-        ))    return result
+        ))
+    return result
 
 
 def choose_model(task: TaskProfile) -> dict[str, Any]:
