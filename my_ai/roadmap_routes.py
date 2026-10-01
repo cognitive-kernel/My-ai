@@ -5,7 +5,7 @@ import json
 from fastapi import APIRouter, Depends, Request
 
 from .advanced_agent import Capability, OperationRisk, RuntimeMode, TaskProfile
-from .personal_benchmark import validate_suite
+from .personal_benchmark import run_suite, validate_suite
 from .db import execute, fetch_all
 from .roadmap_runtime import (
     add_memory_lesson, add_research_trace, authorize_capability, benchmark_summary, benchmark_model_selection,
@@ -204,6 +204,10 @@ def register_roadmap_routes(app, require_user) -> None:
     @router.get("/benchmarks/suite")
     async def benchmark_suite():
         return validate_suite()
+
+    @router.post("/benchmarks/suite/run")
+    async def benchmark_suite_run():
+        return run_suite()
 
     @router.get("/knowledge-ui")
     async def knowledge_ui():
