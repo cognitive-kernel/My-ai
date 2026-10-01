@@ -20,8 +20,8 @@ class FakeRouter:
         }
 
 
-def test_router_does_not_use_ui_locale_as_artifact_language():
-    intent = classify("یک اندیکاتور برای متاتریدر 4 بساز", classifier=FakeRouter("fa"))
+def test_router_does_not_invent_artifact_language_from_ui_context():
+    intent = classify("یک اندیکاتور برای متاتریدر 4 بساز", classifier=FakeRouter(None))
     assert intent.args.get("language") is None
 
 
