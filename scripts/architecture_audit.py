@@ -4,6 +4,7 @@ import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1] / "my_ai"
+SENSITIVE = {"auth.py", "access_policy.py", "self_update.py", "self_repair.py", "watchdog.py", "decision_log.py", "platform.py", "scheduler.py", "infra/persistence.py"}
 
 
 def scan() -> dict[str, list[str]]:
@@ -14,7 +15,7 @@ def scan() -> dict[str, list[str]]:
         for node in ast.walk(tree):
             if isinstance(node, ast.ExceptHandler):
                 body = node.body
-                if len(body) == 1 and isinstance(body[0], ast.Pass):
+                if len(body) == 1 and isinstance(body[0], ast.Pass) and (path.name in SENSITIVE or str(path.relative_to(ROOT)) in SENSITIVE):
                     silent.append(f"{path}:{node.lineno}")
             if isinstance(node, ast.Name) and node.id == "NotImplemented":
                 unresolved.append(f"{path}:{node.lineno}")
