@@ -74,6 +74,6 @@ def test_encrypted_restore_rejects_wrong_password(tmp_path, monkeypatch):
     from my_ai import platform
     monkeypatch.setattr(platform, "BACKUP_ROOT", tmp_path / "backups")
     db.init_db()
-    source = platform.export_database(str(tmp_path / "backups" / "wrong-password.json"), password="correct-password")
+    source = platform.backup_database(str(tmp_path / "backups" / "wrong-password.sqlite.enc"), password="correct-password")
     with pytest.raises(Exception):
         platform.restore_encrypted_backup(source, str(tmp_path / "backups" / "bad.sqlite"), "wrong-password")
