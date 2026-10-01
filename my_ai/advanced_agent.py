@@ -91,6 +91,15 @@ class ContextPack:
 
 
 class ContextBudgetManager:
+    @staticmethod
+    def compact_text(text: str, max_tokens: int) -> str:
+        words = str(text or "").split()
+        if len(words) <= max_tokens:
+            return str(text or "")
+        head = max(1, max_tokens // 2)
+        tail = max(1, max_tokens - head)
+        return " ".join(words[:head]) + " … [compacted] … " + " ".join(words[-tail:])
+
     def pack(self, items: Iterable[ContextItem], budget: int) -> ContextPack:
         material = list(items)
         if budget <= 0:
@@ -103,8 +112,16 @@ class ContextBudgetManager:
             if used + tokens <= budget:
                 selected.append(item)
                 used += tokens
-            else:
-                omitted += 1
+                continue
+            remaining = budget - used
+            if remaining >= 32:
+                compacted = self.compact_text(item.text, remaining)
+                compacted_tokens = max(1, len(compacted.split()))
+                if compacted_tokens <= remaining:
+                    selected.append(ContextItem(item.name, compacted, item.priority, compacted_tokens))
+                    used += compacted_tokens
+                    continue
+            omitted += 1
         return ContextPack(tuple(selected), used, omitted)
 
 
