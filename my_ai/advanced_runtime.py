@@ -7,7 +7,6 @@ controls incrementally without risking persisted user data.
 """
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 
 from .advanced_agent import (
@@ -67,11 +66,15 @@ class AdvancedRuntime:
 
     def choose_model(self, task: TaskProfile, resources: RuntimeResources | None = None):
         snapshot = resources or detect_resources()
-        return self.router.choose(self.models, task, snapshot.__class__ and ResourceSnapshot(
-            ram_available_gb=snapshot.ram_available_gb,
-            vram_available_gb=snapshot.vram_available_gb,
-            cpu_percent=snapshot.cpu_percent,
-        ))
+        return self.router.choose(
+            self.models,
+            task,
+            ResourceSnapshot(
+                ram_available_gb=snapshot.ram_available_gb,
+                vram_available_gb=snapshot.vram_available_gb,
+                cpu_percent=snapshot.cpu_percent,
+            ),
+        )
 
     def authorize(self, capability: str, *, approved: bool = False) -> None:
         self.policy.authorize(capability, approved=approved, mode=self.mode)
