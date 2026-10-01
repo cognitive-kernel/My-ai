@@ -76,8 +76,8 @@ class WebLearner:
             return False
 
     def fetch(self,url,stop_event=None,*,allow_online=False):
-        assert_network_allowed("research", explicit=allow_online)
         self._validate_url(url)
+        assert_network_allowed("research", explicit=allow_online)
         self._rate_limit(urlparse(url).hostname or "", stop_event)
         if not self._robots_allowed(url):
             raise ValueError("robots.txt disallows this URL or could not be verified.")
