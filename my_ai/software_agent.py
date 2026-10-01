@@ -200,33 +200,38 @@ def run_software_task(request: str, *, language: str | None = None, project_path
     result["plan"] = plan
     result["research"] = {"source_count": len(research.sources), "sources": research.sources}
     workspace_value = result.get("project_path") or result.get("workspace")
-    if workspace_value:
-        workspace = Path(str(workspace_value)).resolve()
-        result["git"] = _ensure_git_commit(workspace, "feat: complete generated project")
-    else:
-        result["git"] = {"ok": False, "error": "Project workspace was not returned."}
+    workspace = Path(str(workspace_value)).resolve() if workspace_value else None
 
     build_ok = bool((result.get("build") or {}).get("passed"))
     tests_ok = bool((result.get("tests") or {}).get("passed"))
     lint_ok = bool((result.get("lint") or {}).get("passed"))
-    git_ok = bool((result.get("git") or {}).get("ok"))
+    runtime_ok = bool((result.get("run") or {}).get("passed"))
     research_required = bool(plan.get("research_queries"))
     research_ok = bool(research.sources) if research_required else True
+
+    # Never commit an incomplete artifact as "complete".
+    pre_commit_ok = bool(
+        result.get("status") == "built"
+        and build_ok and tests_ok and lint_ok and runtime_ok
+        and research_ok and not result.get("semantic_defects")
+        and workspace is not None
+    )
+    if pre_commit_ok:
+        result["git"] = _ensure_git_commit(workspace, "feat: complete generated project")
+    elif workspace is not None:
+        result["git"] = {"ok": False, "committed": False, "status": _git_snapshot(workspace), "reason": "Completion prerequisites were not satisfied; workspace was not committed."}
+    else:
+        result["git"] = {"ok": False, "committed": False, "error": "Project workspace was not returned."}
+
+    git_ok = bool((result.get("git") or {}).get("ok"))
     result["completion"] = {
         "plan": True,
         "research": research_ok,
         "build": build_ok,
         "tests": tests_ok,
         "lint": lint_ok,
+        "runtime": runtime_ok,
         "git": git_ok,
-        "completed": bool(
-            result.get("status") == "built"
-            and build_ok
-            and tests_ok
-            and lint_ok
-            and git_ok
-            and research_ok
-            and not result.get("semantic_defects")
-        ),
+        "completed": bool(pre_commit_ok and git_ok),
     }
     return result
