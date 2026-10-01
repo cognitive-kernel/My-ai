@@ -225,8 +225,10 @@ def remember_knowledge(topic: str, title: str, content: str, source_url: str | N
             conn.commit()
             return int(row["id"])
         cur = conn.execute("INSERT INTO knowledge(topic,title,content,source_url,content_hash,category) VALUES(?,?,?,?,?,?)",(topic,title,content,source_url,digest,category))
+        knowledge_id = int(cur.lastrowid or 0)
+        conn.execute("INSERT INTO knowledge_versions(knowledge_id,version,content,source_url,status) VALUES(?,?,?,?,?)",(knowledge_id,1,content,source_url,"active"))
         conn.commit()
-        return int(cur.lastrowid or 0)
+        return knowledge_id
 
 def search_knowledge(query: str, limit: int = 8) -> list[dict[str, Any]]:
     normalized_query = _normalize_search_text(query)
