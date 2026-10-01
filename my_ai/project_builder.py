@@ -298,7 +298,7 @@ def _generate_phase(llm: Any, language: str, goal: str, phase: str, workspace: P
         "or replace working functionality unrelated to this phase.\n"
         f"LANGUAGE: {language}\nPHASE: {phase}\nPLAN: {goal}\n"
         f"CURRENT WORKSPACE:\n{_phase_workspace_context(workspace)}\n"
-        f"RESEARCH:\n{json.dumps(knowledge, ensure_ascii=False)[:10000]}"
+        f"RESEARCH:\n{json.dumps(knowledge, ensure_ascii=False)[:10000]}\nFAILURE FEEDBACK:\n{failure[:6000]}"
     )
     return _parse_files(llm.chat(prompt, system="You are an incremental software implementation engineer. Work phase-by-phase and preserve the existing workspace."))
 
@@ -369,28 +369,40 @@ def build_project(goal: str, language: str = "", *, project_path: str | None = N
             skeleton_files = _parse_files(llm.chat(skeleton_prompt, system="You create minimal runnable software skeletons."))
             written = _write_files(workspace, skeleton_files)
             defects = validate_generated_project(workspace, plan_data, language)
-            phase_validation.append({"phase": 0, "name": "skeleton", "files": written, "passed": not bool(defects), "defects": defects})
-            if defects:
-                semantic_defects = defects
-                last_error = "\n".join(defects)
+            skeleton_lifecycle = _phase_lifecycle_validation(language, workspace, timeout, requirements, include_runtime=False) if not defects else {"passed": False, "skipped": True}
+            skeleton_defects = list(defects)
+            if not skeleton_lifecycle.get("passed"):
+                skeleton_defects.append("Skeleton lifecycle validation failed: " + json.dumps(skeleton_lifecycle, ensure_ascii=False)[:5000])
+            phase_validation.append({"phase": 0, "name": "skeleton", "files": written, "passed": not skeleton_defects, "defects": skeleton_defects, "validation": skeleton_lifecycle})
+            if skeleton_defects:
+                semantic_defects = skeleton_defects
+                last_error = "\n".join(str(x) for x in skeleton_defects)
                 last_diagnosis = _diagnose_failure(llm, "skeleton_validation", last_error)
             else:
                 for index, phase in enumerate(phases, 1):
-                    phase_files = _generate_phase(llm, language, resolved_goal, phase, workspace, knowledge)
-                    written = _write_files(workspace, phase_files)
-                    defects = validate_generated_project(workspace, plan_data, language)
-                    lifecycle = _phase_lifecycle_validation(
-                        language, workspace, timeout, requirements,
-                        include_runtime=index == len(phases),
-                    ) if not defects else {"passed": False, "skipped": True}
-                    phase_defects = list(defects)
-                    if not lifecycle.get("passed"):
-                        phase_defects.append("Intermediate lifecycle validation failed: " + json.dumps(lifecycle, ensure_ascii=False)[:5000])
-                    phase_validation.append({"phase": index, "name": phase, "files": written, "passed": not phase_defects and bool(lifecycle.get("passed")), "defects": phase_defects, "validation": lifecycle})
-                    if phase_defects:
+                    phase_attempts = max(1, min(int(repair_attempts) + 1, 3))
+                    phase_failure = ""
+                    phase_passed = False
+                    written = []
+                    phase_defects = []
+                    lifecycle = {}
+                    for _phase_attempt in range(phase_attempts):
+                        phase_files = _generate_phase(llm, language, resolved_goal, phase, workspace, knowledge, phase_failure)
+                        written = _write_files(workspace, phase_files)
+                        defects = validate_generated_project(workspace, plan_data, language)
+                        lifecycle = _phase_lifecycle_validation(language, workspace, timeout, requirements, include_runtime=index == len(phases)) if not defects else {"passed": False, "skipped": True}
+                        phase_defects = list(defects)
+                        if not lifecycle.get("passed"):
+                            phase_defects.append("Intermediate lifecycle validation failed: " + json.dumps(lifecycle, ensure_ascii=False)[:5000])
+                        if not phase_defects:
+                            phase_passed = True
+                            break
+                        phase_failure = "\n".join(str(item) for item in phase_defects)
+                        last_error = phase_failure
+                        last_diagnosis = _diagnose_failure(llm, "phase_validation", phase_failure)
+                    phase_validation.append({"phase": index, "name": phase, "files": written, "passed": phase_passed, "defects": phase_defects, "validation": lifecycle, "repair_attempts": max(0, phase_attempts - 1)})
+                    if not phase_passed:
                         semantic_defects = phase_defects
-                        last_error = "\n".join(str(item) for item in phase_defects)
-                        last_diagnosis = _diagnose_failure(llm, "phase_validation", last_error)
                         break
     if not phased:
         for _ in range(attempts):
