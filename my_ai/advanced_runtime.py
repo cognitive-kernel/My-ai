@@ -16,7 +16,6 @@ from .advanced_agent import (
     ContextItem,
     ModelProfile,
     ModelRouter,
-    OperationRisk,
     PolicyEngine,
     ResourceSnapshot,
     RuntimeMode,
