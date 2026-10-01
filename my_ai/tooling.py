@@ -36,7 +36,7 @@ def catalog() -> dict[str, Any]:
         "toolchain_model": {
             "source": "semantic_plan_or_project_descriptor",
             "requirements": ["capabilities", "providers", "executables", "commands", "install"],
-            "lifecycle_operations": ["build", "test", "lint", "run"],
+            "lifecycle_operations": ["install", "build", "test", "lint", "typecheck", "run"],
         }
     }
 
