@@ -128,10 +128,18 @@ def _research(plan: dict[str, Any]) -> ResearchBundle:
     learner = WebLearner()
     for query in list(plan.get("research_queries") or [])[:10]:
         try:
-            results = learner.search(_safe_text(query, 700), limit=6)
+            results = learner.search(_safe_text(query, 700), limit=10)
         except Exception as exc:
             bundle.notes.append(f"Research search failed for {query!r}: {exc}")
             continue
+        def source_priority(item: dict[str, Any]) -> tuple[int, str]:
+            url = str(item.get("url") or "").lower()
+            title = str(item.get("title") or "").lower()
+            official = any(token in url for token in (".gov", ".org", "developer.", "docs.", "reference.", "learn."))
+            documentation = any(token in title for token in ("documentation", "reference", "api", "manual", "guide"))
+            return (0 if official or documentation else 1, url)
+
+        results = sorted(results, key=source_priority)
         for result in results:
             url = _safe_text(result.get("url"), 1000)
             if not url:
