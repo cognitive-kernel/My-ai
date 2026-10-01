@@ -7,6 +7,17 @@ from .config import settings
 from .db import remember_knowledge
 from .platform import hybrid_search, invalidate_hybrid_search_cache
 
+MEMORY_CATEGORIES = frozenset({
+    "user_preferences",
+    "project_facts",
+    "technical_decisions",
+    "lessons_learned",
+    "research_evidence",
+    "known_failures",
+    "successful_patterns",
+    "temporary_context",
+})
+
 
 @lru_cache(maxsize=128)
 def _recall_cached(query: str, limit: int, bucket: int):
@@ -14,6 +25,9 @@ def _recall_cached(query: str, limit: int, bucket: int):
 
 
 def remember(topic, title, content, source_url=None, category="project_facts"):
+    category = str(category or "project_facts").strip().lower()
+    if category not in MEMORY_CATEGORIES:
+        raise ValueError(f"Unsupported memory category: {category}")
     result = remember_knowledge(topic, title, content, source_url, category)
     _recall_cached.cache_clear()
     invalidate_hybrid_search_cache()
