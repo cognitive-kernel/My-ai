@@ -21,8 +21,8 @@ STATES = frozenset({
 _ALLOWED_TRANSITIONS = {
     "received": {"understood", "blocked", "failed"},
     "understood": {"planned", "blocked", "failed"},
-    "planned": {"authorized", "blocked", "failed"},
-    "authorized": {"running", "blocked", "failed"},
+    "planned": {"authorized", "completed", "blocked", "failed"},
+    "authorized": {"running", "validating", "blocked", "failed"},
     "running": {"validating", "failed", "rolled_back"},
     "validating": {"completed", "repairing", "failed", "rolled_back"},
     "repairing": {"validating", "failed", "rolled_back"},
