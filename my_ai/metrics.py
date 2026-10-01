@@ -66,7 +66,8 @@ def snapshot() -> dict[str, Any]:
                 "avg_seconds": round(_totals.get(f"{key}:duration", 0.0) / count, 4) if count else 0.0,
                 "errors": _counts.get(f"http_errors:{path}", 0),
             }
-        routing = {key[8:]: count for key, count in _counts.items() if key.startswith("routing:")}\n        return {"inference": inference, "http": http, "routing": routing}
+        routing = {key[8:]: count for key, count in _counts.items() if key.startswith("routing:")}
+        return {"inference": inference, "http": http, "routing": routing}
 
 def timer():
     return time.perf_counter()
