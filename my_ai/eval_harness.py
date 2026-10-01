@@ -105,3 +105,50 @@ def run_response_eval(responder: Callable[[str], str], cases: Iterable[ResponseE
         "baseline_met": mean_score >= float(baseline),
         "case_count": len(results),
     }
+
+
+@dataclass(frozen=True)
+class RegressionThreshold:
+    name: str
+    minimum: float
+
+
+DEFAULT_REGRESSION_THRESHOLDS = (
+    RegressionThreshold("retrieval_mrr", 0.70),
+    RegressionThreshold("persian_response_mean", 0.70),
+    RegressionThreshold("citation_coverage", 1.0),
+    RegressionThreshold("confidence_calibration", 0.70),
+    RegressionThreshold("router_accuracy", 0.90),
+    RegressionThreshold("skill_verification", 0.80),
+)
+
+
+def evaluate_regression_metrics(metrics: dict[str, float], thresholds=DEFAULT_REGRESSION_THRESHOLDS) -> dict:
+    checks = []
+    for threshold in thresholds:
+        value = float(metrics.get(threshold.name, 0.0))
+        checks.append({
+            "name": threshold.name,
+            "value": round(value, 6),
+            "minimum": threshold.minimum,
+            "passed": value >= threshold.minimum,
+        })
+    return {
+        "passed": all(item["passed"] for item in checks),
+        "checks": checks,
+    }
+
+
+def compare_regression_baseline(current: dict[str, float], baseline: dict[str, float], thresholds=DEFAULT_REGRESSION_THRESHOLDS) -> dict:
+    gate = evaluate_regression_metrics(current, thresholds)
+    deltas = {
+        key: round(float(current.get(key, 0.0)) - float(baseline.get(key, 0.0)), 6)
+        for key in set(current) | set(baseline)
+    }
+    regressions = [
+        key for key, delta in deltas.items()
+        if delta < 0 and float(current.get(key, 0.0)) < next(
+            (t.minimum for t in thresholds if t.name == key), 0.0
+        )
+    ]
+    return {**gate, "baseline": baseline, "current": current, "deltas": deltas, "regressions": sorted(regressions)}
