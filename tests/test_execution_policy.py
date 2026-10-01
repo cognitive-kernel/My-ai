@@ -142,3 +142,15 @@ def test_project_authorization_rejects_same_semantics_without_structured_target(
         intents=("coding",),
     )
     assert authorize_project_execution("Please implement the requested software.", intent) is False
+
+
+def test_target_only_structured_route_is_authorized():
+    class Intent:
+        name = "coding"
+        confidence = 0.99
+        args = {
+            "action": "create_artifact",
+            "goal": "create an application for tracking expenses",
+            "target": "expense tracking application",
+        }
+    assert authorize_project_execution("arbitrary wording", Intent(), {}) is True
