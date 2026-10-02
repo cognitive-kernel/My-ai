@@ -1449,24 +1449,27 @@ def create_session_endpoint(request: Request, title: str = "گفتگوی جدی�
 
 @app.get("/sessions/{session_id}")
 def recover_session_endpoint(session_id: int, request: Request):
-    require_user(request)
-    return recover_session(session_id)
+    user = require_user(request)
+    return recover_session(session_id, user["id"])
 
 @app.post("/sessions/{session_id}/events")
 async def session_event_endpoint(session_id: int, request: Request):
-    require_user(request)
+    user = require_user(request)
+    recover_session(session_id, user["id"])
     body = await request.json()
     from .session_lifecycle import append_event
     return append_event(session_id, str(body.get("event_type") or "custom"), dict(body.get("payload") or {}))
 
 @app.get("/sessions/{session_id}/integrity")
 def session_integrity_endpoint(session_id: int, request: Request):
-    require_user(request)
+    user = require_user(request)
+    recover_session(session_id, user["id"])
     return verify_integrity(session_id)
 
 @app.post("/sessions/{session_id}/stream")
 async def stream_open_endpoint(session_id: int, request: Request):
-    require_user(request)
+    user = require_user(request)
+    recover_session(session_id, user["id"])
     body = await request.json()
     return open_stream(session_id, str(body.get("context") or ""))
 
