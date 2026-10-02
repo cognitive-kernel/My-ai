@@ -19,7 +19,7 @@ def find_silent_failures(root: Path = ROOT) -> list[dict[str, Any]]:
             if len(node.body)==1 and isinstance(node.body[0],ast.Pass):
                 rel = str(path.relative_to(root))
                 parent = node.parent if hasattr(node, "parent") else None
-                safe = rel in {"my_ai/settings_store.py", "my_ai/web_learner.py"} and isinstance(node.type, str)
+                safe = rel in {"my_ai/settings_store.py", "my_ai/web_learner.py"} 
                 findings.append({
                     "path": rel,
                     "line": node.lineno,
