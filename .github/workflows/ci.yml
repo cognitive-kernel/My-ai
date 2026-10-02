@@ -24,6 +24,7 @@ jobs:
       - run: pip install -e .[dev] --no-deps
       - run: python -m compileall -q my_ai tests
       - run: python scripts/architecture_audit.py
+      - run: python scripts/architecture_e2e_audit.py
       - run: ruff check my_ai --select F
       - run: mypy my_ai --ignore-missing-imports
       - run: bandit -r my_ai -q -lll
