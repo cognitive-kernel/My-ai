@@ -49,3 +49,18 @@ def test_resource_settings_have_expected_defaults(monkeypatch):
     assert settings_feature.get_int("resources.cpu_threads", 8) == 8
     assert float(settings_feature.get_setting("resources.ram_percent", "80")) == 80.0
     assert settings_feature.get_int("resources.gpu_layers", 0) == 0
+
+
+def test_settings_registry_validates_and_resets(tmp_path, monkeypatch):
+    monkeypatch.setattr(ss, "KEY_PATH", tmp_path / "settings.key")
+    ss.ensure_schema()
+    ss.set_setting("learning.interval_seconds", 120)
+    assert ss.get_setting("learning.interval_seconds") == "120"
+    try:
+        ss.set_setting("learning.interval_seconds", 30)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("out-of-range registered setting must fail")
+    assert ss.reset_setting("learning.interval_seconds") == 3600
+    assert ss.get_setting("learning.interval_seconds") == 3600
