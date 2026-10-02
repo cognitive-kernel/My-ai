@@ -1,5 +1,8 @@
 import logging\nlogger = logging.getLogger(__name__)\nfrom __future__ import annotations
 
+import logging
+logger = logging.getLogger(__name__)
+
 import json
 import re
 from datetime import datetime, timedelta, timezone
@@ -191,8 +194,8 @@ def _ensure_custom_review_schedule(course_id: int) -> None:
     )""")
     try:
         execute("ALTER TABLE learning_domains ADD COLUMN auto_learn INTEGER NOT NULL DEFAULT 1")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("SETTINGS_SCHEMA_MIGRATION_FAILED: %s", exc)
     topics = [
         {"order": int(x["topic_order"]), "topic": str(x["title"]), "goal": str(x["goal"] or "")}
         for x in _progress(course_id)
