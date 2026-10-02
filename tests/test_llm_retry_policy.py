@@ -125,3 +125,22 @@ def test_custom_provider_uses_registry_configuration(monkeypatch):
     assert client.model == "custom-model"
     assert client.api_key == "custom-key"
     assert client.provider_name == "custom-openai-compatible"
+
+
+def test_custom_provider_missing_endpoint_is_rejected(monkeypatch):
+    import my_ai.infra.llm as module
+    class Settings:
+        llm_provider = "ollama"
+        offline_strict = False
+        openai_base_url = "http://default"
+        openai_model = "default"
+        openai_api_key = "default-key"
+    values = {"llm.provider": "custom-openai-compatible", "llm.custom.base_url": "", "llm.custom.model": "custom-model", "llm.custom.api_key": "custom-key"}
+    monkeypatch.setattr(module, "_settings", lambda: Settings())
+    monkeypatch.setattr(module, "get_setting", lambda key, default=None: values.get(key, default))
+    try:
+        module.create_llm()
+    except module.LLMError as exc:
+        assert "base URL" in str(exc)
+    else:
+        raise AssertionError("Expected custom provider configuration error")
