@@ -18,7 +18,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS chat_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,kind TEXT NOT NULL DEFAULT 'chat',language TEXT,pinned INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS conversations (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS chat_attachments (id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id INTEGER, session_id INTEGER NOT NULL, name TEXT NOT NULL, path TEXT NOT NULL, size INTEGER NOT NULL DEFAULT 0, mime_type TEXT NOT NULL DEFAULT 'application/octet-stream', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE, FOREIGN KEY(session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE);
-CREATE TABLE IF NOT EXISTS knowledge (id INTEGER PRIMARY KEY AUTOINCREMENT, topic TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL, source_url TEXT, content_hash TEXT, verification_status TEXT NOT NULL DEFAULT 'unverified', verified_at TEXT, verified_by INTEGER, confidence REAL, product TEXT, version TEXT, validity_status TEXT NOT NULL DEFAULT 'unknown', replaced_by_version TEXT, compatibility TEXT NOT NULL DEFAULT 'unknown', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS knowledge (id INTEGER PRIMARY KEY AUTOINCREMENT, topic TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL, source_url TEXT, content_hash TEXT, verification_status TEXT NOT NULL DEFAULT 'unverified', verified_at TEXT, verified_by INTEGER, confidence REAL, product TEXT, version TEXT, validity_status TEXT NOT NULL DEFAULT 'unknown', replaced_by_version TEXT, compatibility TEXT NOT NULL DEFAULT 'unknown', valid_from TEXT, valid_until TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS knowledge_embeddings (knowledge_id INTEGER NOT NULL, content_hash TEXT NOT NULL, model TEXT NOT NULL, embedding TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(knowledge_id,model), FOREIGN KEY(knowledge_id) REFERENCES knowledge(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS learning_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, language TEXT NOT NULL, topic TEXT NOT NULL, status TEXT NOT NULL, score REAL, notes TEXT, progress_percent REAL NOT NULL DEFAULT 0, phase TEXT NOT NULL DEFAULT 'starting', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS learning_runtime (id INTEGER PRIMARY KEY CHECK(id=1), language TEXT, session_id INTEGER, status TEXT NOT NULL DEFAULT 'idle', started_at TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(session_id) REFERENCES learning_sessions(id) ON DELETE SET NULL);
@@ -167,6 +167,8 @@ def init_db() -> None:
         if "confidence" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN confidence REAL")
         for column, ddl in (("product","TEXT"),("version","TEXT"),("validity_status","TEXT NOT NULL DEFAULT 'unknown'"),("replaced_by_version","TEXT"),("compatibility","TEXT NOT NULL DEFAULT 'unknown'")):
             if column not in cols_knowledge: conn.execute(f"ALTER TABLE knowledge ADD COLUMN {column} {ddl}")
+        for column, ddl in (("valid_from","TEXT"),("valid_until","TEXT")):
+            if column not in cols_knowledge: conn.execute(f"ALTER TABLE knowledge ADD COLUMN {column} {ddl}")
         admin_row = conn.execute("SELECT id FROM users WHERE role='admin' ORDER BY id LIMIT 1").fetchone()
         if conn.execute("SELECT COUNT(*) FROM chat_sessions").fetchone()[0]==0 and conn.execute("SELECT COUNT(*) FROM conversations WHERE session_id IS NULL").fetchone()[0]:
             cur=conn.execute("INSERT INTO chat_sessions(title,user_id) VALUES(?,?)",("گفتگوی قبلی", admin_row[0] if admin_row else None))
@@ -245,7 +247,7 @@ def _semantic_duplicate(topic: str, title: str, content: str, digest: str, conn,
         return None
 
 
-def remember_knowledge(topic: str, title: str, content: str, source_url: str | None = None, *, product: str | None = None, version: str | None = None, validity_status: str = "unknown", replaced_by_version: str | None = None, compatibility: str = "unknown") -> int:
+def remember_knowledge(topic: str, title: str, content: str, source_url: str | None = None, *, product: str | None = None, version: str | None = None, validity_status: str = "unknown", replaced_by_version: str | None = None, compatibility: str = "unknown", valid_from: str | None = None, valid_until: str | None = None) -> int:
     if _write_blocked():
         raise PermissionError("MYAI_READ_ONLY blocks database mutation.")
     digest = _knowledge_hash(topic, content)
@@ -281,8 +283,8 @@ def remember_knowledge(topic: str, title: str, content: str, source_url: str | N
                 f"Semantic duplicate detected for knowledge {duplicate['id']} "
                 f"(similarity={duplicate['similarity']}, threshold={threshold})."
             )
-        cur = conn.execute("INSERT INTO knowledge(topic,title,content,source_url,content_hash,product,version,validity_status,replaced_by_version,compatibility) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                           (topic,title,content,source_url,digest,product,version,validity_status,replaced_by_version,compatibility))
+        cur = conn.execute("INSERT INTO knowledge(topic,title,content,source_url,content_hash,product,version,validity_status,replaced_by_version,compatibility,valid_from,valid_until) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                           (topic,title,content,source_url,digest,product,version,validity_status,replaced_by_version,compatibility,valid_from,valid_until))
         knowledge_id = int(cur.lastrowid or 0)
         conn.execute("INSERT INTO knowledge_audit(knowledge_id,user_id,action,details) VALUES(?,?,?,?)",
                      (knowledge_id, None, "create", "semantic duplicate check passed"))
