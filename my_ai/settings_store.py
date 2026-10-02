@@ -1,4 +1,4 @@
-import logging\nlogger = logging.getLogger(__name__)\nfrom __future__ import annotations
+from __future__ import annotations
 
 import base64
 import os
@@ -50,9 +50,6 @@ def _decrypt(value: str) -> str:
     return AESGCM(_key()).decrypt(blob[:12], blob[12:], b"my-ai-app-settings-v1").decode("utf-8")
 
 def ensure_schema() -> None:
-    # Settings access is on a hot path, including the learning scheduler.
-    # Do not run the full DB migration on every read: init_db() performs
-    # multiple writes and can contend with learning/background transactions.
     with connect() as conn:
         conn.executescript(SCHEMA)
         conn.commit()
