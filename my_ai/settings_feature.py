@@ -921,6 +921,15 @@ def update_registered_setting(key: str, payload: SettingsRegistryValueRequest, r
     audit(user, "settings", "update", "200", f"setting-update:{key}")
     return {"key": key, "value": value}
 
+@router.delete("/settings/registry/{key:path}")
+def delete_registered_setting(key: str, request: Request):
+    user = require_admin(request)
+    if key not in get_setting_registry():
+        raise HTTPException(404, "Unknown registered setting.")
+    value = reset_setting(key)
+    audit(user, "settings", "delete", "200", f"setting-delete:{key}")
+    return {"key": key, "value": value, "deleted": True}
+
 @router.post("/settings/registry/{key:path}/reset")
 def reset_registered_setting(key: str, request: Request):
     user = require_admin(request)
