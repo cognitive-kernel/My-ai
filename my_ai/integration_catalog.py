@@ -11,3 +11,9 @@ def register_integration(name,config,enabled=True): return put_record("integrati
 def list_integrations(): return list_records("integrations.catalog")
 def register_webhook(name,config,enabled=True): return put_record("integrations.webhooks",name,config,enabled=enabled)
 def list_webhooks(): return list_records("integrations.webhooks")
+
+
+def map_event_action(event: str, action: str, *, enabled=True):
+    return put_record("integrations.events", event, {"event": event, "action": action}, enabled=enabled)
+
+def list_event_actions(): return list_records("integrations.events")
