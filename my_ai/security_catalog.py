@@ -28,8 +28,16 @@ def set_subprocess_policy(name, commands=None, timeout=30):
     return put_record("security.subprocess",name,{"commands":commands or [],"timeout":timeout},enabled=True)
 
 
+def set_export_policy(name, *, allow=True, require_approval=True, formats=None):
+    return put_record("security.export", name, {"allow": bool(allow), "require_approval": bool(require_approval), "formats": formats or ["json"]}, enabled=True)
+
+
+def set_versioning_policy(name, *, required=True, immutable_history=True, compatibility_check=True):
+    return put_record("security.versioning", name, {"required": bool(required), "immutable_history": bool(immutable_history), "compatibility_check": bool(compatibility_check)}, enabled=True)
+
+
 def list_security_policies():
-    return {n:list_records(n) for n in ("security.roles","security.capabilities","security.approvals","security.network","security.filesystem","security.subprocess")}
+    return {n:list_records(n) for n in ("security.roles","security.capabilities","security.approvals","security.network","security.filesystem","security.subprocess","security.export","security.versioning")}
 
 
 def set_self_modification_policy(name, allowed_paths=None, require_approval=True, require_tests=True):
