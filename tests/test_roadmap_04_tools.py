@@ -44,3 +44,11 @@ def test_workflow_registry_edit_preserves_identity(monkeypatch):
     result=registries.update_workflow("demo",[{"name":"stage1","enabled":True}],version="2")
     assert result["name"]=="demo"
     assert result["payload"]["version"]=="2"
+
+
+def test_tool_health_reports_language_toolchains(monkeypatch):
+    import my_ai.tooling as tooling
+    monkeypatch.setattr(tooling, "doctor", lambda language=None: {language: {"python": True}})
+    result = tooling.tool_health()
+    assert result["healthy"] is True
+    assert result["languages"]["Python"]["healthy"] is True
