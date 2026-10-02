@@ -34,7 +34,7 @@ def run_test_suite(root: Path, *, per_file_timeout: int = DEFAULT_FILE_TIMEOUT_S
                 timeout=per_file_timeout,
             )
         except subprocess.TimeoutExpired as exc:
-            return False, f"pytest timeout ({per_file_timeout}s): {test_file}\n{exc.stdout or ''}{exc.stderr or ''}"
+            return False, f"pytest timeout ({per_file_timeout}s): {test_file}\\n{exc.stdout!r}\\n{exc.stderr!r}"
         if run.returncode:
             return False, f"pytest failed: {test_file}\n{run.stdout}{run.stderr}".strip()
     return True, f"compileall + {len(files)} test files passed (timeout={per_file_timeout}s/file)"
