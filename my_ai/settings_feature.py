@@ -1040,6 +1040,13 @@ def settings_config(request: Request):
             "gpu_layers": get_int("resources.gpu_layers", 0),
         },
         "logging": {"level": str(get_setting("logging.level", "WARNING")).upper()},
+        "observability": {
+            "alerts_enabled": get_bool("observability.alerts_enabled", True),
+            "alert_rules": json.loads(str(get_setting("observability.alert_rules", "[]")) or "[]"),
+            "notification_destinations": json.loads(str(get_setting("observability.notification_destinations", "[]")) or "[]"),
+            "dashboard_config": json.loads(str(get_setting("observability.dashboard_config", "{}")) or "{}"),
+            "diagnostics_export": str(get_setting("observability.diagnostics_export", "json")),
+        },
         "image": {
             "enabled": get_bool("image.enabled", True),
             "provider": str(get_setting("image.provider", "automatic1111")),
