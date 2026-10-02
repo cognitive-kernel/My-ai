@@ -90,7 +90,7 @@ def test_ollama_chat_uses_second_fallback_after_retry_exhaustion(monkeypatch):
     from my_ai import llm as llm_module
     calls = []
     primary = settings.ollama_model
-    fallback = settings.fallback_model if settings.fallback_model != primary else settings.coding_model
+    fallback = "fallback-test-model"
 
     class Response:
         def __init__(self, model): self.model = model
