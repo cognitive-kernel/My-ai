@@ -94,7 +94,30 @@ def dependency_boundary_inventory(root: Path = ROOT) -> dict[str, list[str]]:
         boundaries[module] = sorted({item for item in imports if not ("from ." in item or "import my_ai" in item)})
     return boundaries
 
-def run_audit(root: Path = ROOT) -> dict[str, Any]:
+def startup_shutdown_inventory(root: Path = ROOT) -> dict[str, Any]:
+    api = root / "my_ai" / "api.py"
+    text = api.read_text(encoding="utf-8") if api.exists() else ""
+    return {
+        "lifespan_present": "@asynccontextmanager" in text and "async def lifespan" in text,
+        "startup_hooks": sorted(set(re.findall(r"(?m)^\s*([A-Za-z_][A-Za-z0-9_]*)\(\)", text))),
+        "shutdown_hooks": sorted(set(re.findall(r"(?m)^\s*([A-Za-z_][A-Za-z0-9_]*)\(\)", text))),
+    }
+
+def documentation_inventory(root: Path = ROOT) -> dict[str, Any]:
+    docs = {}
+    for path in sorted((root / "docs").glob("*.md")):
+        try:
+            source = path.read_text(encoding="utf-8")
+            docs[str(path.relative_to(root))] = {
+                "lines": len(source.splitlines()),
+                "headings": sum(1 for line in source.splitlines() if line.startswith("#")),
+                "references_my_ai": "my_ai/" in source or "my_ai." in source,
+            }
+        except OSError as exc:
+            docs[str(path.relative_to(root))] = {"error": str(exc)}
+    return docs
+
+def run_audit(root: Path = ROOT):
     return {
         "silent_failures": find_silent_failures(root),
         "architecture": architecture_inventory(root),
@@ -102,4 +125,6 @@ def run_audit(root: Path = ROOT) -> dict[str, Any]:
         "routes": route_inventory(root),
         "sensitive_routes": sensitive_route_inventory(root),
         "dependency_boundaries": dependency_boundary_inventory(root),
+        "startup_shutdown": startup_shutdown_inventory(root),
+        "documentation": documentation_inventory(root),
     }
