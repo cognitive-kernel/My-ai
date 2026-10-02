@@ -107,3 +107,21 @@ def test_registered_llm_policy_overrides_environment_defaults(monkeypatch):
     client = llm_module.OllamaClient.__new__(llm_module.OllamaClient)
     assert client._retry_attempts() == 1
     assert client._timeout() == 2
+
+
+def test_custom_provider_uses_registry_configuration(monkeypatch):
+    import my_ai.infra.llm as module
+    class Settings:
+        llm_provider = "ollama"
+        offline_strict = False
+        openai_base_url = "http://default"
+        openai_model = "default"
+        openai_api_key = "default-key"
+    values = {"llm.provider": "custom-openai-compatible", "llm.custom.base_url": "http://custom", "llm.custom.model": "custom-model", "llm.custom.api_key": "custom-key"}
+    monkeypatch.setattr(module, "_settings", lambda: Settings())
+    monkeypatch.setattr(module, "get_setting", lambda key, default=None: values.get(key, default))
+    client = module.create_llm()
+    assert client.base_url == "http://custom"
+    assert client.model == "custom-model"
+    assert client.api_key == "custom-key"
+    assert client.provider_name == "custom-openai-compatible"
