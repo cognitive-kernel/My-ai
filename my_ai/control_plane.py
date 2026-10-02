@@ -226,7 +226,11 @@ DEFAULT_NAMESPACES = (
     "database.backup", "database.migration",
     "prompts.registry", "policies.registry", "config.profiles",
     "plugins.registry", "skills.registry", "knowledge.registry",
-    "evaluation.benchmarks", "evaluation.regression", "experience.evolution",
+    "evaluation.benchmarks", "evaluation.regression", "evaluation.ab",
+    "experience.evolution", "experience.lessons", "agent.skills", "agent.knowledge_graph",
+    "agent.retrieval", "agent.context", "agent.verification", "agent.confidence",
+    "agent.cache", "agent.budget", "agent.events", "agent.meta", "agent.os",
+    "research.agent", "execution.sandbox", "execution.snapshots",
 )
 
 
