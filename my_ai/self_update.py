@@ -29,7 +29,6 @@ def _run(args, cwd=ROOT, timeout=120):
     return subprocess.run(args, cwd=cwd, text=True, capture_output=True, timeout=timeout)
 
 
-
 def _validate_health_url(value: str | None) -> str | None:
     if not value:
         return None
@@ -62,6 +61,32 @@ def _snapshot_database(destination: Path) -> Path | None:
     return destination
 
 
+def restore_database_snapshot(snapshot: Path, destination: Path | None = None) -> Path:
+    """Restore a SQLite snapshot atomically without deleting the source snapshot."""
+    if not snapshot.is_file():
+        raise FileNotFoundError(snapshot)
+    destination = destination or Path(os.getenv("DB_PATH", "data/myai.db")).expanduser().resolve()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    tmp = destination.with_suffix(destination.suffix + ".restore.tmp")
+    source = sqlite3.connect(snapshot)
+    target = sqlite3.connect(tmp)
+    try:
+        source.backup(target)
+        target.commit()
+        target.execute("PRAGMA integrity_check")
+    finally:
+        target.close()
+        source.close()
+    os.replace(tmp, destination)
+    return destination
+
+
+def rollback_git_state(tag: str) -> str:
+    """Reset production code to an immutable pre-update tag and return HEAD."""
+    _git("reset", "--hard", tag)
+    return _git("rev-parse", "HEAD")
+
+
 def _stamp():
     return datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
 
@@ -81,8 +106,7 @@ def _record_lesson(event, **data):
         execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",
                 (event, data.get("candidate") or data.get("attempted"), data.get("details") or data.get("error"), 1 if event == "update_activated" else 0))
     except Exception as exc:
-        import logging
-        logging.getLogger(__name__).warning("SELF_UPDATE_LESSON_PERSIST_FAILED: %s", exc)
+        logger.warning("SELF_UPDATE_LESSON_PERSIST_FAILED: %s", exc)
 
 
 def _tests(cwd):
@@ -112,18 +136,7 @@ def status():
         dirty = bool(_git("status", "--porcelain"))
         enabled = get_bool("self_update.enabled", False)
         approved = get_bool("self_update.approved", False)
-        return {
-            "ok": True,
-            "branch": branch,
-            "head": head,
-            "dirty": dirty,
-            "policy": {
-                "enabled": enabled,
-                "approved": approved,
-                "ready": bool(enabled and approved and not dirty),
-                "deny_by_default": not enabled,
-            },
-        }
+        return {"ok": True, "branch": branch, "head": head, "dirty": dirty, "policy": {"enabled": enabled, "approved": approved, "ready": bool(enabled and approved and not dirty), "deny_by_default": not enabled}}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
 
@@ -142,7 +155,6 @@ def check_for_update():
         return {"ok": False, "update_available": False, "error": str(exc)}
 
 
-
 def preview_update() -> dict[str, object]:
     if _git("status", "--porcelain"):
         return {"status": "blocked", "reason": "working tree is not clean"}
@@ -158,11 +170,11 @@ def preview_update() -> dict[str, object]:
     record_decision("self_update_preview", "preview", {"current": current, "remote": remote})
     return {"status": "update_available", "current": current, "remote": remote, "files": stat, "diff": patch}
 
+
 def apply_confirmed_update(health_url=None, health_timeout=45):
     assert_write_allowed(ROOT)
-    """Test origin/main in isolation, snapshot current code, fast-forward, then supervise restart."""
     if health_url is None:
-        health_url = str(get_setting("self_update.health_url","")).strip() or None
+        health_url = str(get_setting("self_update.health_url", "")).strip() or None
     health_url = _validate_health_url(health_url)
     if _git("status", "--porcelain"):
         raise RuntimeError("Self-update متوقف شد: ابتدا تغییرات محلی را commit کنید یا در جای امن نگه دارید.")
@@ -172,60 +184,36 @@ def apply_confirmed_update(health_url=None, health_timeout=45):
         raise RuntimeError("Self-update requires an explicit approval gate.")
     if os.getenv("MYAI_OFFLINE_STRICT", "false").strip().lower() == "true":
         raise RuntimeError("Self-update is disabled in offline strict mode.")
-
     _git("fetch", "origin", "main", timeout=120)
     current = _git("rev-parse", "HEAD")
     remote = _git("rev-parse", "origin/main")
     if current == remote:
         return {"status": "up_to_date", "commit": current}
-
     stamp = _stamp()
     backup = f"myai-preupdate-{stamp}"
     candidate = STATE_DIR / f"candidate-{stamp}"
     db_snapshot = _snapshot_database(STATE_DIR / f"db-preupdate-{stamp}.sqlite")
     _git("tag", "-a", backup, "-m", "My-AI automatic pre-update snapshot")
-
     try:
         _git("worktree", "add", "--detach", str(candidate), "origin/main", timeout=120)
         ok, details = _tests(candidate)
         if not ok:
             _record_lesson("candidate_test_failed", base=current, candidate=remote, details=details)
             return {"status": "blocked", "reason": "candidate tests failed", "details": details, "backup": backup}
-
         _git("worktree", "remove", "--force", str(candidate), timeout=120)
         candidate = None
         _git("merge", "--ff-only", "origin/main", timeout=120)
         _record_lesson("update_activated", previous=current, new=remote, backup=backup)
         record_decision("self_update", "activate", {"previous": current, "new": remote, "backup": backup})
         notify("self_update_activated", {"previous": current, "new": remote, "backup": backup})
-
         command = chr(34) + sys.executable + chr(34) + " -m uvicorn my_ai.api:app --host 127.0.0.1 --port 8000"
         cmd = shlex.split(command, posix=(os.name != "nt"))
-        watchdog = [
-            sys.executable,
-            "-m",
-            "my_ai.watchdog",
-            "--pid",
-            str(os.getpid()),
-            "--rollback",
-            backup,
-            "--timeout",
-            str(health_timeout),
-            "--command",
-            command,
-        ]
+        watchdog = [sys.executable, "-m", "my_ai.watchdog", "--pid", str(os.getpid()), "--rollback", backup, "--timeout", str(health_timeout), "--command", command]
         if health_url:
             watchdog += ["--url", health_url]
         if db_snapshot:
             watchdog += ["--db-snapshot", str(db_snapshot), "--db-path", str(Path(get_setting("db.path", os.getenv("DB_PATH", "data/myai.db"))).expanduser().resolve())]
-        subprocess.Popen(
-            watchdog,
-            cwd=ROOT,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            stdin=subprocess.DEVNULL,
-            start_new_session=True,
-        )
+        subprocess.Popen(watchdog, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, start_new_session=True)
         return {"status": "activated", "previous": current, "current": remote, "backup": backup, "watchdog": True, "restart_command": cmd}
     except Exception as exc:
         _record_lesson("update_failed", previous=current, attempted=remote, backup=backup, error=str(exc))
@@ -235,8 +223,7 @@ def apply_confirmed_update(health_url=None, health_timeout=45):
             try:
                 _git("worktree", "remove", "--force", str(candidate), timeout=120)
             except Exception as exc:
-                import logging
-                logging.getLogger(__name__).warning("SELF_UPDATE_WORKTREE_CLEANUP_FAILED: %s", exc)
+                logger.warning("SELF_UPDATE_WORKTREE_CLEANUP_FAILED: %s", exc)
 
 
 def recent_lessons(limit=20):
