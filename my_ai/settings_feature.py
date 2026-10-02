@@ -29,6 +29,7 @@ from .control_plane import list_records, get_record, put_record, set_enabled, de
 from .registries import publish_prompt, activate_prompt, publish_policy, register_tool, update_tool, list_tools
 from .plugin_registry import propose_plugin, approve_plugin, reject_plugin
 from .evaluation_registry import upsert_suite, list_suites, create_baseline, propose_candidate, get_candidate, verify_candidate, list_candidates, compare_metrics
+from .integration_catalog import register_integration, list_integrations, register_webhook, list_webhooks
 
 router = APIRouter(tags=["settings"])
 _workers = ThreadPoolExecutor(max_workers=1, thread_name_prefix="myai-learning")
@@ -1201,6 +1202,22 @@ def settings_tool_update(name: str, payload: ToolRegistryRequest, request: Reque
                        tasks=payload.tasks, version=payload.version, enabled=payload.enabled)
     audit(user, "tools", "update", "200", name)
     return item
+
+@router.get("/settings/integrations")
+def settings_integrations(request: Request):
+    require_admin(request); return {"items": list_integrations()}
+
+@router.post("/settings/integrations")
+def settings_integration(payload: ControlPlaneRecordRequest, request: Request):
+    user=require_admin(request); item=register_integration(payload.name,payload.payload,payload.enabled); audit(user,"integrations","write","200",payload.name); return item
+
+@router.get("/settings/webhooks")
+def settings_webhooks(request: Request):
+    require_admin(request); return {"items": list_webhooks()}
+
+@router.post("/settings/webhooks")
+def settings_webhook(payload: ControlPlaneRecordRequest, request: Request):
+    user=require_admin(request); item=register_webhook(payload.name,payload.payload,payload.enabled); audit(user,"webhooks","write","200",payload.name); return item
 
 @router.get("/settings/plugins")
 def settings_plugins(request: Request):
