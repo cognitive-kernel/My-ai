@@ -252,3 +252,11 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 - Expanded the central GUI Action Registry for configuration history, provider/model catalog, learning catalog, database policy, security roles and evaluation/regression.
 - GUI and CLI continue to share the persistent Control Plane rather than maintaining separate state stores.
 - This marks the end of the requested implementation-first pass; test, regression, integration and runtime verification remain intentionally unstarted.
+
+
+### No-Code parity expansion
+- GUI and CLI now expose persistent Prompt/Policy/Tool registries and Plugin proposal/approval/rejection flows.
+- Control Plane GUI covers record CRUD plus enable/disable/delete and action lifecycle controls.
+- Learning-source content hashing is available through the admin CLI.
+- GUI Action Registry has been expanded across LLM, Learning, Behavior, Plugins and Tools.
+- Verification/testing remains intentionally deferred until the coding phase is declared complete.
