@@ -5,6 +5,7 @@ def test_watchdog_rolls_back_unhealthy_activation(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setattr(watchdog, "ROOT", tmp_path)
     monkeypatch.setattr(watchdog, "LESSONS", tmp_path / "lessons.jsonl")
+    monkeypatch.setattr(watchdog, "_record_lesson", lambda *args, **kwargs: None)
     monkeypatch.setattr(watchdog, "_pid_alive", lambda pid: False)
 
     class Child:
