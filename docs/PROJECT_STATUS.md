@@ -195,3 +195,13 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 - API key به‌صورت secret در settings ذخیره می‌شود و در export عادی تنظیمات قرار نمی‌گیرد.
 - Semantic Router نیز از همین Provider سفارشی استفاده می‌کند.
 - برای APIهای کاملاً اختصاصی و غیر OpenAI-compatible هنوز Adapter عمومی لازم است.
+
+## 5. زیرساخت‌های جدید در ادامه نقشه جامع
+
+- Provider Adapter و Provider Registry برای جدا کردن Agent/runtime از protocolهای LLM ایجاد شده‌اند.
+- Provider/Model Catalog پایدار با metadata، capability، version، priority و enabled state اضافه شده است.
+- API مدیریت provider/model و export catalog در Settings ایجاد شده است.
+- Model Manager اکنون catalog پایدار را نیز در inventory و fallback chain لحاظ می‌کند.
+- Event Bus، Execution Budget، Versioned Cache و Parallel Execution به‌عنوان primitives لایه Agent پیشرفته اضافه شده‌اند.
+- Configuration Registry اکنون import/export را از UI نیز در اختیار دارد.
+- این قابلیت‌ها تا اجرای تست‌های واقعی و regression verification، در roadmap به‌عنوان تکمیل‌شده علامت نخورده‌اند.
