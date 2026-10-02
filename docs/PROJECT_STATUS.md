@@ -179,3 +179,11 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 - health check پس از activate.
 - rollback خودکار در صورت failure.
 - ثبت failure lesson بدون فعال‌سازی خودکار آن.
+
+### LLM سفارشی
+
+- Provider فعال اکنون از Configuration Registry قابل انتخاب است.
+- مسیر custom-openai-compatible برای اتصال LLM اختصاصی دارای endpoint، model ID و API key است.
+- API key به‌صورت secret در settings ذخیره می‌شود و در export عادی تنظیمات قرار نمی‌گیرد.
+- Semantic Router نیز از همین Provider سفارشی استفاده می‌کند.
+- برای APIهای کاملاً اختصاصی و غیر OpenAI-compatible هنوز Adapter عمومی لازم است.
