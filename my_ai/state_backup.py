@@ -26,8 +26,7 @@ def export_state(destination: str | Path) -> dict[str, Any]:
             data["tables"][table] = rows
     raw = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
     payload = {"format": EXPORT_VERSION, "sha256": hashlib.sha256(raw).hexdigest(), "data": data}
-    path.write_text(json.dumps(payload,ensure_ascii=False,indent=2)+"
-",encoding="utf-8")
+    path.write_text(json.dumps(payload,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
     return {"path":str(path),"format":EXPORT_VERSION,"sha256":payload["sha256"],"table_counts":{k:len(v) for k,v in data["tables"].items()}}
 
 
@@ -75,4 +74,16 @@ def database_snapshot(destination: str | Path) -> str:
     finally:
         dest.close(); source.close()
     return str(target)
-\n\ndef _migrate_v0(data: dict[str, Any]) -> dict[str, Any]:\n    tables = dict(data.get("tables") or {})\n    tables.setdefault("session_state", [])\n    tables.setdefault("session_events", [])\n    tables.setdefault("stream_state", [])\n    tables.setdefault("conversation_state", [])\n    data = dict(data)\n    data["format"] = EXPORT_VERSION\n    data["migrated_from"] = "state-export-v0"\n    data["tables"] = tables\n    return data\n
+
+
+def _migrate_v0(data: dict[str, Any]) -> dict[str, Any]:
+    tables = dict(data.get("tables") or {})
+    tables.setdefault("session_state", [])
+    tables.setdefault("session_events", [])
+    tables.setdefault("stream_state", [])
+    tables.setdefault("conversation_state", [])
+    data = dict(data)
+    data["format"] = EXPORT_VERSION
+    data["migrated_from"] = "state-export-v0"
+    data["tables"] = tables
+    return data
