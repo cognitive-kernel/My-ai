@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Iterator, Protocol
+import sys
 
 
 class ProviderAdapterError(RuntimeError):
@@ -100,3 +101,10 @@ class ProviderRegistry:
             raise
         except Exception as exc:
             raise ProviderAdapterError(f"Provider adapter initialization failed: {key}: {exc}") from exc
+
+
+# Compatibility bridge for the existing llm module, which resolves ProviderRegistry
+# as a module-global name after importing ProviderCapabilities from this module.
+_llm_module = sys.modules.get("my_ai.infra.llm")
+if _llm_module is not None:
+    setattr(_llm_module, "ProviderRegistry", ProviderRegistry)
