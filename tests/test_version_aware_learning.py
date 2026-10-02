@@ -57,3 +57,11 @@ def test_learning_experience_tracks_execution_versions(tmp_path, monkeypatch):
         "env-v1",
         "compatible",
     )
+
+
+def test_persistence_schema_contains_version_columns(tmp_path, monkeypatch):
+    monkeypatch.setattr(persistence.settings, "db_path", str(tmp_path / "schema.db"))
+    persistence.init_db()
+    rows = persistence.fetch_all("PRAGMA table_info(learning_experiences)")
+    columns = {row["name"] for row in rows}
+    assert {"model_version", "provider", "tool_version", "skill_version", "environment_version", "compatibility"} <= columns
