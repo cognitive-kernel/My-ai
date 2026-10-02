@@ -5,7 +5,20 @@ from .control_plane import put_record, list_records, get_record
 
 
 def publish_prompt(name: str, text: str, *, task: str="default", version: str="1", enabled: bool=False, metadata=None):
+    current = get_record("prompts.registry", name)
+    if current:
+        put_record("prompts.registry.history", f"{name}@{current["version"]}", current["payload"], enabled=True)
     return put_record("prompts.registry", name, {"text":text,"task":task,"version":version,"metadata":metadata or {}}, enabled=enabled)
+
+def list_prompt_history(name: str):
+    return [x for x in list_records("prompts.registry.history") if x["name"].startswith(f"{name}@")]
+
+def rollback_prompt(name: str, version: int):
+    history = next((x for x in list_prompt_history(name) if int(x["version"]) == int(version)), None)
+    if not history: raise KeyError(f"{name}@{version}")
+    payload = dict(history["payload"])
+    payload["version"] = str(int(version) + 1)
+    return put_record("prompts.registry", name, payload, enabled=True)
 
 
 def activate_prompt(name: str): return put_record("prompts.registry",name,(get_record("prompts.registry",name) or {}).get("payload",{}),enabled=True)
