@@ -260,3 +260,12 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 - Learning-source content hashing is available through the admin CLI.
 - GUI Action Registry has been expanded across LLM, Learning, Behavior, Plugins and Tools.
 - Verification/testing remains intentionally deferred until the coding phase is declared complete.
+
+
+### Implementation pass — 2026-10-02 — no verification executed
+- Added a protocol-neutral HTTP LLM provider adapter for non-OpenAI-compatible APIs with configurable request/response mapping, authentication, health metadata and structured-output support.
+- Cataloged non-OpenAI provider records can now be instantiated by the runtime provider registry without modifying Agent/business logic.
+- Completed the provider adapter contract for the existing OpenAI-compatible client with structured JSON output and health-check support.
+- Added persistent SQLite-backed stores for version-aware knowledge evolution and experience evolution while retaining compatibility with existing in-memory APIs.
+- Added version comparison, invalidation and compatibility-aware experience handling to the persistent evolution layer.
+- No tests, CI, regression, integration or runtime verification were executed, as requested.
