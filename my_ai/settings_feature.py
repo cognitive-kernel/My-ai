@@ -28,6 +28,7 @@ from .backup_manager import backup as backup_database, restore as restore_databa
 from .control_plane import list_records, get_record, put_record, set_enabled, delete_record, start_action, update_action, get_action, list_actions, namespace_catalog
 from .registries import publish_prompt, activate_prompt, publish_policy, register_tool, list_tools
 from .plugin_registry import propose_plugin, approve_plugin, reject_plugin
+from .evaluation_registry import upsert_suite, list_suites, create_baseline, propose_candidate, get_candidate, verify_candidate, list_candidates, compare_metrics
 
 router = APIRouter(tags=["settings"])
 _workers = ThreadPoolExecutor(max_workers=1, thread_name_prefix="myai-learning")
@@ -826,6 +827,66 @@ def import_settings_registry(payload: SettingsImportRequest, request: Request):
         raise HTTPException(422, str(exc)) from exc
     audit(user, "settings", "import", "200", f"settings-import:{len(payload.values)}")
     return {"version": get_configuration_schema_version(), "settings": values, "imported": len(payload.values)}
+
+class EvaluationSuiteRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    tasks: list[dict[str, Any]] = Field(min_length=1, max_length=1000)
+    version: str = Field(default="1", max_length=120)
+    enabled: bool = True
+
+class EvaluationBaselineRequest(BaseModel):
+    suite_id: int = Field(gt=0)
+    label: str = Field(min_length=1, max_length=200)
+    metrics: dict[str, Any] = Field(default_factory=dict)
+
+class EvaluationCandidateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    baseline_run_id: int | None = Field(default=None, gt=0)
+
+class EvaluationVerificationRequest(BaseModel):
+    verification: dict[str, Any] = Field(default_factory=dict)
+    approved: bool = False
+
+@router.get("/settings/evaluation/suites")
+def settings_evaluation_suites(request: Request):
+    require_admin(request)
+    return {"items": list_suites()}
+
+@router.post("/settings/evaluation/suites")
+def settings_evaluation_suite(payload: EvaluationSuiteRequest, request: Request):
+    user=require_admin(request)
+    item=upsert_suite(payload.name,payload.tasks,payload.version,payload.enabled)
+    audit(user,"evaluation","suite-write","200",payload.name)
+    return item
+
+@router.post("/settings/evaluation/baselines")
+def settings_evaluation_baseline(payload: EvaluationBaselineRequest, request: Request):
+    user=require_admin(request)
+    item=create_baseline(payload.suite_id,payload.label,payload.metrics)
+    audit(user,"evaluation","baseline-write","200",payload.label)
+    return item
+
+@router.get("/settings/evaluation/candidates")
+def settings_evaluation_candidates(request: Request):
+    require_admin(request)
+    return {"items": list_candidates()}
+
+@router.post("/settings/evaluation/candidates")
+def settings_evaluation_candidate(payload: EvaluationCandidateRequest, request: Request):
+    user=require_admin(request)
+    item=propose_candidate(payload.name,payload.payload,payload.baseline_run_id)
+    audit(user,"evaluation","candidate-propose","200",item["candidate_id"])
+    return item
+
+@router.post("/settings/evaluation/candidates/{candidate_id}/verify")
+def settings_evaluation_candidate_verify(candidate_id: str, payload: EvaluationVerificationRequest, request: Request):
+    user=require_admin(request)
+    if not get_candidate(candidate_id):
+        raise HTTPException(404,"Evaluation candidate not found.")
+    item=verify_candidate(candidate_id,payload.verification,payload.approved)
+    audit(user,"evaluation","candidate-verify","200",candidate_id)
+    return item
 
 class ControlPlaneRecordRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
