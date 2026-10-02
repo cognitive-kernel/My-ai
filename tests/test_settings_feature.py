@@ -98,3 +98,12 @@ def test_configuration_registry_ui_is_schema_driven():
     assert "x.choices||[]" in script
     assert "x.default" in script
     assert "updateRegisteredSetting" in script
+
+
+def test_learning_source_ui_supports_file_upload_edit_and_review():
+    html = sf.SETTINGS_HTML
+    assert "ls_file" in html
+    script = __import__("pathlib").Path("my_ai/settings_script.js").read_text(encoding="utf-8")
+    assert "uploadLearningSourceCatalog" in script
+    assert "editLearningSource" in script
+    assert "/settings/learning-sources/upload" in script
