@@ -4,7 +4,7 @@ import httpx
 from dataclasses import dataclass
 from pathlib import Path
 from .config import settings
-from .settings_store import get_int, get_setting, get_setting
+from .settings_store import get_int, get_setting
 @dataclass(frozen=True)
 class ExecutionResult:
     output:str; error:str; timed_out:bool; return_code:int; sandbox_mode:str="container"
@@ -12,6 +12,11 @@ def _mode() -> str: return str(get_setting("execution.mode", settings.exec_mode)
 def _max_output() -> int: return max(1000, min(10000000, get_int("execution.max_output_chars", settings.exec_output_chars)))
 def _truncate(value:str)->str: return (value or "")[-_max_output():]
 def _timeout_seconds() -> int: return max(1, min(3600, get_int("execution.timeout_seconds", settings.exec_timeout)))
+def _memory_mb() -> int: return max(64, min(1048576, get_int("execution.max_memory_mb", settings.exec_memory_mb)))
+def _pids() -> int: return max(1, min(1000, get_int("execution.max_processes", settings.exec_pids)))
+def _cpu_cores() -> float:
+    try: return max(0.1, min(128.0, float(get_setting("execution.cpu_cores", settings.exec_cpu_cores))))
+    except (TypeError, ValueError): return float(settings.exec_cpu_cores)
 def _run_subprocess(code:str)->ExecutionResult:
     with tempfile.TemporaryDirectory(prefix="myai-") as tmp:
         p=Path(tmp)/"main.py"; p.write_text(code,encoding="utf-8"); os.chmod(tmp,0o755); os.chmod(p,0o644)
@@ -23,7 +28,7 @@ def _run_container(code:str)->ExecutionResult:
     name=f"myai-exec-{uuid.uuid4().hex[:16]}"
     with tempfile.TemporaryDirectory(prefix="myai-exec-") as tmp:
         p=Path(tmp)/"main.py"; p.write_text(code,encoding="utf-8"); os.chmod(tmp,0o755); os.chmod(p,0o644)
-        cmd=["docker","run","--rm","--name",name,"--network","none","--read-only","--cap-drop","ALL","--security-opt","no-new-privileges","--pids-limit",str(settings.exec_pids),"--memory",settings.exec_memory,"--cpus",settings.exec_cpus,"--user","65532:65532","--tmpfs","/tmp:rw,noexec,nosuid,size=64m","--mount",f"type=bind,src={tmp},dst=/work,readonly",settings.exec_image,"python","-I","/work/main.py"]
+        cmd=["docker","run","--rm","--name",name,"--network","none","--read-only","--cap-drop","ALL","--security-opt","no-new-privileges","--pids-limit",str(_pids()),"--memory",f"{_memory_mb()}m","--cpus",str(_cpu_cores()),"--user","65532:65532","--tmpfs","/tmp:rw,noexec,nosuid,size=64m","--mount",f"type=bind,src={tmp},dst=/work,readonly",settings.exec_image,"python","-I","/work/main.py"]
         try:
             r=subprocess.run(cmd,capture_output=True,text=True,timeout=_timeout_seconds()+2)
             return ExecutionResult(_truncate(r.stdout),_truncate(r.stderr),False,r.returncode,"container")
