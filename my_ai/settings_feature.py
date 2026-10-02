@@ -26,7 +26,7 @@ from .config_profiles import save_profile, active_profile, load_profile
 from .learning_catalog import add_source, list_sources, review_source, update_content_hash, update_source, delete_source, list_relearning_queue
 from .backup_manager import backup as backup_database, restore as restore_database
 from .control_plane import list_records, get_record, put_record, set_enabled, delete_record, start_action, update_action, get_action, list_actions, namespace_catalog
-from .registries import publish_prompt, activate_prompt, publish_policy, register_tool, update_tool, list_tools, list_prompt_history, rollback_prompt
+from .registries import publish_prompt, activate_prompt, publish_policy, register_tool, update_tool, list_tools, list_prompt_history, rollback_prompt, prompt_diff
 from .plugin_registry import propose_plugin, approve_plugin, reject_plugin
 from .evaluation_registry import upsert_suite, list_suites, create_baseline, propose_candidate, get_candidate, verify_candidate, list_candidates, compare_metrics
 from .integration_catalog import register_integration, list_integrations, register_webhook, list_webhooks, map_event_action, list_event_actions
@@ -1235,6 +1235,12 @@ def settings_prompt_rollback(name: str, version: int, request: Request):
     try: item=rollback_prompt(name, version)
     except KeyError as exc: raise HTTPException(404, "prompt version not found") from exc
     audit(user, "prompts", "rollback", "200", f"{name}@{version}"); return item
+
+@router.get("/settings/prompts/{name}/diff")
+def settings_prompt_diff(name: str, from_version: int, to_version: int, request: Request):
+    require_admin(request)
+    try: return prompt_diff(name, from_version, to_version)
+    except KeyError as exc: raise HTTPException(404, "prompt version not found") from exc
 
 @router.post("/settings/prompts/{name}/activate")
 def settings_prompt_activate(name: str, request: Request):
