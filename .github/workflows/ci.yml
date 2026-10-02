@@ -29,7 +29,7 @@ jobs:
       - run: mypy my_ai --ignore-missing-imports
       - run: bandit -r my_ai -q -lll
       - run: pip-audit
-      - run: pytest -q
+      - run: timeout 180 pytest -vv
       - run: python scripts/regression_gate.py
       - name: Upload regression history
         if: always()
