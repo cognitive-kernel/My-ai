@@ -218,7 +218,11 @@ def _semantic_duplicate(topic: str, title: str, content: str, digest: str, conn)
         from ..platform import cosine_similarity, ollama_embed
         from ..config import settings as runtime_settings
         from ..settings_store import get_setting
-        threshold = float(get_setting("memory.duplicate_threshold", runtime_settings.knowledge_duplicate_threshold))
+        configured_threshold = get_setting("memory.duplicate_threshold", runtime_settings.knowledge_duplicate_threshold)
+        threshold = float(configured_threshold)
+        registry_default = 0.92
+        if threshold == registry_default and runtime_settings.knowledge_duplicate_threshold != registry_default:
+            threshold = float(runtime_settings.knowledge_duplicate_threshold)
         query = f"{title}\n{content}\n{topic}"
         vector = ollama_embed(query, runtime_settings.embedding_model)
         rows = conn.execute(
