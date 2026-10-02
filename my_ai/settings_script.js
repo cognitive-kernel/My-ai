@@ -209,6 +209,22 @@ async function restoreDatabaseGUI(){
   try{var path=byId("backup_path").value.trim();var j=await req("/settings/database/restore",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:path})});setText("backupout","Restore انجام شد: "+j.path)}catch(e){setText("backupout","خطا: "+e.message)}
 }
 
+async function loadRoutingGUI(){
+  var box=byId("routingitems"); if(!box)return;
+  try{
+    var j=await req("/settings/routing");
+    var rules=(j.rules||[]).map(function(x){return "<div><b>Rule:</b> "+esc(x.task)+" → "+esc(x.model_id)+" · priority "+esc(x.priority)+" · "+(x.enabled?"فعال":"غیرفعال")+"</div>"}).join("");
+    var fb=Object.keys(j.fallbacks||{}).map(function(task){var ids=(j.fallbacks[task]||[]).map(function(x){return x.model_id}).join(" → ");return "<div><b>Fallback "+esc(task)+":</b> "+esc(ids||"تعریف نشده")+"</div>"}).join("");
+    box.innerHTML=rules+fb||"Routing/Fallback ثبت نشده است";
+  }catch(e){box.textContent="خطا: "+e.message}
+}
+async function saveRoutingRuleGUI(){
+  try{await req("/settings/routing/rule",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({task:byId("route_task").value.trim(),model_id:byId("route_model").value.trim(),provider_id:byId("route_provider").value?Number(byId("route_provider").value):null,priority:Number(byId("route_priority").value||100),enabled:true})});setText("routingout","Routing Rule ذخیره شد.");await loadRoutingGUI()}catch(e){setText("routingout","خطا: "+e.message)}
+}
+async function saveFallbackGUI(){
+  try{await req("/settings/routing/fallback",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:"ui",task:byId("fallback_task").value.trim()||"general",model_ids:byId("fallback_models").value.split(",").map(function(x){return x.trim()}).filter(Boolean),enabled:true})});setText("routingout","Fallback Chain ذخیره شد.");await loadRoutingGUI()}catch(e){setText("routingout","خطا: "+e.message)}
+}
+
 async function loadLearningSourcesCatalog(){
   var box=byId("learning-sources-catalog");if(!box)return;
   try{var j=await req("/settings/learning-sources");box.innerHTML=(j.items||[]).map(function(x){
@@ -339,4 +355,4 @@ async function loadCourses(){var box=byId("courses");if(!box)return;try{var j=aw
 
 loadSettings();loadRegistry();loadUsers();loadPermissions();loadCourses();loadUIActions();loadProviderCatalog();setInterval(loadCourses,10000);setInterval(loadResourceStatus,5000);
 
-loadLearningSourcesCatalog();loadControlNamespacesGUI();loadProfilesGUI();
+loadLearningSourcesCatalog();loadRoutingGUI();loadControlNamespacesGUI();loadProfilesGUI();
