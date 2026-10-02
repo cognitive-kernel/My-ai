@@ -18,7 +18,7 @@ import time
 import httpx
 
 from my_ai.provider_catalog import (
-    delete_model, delete_provider, list_models, list_providers, upsert_model, upsert_provider,
+    add_provider_key, list_provider_keys, rotate_provider_key, delete_model, delete_provider, list_models, list_providers, upsert_model, upsert_provider,
 )
 
 
@@ -59,9 +59,12 @@ def main() -> int:
     add.add_argument("--secret", default="")
     add.add_argument("--version", default="")
     add.add_argument("--timeout", type=float, default=30)
-    for name in ("enable", "disable", "delete", "health"):
+    for name in ("enable", "disable", "delete", "health", "keys", "add-key", "rotate-key"):
         cmd = psub.add_parser(name)
         cmd.add_argument("--id", type=int, required=True)
+    psub.choices["add-key"].add_argument("--key-name", required=True)
+    psub.choices["add-key"].add_argument("--secret", required=True)
+    psub.choices["add-key"].add_argument("--priority", type=int, default=100)
 
     models = sub.add_parser("models")
     msub = models.add_subparsers(dest="action", required=True)
@@ -98,6 +101,12 @@ def main() -> int:
         elif args.action == "delete":
             delete_provider(args.id)
             emit({"deleted": args.id})
+        elif args.action == "keys":
+            emit(list_provider_keys(args.id))
+        elif args.action == "add-key":
+            emit(add_provider_key(args.id,args.key_name,args.secret,priority=args.priority))
+        elif args.action == "rotate-key":
+            emit(rotate_provider_key(args.id))
         else:
             emit(provider_health(args.id))
     else:
