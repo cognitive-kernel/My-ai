@@ -66,7 +66,20 @@ jobs:
         with:
           name: ruff-diagnostics-${{ github.sha }}
           path: ruff-f.txt
-      - run: mypy my_ai --ignore-missing-imports
+      - name: Mypy diagnostics
+        shell: bash
+        run: |
+          set +e
+          mypy my_ai --ignore-missing-imports > mypy.txt 2>&1
+          rc=$?
+          cat mypy.txt
+          if [ "$rc" -ne 0 ]; then exit "$rc"; fi
+      - name: Upload Mypy diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: mypy-diagnostics-${{ github.sha }}
+          path: mypy.txt
       - run: bandit -r my_ai -q -lll
       - run: pip-audit
       - name: Run tests one file at a time with 30s timeout
