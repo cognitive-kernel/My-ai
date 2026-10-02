@@ -69,3 +69,21 @@ def test_apply_update_runs_isolated_tests_before_activation(monkeypatch, tmp_pat
     assert any(args[:3] == ("worktree", "add", "--detach") for args in calls)
     assert any(args[:2] == ("merge", "--ff-only") for args in calls)
     assert result["watchdog"] is True
+
+
+def test_candidate_failure_blocks_activation_and_records_lesson(monkeypatch, tmp_path):
+    calls = []
+    state = iter(["", "current", "remote"])
+    monkeypatch.setattr(self_update, "ROOT", tmp_path)
+    monkeypatch.setattr(self_update, "STATE_DIR", tmp_path / "self-repair")
+    self_update.STATE_DIR.mkdir()
+    monkeypatch.setattr(self_update, "_git", lambda *args, **kwargs: calls.append(args) or next(state, "ok"))
+    monkeypatch.setattr(self_update, "_snapshot_database", lambda destination: None)
+    monkeypatch.setattr(self_update, "_tests", lambda cwd: (False, "candidate failed"))
+    monkeypatch.setattr(self_update, "_policy_flag", lambda *args: True)
+    monkeypatch.setattr(self_update, "_record_lesson", lambda *args, **kwargs: calls.append(("lesson", args)))
+    result = self_update.apply_confirmed_update()
+    assert result["status"] == "blocked"
+    assert "candidate tests failed" in result["reason"]
+    assert not any(args[:2] == ("merge", "--ff-only") for args in calls)
+    assert any(args and args[0] == "lesson" for args in calls)
