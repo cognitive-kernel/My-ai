@@ -18,7 +18,7 @@ def test_filewise_runner_stops_on_first_timeout(tmp_path, monkeypatch):
         calls.append((args, kwargs))
         if args[1:4] == ["-m", "compileall", "-q"]:
             return Result()
-        raise TimeoutError("should not be used")
+        raise __import__("subprocess").TimeoutExpired(args, 30)
 
     monkeypatch.setattr("my_ai.test_runner.subprocess.run", fake_run)
     ok, details = run_test_suite(Path(tmp_path), per_file_timeout=30)
