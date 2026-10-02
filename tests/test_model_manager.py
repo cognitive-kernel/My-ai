@@ -139,3 +139,19 @@ def test_custom_provider_is_visible_and_health_checked(monkeypatch):
     status = manager.health("custom-model")
     assert status.provider == "custom-openai-compatible"
     assert status.available is True
+
+
+def test_select_for_task_uses_quality_weight(monkeypatch):
+    manager = ModelManager()
+    monkeypatch.setattr("my_ai.model_manager.list_models", lambda include_disabled=False: [
+        {"provider_id": 1, "model_id": "fast-low-quality", "tasks": ["coding"], "priority": 100, "limits": {"cost_per_1k_tokens": 0, "quality_score": 1}},
+        {"provider_id": 2, "model_id": "slower-high-quality", "tasks": ["coding"], "priority": 100, "limits": {"cost_per_1k_tokens": 0, "quality_score": 10}},
+    ])
+    monkeypatch.setattr("my_ai.model_manager.list_providers", lambda include_disabled=False: [
+        {"id": 1, "name": "p1", "enabled": True},
+        {"id": 2, "name": "p2", "enabled": True},
+    ])
+    monkeypatch.setattr("my_ai.model_manager.list_routing_rules", lambda **kwargs: [])
+    monkeypatch.setattr(manager, "health", lambda model, **kwargs: type("H", (), {"available": True, "latency_ms": 1, "error": None})())
+    monkeypatch.setattr("my_ai.model_manager.get_setting", lambda key, default=None, **kwargs: {"llm.routing.quality_weight": "10", "llm.routing.latency_weight": "0", "llm.routing.cost_weight": "0"}.get(key, default))
+    assert manager.select_for_task("coding") == "slower-high-quality"
