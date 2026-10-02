@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shutil
 from dataclasses import dataclass
@@ -56,8 +57,8 @@ class SecurityEngine:
             try:
                 if p.stat().st_size <= 500_000:
                     files.append(p)
-            except OSError:
-                pass
+            except OSError as exc:
+                logging.getLogger(__name__).debug("Security scan stat failed: %s", exc)
         return root,files
 
     def scan_path(self,project_path:str,fix:bool=False):
