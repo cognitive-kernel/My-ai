@@ -19,7 +19,7 @@ from .git_connector import GitHubConnector
 from .llm import create_llm
 from .provider_catalog import list_providers, upsert_provider, delete_provider, list_models, upsert_model, delete_model, export_catalog, add_provider_key, list_provider_keys, rotate_provider_key, set_routing_rule, list_routing_rules, delete_routing_rule, set_fallback_chain, list_fallback_chain, delete_fallback_chain
 from .settings_store import get_setting, set_setting, get_bool, get_int, get_github_settings, get_setting_registry, get_configuration_schema_version, reset_setting, export_registered_settings, import_registered_settings, list_setting_history
-from .ui_actions import list_ui_actions
+from .ui_actions import UIAction, list_ui_actions, register_ui_action
 from .metrics import snapshot as metrics_snapshot
 from .no_code_catalog import inventory as no_code_inventory
 from .config_profiles import save_profile, active_profile, load_profile
@@ -434,10 +434,27 @@ def settings_metrics(request: Request):
     require_admin(request)
     return metrics_snapshot()
 
+class UIActionRequest(BaseModel):
+    id: str = Field(min_length=1, max_length=160)
+    module: str = Field(min_length=1, max_length=100)
+    label: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=2000)
+    method: str = Field(default="GET", pattern="^(GET|POST)$")
+    endpoint: str = Field(min_length=1, max_length=1000)
+    permission: str = Field(min_length=1, max_length=160)
+    confirmation: bool = False
+
 @router.get("/settings/ui-actions")
 def settings_ui_actions(request: Request):
     require_admin(request)
     return {"items": list_ui_actions()}
+
+@router.post("/settings/ui-actions")
+def settings_ui_action_register(payload: UIActionRequest, request: Request):
+    user=require_admin(request)
+    item=register_ui_action(UIAction(**payload.model_dump()))
+    audit(user,"ui","action-register","200",payload.id)
+    return item
 
 class ProviderKeyRequest(BaseModel):
     key_name: str = Field(min_length=1, max_length=120)
