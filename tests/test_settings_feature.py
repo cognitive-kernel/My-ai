@@ -156,3 +156,15 @@ def test_backup_retention_prunes_old_files(tmp_path):
     removed = prune_backups(str(tmp_path), 2)
     assert len(removed) == 1
     assert len(list(tmp_path.iterdir())) == 2
+
+
+def test_database_restore_requires_confirmation(monkeypatch):
+    from my_ai import settings_feature
+    monkeypatch.setattr(settings_feature, "require_admin", lambda request: 1)
+    try:
+        settings_feature.settings_database_restore(settings_feature.BackupRequest(path="x.db"), object())
+    except settings_feature.HTTPException as exc:
+        assert exc.status_code == 400
+        assert "confirmation" in str(exc.detail).lower()
+    else:
+        raise AssertionError("restore without confirmation must fail")
