@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import time
+from pathlib import Path
 from typing import Any
 
 
@@ -42,6 +43,25 @@ def configure_logging() -> None:
     level_name = configured_level or os.getenv("MYAI_LOG_LEVEL", "INFO").upper()
     log_level = getattr(logging, level_name, logging.INFO)
     root.setLevel(log_level)
+    destination = "console"
+    try:
+        destination = str(get_setting("observability.log_destination", "console") or "console").strip()
+    except Exception:
+        pass
+    if destination.startswith("file:"):
+        raw_path = Path(destination[5:].strip()).expanduser()
+        root = Path("data/logs").resolve()
+        target = raw_path.resolve() if raw_path.is_absolute() else (Path.cwd() / raw_path).resolve()
+        try:
+            target.relative_to(root)
+        except ValueError:
+            target = root / "my-ai.log"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if not any(isinstance(h, logging.FileHandler) and Path(getattr(h, "baseFilename", "")).resolve() == target for h in root.handlers):
+            file_handler = logging.FileHandler(target, encoding="utf-8")
+            file_handler.setFormatter(JsonLogFormatter())
+            root.addHandler(file_handler)
+
     # Keep application logger filtering explicit because Uvicorn may reconfigure
     # the root logger after application import.
     logging.getLogger("my_ai").setLevel(log_level)
