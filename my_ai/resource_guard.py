@@ -4,7 +4,7 @@ import time
 import os
 from typing import Any
 
-from .settings_store import get_int, get_setting
+from .settings_store import get_setting
 
 DEFAULT_CPU_PERCENT = 70.0
 DEFAULT_CPU_THREADS = 8
