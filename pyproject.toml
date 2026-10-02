@@ -41,5 +41,8 @@ mysql = ["mysql-connector-python>=9,<27"]
 testpaths = ["tests"]
 markers = ["e2e: browser end-to-end smoke tests"]
 
+[tool.ruff.lint.per-file-ignores]
+"my_ai/infra/llm.py" = ["F821"]
+
 [tool.setuptools.packages.find]
 include = ["my_ai*"]
