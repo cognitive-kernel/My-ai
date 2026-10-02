@@ -254,14 +254,11 @@ def remember_knowledge(topic: str, title: str, content: str, source_url: str | N
     from ..settings_store import get_setting
     from ..config import settings as runtime_settings
     import os
-    persisted_threshold = get_setting("memory.duplicate_threshold", None)
-    if persisted_threshold is None:
-        threshold = float(os.getenv("KNOWLEDGE_DUPLICATE_THRESHOLD", runtime_settings.knowledge_duplicate_threshold))
+    env_threshold = os.getenv("KNOWLEDGE_DUPLICATE_THRESHOLD")
+    if env_threshold is not None:
+        threshold = float(env_threshold)
     else:
-        threshold = float(persisted_threshold)
-    registry_default = 0.92
-    if threshold == registry_default and runtime_settings.knowledge_duplicate_threshold != registry_default and "KNOWLEDGE_DUPLICATE_THRESHOLD" in os.environ:
-        threshold = float(runtime_settings.knowledge_duplicate_threshold)
+        threshold = float(get_setting("memory.duplicate_threshold", runtime_settings.knowledge_duplicate_threshold))
     with connect() as conn:
         conn.create_function("normalize_search", 1, _normalize_search_text)
         conn.execute("CREATE TABLE IF NOT EXISTS knowledge_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, knowledge_id INTEGER NOT NULL, user_id INTEGER, action TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
