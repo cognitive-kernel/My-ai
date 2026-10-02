@@ -112,6 +112,18 @@ def apply_repair(proposal_id: str, approved: bool, health_url: str | None = None
             raise RuntimeError("Post-activation health check failed and repair was rolled back: "+last_error)
     proposal["approved"]=True; proposal["applied"]=True; proposal["applied_at"]=datetime.now(timezone.utc).isoformat(); path.write_text(json.dumps(proposal,ensure_ascii=False,indent=2),encoding="utf-8"); execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_applied",proposal["patch"],tests,1)); record_decision("self_repair","apply",{"proposal_id":proposal_id}); notify("self_repair_applied",{"proposal_id":proposal_id,"base":proposal["base"]}); return {"status":"applied","proposal_id":proposal_id,"base":proposal["base"],"tests":tests,"working_tree":"modified"}
 
+
+def _record_failure_lesson(event: str, proposal_id: str, error: str) -> None:
+    lesson = ROOT / "self-repair" / "lessons.jsonl"
+    lesson.parent.mkdir(parents=True, exist_ok=True)
+    item = {"timestamp": datetime.now(timezone.utc).isoformat(), "event": event, "proposal_id": proposal_id, "error": str(error)[:4000]}
+    with lesson.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(item, ensure_ascii=False) + "\n")
+    try:
+        execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)", (event, proposal_id, str(error)[:4000], 0))
+    except Exception as exc:
+        logger.warning("SELF_REPAIR_LESSON_PERSIST_FAILED: %s", exc)
+
 def list_proposals():
     PROPOSALS.mkdir(parents=True,exist_ok=True); items=[]
     for path in sorted(PROPOSALS.glob("*.json"),key=lambda p:p.stat().st_mtime,reverse=True):
