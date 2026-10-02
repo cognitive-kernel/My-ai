@@ -89,7 +89,7 @@ class StudyScheduler:
     @staticmethod
     def _wait_for_resources(stop_event):
         while not stop_event.is_set():
-            cpu=float(get_setting("resources.cpu_percent",str(settings.scheduler_max_cpu_percent))); ram=float(get_setting("resources.ram_percent",str(settings.scheduler_max_ram_percent))); r=resource_status()
+            limits = resource_limits(); cpu=float(limits["cpu_percent"]); ram=float(limits["ram_percent"]); r=resource_status()
             if r.get("cpu_percent") is None or r.get("ram_percent") is None or (r.get("cpu_percent")<=cpu and r.get("ram_percent")<=ram): return r
             stop_event.wait(1)
         raise InterruptedError("learning stopped")
