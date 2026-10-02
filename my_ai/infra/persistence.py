@@ -273,6 +273,15 @@ def remember_knowledge(topic: str, title: str, content: str, source_url: str | N
         conn.commit()
         return knowledge_id
 
+
+def purge_expired_knowledge() -> int:
+    from ..settings_store import get_int
+    days=max(1,get_int("memory.retention_days",int(getattr(settings,"memory_retention_days",365))))
+    with connect() as conn:
+        cur=conn.execute("DELETE FROM knowledge WHERE created_at < datetime('now', ?)",(f"-{days} days",))
+        conn.commit()
+        return int(cur.rowcount)
+
 def search_knowledge(query: str, limit: int = 8) -> list[dict[str, Any]]:
     normalized_query = _normalize_search_text(query)
     tokens = [t for t in normalized_query.replace('"', " ").split() if t][:12]
