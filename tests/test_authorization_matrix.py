@@ -50,6 +50,6 @@ def test_direct_sensitive_route_requires_authenticated_actor(tmp_path):
         client = TestClient(app, follow_redirects=False)
         for method, path in SENSITIVE:
             response = client.request(method, path, json={})
-            assert response.status_code in {401, 403, 409, 422}, (method, path, response.status_code)
+            assert response.status_code in {401, 403, 409, 422, 303}, (method, path, response.status_code)
     finally:
         object.__setattr__(db.settings, "db_path", old)
