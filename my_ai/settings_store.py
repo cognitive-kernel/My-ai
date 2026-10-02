@@ -6,6 +6,41 @@ import os
 import secrets
 from pathlib import Path
 from typing import Any
+SETTING_REGISTRY: dict[str, dict[str, Any]] = {
+    "logging.level": {"type":"enum","default":"WARNING","choices":["DEBUG","INFO","WARNING","ERROR","CRITICAL"],"description":"Minimum console log level."},
+    "learning.interval_seconds": {"type":"int","default":3600,"min":60,"max":86400,"description":"Learning interval in seconds."},
+    "learning.max_retries": {"type":"int","default":5,"min":1,"max":20,"description":"Maximum learning retries."},
+    "resources.cpu_percent": {"type":"float","default":70.0,"min":1.0,"max":100.0,"description":"Maximum CPU percentage."},
+    "resources.cpu_threads": {"type":"int","default":8,"min":1,"max":128,"description":"Maximum CPU threads."},
+    "resources.ram_percent": {"type":"float","default":80.0,"min":1.0,"max":100.0,"description":"Maximum RAM percentage."},
+    "resources.gpu_layers": {"type":"int","default":0,"min":0,"max":128,"description":"GPU layers."},
+}
+
+def get_setting_registry() -> dict[str, dict[str, Any]]:
+    return {k: dict(v) for k, v in SETTING_REGISTRY.items()}
+
+def validate_registered_setting(key: str, value: Any) -> Any:
+    meta = SETTING_REGISTRY.get(key)
+    if not meta: raise KeyError(f"Unknown registered setting: {key}")
+    kind = meta["type"]
+    if kind == "int":
+        try: value = int(value)
+        except (TypeError, ValueError) as exc: raise ValueError(f"{key} must be integer") from exc
+    elif kind == "float":
+        try: value = float(value)
+        except (TypeError, ValueError) as exc: raise ValueError(f"{key} must be number") from exc
+    else: value = str(value)
+    if "min" in meta and value < meta["min"]: raise ValueError(f"{key} below minimum")
+    if "max" in meta and value > meta["max"]: raise ValueError(f"{key} above maximum")
+    if "choices" in meta and value not in meta["choices"]: raise ValueError(f"{key} has invalid choice")
+    return value
+
+def reset_setting(key: str) -> Any:
+    meta = SETTING_REGISTRY.get(key)
+    if not meta: raise KeyError(f"Unknown registered setting: {key}")
+    delete_setting(key)
+    return meta["default"]
+
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -69,7 +104,7 @@ def get_setting(key: str, default: Any = None, *, secret: bool = False) -> Any:
 def set_setting(key: str, value: Any, *, secret: bool = False) -> None:
     assert_mutation_allowed(f"setting:{key}")
     ensure_schema()
-    text = "" if value is None else str(value)
+    if key in SETTING_REGISTRY:\n        value = validate_registered_setting(key, value)\n    text = "" if value is None else str(value)
     stored = _encrypt(text) if secret and text else text
     with connect() as conn:
         conn.execute(
