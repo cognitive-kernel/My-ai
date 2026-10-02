@@ -22,6 +22,12 @@ def create_llm():
         base_url = str(_runtime_setting("llm.custom.base_url", "") or "").strip()
         if not base_url:
             raise LLMError("Custom LLM provider requires a base URL.")
+        return OpenAICompatibleClient(
+            base_url=base_url,
+            model=str(_runtime_setting("llm.custom.model", "") or "").strip() or None,
+            api_key=str(_runtime_setting("llm.custom.api_key", "") or ""),
+            provider_name="custom-openai-compatible",
+        )
     return _infra_create_llm()
 
 
