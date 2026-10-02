@@ -21,6 +21,9 @@ class Settings:
     knowledge_duplicate_threshold: float = float(os.getenv("KNOWLEDGE_DUPLICATE_THRESHOLD", "0.92"))
     cache_ttl_seconds: int = int(os.getenv("MYAI_CACHE_TTL", "60"))
     llm_provider: str = os.getenv("LLM_PROVIDER", "auto").strip().lower()
+    llm_retry_attempts: int = max(1, min(5, int(os.getenv("LLM_RETRY_ATTEMPTS", "2"))))
+    llm_retry_backoff_seconds: float = max(0.0, min(10.0, float(os.getenv("LLM_RETRY_BACKOFF_SECONDS", "0.5"))))
+    llm_timeout_seconds: float = max(1.0, float(os.getenv("LLM_TIMEOUT_SECONDS", "300")))
     openai_base_url: str = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
@@ -49,7 +52,6 @@ class Settings:
     resource_wait_seconds: float = max(1.0, float(os.getenv("RESOURCE_WAIT_SECONDS", "30")))
 
 settings = Settings()
-
 
 
 def assert_write_allowed(path: str) -> None:
