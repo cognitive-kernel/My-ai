@@ -132,7 +132,7 @@ def documentation_reference_audit(root: Path = ROOT) -> list[dict[str, Any]]:
         except OSError as exc:
             findings.append({"document": str(path.relative_to(root)), "error": str(exc)})
             continue
-        references = sorted(set(re.findall(r"(?:my_ai/|scripts/|evals/)[A-Za-z0-9_./-]+(?:\\.py|\\.json|\\.md)?", source)))
+        references = sorted(set(re.findall(r"(?:my_ai/|scripts/|evals/)[A-Za-z0-9_./-]+(?:\.py|\.json|\.md)?", source)))
         for reference in references:
             target = root / reference
             findings.append({
