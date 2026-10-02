@@ -121,6 +121,20 @@ async function createCourse(){try{var lines=byId("ct").value.split(/\n+/).map(fu
 async function startCourse(id){try{await req("/settings/courses/"+id+"/start",{method:"POST"});await loadCourses()}catch(e){setText("courseout",e.message)}}
 
 
+async function saveProviderCatalog(){
+  try{
+    var body={provider_id:(byId("pc_provider_id").value?Number(byId("pc_provider_id").value):null),name:byId("pc_name").value.trim(),protocol:byId("pc_protocol").value.trim(),endpoint:byId("pc_endpoint").value.trim(),auth_type:byId("pc_auth").value.trim()||"none",secret:byId("pc_secret").value,version:byId("pc_version").value.trim(),capabilities:{},timeout_seconds:30,enabled:true};
+    await req("/settings/providers",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    byId("pc_provider_id").value="";byId("pc_secret").value="";setText("catalogout","Provider ذخیره شد.");await loadProviderCatalog();
+  }catch(e){setText("catalogout","خطا: "+e.message)}
+}
+async function saveModelCatalog(){
+  try{
+    var tasks=byId("mc_tasks").value.split(",").map(function(x){return x.trim()}).filter(Boolean);
+    await req("/settings/models",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({provider_id:Number(byId("mc_provider").value),model_id:byId("mc_model").value.trim(),tasks:tasks,context_length:(byId("mc_context").value?Number(byId("mc_context").value):null),limits:{},priority:Number(byId("mc_priority").value||100),version:"",enabled:true})});
+    setText("catalogout","Model ذخیره شد.");await loadProviderCatalog();
+  }catch(e){setText("catalogout","خطا: "+e.message)}
+}
 async function loadProviderCatalog(){
   var p=byId("providers"),m=byId("models");if(!p&&!m)return;
   try{
