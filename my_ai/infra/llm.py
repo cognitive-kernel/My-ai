@@ -135,10 +135,13 @@ class OllamaClient:
         raise LLMError("Ollama request failed for all model candidates: "+" | ".join(errors))
 
 class OpenAICompatibleClient:
-    def __init__(self)->None:
-        if getattr(_settings(),"offline_strict",False): raise LLMError("OpenAI is disabled in offline strict mode.")
-        self.base_url=_settings().openai_base_url; self.model=_settings().openai_model; self.api_key=_settings().openai_api_key
-        if not self.api_key: raise LLMError("OPENAI_API_KEY is required when LLM_PROVIDER=openai")
+    def __init__(self, *, base_url: str | None = None, model: str | None = None, api_key: str | None = None, provider_name: str = "openai"):
+        if getattr(_settings(),"offline_strict",False): raise LLMError("OpenAI-compatible providers are disabled in offline strict mode.")
+        self.base_url=(base_url or _settings().openai_base_url).rstrip("/")
+        self.model=model or _settings().openai_model
+        self.api_key=api_key or _settings().openai_api_key
+        self.provider_name=provider_name
+        if not self.api_key: raise LLMError(f"{provider_name} API key is required")
     def _retry_attempts(self) -> int:
         return max(1, min(5, int(_runtime_setting("llm.retry_attempts", getattr(_settings(), "llm_retry_attempts", 2)))))
 
@@ -162,10 +165,10 @@ class OpenAICompatibleClient:
                         data=json.loads(raw)
                         if data.get("type")=="response.output_text.delta" and isinstance(data.get("delta"),str): yield data["delta"]
                         elif data.get("type")=="response.completed":
-                            usage=((data.get("response") or {}).get("usage") or {}); record_inference("openai",self.model,time.perf_counter()-started,prompt_tokens=usage.get("input_tokens"),output_tokens=usage.get("output_tokens"))
+                            usage=((data.get("response") or {}).get("usage") or {}); record_inference(self.provider_name,self.model,time.perf_counter()-started,prompt_tokens=usage.get("input_tokens"),output_tokens=usage.get("output_tokens"))
                 return
             except (httpx.HTTPError,json.JSONDecodeError) as exc:
-                errors.append(f"attempt {attempt}: {exc}"); record_error("openai",self.model); record_route(message,self.model,f"failure_attempt_{attempt}")
+                errors.append(f"attempt {attempt}: {exc}"); record_error(self.provider_name,self.model); record_route(message,self.model,f"failure_attempt_{attempt}")
                 if attempt < self._retry_attempts(): self._backoff(attempt)
         raise LLMError("OpenAI-compatible streaming request failed: "+" | ".join(errors))
     def chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None)->str:
@@ -185,6 +188,13 @@ class OpenAICompatibleClient:
 
 def create_llm(task:str|None=None):
     provider=_settings().llm_provider
+    if provider == "custom-openai-compatible":
+        return OpenAICompatibleClient(
+            base_url=str(_runtime_setting("llm.custom.base_url", "")),
+            model=str(_runtime_setting("llm.custom.model", "")),
+            api_key=str(_runtime_setting("llm.custom.api_key", "")),
+            provider_name="custom-openai-compatible",
+        )
     if provider in {"openai","openai-compatible","openai_compatible"}: return OpenAICompatibleClient()
     if provider=="auto": return OpenAICompatibleClient() if _settings().openai_api_key and not getattr(_settings(),"offline_strict",False) else OllamaClient(task=task)
     return OllamaClient(task=task)
