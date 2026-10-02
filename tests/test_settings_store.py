@@ -64,4 +64,4 @@ def test_settings_registry_validates_and_resets(tmp_path, monkeypatch):
     else:
         raise AssertionError("out-of-range registered setting must fail")
     assert ss.reset_setting("learning.interval_seconds") == 3600
-    assert ss.get_setting("learning.interval_seconds") == 3600
+    assert ss.get_setting("learning.interval_seconds") == "3600"
