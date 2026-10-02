@@ -58,7 +58,7 @@ def test_learning_experience_tracks_execution_versions(monkeypatch):
         compatibility="compatible",
     )
     insert = next(item for item in captured if "INSERT INTO learning_experiences" in item[0])
-    assert insert[1][-6:] == (
+    assert insert[1][7:13] == (
         "model-v2",
         "provider-a",
         "tool-v3",
