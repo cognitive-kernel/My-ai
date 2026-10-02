@@ -89,3 +89,15 @@ def test_registered_settings_export_import_is_validated(tmp_path, monkeypatch):
         ss.import_registered_settings({"not.registered": 1})
     with pytest.raises(ValueError):
         ss.import_registered_settings({"execution.timeout_seconds": 0})
+
+
+def test_custom_llm_registry_secret_is_not_exported(tmp_path, monkeypatch):
+    monkeypatch.setattr(ss, "KEY_PATH", tmp_path / "settings.key")
+    ss.ensure_schema()
+    ss.set_setting("llm.provider", "custom-openai-compatible")
+    ss.set_setting("llm.custom.base_url", "http://127.0.0.1:9000")
+    ss.set_setting("llm.custom.model", "my-model")
+    ss.set_setting("llm.custom.api_key", "secret-key", secret=True)
+    assert ss.get_setting("llm.custom.api_key") == "secret-key"
+    exported = ss.export_registered_settings()
+    assert "llm.custom.api_key" not in exported
