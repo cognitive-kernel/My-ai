@@ -314,15 +314,34 @@ def purge_expired_knowledge() -> int:
         conn.commit()
         return int(cur.rowcount)
 
-def search_knowledge(query: str, limit: int = 8) -> list[dict[str, Any]]:
+def search_knowledge(
+    query: str,
+    limit: int = 8,
+    *,
+    product: str | None = None,
+    version: str | None = None,
+    validity_status: str | None = None,
+) -> list[dict[str, Any]]:
     normalized_query = _normalize_search_text(query)
     tokens = [t for t in normalized_query.replace('"', " ").split() if t][:12]
     if not tokens: return []
     match = " ".join(f'"{t}"' for t in tokens)
+    clauses = ["knowledge_fts MATCH ?"]
+    params: list[Any] = [match]
+    if product is not None:
+        clauses.append("COALESCE(k.product,'')=?")
+        params.append(product)
+    if version is not None:
+        clauses.append("COALESCE(k.version,'')=?")
+        params.append(version)
+    if validity_status is not None:
+        clauses.append("COALESCE(k.validity_status,'')=?")
+        params.append(validity_status)
+    params.append(limit)
     return fetch_all(
-        """SELECT k.id,k.topic,k.title,k.content,k.source_url,k.verification_status,k.confidence,k.product,k.version,k.validity_status,k.replaced_by_version,k.compatibility,k.created_at,
+        f"""SELECT k.id,k.topic,k.title,k.content,k.source_url,k.verification_status,k.confidence,k.product,k.version,k.validity_status,k.replaced_by_version,k.compatibility,k.created_at,
                   bm25(knowledge_fts) AS rank
            FROM knowledge_fts JOIN knowledge k ON k.id=knowledge_fts.rowid
-           WHERE knowledge_fts MATCH ? ORDER BY rank, k.id DESC LIMIT ?""",
-        (match, limit),
+           WHERE {' AND '.join(clauses)} ORDER BY rank, k.id DESC LIMIT ?""",
+        tuple(params),
     )
