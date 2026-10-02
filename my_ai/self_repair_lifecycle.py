@@ -57,7 +57,6 @@ def activate_with_safety(proposal_id: str, base_ref: str, apply_patch, run_tests
             result['restore_error'] = str(restore_error)
         result['activated'] = False
         try:
-            import subprocess
             rollback = subprocess.run(["git", "reset", "--hard", base_ref], cwd=ROOT, text=True, capture_output=True, timeout=120)
             result["git_rolled_back"] = rollback.returncode == 0
             if rollback.returncode != 0:
