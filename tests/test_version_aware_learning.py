@@ -1,11 +1,21 @@
 from __future__ import annotations
 
+import sqlite3
+
 from my_ai import learner
 from my_ai.infra import persistence
 
 
+def _connect_factory(path):
+    def connect():
+        conn = sqlite3.connect(path)
+        conn.row_factory = sqlite3.Row
+        return conn
+    return connect
+
+
 def test_knowledge_schema_tracks_version_compatibility(tmp_path, monkeypatch):
-    monkeypatch.setattr(persistence.settings, "db_path", str(tmp_path / "version.db"))
+    monkeypatch.setattr(persistence, "connect", _connect_factory(tmp_path / "version.db"))
     persistence.init_db()
     kid = persistence.remember_knowledge(
         "Python",
@@ -29,9 +39,8 @@ def test_knowledge_schema_tracks_version_compatibility(tmp_path, monkeypatch):
     }
 
 
-def test_learning_experience_tracks_execution_versions(tmp_path, monkeypatch):
-    monkeypatch.setattr(learner, "execute", lambda sql, params=(): 1)
-    # Exercise the SQL contract without depending on the application's shared DB.
+def test_learning_experience_tracks_execution_versions(monkeypatch):
+    monkeypatch.setattr(learner, "get_bool", lambda *args, **kwargs: True, raising=False)
     captured = []
     monkeypatch.setattr(learner, "execute", lambda sql, params=(): captured.append((sql, params)) or 1)
     monkeypatch.setattr(learner, "fetch_all", lambda *args, **kwargs: [])
@@ -60,7 +69,7 @@ def test_learning_experience_tracks_execution_versions(tmp_path, monkeypatch):
 
 
 def test_persistence_schema_contains_version_columns(tmp_path, monkeypatch):
-    monkeypatch.setattr(persistence.settings, "db_path", str(tmp_path / "schema.db"))
+    monkeypatch.setattr(persistence, "connect", _connect_factory(tmp_path / "schema.db"))
     persistence.init_db()
     rows = persistence.fetch_all("PRAGMA table_info(learning_experiences)")
     columns = {row["name"] for row in rows}
