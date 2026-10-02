@@ -171,6 +171,36 @@ async function deleteModelCatalog(providerId,modelId){
   try{await req("/settings/models/"+providerId+"/"+encodeURIComponent(modelId),{method:"DELETE"});await loadProviderCatalog()}catch(e){setText("catalogout","خطا: "+e.message)}
 }
 
+async function loadControlPlane(){
+  var ns=byId("cp_namespace"),box=byId("controlplane");if(!box)return;
+  try{
+    var n=await req("/settings/control-plane/namespaces");
+    if(ns&&ns.options.length===1)(n.namespaces||[]).forEach(function(v){var o=document.createElement("option");o.value=v;o.textContent=v;ns.appendChild(o)});
+    var q=ns&&ns.value?"?namespace="+encodeURIComponent(ns.value):"";
+    var j=await req("/settings/control-plane"+q);
+    box.innerHTML=(j.items||[]).map(function(x){
+      return "<div class='topic'><b>"+esc(x.namespace)+"/"+esc(x.name)+"</b> v"+esc(x.version)+" — "+(x.enabled?"فعال":"غیرفعال")+
+        "<pre>"+esc(JSON.stringify(x.payload,null,2))+"</pre>"+
+        "<button type='button' onclick='editControlPlane("+JSON.stringify(x)+")'>ویرایش</button>"+
+        "<button type='button' onclick='toggleControlPlane("+JSON.stringify(x.namespace)+","+JSON.stringify(x.name)+","+(!x.enabled)+")'>"+(x.enabled?"غیرفعال":"فعال")+"</button>"+
+        "<button type='button' onclick='deleteControlPlane("+JSON.stringify(x.namespace)+","+JSON.stringify(x.name)+")'>حذف</button></div>";
+    }).join("")||"رکوردی ثبت نشده است";
+    var a=await req("/settings/control-plane/actions?limit=20");
+    var ab=byId("controlactions");if(ab)ab.innerHTML=(a.items||[]).map(function(x){return "<div class='topic'>"+esc(x.action)+" · "+esc(x.namespace)+" · "+esc(x.status)+" · "+esc(x.progress)+"%</div>"}).join("")||"عملیاتی ثبت نشده است";
+  }catch(e){box.textContent="خطا: "+e.message}
+}
+async function saveControlPlane(){
+  try{
+    var ns=byId("cp_namespace").value,name=byId("cp_name").value.trim(),payload=JSON.parse(byId("cp_payload").value||"{}"),enabled=byId("cp_enabled").checked;
+    if(!ns||!name)throw Error("دسته و نام الزامی است");
+    await req("/settings/control-plane/"+encodeURIComponent(ns),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name,payload:payload,enabled:enabled})});
+    await loadControlPlane();
+  }catch(e){setText("catalogout","خطا: "+e.message)}
+}
+function editControlPlane(x){byId("cp_namespace").value=x.namespace;byId("cp_name").value=x.name;byId("cp_payload").value=JSON.stringify(x.payload||{},null,2);byId("cp_enabled").checked=!!x.enabled}
+async function toggleControlPlane(ns,name,enabled){await req("/settings/control-plane/"+encodeURIComponent(ns)+"/"+encodeURIComponent(name)+"/"+(enabled?"enable":"disable"),{method:"POST"});await loadControlPlane()}
+async function deleteControlPlane(ns,name){if(!confirm("این رکورد حذف شود؟"))return;await req("/settings/control-plane/"+encodeURIComponent(ns)+"/"+encodeURIComponent(name),{method:"DELETE"});await loadControlPlane()}
+
 async function loadUIActions(){
   var box=byId("ui-actions");if(!box)return;
   try{
