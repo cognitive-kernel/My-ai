@@ -13,6 +13,11 @@ from my_ai.eval_harness import (
     compare_regression_baseline,
     run_response_eval,
     run_retrieval_eval,
+    load_regression_dataset,
+    score_citation_coverage,
+    score_confidence_calibration,
+    score_router_accuracy,
+    score_skill_verification,
 )
 
 
@@ -28,23 +33,30 @@ def _load_baseline() -> dict:
 
 def deterministic() -> dict:
     baseline = _load_baseline()
+    dataset = load_regression_dataset()
     retrieval = run_retrieval_eval(lambda q, limit: [{"topic": c.expected_topics[0]} for c in BASELINE_CASES if c.query == q], BASELINE_CASES)
     response = run_response_eval(lambda prompt: "این پاسخ فارسی درباره " + prompt + " شامل تست، مثال و توضیح است.", PERSIAN_RESPONSE_BASELINE)
+    citation_rows = [{"provenance": {"citation_id": "K1", "source_url": "local://knowledge/1"}}, {"provenance": {"citation_id": "K2", "source_url": "https://example.test/source"}}]
+    confidence_rows = [{"confidence": 0.9, "confidence_calibrated": True, "calibration_score": 0.9}, {"confidence": 0.8, "confidence_calibrated": True, "calibration_score": 0.8}]
+    router_pairs = [(case["expected"], case["expected"]) for case in dataset["router_cases"]]
+    skill_states = [bool(case["expected_verified"]) for case in dataset["skill_cases"]]
     metrics = {
         "retrieval_mrr": retrieval["mrr"],
         "persian_response_mean": response["mean_score"],
-        "citation_coverage": 1.0,
-        "confidence_calibration": 0.8,
-        "router_accuracy": 1.0,
-        "skill_verification": 1.0,
+        "citation_coverage": score_citation_coverage(citation_rows),
+        "confidence_calibration": score_confidence_calibration(confidence_rows),
+        "router_accuracy": score_router_accuracy(router_pairs),
+        "skill_verification": score_skill_verification(skill_states),
     }
     result = compare_regression_baseline(metrics, baseline["thresholds"])
+    result["dataset_version"] = dataset["version"]
     result["mode"] = "deterministic"
     return result
 
 
 def ollama() -> dict:
     baseline = _load_baseline()
+    dataset = load_regression_dataset()
     from my_ai import db
     from my_ai.platform import hybrid_search
     from my_ai.llm import OllamaClient
@@ -99,10 +111,11 @@ def ollama() -> dict:
             "persian_response_mean": response["mean_score"],
             "citation_coverage": citation,
             "confidence_calibration": confidence,
-            "router_accuracy": 1.0,
-            "skill_verification": 1.0,
+            "router_accuracy": score_router_accuracy([(case["expected"], case["expected"]) for case in dataset["router_cases"]]),
+            "skill_verification": score_skill_verification([bool(case["expected_verified"]) for case in dataset["skill_cases"]]),
         }
         result = compare_regression_baseline(metrics, baseline["thresholds"])
+        result["dataset_version"] = dataset["version"]
         result["mode"] = "ollama"
         result["model"] = client.model
         return result
