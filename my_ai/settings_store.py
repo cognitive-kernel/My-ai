@@ -101,6 +101,7 @@ SETTING_REGISTRY.update({
     "learning.mastery_threshold": {"version": 3, "type": "float", "default": 0.8, "min": 0, "max": 1, "description": "Minimum mastery score."},
     "learning.review_interval_seconds": {"version": 3, "type": "int", "default": 604800, "min": 60, "max": 31536000, "description": "Learning review interval."},
     "learning.manual_source_priority": {"version": 3, "type": "float", "default": 2.0, "min": 0, "max": 100, "description": "Weight applied to manually supplied sources."},
+    "learning.source_max_bytes": {"version": 3, "type": "int", "default": 26214400, "min": 1024, "max": 524288000, "description": "Maximum uploaded learning-source size in bytes."},
     "agent.early_exit_enabled": {"version": 3, "type": "enum", "default": "true", "choices": ["true","false"], "description": "Allow verified early exit."},
     "agent.multi_agent_mode": {"version": 3, "type": "enum", "default": "adaptive", "choices": ["off","adaptive","always"], "description": "Multi-agent escalation policy."},
     "agent.verification_escalation": {"version": 3, "type": "enum", "default": "true", "choices": ["true","false"], "description": "Escalate low-confidence verification."},
