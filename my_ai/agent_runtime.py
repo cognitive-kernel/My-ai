@@ -65,6 +65,16 @@ def _tokens(text: str) -> set[str]:
 class Agent(LegacyAgent):
     """Unified inference pipeline with explicit conversation state and context-aware retrieval."""
 
+    def _configured_system(self) -> str:
+        behavior = str(get_setting("agent.system_behavior", "") or "").strip()
+        persona = str(get_setting("agent.persona", "") or "").strip()
+        additions = []
+        if behavior:
+            additions.append("CONFIGURED SYSTEM BEHAVIOR:\n" + behavior)
+        if persona:
+            additions.append("CONFIGURED PERSONA:\n" + persona)
+        return SYSTEM + ("\n\n" + "\n\n".join(additions) if additions else "")
+
     def _ensure_state_table(self) -> None:
         execute("CREATE TABLE IF NOT EXISTS conversation_state (session_id INTEGER PRIMARY KEY, topic TEXT NOT NULL DEFAULT '', current_goal TEXT NOT NULL DEFAULT '', language TEXT, last_action TEXT NOT NULL DEFAULT '', summary TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
 
