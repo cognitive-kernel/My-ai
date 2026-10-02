@@ -125,25 +125,50 @@ async function loadProviderCatalog(){
   var p=byId("providers"),m=byId("models");if(!p&&!m)return;
   try{
     var j=await req("/settings/providers");
-    if(p)p.innerHTML=(j.providers||[]).map(function(x){return "<div><b>#"+esc(x.id)+" "+esc(x.name)+"</b> — "+esc(x.protocol)+" — "+(x.enabled?"فعال":"غیرفعال")+" <button type='button' onclick='deleteProviderCatalog("+x.id+")'>حذف</button></div>"}).join("")||"Provider ثبت نشده است";
-    if(m)m.innerHTML=(j.models||[]).map(function(x){return "<div><b>Provider #"+esc(x.provider_id)+" / "+esc(x.model_id)+"</b> — priority "+esc(x.priority)+" — "+(x.enabled?"فعال":"غیرفعال")+"</div>"}).join("")||"Model ثبت نشده است";
+    if(p)p.innerHTML=(j.providers||[]).map(function(x){
+      var action=x.enabled?"غیرفعال‌کردن":"فعال‌کردن";
+      return "<div class='topic'><b>#"+esc(x.id)+" "+esc(x.name)+"</b> — "+esc(x.protocol)+" — "+(x.enabled?"فعال":"غیرفعال")+
+        " <button type='button' onclick='toggleProviderCatalog("+x.id+","+(!x.enabled)+")'>"+action+"</button>"+
+        " <button type='button' onclick='healthProviderCatalog("+x.id+")'>بررسی اتصال</button>"+
+        " <button type='button' onclick='deleteProviderCatalog("+x.id+")'>حذف</button>"+
+        " <span id='provider-health-"+x.id+"' class='muted'></span></div>";
+    }).join("")||"Provider ثبت نشده است";
+    if(m)m.innerHTML=(j.models||[]).map(function(x){
+      return "<div class='topic'><b>Provider #"+esc(x.provider_id)+" / "+esc(x.model_id)+"</b> — priority "+esc(x.priority)+" — "+(x.enabled?"فعال":"غیرفعال")+
+        " <button type='button' onclick='toggleModelCatalog("+x.provider_id+",\'"+esc(x.model_id)+"\',"+(!x.enabled)+")'>"+(x.enabled?"غیرفعال‌کردن":"فعال‌کردن")+"</button>"+
+        " <button type='button' onclick='healthModelCatalog("+x.provider_id+",\'"+esc(x.model_id)+"\')'>بررسی مدل</button>"+
+        " <button type='button' onclick='deleteModelCatalog("+x.provider_id+",\'"+esc(x.model_id)+"\')'>حذف</button>"+
+        " <span id='model-health-"+x.provider_id+"-"+esc(x.model_id)+"' class='muted'></span></div>";
+    }).join("")||"Model ثبت نشده است";
   }catch(e){if(p)p.textContent="خطا: "+e.message}
 }
-async function saveProviderCatalog(){
+async function toggleProviderCatalog(id,enabled){
   try{
-    var payload={name:byId("pc_name").value,protocol:byId("pc_protocol").value,endpoint:byId("pc_endpoint").value,auth_type:byId("pc_auth").value,secret:byId("pc_secret").value,version:byId("pc_version").value,capabilities:{},timeout_seconds:30,enabled:true};
-    await req("/settings/providers",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
-    byId("pc_secret").value="";setText("catalogout","Provider ذخیره شد.");await loadProviderCatalog();
+    var j=await req("/settings/providers"),x=(j.providers||[]).find(function(v){return Number(v.id)===Number(id)});
+    if(!x)throw Error("Provider پیدا نشد");
+    await req("/settings/providers",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:x.name,protocol:x.protocol,endpoint:x.endpoint,auth_type:x.auth_type,secret:"",version:x.version||"",capabilities:x.capabilities||{},timeout_seconds:Number(x.timeout_seconds||30),enabled:enabled})});
+    await loadProviderCatalog();
   }catch(e){setText("catalogout","خطا: "+e.message)}
 }
-async function deleteProviderCatalog(id){try{await req("/settings/providers/"+id,{method:"DELETE"});await loadProviderCatalog()}catch(e){setText("catalogout","خطا: "+e.message)}}
-async function saveModelCatalog(){
+async function healthProviderCatalog(id){
+  var out=byId("provider-health-"+id);if(out)out.textContent="در حال بررسی...";
+  try{var j=await req("/settings/providers/"+id+"/health",{method:"POST"});if(out)out.textContent=j.healthy?"سالم · "+j.latency_ms+"ms":"خطا: "+(j.error||"نامشخص")}catch(e){if(out)out.textContent="خطا: "+e.message}
+}
+async function toggleModelCatalog(providerId,modelId,enabled){
   try{
-    var tasks=byId("mc_tasks").value.split(",").map(function(x){return x.trim()}).filter(Boolean);
-    var payload={provider_id:Number(byId("mc_provider").value),model_id:byId("mc_model").value,tasks:tasks,context_length:byId("mc_context").value?Number(byId("mc_context").value):null,limits:{},priority:Number(byId("mc_priority").value||100),version:"",enabled:true};
-    await req("/settings/models",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
-    setText("catalogout","Model ذخیره شد.");await loadProviderCatalog();
+    var j=await req("/settings/providers"), models=j.models||[], x=models.find(function(v){return Number(v.provider_id)===Number(providerId)&&v.model_id===modelId});
+    if(!x)throw Error("Model پیدا نشد");
+    await req("/settings/models",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({provider_id:Number(x.provider_id),model_id:x.model_id,tasks:x.tasks||[],context_length:x.context_length||null,limits:x.limits||{},priority:Number(x.priority||100),version:x.version||"",enabled:enabled})});
+    await loadProviderCatalog();
   }catch(e){setText("catalogout","خطا: "+e.message)}
+}
+async function healthModelCatalog(providerId,modelId){
+  var out=byId("model-health-"+providerId+"-"+modelId);if(out)out.textContent="در حال بررسی...";
+  try{var j=await req("/settings/models/"+providerId+"/"+encodeURIComponent(modelId)+"/health",{method:"POST"});if(out)out.textContent=j.available?"سالم · "+(j.latency_ms||0)+"ms":"در دسترس نیست: "+(j.error||"نامشخص")}catch(e){if(out)out.textContent="خطا: "+e.message}
+}
+async function deleteModelCatalog(providerId,modelId){
+  if(!confirm("این مدل از کاتالوگ حذف شود؟"))return;
+  try{await req("/settings/models/"+providerId+"/"+encodeURIComponent(modelId),{method:"DELETE"});await loadProviderCatalog()}catch(e){setText("catalogout","خطا: "+e.message)}
 }
 
 async function loadUIActions(){
