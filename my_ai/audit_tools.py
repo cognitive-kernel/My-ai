@@ -62,14 +62,13 @@ def configuration_inventory(root: Path = ROOT) -> list[dict[str, str]]:
 
 def route_inventory(root: Path = ROOT) -> list[dict[str, str]]:
     result = []
-    path = root / "my_ai" / "api.py"
-    if not path.exists():
-        return result
-    try:
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    except (OSError, SyntaxError):
-        return result
-    for node in ast.walk(tree):
+    paths = sorted((root / "my_ai").rglob("*.py"))
+    for path in paths:
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        except (OSError, SyntaxError):
+            continue
+        for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         for decorator in node.decorator_list:
