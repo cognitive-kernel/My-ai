@@ -139,6 +139,7 @@ def init_db() -> None:
     if _write_blocked():
         return
     with connect() as conn:
+        conn.create_function("normalize_search", 1, _normalize_search_text)
         conn.executescript(SCHEMA)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_attachments_session ON chat_attachments(session_id, id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_attachments_conversation ON chat_attachments(conversation_id, id)")
