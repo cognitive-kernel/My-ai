@@ -26,3 +26,26 @@ def test_source_change_is_queued_for_relearning(monkeypatch):
     monkeypatch.setattr(learning_catalog, "ensure_schema", lambda: None)
     result = learning_catalog.update_source(7, url="https://new.example")
     assert result is not None
+
+
+
+def test_learning_source_catalog_validates_persists_reviews_and_relearning(monkeypatch, tmp_path):
+    import sqlite3
+    from my_ai import learning_catalog as catalog
+    def connect():
+        conn = sqlite3.connect(tmp_path / "learning-catalog.db")
+        conn.row_factory = sqlite3.Row
+        return conn
+    monkeypatch.setattr(catalog, "connect", connect)
+    catalog.ensure_schema()
+    with __import__("pytest").raises(ValueError):
+        catalog.add_source("https://example.test", source_type="unsupported")
+    source = catalog.add_source("https://example.test/docs", source_type="official-docs", priority=10, weight=2)
+    assert source["status"] == "pending"
+    assert source["priority"] == 10 and source["weight"] == 2
+    approved = catalog.review_source(source["id"], "approved")
+    assert approved["status"] == "approved"
+    catalog.update_content_hash(source["id"], "v1")
+    changed = catalog.update_content_hash(source["id"], "v2")
+    assert changed["relearning_queued"] is True
+    assert catalog.list_relearning_queue(source_id=source["id"])
