@@ -168,3 +168,5 @@ def test_database_restore_requires_confirmation(monkeypatch):
         assert "confirmation" in str(exc.detail).lower()
     else:
         raise AssertionError("restore without confirmation must fail")
+
+# CI verification marker.
