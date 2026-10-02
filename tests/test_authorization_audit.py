@@ -16,7 +16,9 @@ def test_sensitive_routes_have_explicit_capabilities():
 
 
 def test_tool_permission_is_deny_by_default(client_db):
-    user = auth.create_account("policy-user", "a-secure-password")
+    auth.create_account("policy-admin", "a-secure-password")
+    user = auth.create_account("policy-user", "another-secure-password")
+    assert user["role"] == "user"
     assert auth.tool_allowed(user, "python", "execute") is False
     db.execute(
         "INSERT INTO tool_permissions(user_id,tool_name,action,allowed) VALUES(?,?,?,1)",
