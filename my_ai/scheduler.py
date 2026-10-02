@@ -84,7 +84,22 @@ class StudyScheduler:
         for row in rows:
             item=dict(row); item["running"]=bool(self._workers.get(str(item["language"]).casefold()) and self._workers[str(item["language"]).casefold()][0].is_alive()); workers.append(item)
         active=[x for x in workers if x["running"]]; primary=active[0] if active else (workers[-1] if workers else None)
-        return {"running":bool(active),"language":primary["language"] if primary else self.language,"stage":primary["stage"] if primary else self.stage,"current_topic":primary["current_topic"] if primary else self.current_topic,"workers":workers,"active_workers":active,"resources":{**resource_status(),**resource_limits()}}
+        runtime = fetch_all("SELECT status,updated_at FROM learning_runtime WHERE id=1")
+        return {
+            "running": bool(active),
+            "language": primary["language"] if primary else self.language,
+            "stage": primary["stage"] if primary else self.stage,
+            "current_topic": primary["current_topic"] if primary else self.current_topic,
+            "last_result": primary.get("last_result") if primary else self.last_result,
+            "error": primary.get("error") if primary else self.error,
+            "interval_seconds": self.interval_seconds,
+            "session_id": primary.get("session_id") if primary else None,
+            "runtime_status": runtime[0]["status"] if runtime else "idle",
+            "runtime_updated_at": runtime[0]["updated_at"] if runtime else None,
+            "workers": workers,
+            "active_workers": active,
+            "resources": {**resource_status(), **resource_limits()},
+        }
     @staticmethod
     def _wait_for_resources(stop_event):
         while not stop_event.is_set():
@@ -109,6 +124,18 @@ class StudyScheduler:
                     self.last_result={"status":"weekly_review","language":name}
             except Exception as exc: logger.exception("LEARNING_REVIEW_FAILURE: %s",exc)
             self._review_stop.wait(min(self.interval_seconds,3600))
+    def _schedule_worker_recovery(self, language, stop_event):
+        if stop_event.is_set():
+            return
+        rows = fetch_all("SELECT session_id FROM learning_workers WHERE lower(language)=? LIMIT 1", (str(language).casefold(),))
+        session_id = rows[0]["session_id"] if rows else None
+        def recover():
+            if not stop_event.is_set():
+                self.start(language, session_id)
+        timer = threading.Timer(1.0, recover)
+        timer.daemon = True
+        timer.start()
+
     def _loop(self,language,stop_event):
         if not self._renew_lease(language): return
         engine=LearningEngine(); errors=0
