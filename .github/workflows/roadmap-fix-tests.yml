@@ -13,6 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         test_file:
+          - tests/test_advanced_infra.py
           - tests/test_learning_progress.py
           - tests/test_llm_retry_policy.py
           - tests/test_provider_catalog.py
