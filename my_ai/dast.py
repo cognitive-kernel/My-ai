@@ -117,7 +117,7 @@ class LocalDAST:
                     tr=client.request("TRACE",url)
                     if tr.status_code<400:
                         findings.append({"severity":"medium","title":"TRACE method enabled","endpoint":ep,"evidence":f"TRACE returned HTTP {tr.status_code}.","impact":"An unnecessary HTTP method increases attack surface.","remediation":"Disable TRACE at the web server or application gateway."})
-                except Exception: pass
+                except Exception as exc:\n                    logger.debug("DAST_TRACE_CHECK_FAILED: %s", exc)
                 if "set-cookie" in h:
                     cookie=h["set-cookie"].lower()
                     if url.startswith("https://") and "secure" not in cookie:
