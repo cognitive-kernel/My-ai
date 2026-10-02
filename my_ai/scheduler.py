@@ -130,7 +130,19 @@ class StudyScheduler:
                     if stop_event.wait(min(self.interval_seconds,60)): break
                 except InterruptedError: break
                 except Exception as exc:
-                    errors+=1; logger.exception("LEARNING_FAILURE: %s",exc); self._update_worker(language,"retrying",result={"status":"error","error":str(exc),"consecutive_errors":errors},error=str(exc),status="retrying")
-                    if stop_event.wait(min(60,2**min(errors,5))): break
+                    errors += 1
+                    logger.exception("LEARNING_FAILURE: %s", exc)
+                    max_retries = max(1, int(getattr(settings, "learning_max_retries", 5)))
+                    terminal = errors >= max_retries
+                    status = "failed" if terminal else "retrying"
+                    self._update_worker(
+                        language,
+                        status,
+                        result={"status": "error", "error": str(exc), "consecutive_errors": errors, "max_retries": max_retries},
+                        error=str(exc),
+                        status=status,
+                    )
+                    record_scheduler_event(language, "worker_failure", error=str(exc), consecutive_errors=errors, max_retries=max_retries, terminal=terminal)
+                    if terminal or stop_event.wait(min(60, 2 ** min(errors, 5))): break
         finally:
             self._release_lease(language); self._workers.pop(language.casefold(),None)
