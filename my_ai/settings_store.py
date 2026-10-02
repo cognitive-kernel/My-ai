@@ -194,7 +194,7 @@ def apply_runtime_setting(key: str, value: Any) -> None:
 
 def apply_persisted_settings() -> None:
     ensure_schema()
-    with connect() as conn:
+    with _connect() as conn:
         rows = conn.execute("SELECT key,value,secret FROM app_settings").fetchall()
     for row in rows:
         value = _decrypt(str(row["value"])) if int(row["secret"]) else str(row["value"])
@@ -254,8 +254,11 @@ def reset_setting(key: str) -> Any:
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from .db import connect
 from .access_policy import assert_mutation_allowed
+
+def _connect():
+    from .db import connect
+    return connect()
 
 ROOT = Path(__file__).resolve().parent.parent
 KEY_PATH = ROOT / "data" / ".settings_key"
