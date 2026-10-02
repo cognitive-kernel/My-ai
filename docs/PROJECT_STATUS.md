@@ -245,3 +245,10 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 - GUI Action Registry exposes profile and capability discovery.
 - No-code runtime adapters now expose learning, security, scheduler, integration, evaluation, regression, budget, cache, skills and knowledge-graph namespaces directly to runtime consumers.
 - Verification remains intentionally deferred; no tests or CI were executed.
+
+
+### Final coding pass before verification — 2026-10-02
+- Completed the generic Settings Control Plane GUI lifecycle for record create/edit/enable/disable/delete and operation start/status/update, including progress, result and error state.
+- Expanded the central GUI Action Registry for configuration history, provider/model catalog, learning catalog, database policy, security roles and evaluation/regression.
+- GUI and CLI continue to share the persistent Control Plane rather than maintaining separate state stores.
+- This marks the end of the requested implementation-first pass; test, regression, integration and runtime verification remain intentionally unstarted.
