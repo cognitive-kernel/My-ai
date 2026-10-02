@@ -16,6 +16,7 @@ from .auth import require_admin, require_user, audit
 from .db import connect, execute, fetch_all, init_db
 from .git_connector import GitHubConnector
 from .llm import create_llm
+from .provider_catalog import list_providers, upsert_provider, delete_provider, list_models, upsert_model, export_catalog
 from .settings_store import get_setting, set_setting, get_bool, get_int, get_github_settings, get_setting_registry, get_configuration_schema_version, reset_setting, export_registered_settings, import_registered_settings
 
 router = APIRouter(tags=["settings"])
@@ -57,6 +58,27 @@ CREATE TABLE IF NOT EXISTS custom_course_progress (
 );
 """
 
+
+class ProviderCatalogRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    protocol: str = Field(min_length=1, max_length=80)
+    endpoint: str = Field(min_length=1, max_length=1000)
+    auth_type: str = Field(default="none", max_length=40)
+    secret: str = Field(default="", max_length=10000)
+    capabilities: dict[str, Any] = Field(default_factory=dict)
+    version: str = Field(default="", max_length=120)
+    timeout_seconds: float = Field(default=30, gt=0, le=3600)
+    enabled: bool = True
+
+class ModelCatalogRequest(BaseModel):
+    provider_id: int = Field(gt=0)
+    model_id: str = Field(min_length=1, max_length=300)
+    tasks: list[str] = Field(default_factory=list, max_length=30)
+    context_length: int | None = Field(default=None, gt=0)
+    limits: dict[str, Any] = Field(default_factory=dict)
+    priority: int = Field(default=100, ge=0, le=100000)
+    version: str = Field(default="", max_length=120)
+    enabled: bool = True
 
 class CourseRequest(BaseModel):
     name: str = Field(min_length=2, max_length=120)
@@ -361,6 +383,38 @@ def _run_course(course_id: int) -> None:
 
 class SettingsImportRequest(BaseModel):
     values: dict[str, Any]
+
+@router.get("/settings/providers")
+def settings_providers(request: Request):
+    require_admin(request)
+    return {"providers": list_providers(), "models": list_models()}
+
+@router.post("/settings/providers")
+def settings_provider_create(payload: ProviderCatalogRequest, request: Request):
+    require_admin(request)
+    try:
+        return upsert_provider(**payload.model_dump())
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+@router.delete("/settings/providers/{provider_id}")
+def settings_provider_delete(provider_id: int, request: Request):
+    require_admin(request)
+    delete_provider(provider_id)
+    return {"deleted": provider_id}
+
+@router.post("/settings/models")
+def settings_model_create(payload: ModelCatalogRequest, request: Request):
+    require_admin(request)
+    try:
+        return upsert_model(**payload.model_dump())
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+@router.get("/settings/models/export")
+def settings_models_export(request: Request):
+    require_admin(request)
+    return export_catalog()
 
 @router.get("/settings/registry")
 def settings_registry(request: Request):
