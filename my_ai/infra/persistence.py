@@ -262,12 +262,16 @@ def remember_knowledge(topic: str, title: str, content: str, source_url: str | N
     with connect() as conn:
         conn.create_function("normalize_search", 1, _normalize_search_text)
         conn.execute("CREATE TABLE IF NOT EXISTS knowledge_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, knowledge_id INTEGER NOT NULL, user_id INTEGER, action TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
-        row = conn.execute("SELECT id,source_url FROM knowledge WHERE content_hash=?", (digest,)).fetchone()
-        if row:
+        row = conn.execute(
+            "SELECT id,source_url,product,version FROM knowledge WHERE content_hash=? ORDER BY id LIMIT 1",
+            (digest,),
+        ).fetchone()
+        same_version = row and (row["product"] or "") == (product or "") and (row["version"] or "") == (version or "")
+        if row and same_version:
             if not row["source_url"] and source_url:
                 conn.execute("UPDATE knowledge SET source_url=? WHERE id=?", (source_url, row["id"]))
             conn.execute("INSERT INTO knowledge_audit(knowledge_id,user_id,action,details) VALUES(?,?,?,?)",
-                         (row["id"], None, "duplicate_exact", "content_hash matched existing knowledge"))
+                         (row["id"], None, "duplicate_exact", "content_hash matched existing knowledge/version"))
             conn.commit()
             return int(row["id"])
         duplicate = _semantic_duplicate(topic, title, content, digest, conn, threshold=threshold)
