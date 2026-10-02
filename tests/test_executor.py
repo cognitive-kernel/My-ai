@@ -23,3 +23,9 @@ def test_executor_reports_error():
 
     assert result.return_code != 0
     assert "ValueError" in result.error
+
+
+def test_executor_timeout_uses_registered_setting(monkeypatch):
+    import my_ai.executor as executor
+    monkeypatch.setattr(executor, "get_int", lambda key, default: 17)
+    assert executor._timeout_seconds() == 17
