@@ -4,9 +4,15 @@ from dataclasses import dataclass
 import time
 from typing import Any
 
+
+def _auth_headers(key: str) -> dict[str, str]:
+    value = str(get_setting(key, ""))
+    return {"Authorization": f"Bearer {value}"} if value else {}
+
 import httpx
 
 from .config import settings
+from .settings_store import get_setting
 
 
 @dataclass(frozen=True)
@@ -22,7 +28,7 @@ class ModelManager:
     """Central model inventory and health checks used by routing/failover."""
 
     def inventory(self) -> list[dict[str, str]]:
-        return [
+        items = [
             {"provider": "ollama", "role": "general", "model": settings.ollama_model},
             {"provider": "ollama", "role": "routing", "model": settings.routing_model},
             {"provider": "ollama", "role": "coding", "model": settings.coding_model},
@@ -30,20 +36,42 @@ class ModelManager:
             {"provider": "ollama", "role": "embedding", "model": settings.embedding_model},
             {"provider": "openai-compatible", "role": "general", "model": settings.openai_model},
         ]
+        provider = str(get_setting("llm.provider", settings.llm_provider))
+        custom_model = str(get_setting("llm.custom.model", "")).strip()
+        if provider == "custom-openai-compatible" and custom_model:
+            items.append({"provider": "custom-openai-compatible", "role": "general", "model": custom_model})
+        return items
 
-    def health(self, model: str, *, timeout: float = 5.0) -> ModelStatus:
+    def _provider_for_model(self, model: str) -> str:
+        for item in self.inventory():
+            if item["model"] == model:
+                return item["provider"]
+        return "ollama"
+
+    def health(self, model: str, *, provider: str | None = None, timeout: float = 5.0) -> ModelStatus:
+        provider = provider or self._provider_for_model(model)
         started = time.perf_counter()
         try:
+            if provider == "custom-openai-compatible":
+                base_url = str(get_setting("llm.custom.base_url", "")).rstrip("/")
+                if not base_url:
+                    return ModelStatus(provider, model, False, (time.perf_counter() - started) * 1000, "custom provider endpoint is not configured")
+                response = httpx.get(f"{base_url}/models", headers=_auth_headers("llm.custom.api_key"), timeout=timeout)
+                response.raise_for_status()
+                payload = response.json()
+                models = {str(item.get("id")) for item in payload.get("data", []) if isinstance(item, dict) and item.get("id")}
+                available = model in models if models else True
+                return ModelStatus(provider, model, available, (time.perf_counter() - started) * 1000)
             response = httpx.get(f"{settings.ollama_base_url.rstrip('/')}/api/tags", timeout=timeout)
             response.raise_for_status()
             models = {str(item.get("name")) for item in response.json().get("models", []) if item.get("name")}
-            return ModelStatus("ollama", model, model in models, (time.perf_counter() - started) * 1000)
+            return ModelStatus(provider, model, model in models, (time.perf_counter() - started) * 1000)
         except Exception as exc:
-            return ModelStatus("ollama", model, False, (time.perf_counter() - started) * 1000, str(exc))
+            return ModelStatus(provider, model, False, (time.perf_counter() - started) * 1000, str(exc))
 
     def health_all(self, *, timeout: float = 5.0) -> list[ModelStatus]:
-        unique = list(dict.fromkeys(item["model"] for item in self.inventory() if item["provider"] == "ollama"))
-        return [self.health(model, timeout=timeout) for model in unique]
+        unique = list(dict.fromkeys((item["provider"], item["model"]) for item in self.inventory()))
+        return [self.health(model, provider=provider, timeout=timeout) for provider, model in unique]
 
     def available_models(self, *, timeout: float = 5.0) -> set[str]:
         return {status.model for status in self.health_all(timeout=timeout) if status.available}
