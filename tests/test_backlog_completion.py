@@ -75,14 +75,19 @@ def test_model_health_retry_and_multi_step_fallback(monkeypatch):
 
 def test_model_fallback_preserves_history(monkeypatch):
     from my_ai.infra import llm
-    settings = llm._settings()
-    for key, value in {"ollama_base_url":"http://127.0.0.1:11434","llm_retry_attempts":1,"llm_max_fallback_models":2,"ollama_model":"primary","fallback_model":"fallback","coding_model":"primary","routing_model":"primary"}.items(): object.__setattr__(settings, key, value)
+    fake = SimpleNamespace(offline_strict=False, ollama_base_url="http://127.0.0.1:11434",
+        ollama_model="primary", fallback_model="fallback", coding_model="primary", routing_model="primary",
+        llm_max_fallback_models=2, llm_retry_attempts=1, llm_timeout_seconds=5,
+        llm_retry_backoff_seconds=0, resource_wait_seconds=1, ollama_num_ctx=1024, ollama_keep_alive="5m")
+    monkeypatch.setattr(llm, "_settings", lambda: fake)
     class FakeManager:
         def health(self, model, **kwargs): return ModelStatus("ollama", model, True, 1.0)
         def fallback_chain(self, model, **kwargs): return ["fallback"]
         def choose_fallback(self, model, **kwargs): return "fallback"
     monkeypatch.setattr(llm, "ModelManager", FakeManager)
-    monkeypatch.setattr(llm, "record_inference", lambda *a, **k: None); monkeypatch.setattr(llm, "record_error", lambda *a, **k: None); monkeypatch.setattr(llm, "record_route", lambda *a, **k: None)
+    monkeypatch.setattr(llm, "record_inference", lambda *a, **k: None)
+    monkeypatch.setattr(llm, "record_error", lambda *a, **k: None)
+    monkeypatch.setattr(llm, "record_route", lambda *a, **k: None)
     calls=[]
     class Stream:
         def __enter__(self): return self
