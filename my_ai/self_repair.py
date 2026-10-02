@@ -7,6 +7,8 @@ import sys
 import tempfile
 import shutil
 import uuid
+import time
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -76,7 +78,7 @@ def propose_repair(issue: str):
     proposal_id=uuid.uuid4().hex; PROPOSALS.mkdir(parents=True,exist_ok=True); proposal={"id":proposal_id,"created_at":datetime.now(timezone.utc).isoformat(),"base":base,"issue":issue,"patch":patch,"isolated_tests_passed":passed,"test_result":test_result,"approved":False,"applied":False}
     (PROPOSALS/f"{proposal_id}.json").write_text(json.dumps(proposal,ensure_ascii=False,indent=2),encoding="utf-8"); execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_proposal",patch,test_result,0)); record_decision("self_repair_proposal","propose",{"proposal_id":proposal_id,"isolated_tests_passed":passed}); return proposal
 
-def apply_repair(proposal_id: str, approved: bool):
+def apply_repair(proposal_id: str, approved: bool, health_url: str | None = None, health_timeout: float = 20.0):
     assert_mutation_allowed("self-repair apply")
     if not get_bool("self_repair.enabled",True): raise ValueError("Self-repair is disabled in Settings.")
     if get_bool("self_repair.require_approval",True) and not approved: raise ValueError("Explicit approval is required before applying a repair.")
@@ -92,6 +94,22 @@ def apply_repair(proposal_id: str, approved: bool):
     ok,tests=_tests(ROOT)
     if not ok:
         _git("reset","--hard",proposal["base"]); execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_rolled_back",proposal["patch"],tests,0)); raise RuntimeError("Applied repair failed post-apply tests and was rolled back:\n"+tests)
+    if health_url:
+        deadline=time.time()+max(1.0,float(health_timeout))
+        healthy=False
+        last_error=""
+        while time.time()<deadline:
+            try:
+                with urllib.request.urlopen(health_url,timeout=3) as response:
+                    healthy=int(response.status)==200
+                    if healthy: break
+            except Exception as exc:
+                last_error=str(exc)
+            time.sleep(0.5)
+        if not healthy:
+            _git("reset","--hard",proposal["base"])
+            _record_failure_lesson("self_repair_health_failed",proposal_id,last_error)
+            raise RuntimeError("Post-activation health check failed and repair was rolled back: "+last_error)
     proposal["approved"]=True; proposal["applied"]=True; proposal["applied_at"]=datetime.now(timezone.utc).isoformat(); path.write_text(json.dumps(proposal,ensure_ascii=False,indent=2),encoding="utf-8"); execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_applied",proposal["patch"],tests,1)); record_decision("self_repair","apply",{"proposal_id":proposal_id}); notify("self_repair_applied",{"proposal_id":proposal_id,"base":proposal["base"]}); return {"status":"applied","proposal_id":proposal_id,"base":proposal["base"],"tests":tests,"working_tree":"modified"}
 
 def list_proposals():
