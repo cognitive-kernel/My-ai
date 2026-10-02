@@ -30,3 +30,12 @@ def test_task_graph_detects_ready_dependencies():
     graph.add("b", lambda: 2, deps=("a",))
     assert graph.ready(set()) == ["a"]
     assert graph.ready({"a"}) == ["b"]
+
+
+def test_agent_system_behavior_and_persona_are_configuration_driven(monkeypatch):
+    values = {"agent.system_behavior": "Be concise.", "agent.persona": "Technical maintainer."}
+    monkeypatch.setattr("my_ai.agent.get_setting", lambda key, default="": values.get(key, default))
+    from my_ai.agent import Agent
+    system = Agent(llm=object())._configured_system()
+    assert "CONFIGURED SYSTEM BEHAVIOR:\nBe concise." in system
+    assert "CONFIGURED PERSONA:\nTechnical maintainer." in system
