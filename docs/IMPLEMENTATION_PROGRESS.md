@@ -45,3 +45,10 @@
 
 ## مرحله بعد
 مرحله بعد از اتمام implementation، اجرای تست، regression، integration، security و runtime verification است. موارد roadmap تا آن مرحله به‌صورت [ ] باقی می‌مانند.
+
+### GUI/CLI parity completion pass — 2026-10-02
+- Extended the unified admin CLI with configuration profiles, backup/restore, learning-source catalog operations, and capability inventory.
+- Added Settings API and GUI controls for configuration profiles using the same control-plane persistence as CLI.
+- Added profile/capability entries to the GUI Action Registry.
+- Existing generic Control Plane GUI now supports record edit, enable/disable, and delete alongside CLI CRUD operations.
+- No tests, pytest, CI, or regression verification were run in this pass by explicit project instruction.
