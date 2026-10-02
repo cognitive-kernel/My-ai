@@ -49,8 +49,8 @@ def _hardware() -> dict[str, object]:
     try:
         import os
         info["cpu_count"] = os.cpu_count()
-    except Exception:
-        pass
+    except Exception as exc:
+        info["cpu_count_error"] = str(exc)
     try:
         import psutil
         info["ram_bytes"] = psutil.virtual_memory().total
