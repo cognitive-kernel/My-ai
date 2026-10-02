@@ -140,10 +140,10 @@ class OpenAICompatibleClient:
         self.base_url=_settings().openai_base_url; self.model=_settings().openai_model; self.api_key=_settings().openai_api_key
         if not self.api_key: raise LLMError("OPENAI_API_KEY is required when LLM_PROVIDER=openai")
     def _retry_attempts(self) -> int:
-        return max(1, min(5, int(getattr(_settings(), "llm_retry_attempts", 2))))
+        return max(1, min(5, int(_runtime_setting("llm.retry_attempts", getattr(_settings(), "llm_retry_attempts", 2)))))
 
     def _timeout(self) -> float:
-        return max(1.0, float(getattr(_settings(), "llm_timeout_seconds", 300)))
+        return max(1.0, float(_runtime_setting("llm.timeout_seconds", getattr(_settings(), "llm_timeout_seconds", 300))))
 
     def _backoff(self, attempt: int) -> None:
         delay=max(0.0,min(10.0,float(getattr(_settings(),"llm_retry_backoff_seconds",0.5))))
