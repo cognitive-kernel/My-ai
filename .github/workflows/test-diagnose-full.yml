@@ -1,0 +1,20 @@
+name: test-diagnose-full
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  files:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.lock
+      - run: pip install -e .[dev] --no-deps
+      - run: |
+          set -o pipefail
+          mkdir -p /tmp/results
+          find tests -maxdepth 1 -name 'test_*.py' -print0 | xargs -0 -n1 -P4 sh -c 'f="$0"; echo "=== $f ==="; timeout 120s pytest -q "$f" > "/tmp/results/$(basename "$f").log" 2>&1 || { cat "/tmp/results/$(basename "$f").log"; exit 1; }'
