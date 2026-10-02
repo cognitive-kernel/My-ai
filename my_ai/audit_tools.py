@@ -110,7 +110,7 @@ def startup_shutdown_inventory(root: Path = ROOT) -> dict[str, Any]:
     }
 
 def documentation_inventory(root: Path = ROOT) -> dict[str, Any]:
-    docs = {}
+    docs: dict[str, Any] = {}
     for path in sorted((root / "docs").glob("*.md")):
         try:
             source = path.read_text(encoding="utf-8")
@@ -124,7 +124,7 @@ def documentation_inventory(root: Path = ROOT) -> dict[str, Any]:
     return docs
 
 def documentation_reference_audit(root: Path = ROOT) -> list[dict[str, Any]]:
-    findings = []
+    findings: list[dict[str, Any]] = []
     for path in sorted((root / "docs").rglob("*.md")):
         try:
             source = path.read_text(encoding="utf-8")
@@ -147,7 +147,7 @@ def authorization_coverage(root: Path = ROOT) -> list[dict[str, Any]]:
         from .access_policy import permission_for_path
     except ImportError:
         from my_ai.access_policy import permission_for_path
-    findings = []
+    findings: list[dict[str, Any]] = []
     for route in route_inventory(root):
         permission = permission_for_path(route["path"], route["method"])
         if permission is None and not route["path"].startswith(("/docs", "/openapi.json", "/redoc", "/static")):
