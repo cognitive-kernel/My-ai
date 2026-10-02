@@ -124,9 +124,9 @@ def append_event(session_id: int, event_type: str, payload: dict[str, Any], user
     return {"session_id": session_id, "sequence": seq, "checksum": checksum}
 
 
-def open_stream(session_id: int, context: str = "") -> dict[str, Any]:
+def open_stream(session_id: int, context: str = "", user_id: int | None = None) -> dict[str, Any]:
     ensure_schema()
-    state = recover_session(session_id)
+    state = recover_session(session_id, user_id)
     if state["status"] == "expired":
         raise ValueError("Session expired.")
     stream_id = uuid.uuid4().hex
@@ -138,8 +138,8 @@ def open_stream(session_id: int, context: str = "") -> dict[str, Any]:
     return {"stream_id": stream_id, "session_id": session_id, "next_sequence": 1, "context_hash": context_hash}
 
 
-def stream_chunk(stream_id: str, chunk: str, sequence: int | None = None) -> dict[str, Any]:
-    rows = fetch_all("SELECT * FROM stream_state WHERE stream_id=?", (stream_id,))
+def stream_chunk(stream_id: str, chunk: str, sequence: int | None = None, user_id: int | None = None) -> dict[str, Any]:
+    rows = fetch_all("SELECT st.* FROM stream_state st JOIN chat_sessions s ON s.id=st.session_id WHERE st.stream_id=? AND (? IS NULL OR s.user_id=?)", (stream_id, user_id, user_id))
     if not rows:
         raise ValueError("Stream not found.")
     state = rows[0]
@@ -150,25 +150,25 @@ def stream_chunk(stream_id: str, chunk: str, sequence: int | None = None) -> dic
     if sequence != expected:
         raise ValueError(f"Stream sequence mismatch: expected {expected}, got {sequence}.")
     payload = {"stream_id": stream_id, "sequence": sequence, "chunk": str(chunk)}
-    append_event(int(state["session_id"]), "stream.chunk", payload)
+    append_event(int(state["session_id"]), "stream.chunk", payload, user_id)
     checksum = hashlib.sha256(json.dumps(payload,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
     execute("UPDATE stream_state SET next_sequence=?,updated_at=CURRENT_TIMESTAMP WHERE stream_id=?", (sequence + 1, stream_id))
     return {**payload, "checksum": checksum}
 
 
-def close_stream(stream_id: str, status: str = "completed") -> dict[str, Any]:
+def close_stream(stream_id: str, status: str = "completed", user_id: int | None = None) -> dict[str, Any]:
     if status not in {"completed", "interrupted", "failed", "reconnected"}:
         raise ValueError("Invalid stream terminal state.")
-    rows = fetch_all("SELECT * FROM stream_state WHERE stream_id=?", (stream_id,))
+    rows = fetch_all("SELECT st.* FROM stream_state st JOIN chat_sessions s ON s.id=st.session_id WHERE st.stream_id=? AND (? IS NULL OR s.user_id=?)", (stream_id, user_id, user_id))
     if not rows:
         raise ValueError("Stream not found.")
     execute("UPDATE stream_state SET status=?,updated_at=CURRENT_TIMESTAMP WHERE stream_id=?", (status, stream_id))
-    append_event(int(rows[0]["session_id"]), "stream.closed", {"stream_id": stream_id, "status": status})
+    append_event(int(rows[0]["session_id"]), "stream.closed", {"stream_id": stream_id, "status": status}, user_id)
     return {"stream_id": stream_id, "status": status}
 
 
-def reconnect_stream(stream_id: str) -> dict[str, Any]:
-    rows = fetch_all("SELECT * FROM stream_state WHERE stream_id=?", (stream_id,))
+def reconnect_stream(stream_id: str, user_id: int | None = None) -> dict[str, Any]:
+    rows = fetch_all("SELECT st.* FROM stream_state st JOIN chat_sessions s ON s.id=st.session_id WHERE st.stream_id=? AND (? IS NULL OR s.user_id=?)", (stream_id, user_id, user_id))
     if not rows:
         raise ValueError("Stream not found.")
     state = rows[0]
