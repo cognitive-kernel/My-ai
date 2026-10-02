@@ -65,7 +65,9 @@ class StudyScheduler:
                 return
             rows = fetch_all("SELECT session_id,status FROM learning_workers WHERE lower(language)=? LIMIT 1", (str(language).casefold(),))
             self.start(language, rows[0]["session_id"] if rows else None)
-        threading.Timer(delay, recover).start()
+        timer = threading.Timer(delay, recover)
+        timer.daemon = True
+        timer.start()
 
     def start(self,language="Python",session_id=None):
         self._ensure_worker_tables()
