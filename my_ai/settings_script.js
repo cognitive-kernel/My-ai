@@ -123,7 +123,7 @@ async function startCourse(id){try{await req("/settings/courses/"+id+"/start",{m
 
 async function saveProviderCatalog(){
   try{
-    var body={provider_id:(byId("pc_provider_id").value?Number(byId("pc_provider_id").value):null),name:byId("pc_name").value.trim(),protocol:byId("pc_protocol").value.trim(),endpoint:byId("pc_endpoint").value.trim(),auth_type:byId("pc_auth").value.trim()||"none",secret:byId("pc_secret").value,version:byId("pc_version").value.trim(),capabilities:{},timeout_seconds:30,enabled:true};
+    var capabilities={};try{capabilities=byId("pc_capabilities").value.trim()?JSON.parse(byId("pc_capabilities").value):{};if(!capabilities||typeof capabilities!=="object"||Array.isArray(capabilities))throw Error("Capabilities باید JSON object باشد");}catch(e){setText("catalogout","Capabilities نامعتبر: "+e.message);return;}var body={provider_id:(byId("pc_provider_id").value?Number(byId("pc_provider_id").value):null),name:byId("pc_name").value.trim(),protocol:byId("pc_protocol").value.trim(),endpoint:byId("pc_endpoint").value.trim(),auth_type:byId("pc_auth").value.trim()||"none",secret:byId("pc_secret").value,version:byId("pc_version").value.trim(),capabilities:capabilities,timeout_seconds:Number(byId("pc_timeout").value||30),enabled:byId("pc_enabled").checked};
     await req("/settings/providers",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     byId("pc_provider_id").value="";byId("pc_secret").value="";setText("catalogout","Provider ذخیره شد.");await loadProviderCatalog();
   }catch(e){setText("catalogout","خطا: "+e.message)}
@@ -131,7 +131,7 @@ async function saveProviderCatalog(){
 async function saveModelCatalog(){
   try{
     var tasks=byId("mc_tasks").value.split(",").map(function(x){return x.trim()}).filter(Boolean);
-    await req("/settings/models",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({provider_id:Number(byId("mc_provider").value),model_id:byId("mc_model").value.trim(),tasks:tasks,context_length:(byId("mc_context").value?Number(byId("mc_context").value):null),limits:{},priority:Number(byId("mc_priority").value||100),version:"",enabled:true})});
+    var limits={};try{limits=byId("mc_limits").value.trim()?JSON.parse(byId("mc_limits").value):{};if(!limits||typeof limits!=="object"||Array.isArray(limits))throw Error("Limits باید JSON object باشد");}catch(e){setText("catalogout","Limits نامعتبر: "+e.message);return;}await req("/settings/models",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({provider_id:Number(byId("mc_provider").value),model_id:byId("mc_model").value.trim(),tasks:tasks,context_length:(byId("mc_context").value?Number(byId("mc_context").value):null),limits:limits,priority:Number(byId("mc_priority").value||100),version:byId("mc_version").value.trim(),enabled:byId("mc_enabled").checked})});
     setText("catalogout","Model ذخیره شد.");await loadProviderCatalog();
   }catch(e){setText("catalogout","خطا: "+e.message)}
 }
@@ -161,7 +161,7 @@ async function loadProviderCatalog(){
 }
 async function editProviderCatalog(id){
   try{var j=await req("/settings/providers"),x=(j.providers||[]).find(function(v){return Number(v.id)===Number(id)});if(!x)throw Error("Provider پیدا نشد");
-    byId("pc_provider_id").value=x.id;byId("pc_name").value=x.name||"";byId("pc_protocol").value=x.protocol||"";byId("pc_endpoint").value=x.endpoint||"";byId("pc_auth").value=x.auth_type||"none";byId("pc_version").value=x.version||"";byId("pc_secret").value="";setText("catalogout","Provider #"+x.id+" برای ویرایش بارگذاری شد.");
+    byId("pc_provider_id").value=x.id;byId("pc_name").value=x.name||"";byId("pc_protocol").value=x.protocol||"";byId("pc_endpoint").value=x.endpoint||"";byId("pc_auth").value=x.auth_type||"none";byId("pc_version").value=x.version||"";byId("pc_timeout").value=x.timeout_seconds||30;byId("pc_capabilities").value=JSON.stringify(x.capabilities||{});byId("pc_enabled").checked=!!x.enabled;byId("pc_secret").value="";setText("catalogout","Provider #"+x.id+" برای ویرایش بارگذاری شد.");
   }catch(e){setText("catalogout","خطا: "+e.message)}
 }
 async function addProviderKeyGUI(id){
