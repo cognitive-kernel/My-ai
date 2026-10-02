@@ -1,6 +1,12 @@
 import json
 from my_ai.eval_harness import BASELINE_CASES, compare_regression_baseline
-from scripts import regression_gate
+import importlib.util
+from pathlib import Path
+
+_spec=importlib.util.spec_from_file_location("regression_gate", Path(__file__).parents[1] / "scripts" / "regression_gate.py")
+regression_gate=importlib.util.module_from_spec(_spec)
+assert _spec.loader is not None
+_spec.loader.exec_module(regression_gate)
 
 def test_regression_gate_uses_versioned_baseline(monkeypatch, tmp_path):
     baseline=tmp_path/"baseline.json"
