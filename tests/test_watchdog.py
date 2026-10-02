@@ -39,7 +39,8 @@ def test_watchdog_restores_database_snapshot_after_failed_health(monkeypatch, tm
         def wait(self, timeout=0): pass
     monkeypatch.setattr(watchdog.subprocess, "Popen", lambda *args, **kwargs: Child())
     monkeypatch.setattr(watchdog.time, "sleep", lambda _: None)
-    monkeypatch.setattr(watchdog.time, "time", lambda: 100.0)
+    now = [100.0]
+    monkeypatch.setattr(watchdog.time, "time", lambda: (now.__setitem__(0, now[0] + 20.0) or now[0]))
     import sys
     monkeypatch.setattr(sys, "argv", ["watchdog", "--pid", "1", "--rollback", "backup", "--timeout", "10", "--command", "python -c pass", "--db-snapshot", str(snapshot), "--db-path", str(target)])
     assert watchdog.main() == 1
