@@ -23,14 +23,16 @@ class VersionKnowledge:
             if m:
                 def v(x): return tuple(int(p) for p in re.findall(r"\d+",x))
                 return v(target_version)>=v(m.group(1)) and v(target_version)<v(m.group(2))
-        return self.version == target_version or self.status == "valid"
+        if self.version == target_version: return self.status == "valid"
+        return self.status in {"compatible","valid-compatible"} and bool(self.compatibility)
 
 
 class VersionKnowledgeStore:
     def __init__(self): self.items: list[VersionKnowledge]=[]
     def add(self,item): self.items.append(item); return item
     def candidates(self,subject,target_version):
-        return [x for x in self.items if x.subject==subject and x.status not in {"removed","deprecated"} and x.supports(target_version)]
+        items=[x for x in self.items if x.subject==subject and x.status not in {"removed","deprecated"} and x.supports(target_version)]
+        return sorted(items,key=lambda x:(x.version==target_version, x.status=="valid"),reverse=True)
     def evolution(self,subject): return [asdict(x) for x in self.items if x.subject==subject]
     def mark(self,subject,version,status,replaced_by=None):
         for x in self.items:
