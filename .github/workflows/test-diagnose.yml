@@ -1,0 +1,33 @@
+name: test-diagnose
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test-file:
+    strategy:
+      fail-fast: false
+      matrix:
+        file:
+          - tests/test_api.py
+          - tests/test_authorization_matrix.py
+          - tests/test_learning_progress.py
+          - tests/test_self_repair.py
+          - tests/test_self_update.py
+          - tests/test_scheduler_stress.py
+          - tests/test_feature_routes.py
+          - tests/test_hardening.py
+          - tests/test_model_failover_telemetry.py
+          - tests/test_openai_retry_policy.py
+          - tests/test_eval_history.py
+          - tests/test_session_stream_lifecycle.py
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.lock
+      - run: pip install -e .[dev] --no-deps
+      - run: timeout 90s pytest -q "${{ matrix.file }}"
