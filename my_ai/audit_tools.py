@@ -62,23 +62,22 @@ def configuration_inventory(root: Path = ROOT) -> list[dict[str, str]]:
 
 def route_inventory(root: Path = ROOT) -> list[dict[str, str]]:
     result = []
-    paths = sorted((root / "my_ai").rglob("*.py"))
-    for path in paths:
+    for path in sorted((root / "my_ai").rglob("*.py")):
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         except (OSError, SyntaxError):
             continue
         for node in ast.walk(tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
-        for decorator in node.decorator_list:
-            if not isinstance(decorator, ast.Call) or not isinstance(decorator.func, ast.Attribute):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
-            if decorator.func.attr.lower() not in {"get", "post", "put", "patch", "delete"}:
-                continue
-            if not decorator.args or not isinstance(decorator.args[0], ast.Constant):
-                continue
-            result.append({"method": decorator.func.attr.upper(), "path": str(decorator.args[0].value)})
+            for decorator in node.decorator_list:
+                if not isinstance(decorator, ast.Call) or not isinstance(decorator.func, ast.Attribute):
+                    continue
+                if decorator.func.attr.lower() not in {"get", "post", "put", "patch", "delete"}:
+                    continue
+                if not decorator.args or not isinstance(decorator.args[0], ast.Constant):
+                    continue
+                result.append({"method": decorator.func.attr.upper(), "path": str(decorator.args[0].value)})
     return sorted(result, key=lambda x: (x["path"], x["method"]))
 
 def sensitive_route_inventory(root: Path = ROOT) -> list[dict[str, str]]:
