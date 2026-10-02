@@ -86,10 +86,10 @@ def propose_repair(issue: str):
     proposal_id=uuid.uuid4().hex; PROPOSALS.mkdir(parents=True,exist_ok=True); proposal={"id":proposal_id,"created_at":datetime.now(timezone.utc).isoformat(),"base":base,"issue":issue,"patch":patch,"isolated_tests_passed":passed,"test_result":test_result,"approved":False,"applied":False}
     (PROPOSALS/f"{proposal_id}.json").write_text(json.dumps(proposal,ensure_ascii=False,indent=2),encoding="utf-8"); execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_proposal",patch,test_result,0)); record_decision("self_repair_proposal","propose",{"proposal_id":proposal_id,"isolated_tests_passed":passed}); return proposal
 
-def apply_repair(proposal_id: str, approved: bool, health_url: str | None = None, health_timeout: float = 20.0):
+def apply_repair(proposal_id: str, approved: bool, health_url: str | None = None, health_timeout: float = 20.0, approver_id: int | None = None):
     assert_mutation_allowed("self-repair apply")
     if not get_bool("self_repair.enabled",True): raise ValueError("Self-repair is disabled in Settings.")
-    if get_bool("self_repair.require_approval",True) and not approved: raise ValueError("Explicit approval is required before applying a repair.")
+    if get_bool("self_repair.require_approval",True) and (not approved or approver_id is None): raise ValueError("Explicit approval by an authenticated administrator is required before applying a repair.")
     path=PROPOSALS/f"{proposal_id}.json"
     if not path.is_file(): raise ValueError("Repair proposal not found.")
     proposal=json.loads(path.read_text(encoding="utf-8"))
@@ -127,7 +127,7 @@ def apply_repair(proposal_id: str, approved: bool, health_url: str | None = None
             except Exception as restore_exc: _record_failure_lesson("self_repair_restore_failed",proposal_id,str(restore_exc))
             _record_failure_lesson("self_repair_health_failed",proposal_id,last_error)
             raise RuntimeError("Post-activation health check failed and repair was rolled back: "+last_error)
-    proposal["approved"]=True; proposal["applied"]=True; proposal["applied_at"]=datetime.now(timezone.utc).isoformat(); path.write_text(json.dumps(proposal,ensure_ascii=False,indent=2),encoding="utf-8"); execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_applied",proposal["patch"],tests,1)); record_decision("self_repair","apply",{"proposal_id":proposal_id}); notify("self_repair_applied",{"proposal_id":proposal_id,"base":proposal["base"]}); return {"status":"applied","proposal_id":proposal_id,"base":proposal["base"],"tests":tests,"working_tree":"modified"}
+    proposal["approved"]=True; proposal["approved_by"]=approver_id; proposal["approved_at"]=datetime.now(timezone.utc).isoformat(); proposal["applied"]=True; proposal["applied_at"]=datetime.now(timezone.utc).isoformat(); path.write_text(json.dumps(proposal,ensure_ascii=False,indent=2),encoding="utf-8"); execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_applied",proposal["patch"],tests,1)); record_decision("self_repair","apply",{"proposal_id":proposal_id}); notify("self_repair_applied",{"proposal_id":proposal_id,"base":proposal["base"]}); return {"status":"applied","proposal_id":proposal_id,"base":proposal["base"],"tests":tests,"working_tree":"modified"}
 
 
 def _record_failure_lesson(event: str, proposal_id: str, error: str) -> None:
