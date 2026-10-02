@@ -12,6 +12,10 @@ from my_ai.provider_catalog import (
 )
 from my_ai.settings_store import get_setting_registry, export_registered_settings, list_setting_history, set_setting, reset_setting
 from my_ai.readiness import build_readiness
+from my_ai.learning_catalog import list_sources, add_source, review_source
+from my_ai.config_profiles import save_profile, active_profile, load_profile
+from my_ai.backup_manager import backup, restore
+from my_ai.no_code_catalog import inventory
 
 def out(v): print(json.dumps(v, ensure_ascii=False, indent=2, default=str))
 
@@ -19,8 +23,15 @@ def main():
     p=argparse.ArgumentParser(description="My-AI administration")
     s=p.add_subparsers(dest="cmd", required=True)
 
-    s.add_parser("status"); s.add_parser("health"); s.add_parser("config")
-    s.add_parser("actions"); s.add_parser("namespaces"); s.add_parser("config-history")
+    s.add_parser("status"); s.add_parser("health"); s.add_parser("config"); s.add_parser("capabilities")
+    s.add_parser("actions"); s.add_parser("namespaces"); s.add_parser("config-history"); s.add_parser("profile-active")
+    q=s.add_parser("profile-save"); q.add_argument("name"); q.add_argument("settings"); q.add_argument("--activate",action="store_true")
+    q=s.add_parser("profile-load"); q.add_argument("name")
+    q=s.add_parser("backup"); q.add_argument("path"); q.add_argument("--overwrite",action="store_true")
+    q=s.add_parser("restore"); q.add_argument("path"); q.add_argument("--target")
+    s.add_parser("learning-sources")
+    q=s.add_parser("learning-source-add"); q.add_argument("url"); q.add_argument("--type",default="custom"); q.add_argument("--product",default=""); q.add_argument("--version",default=""); q.add_argument("--priority",type=int,default=100)
+    q=s.add_parser("learning-source-review"); q.add_argument("source_id",type=int); q.add_argument("status",choices=["approved","rejected","pending"])
     q=s.add_parser("config-set"); q.add_argument("key"); q.add_argument("value")
     q=s.add_parser("config-reset"); q.add_argument("key")
     q=s.add_parser("config-export"); q.add_argument("path")
@@ -49,10 +60,19 @@ def main():
     a=p.parse_args()
     if a.cmd=="status": out({"providers":list_providers(),"models":list_models(),"actions":list_actions(20)})
     elif a.cmd=="health": out(build_readiness())
+    elif a.cmd=="capabilities": out(inventory())
     elif a.cmd=="config": out({"registry":get_setting_registry(),"values":export_registered_settings()})
     elif a.cmd=="actions": out(list_actions(100))
     elif a.cmd=="namespaces": out(namespace_catalog())
     elif a.cmd=="config-history": out(list_setting_history())
+    elif a.cmd=="profile-active": out({"name":active_profile()})
+    elif a.cmd=="profile-save": out(save_profile(a.name,json.loads(a.settings),activate=a.activate))
+    elif a.cmd=="profile-load": out(load_profile(a.name))
+    elif a.cmd=="backup": out({"path":backup(a.path,overwrite=a.overwrite)})
+    elif a.cmd=="restore": out({"path":restore(a.path,target=a.target)})
+    elif a.cmd=="learning-sources": out(list_sources())
+    elif a.cmd=="learning-source-add": out(add_source(a.url,source_type=a.type,product=a.product,version=a.version,priority=a.priority))
+    elif a.cmd=="learning-source-review": out(review_source(a.source_id,a.status))
     elif a.cmd=="config-set":
         meta=get_setting_registry().get(a.key)
         if not meta: raise SystemExit(f"Unknown setting: {a.key}")
