@@ -256,6 +256,27 @@ async function toggleControlPlane(ns,name,enabled){await req("/settings/control-
 async function deleteControlPlane(ns,name){if(!confirm("این رکورد حذف شود؟"))return;await req("/settings/control-plane/"+encodeURIComponent(ns)+"/"+encodeURIComponent(name),{method:"DELETE"});await loadControlPlane()}
 
 async function adminGUI(kind){try{var endpoint=kind==="status"?"/settings/providers":kind==="health"?"/settings/metrics":"/settings/control-plane?namespace="+encodeURIComponent(kind==="sessions"?"agent.session":kind==="memory"?"memory.policy":kind==="tools"?"tools.catalog":kind==="policies"?"policies.registry":kind==="learning"?"knowledge.registry":kind==="repairs"?"self_repair.policy":kind==="rollback"?"self_update.policy":"");var x=await req(endpoint);setText("adminguiout",JSON.stringify(x,null,2));}catch(e){setText("adminguiout","خطا: "+e.message)}}
+async function loadControlNamespacesGUI(){
+  try{
+    var j=await req("/settings/control-plane/namespaces"), box=byId("cp_namespace");
+    box.innerHTML=(j.items||[]).map(function(x){return "<option value=\""+esc(x)+"\">"+esc(x)+"</option>"}).join("");
+    await loadControlRecordsGUI();
+  }catch(e){setText("cp_out","خطا: "+e.message)}
+}
+async function loadControlRecordsGUI(){
+  try{
+    var ns=byId("cp_namespace").value,j=await req("/settings/control-plane?namespace="+encodeURIComponent(ns));
+    byId("cp_records").innerHTML=(j.items||[]).map(function(x){return "<div><b>"+esc(x.name)+"</b> v"+x.version+" — "+(x.enabled?"فعال":"غیرفعال")+" <button onclick=\"editControlRecordGUI('"+esc(x.name)+"')\">ویرایش</button></div>"}).join("")||"رکوردی ثبت نشده است";
+  }catch(e){setText("cp_out","خطا: "+e.message)}
+}
+async function editControlRecordGUI(name){
+  try{var ns=byId("cp_namespace").value,x=await req("/settings/control-plane/"+encodeURIComponent(ns)+"/"+encodeURIComponent(name));byId("cp_name").value=x.name;byId("cp_payload").value=JSON.stringify(x.payload,null,2);byId("cp_enabled").checked=!!x.enabled}
+  catch(e){setText("cp_out","خطا: "+e.message)}
+}
+async function saveControlRecordGUI(){
+  try{var ns=byId("cp_namespace").value,name=byId("cp_name").value.trim(),payload=JSON.parse(byId("cp_payload").value||"{}");var x=await req("/settings/control-plane/"+encodeURIComponent(ns),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name,payload:payload,enabled:byId("cp_enabled").checked})});setText("cp_out","ذخیره شد: "+x.name+" v"+x.version);await loadControlRecordsGUI()}
+  catch(e){setText("cp_out","خطا: "+e.message)}
+}
 async function loadUIActions(){
   var box=byId("ui-actions");if(!box)return;
   try{
