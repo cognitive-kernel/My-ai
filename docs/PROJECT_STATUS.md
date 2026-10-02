@@ -221,3 +221,13 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 - Model catalog now supports graphical enable/disable, deletion, health checks, and version/capability metadata.
 - The same provider/model lifecycle is available from `scripts/myai_catalog.py` for command-line operation.
 - GUI lifecycle routes are covered by `tests/test_provider_model_gui.py`.
+
+
+### No-code control-plane implementation pass
+- Added unified persistent control plane for agent behavior, workflows, tools, memory, research, security, self-update/repair, scheduler, execution, integrations, observability, backup, prompts/policies, evaluation and experience evolution.
+- Added schema-driven Settings access to control-plane records and action lifecycle.
+- Added CLI parity through `scripts/myai_control.py` and `scripts/myai_admin.py`.
+- Added advanced orchestration primitives: dynamic skills, knowledge graph, hybrid retrieval, context planning, confidence, evaluation lab, research pipeline, secure environment, task graph, smart cache, execution budgets, event workflows, meta-agent and Agent OS.
+- Added version-aware knowledge/experience evolution and learning source catalog with approval/provenance.
+- Added provider/model routing selection and capability-aware fallback infrastructure.
+- This implementation pass is intentionally not marked test-complete yet; verification/regression is deferred to the requested next phase.
