@@ -138,7 +138,6 @@ _RUNTIME_SETTING_ATTRS = {
     "llm.timeout_seconds": "llm_timeout_seconds",
     "memory.embedding_model": "embedding_model",
     "memory.duplicate_threshold": "knowledge_duplicate_threshold",
-    "agent.execution_timeout": "llm_timeout_seconds",
     "execution.timeout_seconds": "exec_timeout",
     "execution.mode": "exec_mode",
     "execution.max_output_chars": "exec_output_chars",
@@ -153,7 +152,7 @@ _RUNTIME_SETTING_ATTRS = {
     "scheduler.auto_resume": "scheduler_auto_resume",
     "resources.cpu_percent": "scheduler_max_cpu_percent",
     "resources.ram_percent": "scheduler_max_ram_percent",
-    "cache.ttl_seconds": "cache_ttl_seconds",
+    "agent.cache_ttl_seconds": "cache_ttl_seconds",
 }
 
 def _coerce_runtime_value(current: Any, value: Any) -> Any:
