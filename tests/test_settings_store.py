@@ -65,3 +65,11 @@ def test_settings_registry_validates_and_resets(tmp_path, monkeypatch):
         raise AssertionError("out-of-range registered setting must fail")
     assert ss.reset_setting("learning.interval_seconds") == 3600
     assert ss.get_setting("learning.interval_seconds") == "3600"
+
+
+def test_registered_default_is_returned_after_reset(tmp_path, monkeypatch):
+    monkeypatch.setattr(ss, "KEY_PATH", tmp_path / "settings.key")
+    ss.ensure_schema()
+    ss.set_setting("execution.timeout_seconds", 45)
+    ss.reset_setting("execution.timeout_seconds")
+    assert ss.get_setting("execution.timeout_seconds") == "10"
