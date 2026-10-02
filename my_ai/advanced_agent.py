@@ -165,6 +165,11 @@ class SmartCache:
     def key(self, namespace, value, version=""): return hashlib.sha256(f"{namespace}|{version}|{value}".encode()).hexdigest()
     def get(self, namespace, value, version=""): return self.backend.get(self.key(namespace,value,version))
     def put(self, namespace, value, result, version="", ttl=None): return self.backend.put(self.key(namespace,value,version),result,ttl=ttl)
+    def invalidate(self, namespace, value, version=""):
+        key=self.key(namespace,value,version)
+        deleter=getattr(self.backend,"delete",None)
+        if callable(deleter): return bool(deleter(key))
+        return False
 
 
 @dataclass
@@ -181,9 +186,28 @@ class ExecutionBudget:
 
 
 class EventWorkflow:
-    def __init__(self): self.handlers: dict[str,list[Callable]]={}
+    def __init__(self, *, retry_limit: int = 3):
+        self.handlers: dict[str,list[Callable]]={}
+        self.retry_limit=max(0,int(retry_limit))
+        self.dead_letters:list[dict[str,Any]]=[]
+        self._seen:set[str]=set()
     def on(self,event,handler): self.handlers.setdefault(event,[]).append(handler)
-    def emit(self,event,payload): return [h(payload) for h in self.handlers.get(event,())]
+    def emit(self,event,payload,*,event_id=None):
+        event_id=str(event_id or uuid.uuid4())
+        if event_id in self._seen: return []
+        self._seen.add(event_id)
+        outputs=[]
+        for handler in self.handlers.get(event,()):
+            last=None
+            for attempt in range(self.retry_limit+1):
+                try:
+                    last=handler(payload); break
+                except Exception as exc:
+                    last=exc
+                    if attempt>=self.retry_limit:
+                        self.dead_letters.append({"event_id":event_id,"event":event,"payload":payload,"error":str(exc)})
+            outputs.append(last)
+        return outputs
 
 
 class MetaAgent:
@@ -194,6 +218,13 @@ class MetaAgent:
         if metrics.get("retrieval_recall",1)<metrics.get("target_recall",0): proposals.append({"type":"retrieval","reason":"recall"})
         return proposals
 
+    def evaluate_candidate(self, candidate: dict[str, Any], *, sandbox: Callable[[dict[str,Any]], Any],
+                           verify: Callable[[Any], bool], approve: Callable[[Any], bool] | None = None) -> dict[str, Any]:
+        """Candidate -> sandbox -> verify -> optional approval; never mutates production directly."""
+        result = sandbox(dict(candidate))
+        verified = bool(verify(result))
+        approved = bool(approve(result)) if verified and approve else verified
+        return {"candidate": candidate, "sandbox_result": result, "verified": verified, "approved": approved}
 
 class AgentOS:
     """Shared lifecycle registry for task/session/model/tool/skill/event/evaluation."""
