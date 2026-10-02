@@ -230,7 +230,8 @@ async function loadLearningSourcesCatalog(){
   try{var j=await req("/settings/learning-sources");box.innerHTML=(j.items||[]).map(function(x){
     return "<div class='topic'><b>"+esc(x.title||x.url)+"</b> · "+esc(x.source_type)+" · v"+esc(x.version)+" · "+esc(x.status)+
       " <button type='button' onclick='reviewLearningSource("+x.id+",\'approved\')'>تأیید</button>"+
-      " <button type='button' onclick='reviewLearningSource("+x.id+",\'rejected\')'>رد</button></div>";
+      " <button type='button' onclick='reviewLearningSource("+x.id+",\'rejected\')'>رد</button>"+
+      " <button type='button' onclick='deleteLearningSource("+x.id+")'>حذف</button></div>";
   }).join("")||"منبع ثبت نشده است"}catch(e){box.textContent="خطا: "+e.message}
 }
 async function addLearningSourceCatalog(){
@@ -239,6 +240,7 @@ async function addLearningSourceCatalog(){
     version:byId("ls_version").value.trim(),priority:Number(byId("ls_priority").value||100),provenance:{ui:true}
   })});await loadLearningSourcesCatalog()}catch(e){setText("catalogout","خطا: "+e.message)}
 }
+async function deleteLearningSource(id){if(!confirm("این منبع حذف شود؟"))return;try{await req("/settings/learning-sources/"+id,{method:"DELETE"});await loadLearningSourcesCatalog()}catch(e){setText("catalogout","خطا: "+e.message)}}
 async function reviewLearningSource(id,status){try{await req("/settings/learning-sources/"+id+"/"+status,{method:"POST"});await loadLearningSourcesCatalog()}catch(e){setText("catalogout","خطا: "+e.message)}}
 
 async function loadControlPlane(){
