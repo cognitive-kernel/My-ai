@@ -24,4 +24,4 @@ def test_self_repair_creates_snapshot_before_mutation(monkeypatch, tmp_path):
     monkeypatch.setattr(self_repair.subprocess, "run", lambda *a, **k: R())
     result=self_repair.apply_repair("1234567890abcdef", True)
     assert result["status"]=="applied"
-    assert any(args[:3]==("tag","-a","myai-repair-pre-1234567890") for args in calls)
+    assert any(args[:3]==("tag","-a","myai-repair-pre-1234567890ab") for args in calls)
