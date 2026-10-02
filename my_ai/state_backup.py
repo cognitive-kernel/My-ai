@@ -20,7 +20,7 @@ def export_state(destination: str | Path) -> dict[str, Any]:
     path = Path(destination).expanduser().resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     with connect() as conn:
-        data = {"format": EXPORT_VERSION, "created_at": datetime.now(timezone.utc).isoformat(), "tables": {}}
+        data: dict[str, Any] = {"format": EXPORT_VERSION, "created_at": datetime.now(timezone.utc).isoformat(), "tables": {}}
         for table in TABLES:
             try:
                 rows = [dict(row) for row in conn.execute(f"SELECT * FROM {table}").fetchall()]
