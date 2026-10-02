@@ -91,7 +91,9 @@ class ModelManager:
                 cost = float(limits.get("cost_per_1k_tokens", limits.get("cost", 0)) or 0)
                 cost_weight = float(get_setting("llm.routing.cost_weight", "0") or 0)
                 latency_weight = float(get_setting("llm.routing.latency_weight", "1") or 1)
-                score = priority + latency * latency_weight + cost * cost_weight
+                quality_weight = float(get_setting("llm.routing.quality_weight", "1") or 1)
+                quality = float(limits.get("quality_score", limits.get("quality", 0)) or 0)
+                score = priority + latency * latency_weight + cost * cost_weight - quality * quality_weight
                 ranked.append((score, str(provider["name"]), str(item["model_id"]), latency))
         if ranked:
             ranked.sort(key=lambda x: (x[0], x[1], x[2]))
