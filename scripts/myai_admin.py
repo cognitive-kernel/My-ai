@@ -18,6 +18,8 @@ from my_ai.backup_manager import backup, restore
 from my_ai.no_code_catalog import inventory
 from my_ai.registries import publish_prompt, activate_prompt, publish_policy, register_tool, list_tools
 from my_ai.plugin_registry import propose_plugin, approve_plugin, reject_plugin
+from my_ai.registries import publish_prompt, activate_prompt, publish_policy, register_tool, list_tools
+from my_ai.plugin_registry import propose_plugin, approve_plugin, reject_plugin
 
 def out(v): print(json.dumps(v, ensure_ascii=False, indent=2, default=str))
 
@@ -59,6 +61,17 @@ def main():
     q=s.add_parser("provider-upsert"); q.add_argument("name"); q.add_argument("protocol"); q.add_argument("endpoint"); q.add_argument("--provider-id",type=int); q.add_argument("--auth-type",default="none"); q.add_argument("--secret",default=""); q.add_argument("--version",default=""); q.add_argument("--timeout",type=float,default=30); q.add_argument("--disabled",action="store_true")
     q=s.add_parser("model-upsert"); q.add_argument("provider_id",type=int); q.add_argument("model_id"); q.add_argument("--tasks",default=""); q.add_argument("--context",type=int); q.add_argument("--priority",type=int,default=100); q.add_argument("--version",default=""); q.add_argument("--disabled",action="store_true")
     q=s.add_parser("model-delete"); q.add_argument("provider_id",type=int); q.add_argument("model_id")
+    s.add_parser("prompt-list")
+    q=s.add_parser("prompt-publish"); q.add_argument("name"); q.add_argument("text"); q.add_argument("--task",default="default"); q.add_argument("--version",default="1"); q.add_argument("--enabled",action="store_true")
+    q=s.add_parser("prompt-activate"); q.add_argument("name")
+    s.add_parser("policy-list")
+    q=s.add_parser("policy-publish"); q.add_argument("name"); q.add_argument("policy"); q.add_argument("--version",default="1"); q.add_argument("--enabled",action="store_true")
+    s.add_parser("tool-list")
+    q=s.add_parser("tool-register"); q.add_argument("name"); q.add_argument("spec"); q.add_argument("--enabled",action="store_true")
+    s.add_parser("plugin-list")
+    q=s.add_parser("plugin-propose"); q.add_argument("name"); q.add_argument("source"); q.add_argument("--version",default=""); q.add_argument("--capabilities",default=""); q.add_argument("--checksum",default="")
+    q=s.add_parser("plugin-approve"); q.add_argument("name")
+    q=s.add_parser("plugin-reject"); q.add_argument("name"); q.add_argument("--reason",default="")
 
     a=p.parse_args()
     if a.cmd=="status": out({"providers":list_providers(),"models":list_models(),"actions":list_actions(20)})
@@ -120,6 +133,17 @@ def main():
     elif a.cmd=="model-upsert":
         out(upsert_model(provider_id=a.provider_id,model_id=a.model_id,tasks=[x.strip() for x in a.tasks.split(",") if x.strip()],context_length=a.context,priority=a.priority,version=a.version,enabled=not a.disabled))
     elif a.cmd=="model-delete": delete_model(a.provider_id,a.model_id); out({"deleted":{"provider_id":a.provider_id,"model_id":a.model_id}})
+    elif a.cmd=="prompt-list": out(list_records("prompts.registry"))
+    elif a.cmd=="prompt-publish": out(publish_prompt(a.name,a.text,task=a.task,version=a.version,enabled=a.enabled))
+    elif a.cmd=="prompt-activate": out(activate_prompt(a.name))
+    elif a.cmd=="policy-list": out(list_records("policies.registry"))
+    elif a.cmd=="policy-publish": out(publish_policy(a.name,json.loads(a.policy),version=a.version,enabled=a.enabled))
+    elif a.cmd=="tool-list": out(list_tools())
+    elif a.cmd=="tool-register": out(register_tool(a.name,json.loads(a.spec),enabled=a.enabled))
+    elif a.cmd=="plugin-list": out(list_records("plugins.registry"))
+    elif a.cmd=="plugin-propose": out(propose_plugin(a.name,a.source,a.version,[x.strip() for x in a.capabilities.split(",") if x.strip()],a.checksum))
+    elif a.cmd=="plugin-approve": out(approve_plugin(a.name))
+    elif a.cmd=="plugin-reject": out(reject_plugin(a.name,a.reason))
 
 if __name__=="__main__":
     main()
