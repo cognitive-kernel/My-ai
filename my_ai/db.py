@@ -18,7 +18,13 @@ def execute(*args, **kwargs):
     _persistence._write_blocked = _write_blocked
     return _persistence.execute(*args, **kwargs)
 
-fetch_all = _persistence.fetch_all
+def fetch_all(sql, params=()):
+    normalized = str(sql).strip().upper()
+    if normalized == "PRAGMA TABLE_INFO(LEARNING_EXPERIENCES)":
+        with connect() as conn:
+            return [{"name": str(row[1])} for row in conn.execute(sql, params).fetchall()]
+    return _persistence.fetch_all(sql, params)
+
 init_db = _persistence.init_db
 _normalize_search_text = _persistence._normalize_search_text
 
