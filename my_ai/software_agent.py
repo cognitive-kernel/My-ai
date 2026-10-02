@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .db import execute, search_knowledge
+from .settings_store import get_int, get_float
 from .infra.llm import create_llm
 from .web_learner import WebLearner
 from .project_builder import build_project
@@ -160,8 +161,12 @@ def run_software_task(
         raise ValueError("Software request is required.")
 
     plan = _plan(request, context)
+    max_steps = max(1, get_int("agent.max_steps", 20))
+    plan["phases"] = list(plan.get("phases") or [])[:max_steps]
     if language:
         plan["language"] = language
+    timeout = int(max(1, get_float("agent.execution_timeout", timeout)))
+    repair_attempts = max(0, min(20, get_int("learning.max_retries", repair_attempts)))
     research = _research(plan)
     enriched_request = (
         "SOFTWARE ENGINEERING PLAN:\n" + json.dumps(plan, ensure_ascii=False)[:20000]
