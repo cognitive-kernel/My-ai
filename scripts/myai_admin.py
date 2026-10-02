@@ -8,7 +8,7 @@ from my_ai.control_plane import (
 )
 from my_ai.provider_catalog import (
     list_providers, list_models, upsert_provider, delete_provider, delete_model,
-    upsert_model, delete_model, add_provider_key, list_provider_keys, rotate_provider_key,
+    upsert_model, delete_model, add_provider_key, list_provider_keys, rotate_provider_key, activate_provider_key,
 )
 from my_ai.settings_store import get_setting_registry, export_registered_settings, list_setting_history, set_setting, reset_setting
 from my_ai.readiness import build_readiness
@@ -16,8 +16,6 @@ from my_ai.learning_catalog import list_sources, add_source, review_source, upda
 from my_ai.config_profiles import save_profile, active_profile, load_profile
 from my_ai.backup_manager import backup, restore
 from my_ai.no_code_catalog import inventory
-from my_ai.registries import publish_prompt, activate_prompt, publish_policy, register_tool, list_tools
-from my_ai.plugin_registry import propose_plugin, approve_plugin, reject_plugin
 from my_ai.registries import publish_prompt, activate_prompt, publish_policy, register_tool, list_tools
 from my_ai.plugin_registry import propose_plugin, approve_plugin, reject_plugin
 
@@ -58,6 +56,7 @@ def main():
     q=s.add_parser("provider-key-list"); q.add_argument("provider_id",type=int)
     q=s.add_parser("provider-key-add"); q.add_argument("provider_id",type=int); q.add_argument("key_name"); q.add_argument("secret"); q.add_argument("--priority",type=int,default=100)
     q=s.add_parser("provider-key-rotate"); q.add_argument("provider_id",type=int)
+    q=s.add_parser("provider-key-activate"); q.add_argument("provider_id",type=int); q.add_argument("key_name")
     q=s.add_parser("provider-upsert"); q.add_argument("name"); q.add_argument("protocol"); q.add_argument("endpoint"); q.add_argument("--provider-id",type=int); q.add_argument("--auth-type",default="none"); q.add_argument("--secret",default=""); q.add_argument("--version",default=""); q.add_argument("--timeout",type=float,default=30); q.add_argument("--disabled",action="store_true")
     q=s.add_parser("model-upsert"); q.add_argument("provider_id",type=int); q.add_argument("model_id"); q.add_argument("--tasks",default=""); q.add_argument("--context",type=int); q.add_argument("--priority",type=int,default=100); q.add_argument("--version",default=""); q.add_argument("--disabled",action="store_true")
     q=s.add_parser("model-delete"); q.add_argument("provider_id",type=int); q.add_argument("model_id")
@@ -67,7 +66,7 @@ def main():
     s.add_parser("policy-list")
     q=s.add_parser("policy-publish"); q.add_argument("name"); q.add_argument("policy"); q.add_argument("--version",default="1"); q.add_argument("--enabled",action="store_true")
     s.add_parser("tool-list")
-    q=s.add_parser("tool-register"); q.add_argument("name"); q.add_argument("spec"); q.add_argument("--enabled",action="store_true")
+    q=s.add_parser("tool-register"); q.add_argument("name"); q.add_argument("description"); q.add_argument("input_schema"); q.add_argument("output_schema"); q.add_argument("--permissions",default=""); q.add_argument("--timeout",type=float,default=30); q.add_argument("--retries",type=int,default=2); q.add_argument("--tasks",default=""); q.add_argument("--version",default="1"); q.add_argument("--enabled",action="store_true")
     s.add_parser("plugin-list")
     q=s.add_parser("plugin-propose"); q.add_argument("name"); q.add_argument("source"); q.add_argument("--version",default=""); q.add_argument("--capabilities",default=""); q.add_argument("--checksum",default="")
     q=s.add_parser("plugin-approve"); q.add_argument("name")
@@ -128,8 +127,9 @@ def main():
     elif a.cmd=="provider-key-list": out(list_provider_keys(a.provider_id))
     elif a.cmd=="provider-key-add": out(add_provider_key(a.provider_id,a.key_name,a.secret,priority=a.priority))
     elif a.cmd=="provider-key-rotate": out(rotate_provider_key(a.provider_id))
+    elif a.cmd=="provider-key-activate": out(activate_provider_key(a.provider_id,a.key_name))
     elif a.cmd=="provider-upsert":
-        out(upsert_provider(name=a.name,protocol=a.protocol,endpoint=a.endpoint,auth_type=a.auth_type,secret=a.secret,version=a.version,timeout_seconds=a.timeout,enabled=not a.disabled,provider_id=a.provider_id))
+        out(upsert_provider(name=a.name,protocol=a.protocol,endpoint=a.endpoint,auth_type=a.auth_type,secret=a.secret,version=a.version,timeout_seconds=a.timeout,enabled=not a.disabled))
     elif a.cmd=="model-upsert":
         out(upsert_model(provider_id=a.provider_id,model_id=a.model_id,tasks=[x.strip() for x in a.tasks.split(",") if x.strip()],context_length=a.context,priority=a.priority,version=a.version,enabled=not a.disabled))
     elif a.cmd=="model-delete": delete_model(a.provider_id,a.model_id); out({"deleted":{"provider_id":a.provider_id,"model_id":a.model_id}})
@@ -139,7 +139,7 @@ def main():
     elif a.cmd=="policy-list": out(list_records("policies.registry"))
     elif a.cmd=="policy-publish": out(publish_policy(a.name,json.loads(a.policy),version=a.version,enabled=a.enabled))
     elif a.cmd=="tool-list": out(list_tools())
-    elif a.cmd=="tool-register": out(register_tool(a.name,json.loads(a.spec),enabled=a.enabled))
+    elif a.cmd=="tool-register": out(register_tool(a.name,a.description,json.loads(a.input_schema),json.loads(a.output_schema),permissions=[x.strip() for x in a.permissions.split(",") if x.strip()],timeout=a.timeout,retries=a.retries,tasks=[x.strip() for x in a.tasks.split(",") if x.strip()],version=a.version,enabled=a.enabled))
     elif a.cmd=="plugin-list": out(list_records("plugins.registry"))
     elif a.cmd=="plugin-propose": out(propose_plugin(a.name,a.source,a.version,[x.strip() for x in a.capabilities.split(",") if x.strip()],a.checksum))
     elif a.cmd=="plugin-approve": out(approve_plugin(a.name))
