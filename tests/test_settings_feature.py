@@ -142,3 +142,17 @@ def test_backup_uses_configured_destination_when_path_omitted(monkeypatch):
     result = settings_feature.settings_database_backup(settings_feature.BackupRequest(), object())
     assert captured["path"] == "data/configured-backups"
     assert result["path"] == "data/configured-backups"
+
+
+def test_backup_retention_prunes_old_files(tmp_path):
+    from my_ai.backup_manager import prune_backups
+    import os, time
+    paths = []
+    for index in range(3):
+        path = tmp_path / f"backup-{index}.db"
+        path.write_text(str(index))
+        os.utime(path, (time.time() - index, time.time() - index))
+        paths.append(path)
+    removed = prune_backups(str(tmp_path), 2)
+    assert len(removed) == 1
+    assert len(list(tmp_path.iterdir())) == 2
