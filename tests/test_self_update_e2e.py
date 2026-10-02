@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from my_ai import self_update
 
 
@@ -41,8 +39,8 @@ def test_database_snapshot_round_trip(tmp_path, monkeypatch):
     db = tmp_path / "source.sqlite"
     destination = tmp_path / "snapshot.sqlite"
     monkeypatch.setenv("DB_PATH", str(db))
-    self_update.sqlite3.connect(db).execute("CREATE TABLE t(value TEXT)")
     conn = self_update.sqlite3.connect(db)
+    conn.execute("CREATE TABLE t(value TEXT)")
     conn.execute("INSERT INTO t VALUES ('before')")
     conn.commit(); conn.close()
     assert self_update._snapshot_database(destination) == destination
