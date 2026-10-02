@@ -766,7 +766,7 @@ def learning_source_hash(source_id:int, request:Request, content:str=""):
     return update_content_hash(source_id,content)
 
 class BackupRequest(BaseModel):
-    path: str = Field(min_length=1, max_length=2000)
+    path: str = Field(default="", max_length=2000)
     overwrite: bool = False
 
 @router.post("/settings/database/backup")
