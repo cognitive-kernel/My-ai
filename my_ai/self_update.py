@@ -17,6 +17,7 @@ from .settings_store import get_bool, get_setting
 from .decision_log import record as record_decision
 from .notifications import notify
 from .config import assert_write_allowed
+from .test_runner import run_test_suite
 
 ROOT = Path(__file__).resolve().parent.parent
 STATE_DIR = ROOT / "self-repair"
@@ -110,17 +111,7 @@ def _record_lesson(event, **data):
 
 
 def _tests(cwd):
-    compile_run = _run([sys.executable, "-m", "compileall", "-q", "my_ai"], cwd=cwd, timeout=120)
-    if compile_run.returncode:
-        return False, "compileall failed:\n" + (compile_run.stdout + compile_run.stderr).strip()
-    tests_dir = cwd / "tests"
-    if tests_dir.exists():
-        test_run = _run([sys.executable, "-m", "pytest", "-q"], cwd=cwd, timeout=300)
-        if test_run.returncode:
-            return False, "pytest failed:\n" + (test_run.stdout + test_run.stderr).strip()
-        return True, "compileall + pytest passed"
-    return True, "compileall passed; no tests directory present"
-
+    return run_test_suite(cwd, per_file_timeout=30)
 
 def _policy_flag(env_name: str, setting_key: str) -> bool:
     env_value = os.getenv(env_name)
