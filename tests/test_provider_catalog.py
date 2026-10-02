@@ -31,4 +31,4 @@ def test_provider_catalog_roundtrip(monkeypatch, tmp_path):
     assert catalog.list_models(provider_id=provider["id"])[0]["context_length"] == 8192
     exported = catalog.export_catalog()
     assert exported["version"] == 1
-    assert exported["providers"][0]["auth_configured"] is False
+    assert "auth_configured" not in exported["providers"][0]
