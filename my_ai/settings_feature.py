@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import httpx
 import re
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
@@ -16,7 +17,7 @@ from .auth import require_admin, require_user, audit
 from .db import connect, execute, fetch_all, init_db
 from .git_connector import GitHubConnector
 from .llm import create_llm
-from .provider_catalog import list_providers, upsert_provider, delete_provider, list_models, upsert_model, export_catalog
+from .provider_catalog import list_providers, upsert_provider, delete_provider, list_models, upsert_model, delete_model, export_catalog
 from .settings_store import get_setting, set_setting, get_bool, get_int, get_github_settings, get_setting_registry, get_configuration_schema_version, reset_setting, export_registered_settings, import_registered_settings
 from .ui_actions import list_ui_actions
 
@@ -421,6 +422,46 @@ def settings_model_create(payload: ModelCatalogRequest, request: Request):
 def settings_models_export(request: Request):
     require_admin(request)
     return export_catalog()
+
+@router.delete("/settings/models/{provider_id}/{model_id:path}")
+def settings_model_delete(provider_id: int, model_id: str, request: Request):
+    require_admin(request)
+    delete_model(provider_id, model_id)
+    return {"deleted": {"provider_id": provider_id, "model_id": model_id}}
+
+@router.post("/settings/providers/{provider_id}/health")
+def settings_provider_health(provider_id: int, request: Request):
+    require_admin(request)
+    provider = next((x for x in list_providers() if int(x["id"]) == int(provider_id)), None)
+    if not provider:
+        raise HTTPException(404, "Provider not found.")
+    started = __import__("time").perf_counter()
+    headers = {}
+    if provider.get("auth_type") != "none" and provider.get("auth_configured"):
+        # Secrets are intentionally not returned by the catalog API; health uses the encrypted secret internally.
+        from .provider_catalog import _decrypt
+        with connect() as conn:
+            row = conn.execute("SELECT auth_secret FROM llm_providers WHERE id=?", (provider_id,)).fetchone()
+        secret = _decrypt(row["auth_secret"]) if row and row["auth_secret"] else ""
+        if secret:
+            headers["Authorization"] = f"Bearer {secret}"
+    try:
+        response = httpx.get(str(provider["endpoint"]).rstrip("/") + "/models", headers=headers, timeout=float(provider.get("timeout_seconds") or 30))
+        elapsed = round((__import__("time").perf_counter() - started) * 1000, 2)
+        response.raise_for_status()
+        return {"provider_id": provider_id, "healthy": True, "status_code": response.status_code, "latency_ms": elapsed}
+    except Exception as exc:
+        return {"provider_id": provider_id, "healthy": False, "latency_ms": round((__import__("time").perf_counter() - started) * 1000, 2), "error": str(exc)}
+
+@router.post("/settings/models/{provider_id}/{model_id:path}/health")
+def settings_model_health(provider_id: int, model_id: str, request: Request):
+    require_admin(request)
+    from .model_manager import ModelManager
+    provider = next((x for x in list_providers() if int(x["id"]) == int(provider_id)), None)
+    if not provider:
+        raise HTTPException(404, "Provider not found.")
+    status = ModelManager().health(model_id, provider=str(provider["name"]))
+    return status.__dict__
 
 @router.get("/settings/registry")
 def settings_registry(request: Request):
