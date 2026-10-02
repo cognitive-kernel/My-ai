@@ -13,7 +13,7 @@ import httpx
 
 from .config import settings
 from .settings_store import get_setting
-from .provider_catalog import list_providers, list_models
+from .provider_catalog import list_providers, list_models, list_routing_rules, list_fallback_chain
 
 
 @dataclass(frozen=True)
@@ -73,6 +73,7 @@ class ModelManager:
         wanted = aliases.get(requested, {requested, "general"})
         catalog = list_models(include_disabled=False)
         providers = {int(p["id"]): p for p in list_providers(include_disabled=False)}
+        explicit = [r for r in list_routing_rules(task=requested, include_disabled=False)]
         ranked = []
         for item in catalog:
             provider = providers.get(int(item["provider_id"]))
@@ -83,9 +84,11 @@ class ModelManager:
                 continue
             health = self.health(str(item["model_id"]), provider=str(provider["name"]), timeout=timeout)
             if health.available:
-                ranked.append((int(item.get("priority", 100)), str(provider["name"]), str(item["model_id"])))
+                rule_priority = next((int(r.get("priority",100)) for r in explicit if r.get("model_id")==item["model_id"]), None)
+                priority = rule_priority if rule_priority is not None else int(item.get("priority", 100))
+                ranked.append((priority, str(provider["name"]), str(item["model_id"]), float(health.latency_ms or 0)))
         if ranked:
-            ranked.sort(key=lambda x: (x[0], x[1], x[2]))
+            ranked.sort(key=lambda x: (x[0], x[3], x[1], x[2]))
             return ranked[0][2]
         return None
 
@@ -123,9 +126,12 @@ class ModelManager:
     def available_models(self, *, timeout: float = 5.0) -> set[str]:
         return {status.model for status in self.health_all(timeout=timeout) if status.available}
 
-    def fallback_chain(self, requested: str, *, timeout: float = 5.0) -> list[str]:
+    def fallback_chain(self, requested: str, *, timeout: float = 5.0, task: str = "general") -> list[str]:
         available = self.available_models(timeout=timeout)
-        candidates = [item["model"] for item in self.inventory()]
+        configured = []
+        for name in ("default", "global", "ui"):
+            configured.extend(x.get("model_id","") for x in list_fallback_chain(name, task))
+        candidates = configured + [item["model"] for item in self.inventory()]
         return list(dict.fromkeys(model for model in candidates if model and model != requested and model in available))
 
     def choose_fallback(self, requested: str, *, timeout: float = 5.0) -> str | None:
