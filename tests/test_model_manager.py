@@ -111,3 +111,31 @@ def test_ollama_chat_uses_second_fallback_after_retry_exhaustion(monkeypatch):
     assert calls[:2] == [primary, primary]
     assert calls[2] == fallback
     assert client.model == fallback
+
+
+def test_custom_provider_is_visible_and_health_checked(monkeypatch):
+    from my_ai import model_manager as mm
+    values = {
+        "llm.provider": "custom-openai-compatible",
+        "llm.custom.model": "custom-model",
+        "llm.custom.base_url": "http://custom.local/v1",
+        "llm.custom.api_key": "secret",
+    }
+    monkeypatch.setattr(mm, "get_setting", lambda key, default=None, **kwargs: values.get(key, default))
+
+    def fake_get(url, **kwargs):
+        assert url == "http://custom.local/v1/models"
+        assert kwargs["headers"]["Authorization"] == "Bearer secret"
+        return httpx.Response(
+            200,
+            json={"data": [{"id": "custom-model"}]},
+            request=httpx.Request("GET", url),
+        )
+
+    monkeypatch.setattr(mm.httpx, "get", fake_get)
+    manager = ModelManager()
+    item = next(x for x in manager.inventory() if x["provider"] == "custom-openai-compatible")
+    assert item["model"] == "custom-model"
+    status = manager.health("custom-model")
+    assert status.provider == "custom-openai-compatible"
+    assert status.available is True
