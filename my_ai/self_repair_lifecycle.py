@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import time
 import urllib.request
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -14,6 +15,12 @@ STATE = ROOT / 'self-repair'
 
 def activate_with_safety(proposal_id: str, base_ref: str, apply_patch, run_tests, health_url: str | None = None, health_timeout: float = 20.0) -> dict:
     STATE.mkdir(parents=True, exist_ok=True)
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, capture_output=True, timeout=30)
+    if head.returncode != 0 or head.stdout.strip() != base_ref:
+        raise RuntimeError("Production HEAD changed; candidate activation must be regenerated.")
+    status = subprocess.run(["git", "status", "--porcelain"], cwd=ROOT, text=True, capture_output=True, timeout=30)
+    if status.stdout.strip():
+        raise RuntimeError("Production working tree must be clean before activation.")
     snapshot = database_snapshot(STATE / f'{proposal_id}.pre.sqlite')
     result = {'proposal_id': proposal_id, 'base': base_ref, 'snapshot': snapshot, 'activated': False}
     try:
