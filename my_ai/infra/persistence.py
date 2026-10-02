@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
  occurred_at TEXT,
  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX IF NOT EXISTS idx_audit_created_at ON audit_log(created_at);\nCREATE INDEX IF NOT EXISTS idx_audit_request_id ON audit_log(request_id);
+CREATE INDEX IF NOT EXISTS idx_audit_created_at ON audit_log(created_at);
 CREATE TABLE IF NOT EXISTS skills (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  name TEXT NOT NULL,
