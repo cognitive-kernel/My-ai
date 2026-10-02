@@ -52,6 +52,9 @@ def _normalize_patch(raw: str):
 
 def _test_patch(patch: str, base: str):
     parent=Path(tempfile.mkdtemp(prefix="myai-repair-")); candidate=parent/"worktree"
+    production_before=_git("rev-parse","HEAD").stdout.strip()
+    if production_before != base:
+        return False,"Production HEAD changed before candidate validation; proposal must be regenerated."
     try:
         add=_git("worktree","add","--detach",str(candidate),base,timeout=120)
         if add.returncode: return False,"worktree creation failed:\n"+(add.stdout+add.stderr).strip()
@@ -60,7 +63,11 @@ def _test_patch(patch: str, base: str):
         if check.returncode: return False,"git apply --check failed:\n"+(check.stdout+check.stderr).strip()
         apply=_git("apply","--index",str(patch_file),cwd=candidate)
         if apply.returncode: return False,"git apply failed:\n"+(apply.stdout+apply.stderr).strip()
-        return _tests(candidate)
+        result=_tests(candidate)
+        production_after=_git("rev-parse","HEAD").stdout.strip()
+        if production_after != production_before:
+            return False,"Production repository changed during isolated candidate validation."
+        return result
     finally:
         _git("worktree","remove","--force",str(candidate),timeout=120); shutil.rmtree(parent,ignore_errors=True)
 
