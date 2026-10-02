@@ -87,6 +87,7 @@ class OllamaClient:
                     self.model=candidate; return
                 except (httpx.HTTPError,json.JSONDecodeError) as exc:
                     record_error("ollama",candidate); errors.append(f"{candidate} attempt {attempt}: {exc}")
+                    record_route(messages[-1]["content"], candidate, f"failure_attempt_{attempt}")
                     if yielded or attempt>=self._retry_attempts(): break
                     self._backoff(attempt)
         raise LLMError("Ollama streaming request failed for all model candidates: "+" | ".join(errors))
@@ -104,7 +105,7 @@ class OllamaClient:
                     if not isinstance(parsed,dict): raise LLMError("Structured Ollama response is not an object.")
                     record_inference("ollama",candidate,time.perf_counter()-started,prompt_tokens=data.get("prompt_eval_count"),output_tokens=data.get("eval_count")); self.model=candidate; return parsed
                 except (httpx.HTTPError,json.JSONDecodeError,LLMError) as exc:
-                    errors.append(f"{candidate} attempt {attempt}: {exc}"); record_error("ollama",candidate)
+                    errors.append(f"{candidate} attempt {attempt}: {exc}"); record_error("ollama",candidate); record_route(message, candidate, f"failure_attempt_{attempt}")
                     if attempt<self._retry_attempts(): self._backoff(attempt)
         raise LLMError("Structured Ollama request failed for all model candidates: "+" | ".join(errors))
 
@@ -122,7 +123,7 @@ class OllamaClient:
                     response=self._post_json(f"{self.base_url}/api/chat",payload); data=response.json(); content=data["message"]["content"]
                     record_inference("ollama",candidate,time.perf_counter()-started,prompt_tokens=data.get("prompt_eval_count"),output_tokens=data.get("eval_count")); self.model=candidate; return str(content)
                 except (httpx.HTTPError,KeyError,TypeError,LLMError) as exc:
-                    errors.append(f"{candidate} attempt {attempt}: {exc}"); record_error("ollama",candidate)
+                    errors.append(f"{candidate} attempt {attempt}: {exc}"); record_error("ollama",candidate); record_route(message, candidate, f"failure_attempt_{attempt}")
                     if attempt<self._retry_attempts(): self._backoff(attempt)
         raise LLMError("Ollama request failed for all model candidates: "+" | ".join(errors))
 
