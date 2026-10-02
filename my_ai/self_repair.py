@@ -116,6 +116,8 @@ def apply_repair(proposal_id: str, approved: bool, health_url: str | None = None
             time.sleep(0.5)
         if not healthy:
             _git("reset","--hard",proposal["base"])
+            try: restore_database_snapshot(Path(db_snapshot))
+            except Exception as restore_exc: _record_failure_lesson("self_repair_restore_failed",proposal_id,str(restore_exc))
             _record_failure_lesson("self_repair_health_failed",proposal_id,last_error)
             raise RuntimeError("Post-activation health check failed and repair was rolled back: "+last_error)
     proposal["approved"]=True; proposal["applied"]=True; proposal["applied_at"]=datetime.now(timezone.utc).isoformat(); path.write_text(json.dumps(proposal,ensure_ascii=False,indent=2),encoding="utf-8"); execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_applied",proposal["patch"],tests,1)); record_decision("self_repair","apply",{"proposal_id":proposal_id}); notify("self_repair_applied",{"proposal_id":proposal_id,"base":proposal["base"]}); return {"status":"applied","proposal_id":proposal_id,"base":proposal["base"],"tests":tests,"working_tree":"modified"}
