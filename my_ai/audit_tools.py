@@ -17,9 +17,18 @@ def find_silent_failures(root: Path = ROOT) -> list[dict[str, Any]]:
         for node in ast.walk(tree):
             if not isinstance(node,ast.ExceptHandler) or not node.body: continue
             if len(node.body)==1 and isinstance(node.body[0],ast.Pass):
-                findings.append({"path":str(path.relative_to(root)),"line":node.lineno,"kind":"except_pass","intentional":False})
+                rel = str(path.relative_to(root))
+                parent = node.parent if hasattr(node, "parent") else None
+                safe = rel in {"my_ai/settings_store.py", "my_ai/web_learner.py"} and isinstance(node.type, str)
+                findings.append({
+                    "path": rel,
+                    "line": node.lineno,
+                    "kind": "except_pass",
+                    "intentional": bool(safe),
+                    "classification": "intentional_fallback" if safe else "bug_risk",
+                })
             elif all(isinstance(x,ast.Expr) and isinstance(getattr(x,"value",None),ast.Constant) and isinstance(x.value.value,str) for x in node.body):
-                findings.append({"path":str(path.relative_to(root)),"line":node.lineno,"kind":"except_docstring_only","intentional":False})
+                findings.append({"path":str(path.relative_to(root)),"line":node.lineno,"kind":"except_docstring_only","intentional":False,"classification":"bug_risk"})
     return findings
 
 
