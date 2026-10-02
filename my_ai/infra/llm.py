@@ -34,11 +34,11 @@ class OllamaClient:
         self.model = self._preflight_model(self._select_model(task), task)
 
     def _retry_attempts(self) -> int:
-        return max(1, min(5, int(getattr(_settings(), "llm_retry_attempts", 2))))
+        return max(1, min(5, int(getattr(_settings(), "llm_model_retry_attempts", getattr(_settings(), "llm_retry_attempts", 2)))))
     def _timeout(self) -> float:
-        return max(1.0, float(getattr(_settings(), "llm_timeout_seconds", 300)))
+        return max(1.0, float(getattr(_settings(), "llm_model_timeout_seconds", getattr(_settings(), "llm_timeout_seconds", 300))))
     def _backoff(self, attempt: int) -> None:
-        delay=max(0.0,min(10.0,float(getattr(_settings(),"llm_retry_backoff_seconds",0.5))))
+        delay=max(0.0,min(10.0,float(getattr(_settings(),"llm_model_retry_backoff_seconds",getattr(_settings(),"llm_retry_backoff_seconds",0.5)))))
         if delay: time.sleep(delay*(2**max(0,attempt-1)))
     def _post_json(self,url:str,payload:dict,*,headers:dict|None=None)->httpx.Response:
         response=httpx.post(url,json=payload,headers=headers,timeout=self._timeout()); response.raise_for_status(); return response
