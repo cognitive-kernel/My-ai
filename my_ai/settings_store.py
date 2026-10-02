@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 import os
 import secrets
 from pathlib import Path
@@ -30,8 +31,8 @@ def _key() -> bytes:
         KEY_PATH.write_bytes(raw)
         try:
             os.chmod(KEY_PATH, 0o600)
-        except OSError:
-            pass
+        except OSError as exc:
+            logging.getLogger(__name__).debug("settings key chmod failed: %s", exc)
     if len(raw) != 32:
         raise RuntimeError("Invalid My-AI settings encryption key.")
     return raw
