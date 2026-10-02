@@ -1,0 +1,44 @@
+name: ci-filewise-diagnose
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --upgrade "setuptools>=83"
+      - run: pip install -r requirements.lock
+      - run: pip install -e .[dev] --no-deps
+      - name: Run each test file with hard timeout
+        shell: bash
+        run: |
+          set +e
+          mkdir -p /tmp/test-results
+          failed=0
+          while IFS= read -r -d '' f; do
+            name=$(basename "$f")
+            echo "::group::START $f"
+            timeout --signal=TERM --kill-after=10s 90s pytest -q "$f" > "/tmp/test-results/$name.log" 2>&1
+            rc=$?
+            echo "::endgroup::"
+            echo "$f rc=$rc"
+            if [ "$rc" -ne 0 ]; then
+              failed=1
+              echo "===== $f ====="
+              cat "/tmp/test-results/$name.log"
+            fi
+          done < <(find tests -maxdepth 2 -type f -name 'test_*.py' -print0 | sort -z)
+          exit "$failed"
+      - name: Upload per-file results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-filewise-results-${{ github.sha }}
+          path: /tmp/test-results/
