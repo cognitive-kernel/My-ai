@@ -385,7 +385,11 @@ def import_registered_settings(values: dict[str, Any]) -> dict[str, Any]:
         key: validate_registered_setting(key, value)
         for key, value in values.items()
     }
-    for key, value in validated.items():
+    ordered_keys = [key for key in validated if key != "database.path"]
+    if "database.path" in validated:
+        ordered_keys.append("database.path")
+    for key in ordered_keys:
+        value = validated[key]
         set_setting(key, value, secret=bool(SETTING_REGISTRY[key].get("secret")))
     return export_registered_settings()
 
