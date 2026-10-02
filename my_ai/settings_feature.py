@@ -109,6 +109,11 @@ class CourseRequest(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     description: str = Field(default="", max_length=2000)
     topics: list[dict[str, str]] = Field(min_length=1, max_length=100)
+    llm_model: str = Field(default="", max_length=300)
+    schedule: str = Field(default="weekly", max_length=120)
+    mastery_threshold: float = Field(default=0.8, ge=0, le=1)
+    source_policy: str = Field(default="hybrid", max_length=40)
+    mode: str = Field(default="auto", max_length=40)
 
 class CourseTopicRequest(BaseModel):
     title: str = Field(min_length=1, max_length=300)
@@ -173,6 +178,16 @@ def _setup() -> None:
     init_db()
     with connect() as conn:
         conn.executescript(SCHEMA)
+        course_columns={str(r["name"]) for r in conn.execute("PRAGMA table_info(custom_courses)").fetchall()}
+        for column, ddl in {
+            "llm_model":"TEXT NOT NULL DEFAULT ''",
+            "schedule":"TEXT NOT NULL DEFAULT 'weekly'",
+            "mastery_threshold":"REAL NOT NULL DEFAULT 0.8",
+            "source_policy":"TEXT NOT NULL DEFAULT 'hybrid'",
+            "mode":"TEXT NOT NULL DEFAULT 'auto'",
+        }.items():
+            if column not in course_columns:
+                conn.execute(f"ALTER TABLE custom_courses ADD COLUMN {column} {ddl}")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS learning_domains (
                 name TEXT PRIMARY KEY,
