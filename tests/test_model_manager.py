@@ -35,6 +35,24 @@ def test_choose_fallback_only_when_fallback_is_available(monkeypatch):
     assert manager.choose_fallback("missing-primary") == settings.fallback_model
 
 
+def test_fallback_chain_is_ordered_and_unique(monkeypatch):
+    names = [settings.fallback_model, settings.coding_model, settings.routing_model]
+    monkeypatch.setattr("my_ai.model_manager.httpx.get", lambda *a, **k: _tags(names))
+    manager = ModelManager()
+    chain = manager.fallback_chain("primary")
+    assert chain
+    assert chain == list(dict.fromkeys(chain))
+    assert all(name in names for name in chain)
+
+
+def test_route_snapshot_exposes_failure_and_fallback(monkeypatch):
+    monkeypatch.setattr("my_ai.model_manager.httpx.get", lambda *a, **k: _tags([settings.fallback_model]))
+    manager = ModelManager()
+    snapshot = manager.route_snapshot("primary")
+    assert snapshot["requested_available"] is False
+    assert settings.fallback_model in snapshot["fallback_chain"]
+
+
 def test_ollama_client_uses_central_health_manager(monkeypatch):
     monkeypatch.setattr("my_ai.model_manager.httpx.get", lambda *a, **k: _tags([settings.fallback_model]))
     from my_ai.llm import OllamaClient
