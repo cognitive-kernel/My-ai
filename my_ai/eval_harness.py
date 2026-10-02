@@ -182,7 +182,7 @@ def score_confidence_calibration(items: Iterable[dict]) -> float:
         return 0.0
     # Calibration evidence is supplied by the retrieval judgment layer. Prefer its
     # explicit calibration score when present; otherwise use the calibrated-hit rate.
-    scores = [float(item.get("calibration_score")) for item in calibrated if item.get("calibration_score") is not None]
+    scores = [float(item["calibration_score"]) for item in calibrated if item.get("calibration_score") is not None]
     return max(0.0, min(1.0, sum(scores) / len(scores))) if scores else len(calibrated) / len(rows)
 
 
