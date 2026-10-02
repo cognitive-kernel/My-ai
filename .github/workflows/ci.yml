@@ -51,14 +51,15 @@ jobs:
         with:
           name: architecture-e2e-diagnostics-${{ github.sha }}
           path: architecture-e2e.txt
-      - name: Ruff F diagnostics
+      - name: Ruff F diagnostics and autofix
         shell: bash
         run: |
           set +e
-          ruff check my_ai --select F > ruff-f.txt 2>&1
+          ruff check my_ai --select F --fix > ruff-f.txt 2>&1
           rc=$?
           cat ruff-f.txt
           if [ "$rc" -ne 0 ]; then exit "$rc"; fi
+          ruff check my_ai --select F
       - name: Upload Ruff diagnostics
         if: failure()
         uses: actions/upload-artifact@v6
