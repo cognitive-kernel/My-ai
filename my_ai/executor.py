@@ -4,11 +4,13 @@ import httpx
 from dataclasses import dataclass
 from pathlib import Path
 from .config import settings
-from .settings_store import get_int, get_setting
+from .settings_store import get_int, get_setting, get_setting
 @dataclass(frozen=True)
 class ExecutionResult:
     output:str; error:str; timed_out:bool; return_code:int; sandbox_mode:str="container"
-def _truncate(value:str)->str: return (value or "")[-settings.exec_output_chars:]
+def _mode() -> str: return str(get_setting("execution.mode", settings.exec_mode) or settings.exec_mode)
+def _max_output() -> int: return max(1000, min(10000000, get_int("execution.max_output_chars", settings.exec_output_chars)))
+def _truncate(value:str)->str: return (value or "")[-_max_output():]
 def _timeout_seconds() -> int: return max(1, min(3600, get_int("execution.timeout_seconds", settings.exec_timeout)))
 def _run_subprocess(code:str)->ExecutionResult:
     with tempfile.TemporaryDirectory(prefix="myai-") as tmp:
@@ -51,7 +53,7 @@ def _run_remote(code:str)->ExecutionResult:
 
 def run_python(code:str)->ExecutionResult:
     if not isinstance(code,str) or not code.strip(): return ExecutionResult("","No Python code supplied.",False,2,settings.exec_mode)
-    if settings.exec_mode=="remote": return _run_remote(code)
-    if settings.exec_mode=="container": return _run_container(code)
-    if settings.exec_mode=="subprocess": return _run_subprocess(code)
-    raise ValueError("EXECUTOR_MODE must be 'container', 'subprocess', or 'remote'.")
+    mode=_mode()\n    if mode=="remote": return _run_remote(code)
+    if mode in ("container","sandbox"): return _run_container(code)
+    if mode in ("subprocess","local"): return _run_subprocess(code)
+    raise ValueError("execution.mode must be local, sandbox, container, or remote.")
