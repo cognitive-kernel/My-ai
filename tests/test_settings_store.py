@@ -142,3 +142,9 @@ def test_registry_exposes_category_dependencies_and_delete_semantics(monkeypatch
         assert ss.get_setting("test.dependent") == "x"
     finally:
         ss.SETTING_REGISTRY.pop("test.dependent", None)
+
+
+def test_observability_configuration_settings_are_registered():
+    from my_ai.settings_store import SETTING_REGISTRY
+    for key in ("observability.alert_rules", "observability.notification_destinations", "observability.dashboard_config", "observability.diagnostics_export"):
+        assert key in SETTING_REGISTRY
