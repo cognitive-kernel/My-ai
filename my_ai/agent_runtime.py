@@ -14,6 +14,7 @@ from .self_update import recent_lessons
 from .chat_transport_context import get_attachments
 from .project_builder import build_project as _legacy_build_project
 from .software_agent import run_software_task
+from .settings_store import get_setting
 
 # Compatibility hook for tests/integrations that patch the historical builder.
 build_project = _legacy_build_project
@@ -21,6 +22,17 @@ build_project = _legacy_build_project
 
 @dataclass
 class PreparedChat:
+    def _configured_system(self) -> str:
+        behavior = str(get_setting("agent.system_behavior", "") or "").strip()
+        persona = str(get_setting("agent.persona", "") or "").strip()
+        additions = []
+        if behavior:
+            additions.append("CONFIGURED SYSTEM BEHAVIOR:\n" + behavior)
+        if persona:
+            additions.append("CONFIGURED PERSONA:\n" + persona)
+        return SYSTEM + ("\n\n" + "\n\n".join(additions) if additions else "")
+
+
     message: str
     session_id: int
     attachments: list[dict[str, Any]]
