@@ -114,8 +114,9 @@ jobs:
         run: |
           docker compose down -v --remove-orphans 2>/dev/null || true
           trap 'docker compose down -v --remove-orphans 2>/dev/null || true' EXIT
-          mkdir -p data
-          sudo chown -R 10001:10001 data
+          mkdir -p data self-repair projects
+          sudo chown -R 10001:10001 data projects self-repair
+          sudo chmod -R u+rwX,g+rwX self-repair
           docker compose up -d --build
           ready=false
           for i in $(seq 1 90); do
