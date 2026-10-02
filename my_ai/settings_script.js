@@ -171,6 +171,14 @@ async function deleteModelCatalog(providerId,modelId){
   try{await req("/settings/models/"+providerId+"/"+encodeURIComponent(modelId),{method:"DELETE"});await loadProviderCatalog()}catch(e){setText("catalogout","خطا: "+e.message)}
 }
 
+async function backupDatabaseGUI(){
+  try{var path=byId("backup_path").value.trim();var j=await req("/settings/database/backup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:path,overwrite:false})});setText("backupout","Backup انجام شد: "+j.path)}catch(e){setText("backupout","خطا: "+e.message)}
+}
+async function restoreDatabaseGUI(){
+  if(!confirm("بازیابی DB انجام شود؟"))return;
+  try{var path=byId("backup_path").value.trim();var j=await req("/settings/database/restore",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:path})});setText("backupout","Restore انجام شد: "+j.path)}catch(e){setText("backupout","خطا: "+e.message)}
+}
+
 async function loadLearningSourcesCatalog(){
   var box=byId("learning-sources-catalog");if(!box)return;
   try{var j=await req("/settings/learning-sources");box.innerHTML=(j.items||[]).map(function(x){
