@@ -101,6 +101,7 @@ SETTING_REGISTRY.update({
     "llm.routing.default_task": {"version": 3, "type": "enum", "default": "general", "choices": ["general","chat","coding","reasoning","embedding","routing"], "description": "Default task class for model routing."},
     "llm.routing.cost_weight": {"version": 3, "type": "float", "default": 0.0, "min": 0, "max": 100, "description": "Relative cost weight used by model routing."},
     "llm.routing.latency_weight": {"version": 3, "type": "float", "default": 1.0, "min": 0, "max": 100, "description": "Relative latency weight used by model routing."},
+    "llm.routing.quality_weight": {"version": 3, "type": "float", "default": 1.0, "min": 0, "max": 100, "description": "Relative quality weight used by model routing."},
     "llm.routing.availability_required": {"version": 3, "type": "enum", "default": "true", "choices": ["true","false"], "description": "Require healthy models for automatic routing."},
     "learning.mode": {"version": 3, "type": "enum", "default": "auto", "choices": ["auto","manual","hybrid"], "description": "Learning source selection mode."},
     "learning.mastery_threshold": {"version": 3, "type": "float", "default": 0.8, "min": 0, "max": 1, "description": "Minimum mastery score."},
