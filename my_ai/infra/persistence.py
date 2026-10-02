@@ -283,8 +283,16 @@ def remember_knowledge(topic: str, title: str, content: str, source_url: str | N
                 f"Semantic duplicate detected for knowledge {duplicate['id']} "
                 f"(similarity={duplicate['similarity']}, threshold={threshold})."
             )
-        cur = conn.execute("INSERT INTO knowledge(topic,title,content,source_url,content_hash,product,version,validity_status,replaced_by_version,compatibility,valid_from,valid_until) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-                           (topic,title,content,source_url,digest,product,version,validity_status,replaced_by_version,compatibility,valid_from,valid_until))
+        columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(knowledge)").fetchall()}
+        if {"valid_from", "valid_until"} <= columns:
+            cur = conn.execute("INSERT INTO knowledge(topic,title,content,source_url,content_hash,product,version,validity_status,replaced_by_version,compatibility,valid_from,valid_until) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                               (topic,title,content,source_url,digest,product,version,validity_status,replaced_by_version,compatibility,valid_from,valid_until))
+        elif {"product", "version", "validity_status", "replaced_by_version", "compatibility"} <= columns:
+            cur = conn.execute("INSERT INTO knowledge(topic,title,content,source_url,content_hash,product,version,validity_status,replaced_by_version,compatibility) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                               (topic,title,content,source_url,digest,product,version,validity_status,replaced_by_version,compatibility))
+        else:
+            cur = conn.execute("INSERT INTO knowledge(topic,title,content,source_url,content_hash) VALUES(?,?,?,?,?)",
+                               (topic,title,content,source_url,digest))
         knowledge_id = int(cur.lastrowid or 0)
         conn.execute("INSERT INTO knowledge_audit(knowledge_id,user_id,action,details) VALUES(?,?,?,?)",
                      (knowledge_id, None, "create", "semantic duplicate check passed"))
