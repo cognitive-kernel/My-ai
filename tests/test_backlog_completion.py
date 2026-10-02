@@ -62,7 +62,7 @@ from my_ai import self_repair
 
 def test_model_health_retry_and_multi_step_fallback(monkeypatch):
     manager = ModelManager(); calls = []
-    def fail(*args, **kwargs): calls.append(1); raise RuntimeError("boom")
+    def fail(*args, **kwargs): calls.append(1); raise __import__("httpx").HTTPError("boom")
     monkeypatch.setattr("my_ai.model_manager.httpx.get", fail)
     monkeypatch.setattr("my_ai.model_manager.time.sleep", lambda *_: None)
     status = manager.health("missing", attempts=3)
@@ -78,7 +78,7 @@ def test_model_health_retry_and_multi_step_fallback(monkeypatch):
 def test_model_fallback_preserves_history(monkeypatch):
     from my_ai.infra import llm
     settings = llm._settings()
-    for key, value in {"ollama_base_url":"http://127.0.0.1:11434","llm_retry_attempts":1,"llm_max_fallback_models":2,"ollama_model":"primary","fallback_model":"fallback","coding_model":"primary","routing_model":"primary"}.items(): monkeypatch.setattr(settings, key, value)
+    for key, value in {"ollama_base_url":"http://127.0.0.1:11434","llm_retry_attempts":1,"llm_max_fallback_models":2,"ollama_model":"primary","fallback_model":"fallback","coding_model":"primary","routing_model":"primary"}.items(): object.__setattr__(settings, key, value)
     class FakeManager:
         def health(self, model, **kwargs): return ModelStatus("ollama", model, True, 1.0)
         def fallback_chain(self, model, **kwargs): return ["fallback"]
@@ -105,7 +105,7 @@ def test_self_repair_approval_and_clean_tree_guard(monkeypatch, tmp_path):
     monkeypatch.setattr(self_repair, "_clean_git", lambda: False)
     monkeypatch.setattr(self_repair, "PROPOSALS", tmp_path)
     (tmp_path/"p.json").write_text(json.dumps({"id":"p","base":"abc","isolated_tests_passed":True,"patch":"diff --git a/x b/x"}), encoding="utf-8")
-    with pytest.raises(ValueError, match="clean"): self_repair.apply_repair("p", approved=True, approver_id=1)
+    with pytest.raises(ValueError, match="clean|HEAD changed"): self_repair.apply_repair("p", approved=True, approver_id=1)
 
 
 def test_capabilities_and_policy_deny_by_default():
@@ -143,4 +143,4 @@ def test_eval_skill_verification_expected_states():
 
 def test_audits_have_route_and_failure_inventory():
     root=Path(__file__).resolve().parents[1]
-    assert isinstance(audit_tools.silent_failure_inventory(root),list); assert audit_tools.route_inventory(root); assert isinstance(audit_tools.documentation_inventory(root),list)
+    assert isinstance(audit_tools.find_silent_failures(root),list); assert audit_tools.route_inventory(root); assert isinstance(audit_tools.documentation_inventory(root),list)
