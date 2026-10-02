@@ -207,7 +207,7 @@ async function backupDatabaseGUI(){
 }
 async function restoreDatabaseGUI(){
   if(!confirm("بازیابی DB انجام شود؟"))return;
-  try{var path=byId("backup_path").value.trim();var j=await req("/settings/database/restore",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:path})});setText("backupout","Restore انجام شد: "+j.path)}catch(e){setText("backupout","خطا: "+e.message)}
+  try{var path=byId("backup_path").value.trim();var j=await req("/settings/database/restore",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:path,confirm:true})});setText("backupout","Restore انجام شد: "+j.path)}catch(e){setText("backupout","خطا: "+e.message)}
 }
 
 async function loadRoutingGUI(){
