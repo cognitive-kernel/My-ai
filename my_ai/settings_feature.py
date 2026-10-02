@@ -18,6 +18,7 @@ from .git_connector import GitHubConnector
 from .llm import create_llm
 from .provider_catalog import list_providers, upsert_provider, delete_provider, list_models, upsert_model, export_catalog
 from .settings_store import get_setting, set_setting, get_bool, get_int, get_github_settings, get_setting_registry, get_configuration_schema_version, reset_setting, export_registered_settings, import_registered_settings
+from .ui_actions import list_ui_actions
 
 router = APIRouter(tags=["settings"])
 _workers = ThreadPoolExecutor(max_workers=1, thread_name_prefix="myai-learning")
@@ -383,6 +384,11 @@ def _run_course(course_id: int) -> None:
 
 class SettingsImportRequest(BaseModel):
     values: dict[str, Any]
+
+@router.get("/settings/ui-actions")
+def settings_ui_actions(request: Request):
+    require_admin(request)
+    return {"items": list_ui_actions()}
 
 @router.get("/settings/providers")
 def settings_providers(request: Request):
