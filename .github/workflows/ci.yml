@@ -88,18 +88,25 @@ jobs:
         shell: bash
         run: |
           set -e
+          : > test-results.txt
           while IFS= read -r -d '' test_file; do
-            echo "===== START $test_file ====="
+            echo "===== START $test_file =====" | tee -a test-results.txt
             set +e
-            timeout --signal=TERM --kill-after=5s 30s pytest -q "$test_file"
-            rc=$?
+            timeout --signal=TERM --kill-after=5s 30s pytest -q "$test_file" 2>&1 | tee -a test-results.txt
+            rc=${PIPESTATUS[0]}
             set -e
             if [ "$rc" -ne 0 ] && [ "$rc" -ne 5 ]; then
-              echo "===== FAIL $test_file rc=$rc ====="
+              echo "===== FAIL $test_file rc=$rc =====" | tee -a test-results.txt
               exit "$rc"
             fi
-            echo "===== PASS $test_file rc=$rc ====="
+            echo "===== PASS $test_file rc=$rc =====" | tee -a test-results.txt
           done < <(find tests -maxdepth 2 -type f -name 'test_*.py' -print0 | sort -z)
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-results-${{ github.sha }}
+          path: test-results.txt
       - run: python scripts/regression_gate.py
       - name: Upload regression history
         if: always()
