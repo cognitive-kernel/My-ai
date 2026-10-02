@@ -13,6 +13,7 @@ import httpx
 
 from .config import settings
 from .settings_store import get_setting
+from .provider_catalog import list_providers, list_models
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,23 @@ class ModelManager:
         custom_model = str(get_setting("llm.custom.model", "")).strip()
         if provider == "custom-openai-compatible" and custom_model:
             items.append({"provider": "custom-openai-compatible", "role": "general", "model": custom_model})
+        try:
+            providers = {int(item["id"]): item for item in list_providers(include_disabled=False)}
+            for model in list_models(include_disabled=False):
+                provider_item = providers.get(int(model["provider_id"]))
+                if provider_item and provider_item["enabled"]:
+                    items.append({
+                        "provider": provider_item["name"],
+                        "role": "general",
+                        "model": model["model_id"],
+                        "version": model.get("version", ""),
+                        "context_length": model.get("context_length"),
+                        "priority": model.get("priority", 100),
+                        "capabilities": provider_item.get("capabilities", {}),
+                    })
+        except Exception:
+            # Catalog is optional during first boot; legacy inventory remains usable.
+            pass
         return items
 
     def _provider_for_model(self, model: str) -> str:
