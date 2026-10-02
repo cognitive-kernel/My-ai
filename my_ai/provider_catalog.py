@@ -102,6 +102,14 @@ def upsert_provider(
     return _row(row)
 
 
+def delete_model(provider_id: int, model_id: str) -> None:
+    assert_mutation_allowed(f"llm-model-delete:{provider_id}:{model_id}")
+    ensure_schema()
+    with connect() as conn:
+        conn.execute("DELETE FROM llm_models WHERE provider_id=? AND model_id=?", (int(provider_id), str(model_id).strip()))
+        conn.commit()
+
+
 def delete_provider(provider_id: int) -> None:
     assert_mutation_allowed(f"llm-provider-delete:{provider_id}")
     ensure_schema()
