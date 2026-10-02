@@ -572,23 +572,25 @@ def settings_provider_health(provider_id: int, request: Request):
     provider = next((x for x in list_providers() if int(x["id"]) == int(provider_id)), None)
     if not provider:
         raise HTTPException(404, "Provider not found.")
+    from .provider_catalog import get_provider_runtime_config
+    runtime = get_provider_runtime_config(provider_id)
     started = __import__("time").perf_counter()
     headers = {}
-    if provider.get("auth_type") != "none" and provider.get("auth_configured"):
-        # Secrets are intentionally not returned by the catalog API; health uses the encrypted secret internally.
-        from .provider_catalog import _decrypt
-        with connect() as conn:
-            row = conn.execute("SELECT auth_secret FROM llm_providers WHERE id=?", (provider_id,)).fetchone()
-        secret = _decrypt(row["auth_secret"]) if row and row["auth_secret"] else ""
-        if secret:
-            headers["Authorization"] = f"Bearer {secret}"
+    secret = str(runtime.get("api_key") or "")
+    if secret and str(runtime.get("auth_type") or "none").lower() != "none":
+        header = str(runtime.get("auth_header") or "Authorization")
+        scheme = str(runtime.get("auth_scheme") or "Bearer")
+        headers[header] = f"{scheme} {secret}" if scheme else secret
     try:
-        response = httpx.get(str(provider["endpoint"]).rstrip("/") + "/models", headers=headers, timeout=float(provider.get("timeout_seconds") or 30))
+        response = httpx.get(str(provider["endpoint"]).rstrip("/") + "/models", headers=headers,
+                             timeout=float(provider.get("timeout_seconds") or 30))
         elapsed = round((__import__("time").perf_counter() - started) * 1000, 2)
         response.raise_for_status()
         return {"provider_id": provider_id, "healthy": True, "status_code": response.status_code, "latency_ms": elapsed}
     except Exception as exc:
-        return {"provider_id": provider_id, "healthy": False, "latency_ms": round((__import__("time").perf_counter() - started) * 1000, 2), "error": str(exc)}
+        return {"provider_id": provider_id, "healthy": False,
+                "latency_ms": round((__import__("time").perf_counter() - started) * 1000, 2),
+                "error": str(exc)}
 
 @router.post("/settings/models/{provider_id}/{model_id:path}/health")
 def settings_model_health(provider_id: int, model_id: str, request: Request):
