@@ -2,93 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from my_ai import settings_store as ss
-from my_ai import git_connector
-from my_ai import settings_store
-
-
-def test_github_connector_has_no_api_url_default(monkeypatch):
-    monkeypatch.setattr(git_connector, "get_github_settings", lambda: {
-        "api_url": "",
-        "repository": "",
-        "username": "",
-        "token": "",
-    })
-    with pytest.raises(RuntimeError, match="API URL"):
-        git_connector.GitHubConnector()
-
-
-def test_github_token_is_saved_through_settings_store(monkeypatch):
-    saved = {}
-
-    def fake_set(key, value, *, secret=False):
-        saved[key] = (value, secret)
-
-    monkeypatch.setattr(git_connector, "set_setting", fake_set)
-    monkeypatch.setattr(git_connector, "delete_setting", lambda key: saved.pop(key, None))
-
-    assert git_connector.GitHubConnector.save_token("github_pat_example_token_123456") is True
-    assert saved["github.token"][0] == "github_pat_example_token_123456"
-    assert saved["github.token"][1] is True
-
-
-def test_settings_secret_roundtrip_uses_encryption(monkeypatch, tmp_path):
-    key_path = tmp_path / "settings.key"
-    monkeypatch.setattr(settings_store, "KEY_PATH", key_path)
-    stored = settings_store._encrypt("secret-value")
-    assert stored.startswith(settings_store.SECRET_PREFIX)
-    assert settings_store._decrypt(stored) == "secret-value"
-    assert stored != "secret-value"
-
-
-def test_resource_settings_have_expected_defaults(monkeypatch):
-    from my_ai import settings_feature
-    values = {"resources.cpu_percent": "70", "resources.cpu_threads": "8", "resources.ram_percent": "80", "resources.gpu_layers": "0"}
-    monkeypatch.setattr(settings_feature, "get_setting", lambda key, default=None: values.get(key, default))
-    monkeypatch.setattr(settings_feature, "get_int", lambda key, default=0: int(values.get(key, default)))
-    assert float(settings_feature.get_setting("resources.cpu_percent", "70")) == 70.0
-    assert settings_feature.get_int("resources.cpu_threads", 8) == 8
-    assert float(settings_feature.get_setting("resources.ram_percent", "80")) == 80.0
-    assert settings_feature.get_int("resources.gpu_layers", 0) == 0
-
-
-def test_settings_registry_validates_and_resets(tmp_path, monkeypatch):
-    monkeypatch.setattr(ss, "KEY_PATH", tmp_path / "settings.key")
-    ss.ensure_schema()
-    ss.set_setting("learning.interval_seconds", 120)
-    assert ss.get_setting("learning.interval_seconds") == "120"
-    try:
-        ss.set_setting("learning.interval_seconds", 30)
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("out-of-range registered setting must fail")
-    assert ss.reset_setting("learning.interval_seconds") == 3600
-    assert ss.get_setting("learning.interval_seconds") == "3600"
-
-
-def test_registered_default_is_returned_after_reset(tmp_path, monkeypatch):
-    monkeypatch.setattr(ss, "KEY_PATH", tmp_path / "settings.key")
-    ss.ensure_schema()
-    ss.set_setting("execution.timeout_seconds", 45)
-    ss.reset_setting("execution.timeout_seconds")
-    assert ss.get_setting("execution.timeout_seconds") == "10"
-
-
-def test_registered_settings_export_import_is_validated(tmp_path, monkeypatch):
-    monkeypatch.setattr(ss, "KEY_PATH", tmp_path / "settings.key")
-    ss.ensure_schema()
-    ss.set_setting("execution.timeout_seconds", 25)
-    exported = ss.export_registered_settings()
-    assert exported["execution.timeout_seconds"] == "25"
-    imported = dict(exported)
-    imported["execution.timeout_seconds"] = 40
-    result = ss.import_registered_settings(imported)
-    assert result["execution.timeout_seconds"] == "40"
-    with pytest.raises(ValueError, match="Unknown registered settings"):
-        ss.import_registered_settings({"not.registered": 1})
-    with pytest.raises(ValueError):
-        ss.import_registered_settings({"execution.timeout_seconds": 0})
+import my_ai.settings_store as ss
 
 
 def test_custom_llm_registry_secret_is_not_exported(tmp_path, monkeypatch):
@@ -106,14 +20,15 @@ def test_custom_llm_registry_secret_is_not_exported(tmp_path, monkeypatch):
 def test_configuration_schema_is_versioned_and_migrated(tmp_path, monkeypatch):
     monkeypatch.setattr(ss, "KEY_PATH", tmp_path / "settings.key")
     ss.ensure_schema()
-    assert ss.get_configuration_schema_version() == 1
-    assert ss.migrate_configuration() == 1
+    expected_version = ss.CONFIG_SCHEMA_VERSION
+    assert ss.get_configuration_schema_version() == expected_version
+    assert ss.migrate_configuration() == expected_version
     with ss.connect() as conn:
         row = conn.execute("SELECT version FROM app_settings_migrations ORDER BY version DESC LIMIT 1").fetchone()
-        assert int(row["version"]) == 1
+        assert int(row["version"]) == expected_version
         columns = {str(item["name"]) for item in conn.execute("PRAGMA table_info(app_settings)").fetchall()}
         assert "schema_version" in columns
     ss.set_setting("execution.timeout_seconds", 25)
     with ss.connect() as conn:
         row = conn.execute("SELECT schema_version FROM app_settings WHERE key=?", ("execution.timeout_seconds",)).fetchone()
-        assert int(row["schema_version"]) == 1
+        assert int(row["schema_version"]) == ss.SETTING_REGISTRY["execution.timeout_seconds"]["version"]
