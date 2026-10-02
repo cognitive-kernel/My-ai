@@ -1435,3 +1435,85 @@ def scheduler_stop(request:Request):
 
 from .settings_feature import install as _install_settings_features
 _install_settings_features(app)
+
+
+# Stateful session/stream lifecycle endpoints.
+from .session_lifecycle import create_session as create_stateful_session, recover_session, open_stream, stream_chunk, close_stream, reconnect_stream, verify_integrity, expire_sessions
+from .state_backup import export_state, import_state, verify_export
+from .skill_sandbox import run as run_skill_sandbox
+
+@app.post("/sessions")
+def create_session_endpoint(request: Request, title: str = "گفتگوی جدید", language: str | None = None):
+    user = require_user(request)
+    return {"session_id": create_stateful_session(user["id"], title, language)}
+
+@app.get("/sessions/{session_id}")
+def recover_session_endpoint(session_id: int, request: Request):
+    require_user(request)
+    return recover_session(session_id)
+
+@app.post("/sessions/{session_id}/events")
+async def session_event_endpoint(session_id: int, request: Request):
+    require_user(request)
+    body = await request.json()
+    from .session_lifecycle import append_event
+    return append_event(session_id, str(body.get("event_type") or "custom"), dict(body.get("payload") or {}))
+
+@app.get("/sessions/{session_id}/integrity")
+def session_integrity_endpoint(session_id: int, request: Request):
+    require_user(request)
+    return verify_integrity(session_id)
+
+@app.post("/sessions/{session_id}/stream")
+async def stream_open_endpoint(session_id: int, request: Request):
+    require_user(request)
+    body = await request.json()
+    return open_stream(session_id, str(body.get("context") or ""))
+
+@app.post("/streams/{stream_id}/chunk")
+async def stream_chunk_endpoint(stream_id: str, request: Request):
+    require_user(request)
+    body = await request.json()
+    return stream_chunk(stream_id, str(body.get("chunk") or ""), body.get("sequence"))
+
+@app.post("/streams/{stream_id}/reconnect")
+def stream_reconnect_endpoint(stream_id: str, request: Request):
+    require_user(request)
+    return reconnect_stream(stream_id)
+
+@app.post("/streams/{stream_id}/close")
+async def stream_close_endpoint(stream_id: str, request: Request):
+    require_user(request)
+    body = await request.json()
+    return close_stream(stream_id, str(body.get("status") or "completed"))
+
+@app.post("/state/export")
+def state_export_endpoint(request: Request, path: str):
+    require_admin(request)
+    return export_state(path)
+
+@app.post("/state/import")
+def state_import_endpoint(request: Request, path: str, allow_migration: bool = False):
+    require_admin(request)
+    return import_state(path, allow_migration=allow_migration)
+
+@app.get("/state/verify")
+def state_verify_endpoint(request: Request, path: str):
+    require_admin(request)
+    return verify_export(path)
+
+@app.post("/skills/{skill_id}/sandbox-test")
+async def skill_sandbox_endpoint(skill_id: int, request: Request):
+    user = require_user(request)
+    if user["role"] != "admin":
+        raise HTTPException(403, "Administrator access required for sandbox execution.")
+    body = await request.json()
+    command = body.get("command")
+    if not isinstance(command, list):
+        raise HTTPException(400, "command must be a list.")
+    return run_skill_sandbox(skill_id, command, cwd=body.get("cwd"), timeout=int(body.get("timeout", 30)))
+
+@app.post("/sessions/expire")
+def session_expire_endpoint(request: Request):
+    require_admin(request)
+    return {"expired": expire_sessions()}
