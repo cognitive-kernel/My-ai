@@ -22,6 +22,7 @@ def test_openai_router_uses_strict_responses_json_schema(monkeypatch):
     client.base_url = "https://api.example.test/v1"
     client.model = "router-model"
     client.api_key = "test-key"
+    client.provider_name = "openai-router"
     result = client.structured_chat_json("hello", {"type": "object"}, "system")
     assert result["primary"] == "chat"
     payload = calls[0][1]["json"]
