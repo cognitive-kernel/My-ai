@@ -210,4 +210,9 @@ def create_llm(task: str | None = None):
         provider = "openai-compatible"
     if provider == "auto":
         provider = "openai-compatible" if _settings().openai_api_key and not getattr(_settings(), "offline_strict", False) else "ollama"
-    return _provider_registry().create(provider, task=task) if provider == "ollama" else _provider_registry().create(provider)
+    try:
+        return _provider_registry().create(provider, task=task) if provider == "ollama" else _provider_registry().create(provider)
+    except Exception as exc:
+        if isinstance(exc, LLMError):
+            raise
+        raise LLMError(str(exc)) from exc
