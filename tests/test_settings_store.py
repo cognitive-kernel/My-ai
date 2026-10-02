@@ -105,7 +105,11 @@ def test_configuration_schema_is_versioned_and_migrated(tmp_path, monkeypatch):
 def test_registry_setting_updates_runtime_configuration(tmp_path, monkeypatch):
     import sqlite3
     from my_ai import config
-    monkeypatch.setattr(ss, "connect", lambda: sqlite3.connect(tmp_path / "runtime.db"))
+    def connect():
+        conn = sqlite3.connect(tmp_path / "runtime.db")
+        conn.row_factory = sqlite3.Row
+        return conn
+    monkeypatch.setattr(ss, "connect", connect)
     original = config.settings.llm_retry_attempts
     ss.ensure_schema()
     ss.set_setting("llm.retry_attempts", 4)
