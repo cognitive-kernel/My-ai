@@ -38,6 +38,9 @@ TOOL_RULES = (
     ("/tools/", "tools"),
     ("/files/", "files"),
     ("/image/", "image-generation"),
+    ("/sessions", "session"),
+    ("/streams/", "session"),
+    ("/state/", "database"),
 )
 
 PATH_ACTIONS = {
@@ -81,6 +84,17 @@ PATH_ACTIONS = {
     ("POST", "/learning/step"): "execute",
     ("POST", "/learning/{language}/stop"): "execute",
     ("POST", "/learning/{language}/resume"): "execute",
+    ("POST", "/sessions"): "write",
+    ("POST", "/sessions/{session_id}/events"): "write",
+    ("GET", "/sessions/{session_id}/integrity"): "read",
+    ("POST", "/sessions/{session_id}/stream"): "execute",
+    ("POST", "/streams/{stream_id}/chunk"): "execute",
+    ("POST", "/streams/{stream_id}/reconnect"): "execute",
+    ("POST", "/streams/{stream_id}/close"): "execute",
+    ("POST", "/state/export"): "write",
+    ("POST", "/state/import"): "write",
+    ("GET", "/state/verify"): "read",
+    ("POST", "/sessions/expire"): "write",
 }
 
 @dataclass(frozen=True)
