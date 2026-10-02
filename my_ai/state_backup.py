@@ -91,6 +91,24 @@ def database_snapshot(destination: str | Path) -> str:
     return str(target)
 
 
+def restore_database_snapshot(source: str | Path) -> str:
+    """Restore the live SQLite database from a validated SQLite snapshot."""
+    snapshot = Path(source).expanduser().resolve()
+    if not snapshot.is_file():
+        raise FileNotFoundError(f"Database snapshot not found: {snapshot}")
+    destination = Path(settings.db_path).expanduser().resolve()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    source_conn = sqlite3.connect(snapshot)
+    dest_conn = sqlite3.connect(destination)
+    try:
+        source_conn.backup(dest_conn)
+        dest_conn.commit()
+    finally:
+        dest_conn.close()
+        source_conn.close()
+    return str(destination)
+
+
 def _migrate_v0(data: dict[str, Any]) -> dict[str, Any]:
     tables = dict(data.get("tables") or {})
     tables.setdefault("session_state", [])
