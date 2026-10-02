@@ -180,6 +180,14 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 - rollback خودکار در صورت failure.
 - ثبت failure lesson بدون فعال‌سازی خودکار آن.
 
+### زیرساخت Configuration و Provider
+
+- Configuration Registry اکنون schema version دارد و migration registry جداگانه برای تکامل schema ایجاد شده است.
+- هر setting ثبت‌شده نسخه‌ی metadata دارد و مقدار ذخیره‌شده نیز schema version خود را نگه می‌دارد.
+- APIهای Registry نسخه‌ی schema را در پاسخ export/import/registry اعلام می‌کنند.
+- قرارداد عمومی `LLMProviderAdapter`، capability/health/token-usage metadata و `ProviderRegistry` اضافه شده است؛ انتخاب runtime در `create_llm` از این registry عبور می‌کند.
+- `ModelManager` برای custom OpenAI-compatible provider inventory و health-check دارد، بدون اینکه Agent به API provider وابسته شود.
+
 ### LLM سفارشی
 
 - Provider فعال اکنون از Configuration Registry قابل انتخاب است.
