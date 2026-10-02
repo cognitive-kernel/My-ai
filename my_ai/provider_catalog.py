@@ -24,6 +24,18 @@ CREATE TABLE IF NOT EXISTS llm_providers (
     created_at REAL NOT NULL,
     updated_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS llm_provider_keys (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ provider_id INTEGER NOT NULL,
+ key_name TEXT NOT NULL,
+ secret TEXT NOT NULL,
+ active INTEGER NOT NULL DEFAULT 1,
+ priority INTEGER NOT NULL DEFAULT 100,
+ created_at REAL NOT NULL,
+ last_used_at REAL,
+ UNIQUE(provider_id,key_name),
+ FOREIGN KEY(provider_id) REFERENCES llm_providers(id) ON DELETE CASCADE
+);
 CREATE TABLE IF NOT EXISTS llm_models (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     provider_id INTEGER NOT NULL REFERENCES llm_providers(id) ON DELETE CASCADE,
@@ -52,6 +64,35 @@ def _row(row: Any) -> dict[str, Any]:
     item["auth_configured"] = bool(item.pop("auth_secret", ""))
     return item
 
+
+def add_provider_key(provider_id: int, key_name: str, secret: str, *, priority: int = 100, active: bool = True) -> dict[str, Any]:
+    assert_mutation_allowed(f"llm-provider-key:{provider_id}:{key_name}")
+    ensure_schema()
+    if not key_name.strip() or not secret: raise ValueError("key name and secret are required")
+    now=time.time()
+    with connect() as conn:
+        conn.execute("""INSERT INTO llm_provider_keys(provider_id,key_name,secret,active,priority,created_at)
+                        VALUES(?,?,?,?,?,?) ON CONFLICT(provider_id,key_name) DO UPDATE SET
+                        secret=excluded.secret,active=excluded.active,priority=excluded.priority""",
+                     (int(provider_id),key_name.strip(),_encrypt(secret),int(active),int(priority),now))
+        conn.commit()
+    return {"provider_id":provider_id,"key_name":key_name,"active":active,"priority":priority}
+
+def list_provider_keys(provider_id: int) -> list[dict[str, Any]]:
+    ensure_schema()
+    with connect() as conn:
+        rows=conn.execute("SELECT id,provider_id,key_name,active,priority,created_at,last_used_at FROM llm_provider_keys WHERE provider_id=? ORDER BY priority,id",(int(provider_id),)).fetchall()
+    return [dict(r)|{"active":bool(r["active"])} for r in rows]
+
+def rotate_provider_key(provider_id: int) -> dict[str, Any]:
+    ensure_schema()
+    with connect() as conn:
+        row=conn.execute("SELECT id,key_name FROM llm_provider_keys WHERE provider_id=? AND active=1 ORDER BY priority,id LIMIT 1",(int(provider_id),)).fetchone()
+        if not row: raise ValueError("no active provider key")
+        conn.execute("UPDATE llm_provider_keys SET active=0 WHERE provider_id=?",(int(provider_id),))
+        conn.execute("UPDATE llm_provider_keys SET active=1,last_used_at=? WHERE id=?",(time.time(),int(row["id"])))
+        conn.commit()
+    return {"provider_id":provider_id,"active_key":row["key_name"]}
 
 def list_providers(*, include_disabled: bool = True) -> list[dict[str, Any]]:
     ensure_schema()
