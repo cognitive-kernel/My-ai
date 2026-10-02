@@ -53,7 +53,7 @@ def api_route_inventory(app) -> list[dict[str, Any]]:
 
 def configuration_inventory(root: Path = ROOT) -> list[dict[str, str]]:
     result=[]
-    pattern=re.compile(r'os\\.getenv\\(["\\\']([A-Z][A-Z0-9_]+)["\\\']')
+    pattern=re.compile(r'os\\.getenv\\(["\']([A-Z][A-Z0-9_]+)["\']')
     for path in sorted((root / 'my_ai').rglob('*.py')):
         try: source=path.read_text(encoding='utf-8')
         except OSError: continue
@@ -62,7 +62,7 @@ def configuration_inventory(root: Path = ROOT) -> list[dict[str, str]]:
 
 def route_inventory(root: Path = ROOT) -> list[dict[str, str]]:
     result=[]
-    pattern=re.compile(r'@app\\.(get|post|put|patch|delete)\\(["\\\']([^"\\\']+)["\\\']')
+    pattern=re.compile(r'os\\.getenv\\(["\']([A-Z][A-Z0-9_]+)["\']')
     path=root/'my_ai'/'api.py'
     if path.exists():
         source=path.read_text(encoding='utf-8')
