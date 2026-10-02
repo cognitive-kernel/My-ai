@@ -29,7 +29,15 @@ jobs:
       - run: mypy my_ai --ignore-missing-imports
       - run: bandit -r my_ai -q -lll
       - run: pip-audit
-      - run: pytest -q
+      - name: Run tests one file at a time with 30s timeout
+        shell: bash
+        run: |
+          set -e
+          while IFS= read -r -d '' test_file; do
+            echo "===== START $test_file ====="
+            timeout --signal=TERM --kill-after=5s 30s pytest -q "$test_file"
+            echo "===== PASS $test_file ====="
+          done < <(find tests -maxdepth 2 -type f -name 'test_*.py' -print0 | sort -z)
       - run: python scripts/regression_gate.py
       - name: Upload regression history
         if: always()
