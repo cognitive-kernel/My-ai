@@ -29,7 +29,7 @@ from .control_plane import list_records, get_record, put_record, set_enabled, de
 from .registries import publish_prompt, activate_prompt, publish_policy, register_tool, update_tool, list_tools
 from .plugin_registry import propose_plugin, approve_plugin, reject_plugin
 from .evaluation_registry import upsert_suite, list_suites, create_baseline, propose_candidate, get_candidate, verify_candidate, list_candidates, compare_metrics
-from .integration_catalog import register_integration, list_integrations, register_webhook, list_webhooks
+from .integration_catalog import register_integration, list_integrations, register_webhook, list_webhooks, map_event_action, list_event_actions
 
 router = APIRouter(tags=["settings"])
 _workers = ThreadPoolExecutor(max_workers=1, thread_name_prefix="myai-learning")
@@ -1202,6 +1202,16 @@ def settings_tool_update(name: str, payload: ToolRegistryRequest, request: Reque
                        tasks=payload.tasks, version=payload.version, enabled=payload.enabled)
     audit(user, "tools", "update", "200", name)
     return item
+
+@router.get("/settings/integration-events")
+def settings_integration_events(request: Request):
+    require_admin(request); return {"items": list_event_actions()}
+
+@router.post("/settings/integration-events")
+def settings_integration_event(payload: ControlPlaneRecordRequest, request: Request):
+    user=require_admin(request); action=str(payload.payload.get("action") or "").strip()
+    if not action: raise HTTPException(400,"action is required")
+    item=map_event_action(payload.name,action,enabled=payload.enabled); audit(user,"integrations","event-map","200",payload.name); return item
 
 @router.get("/settings/integrations")
 def settings_integrations(request: Request):
