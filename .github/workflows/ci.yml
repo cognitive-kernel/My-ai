@@ -35,8 +35,15 @@ jobs:
           set -e
           while IFS= read -r -d '' test_file; do
             echo "===== START $test_file ====="
+            set +e
             timeout --signal=TERM --kill-after=5s 30s pytest -q "$test_file"
-            echo "===== PASS $test_file ====="
+            rc=$?
+            set -e
+            if [ "$rc" -ne 0 ] && [ "$rc" -ne 5 ]; then
+              echo "===== FAIL $test_file rc=$rc ====="
+              exit "$rc"
+            fi
+            echo "===== PASS $test_file rc=$rc ====="
           done < <(find tests -maxdepth 2 -type f -name 'test_*.py' -print0 | sort -z)
       - run: python scripts/regression_gate.py
       - name: Upload regression history
