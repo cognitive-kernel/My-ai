@@ -102,6 +102,9 @@ install_learning_resilience()
 install_ui_extensions(app)
 
 _LOGIN_FAILURES: dict[str, tuple[int, float]] = {}
+_REQUEST_RATE: dict[str, tuple[int, float]] = {}
+_REQUEST_RATE_LOCK = __import__("threading").RLock()
+
 _LOGIN_FAILURE_LIMIT = 5
 _LOGIN_FAILURE_WINDOW = 300.0
 
@@ -134,6 +137,15 @@ async def auth_and_audit_middleware(request: Request, call_next):
         response.headers["X-Request-ID"] = request_id
         audit_event(None, "auth", "authenticate", "401", request_id=request_id, input_data=request_body, extra={"method": request.method, "path": path})
         return response
+    rate_limit=max(1,get_int("server.rate_limit_per_minute",120))
+    rate_key=str((user or {}).get("id") or (request.client.host if request.client else "unknown"))
+    now=time.time()
+    with _REQUEST_RATE_LOCK:
+        count,started=_REQUEST_RATE.get(rate_key,(0,now))
+        if now-started >= 60: count,started=0,now
+        count += 1; _REQUEST_RATE[rate_key]=(count,started)
+    if count > rate_limit:
+        response=JSONResponse({"detail":"Rate limit exceeded."},status_code=429); response.headers["Retry-After"]=str(max(1,int(60-(now-started)))); return response
     read_only = os.getenv("MYAI_READ_ONLY", "false").strip().lower() == "true"
     decision = policy.decide(user=user, method=request.method, path=path, read_only=read_only)
     if not decision.allowed:
