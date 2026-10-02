@@ -115,3 +115,17 @@ def test_registry_setting_updates_runtime_configuration(tmp_path, monkeypatch):
     ss.set_setting("llm.retry_attempts", 4)
     assert config.settings.llm_retry_attempts == 4
     config.settings.llm_retry_attempts = original
+
+def test_persisted_registry_setting_is_reapplied_on_startup(tmp_path, monkeypatch):
+    import sqlite3
+    from my_ai import config
+    def connect():
+        conn = sqlite3.connect(tmp_path / "persisted.db")
+        conn.row_factory = sqlite3.Row
+        return conn
+    monkeypatch.setattr(ss, "connect", connect)
+    ss.ensure_schema()
+    ss.set_setting("llm.retry_attempts", 5)
+    config.settings.llm_retry_attempts = 1
+    ss.apply_persisted_settings()
+    assert config.settings.llm_retry_attempts == 5
