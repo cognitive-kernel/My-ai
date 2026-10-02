@@ -1,4 +1,7 @@
-import logging\nlogger = logging.getLogger(__name__)\nfrom __future__ import annotations
+from __future__ import annotations
+
+import logging
+logger = logging.getLogger(__name__)
 
 import json
 import re
@@ -56,8 +59,8 @@ class SecurityEngine:
             try:
                 if p.stat().st_size <= 500_000:
                     files.append(p)
-            except OSError:
-                pass
+            except OSError as exc:
+                logger.debug("SECURITY_FILE_STAT_FAILED path=%s error=%s", p, exc)
         return root,files
 
     def scan_path(self,project_path:str,fix:bool=False):
