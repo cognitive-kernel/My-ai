@@ -767,6 +767,7 @@ def learning_source_hash(source_id:int, request:Request, content:str=""):
 
 class BackupRequest(BaseModel):
     path: str = Field(default="", max_length=2000)
+    confirm: bool = False
     overwrite: bool = False
 
 @router.post("/settings/database/backup")
@@ -799,6 +800,8 @@ def settings_database_health(request: Request):
 @router.post("/settings/database/restore")
 def settings_database_restore(payload: BackupRequest, request: Request):
     user=require_admin(request)
+    if not payload.confirm:
+        raise HTTPException(400, "Restore requires explicit confirmation.")
     try: result=restore_database(payload.path)
     except (OSError,FileNotFoundError) as exc: raise HTTPException(400,str(exc))
     audit(user,"database","restore","200",result["path"]); return result
