@@ -25,3 +25,18 @@ def test_budget_enforces_all_dimensions():
     assert budget.allow(steps=2, tokens=10, seconds=5, tool_calls=1, cost=1)
     budget.consume(steps=1, tokens=5, seconds=2, tool_calls=1, cost=.5)
     assert not budget.allow(tool_calls=1, tokens=6)
+
+
+def test_task_graph_batches_independent_nodes_and_respects_dependencies():
+    graph = TaskGraph()
+    graph.add("a", lambda: 1)
+    graph.add("b", lambda: 2)
+    graph.add("c", lambda: 3, deps=("a", "b"))
+    batches = []
+    def executor(batch):
+        batches.append([name for name, _ in batch])
+        return {name: fn() for name, fn in batch}
+    result = graph.run(executor)
+    assert set(batches[0]) == {"a", "b"}
+    assert batches[1] == ["c"]
+    assert result == {"a": 1, "b": 2, "c": 3}
