@@ -57,3 +57,13 @@
 - Expanded GUI Action Registry coverage for configuration history, provider/model catalog, learning catalog, database policy, security roles and evaluation/regression.
 - The Settings page now exposes the Control Plane action lifecycle without requiring direct endpoint or CLI usage.
 - Coding remains intentionally separate from verification: no test execution was started in this pass.
+
+
+## آخرین pass — تکمیل No-Code parity (بدون اجرای تست)
+- Control Plane GUI اکنون مسیرهای CRUD، فعال/غیرفعال‌سازی، حذف و مدیریت lifecycle عملیات را پوشش می‌دهد.
+- Registryهای Prompt، Policy و Tool از طریق API/GUI قابل مدیریت شدند.
+- چرخه پیشنهاد/تأیید/رد Plugin به Control Plane، API و GUI متصل شد.
+- CLI مدیریت منابع یادگیری به‌روزرسانی شد و محاسبه content hash نیز در آن در دسترس است.
+- CLI مدیریت Prompt/Policy/Tool/Plugin با همان لایه persistent پروژه اضافه شد.
+- GUI Action Registry برای Provider، Learning، Prompt، Policy، Plugin و Tool گسترش یافت.
+- طبق دستور پروژه، در این pass هیچ تست، pytest، CI یا regression اجرا نشده است.
