@@ -187,7 +187,7 @@ class OpenAICompatibleClient:
         raise LLMError("OpenAI-compatible request failed: "+" | ".join(errors))
 
 def create_llm(task:str|None=None):
-    provider=_settings().llm_provider
+    provider=str(_runtime_setting("llm.provider", _settings().llm_provider))
     if provider == "custom-openai-compatible":
         return OpenAICompatibleClient(
             base_url=str(_runtime_setting("llm.custom.base_url", "")),
