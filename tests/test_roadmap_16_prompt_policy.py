@@ -47,3 +47,19 @@ def test_prompt_diff_between_history_versions(monkeypatch):
     assert result["to_version"] == 2
     assert "-  \"text\": \"old\"" in result["diff"]
     assert "+  \"text\": \"new\"" in result["diff"]
+
+
+def test_prompt_rollback_uses_monotonic_record_version(monkeypatch):
+    import my_ai.registries as registries
+    current = {"name":"demo","payload":{"text":"current","version":"2","task":"default","metadata":{}},"version":7}
+    history = [{"name":"demo@1","payload":{"text":"old","version":"1","task":"default","metadata":{}},"version":1}]
+    monkeypatch.setattr(registries, "get_record", lambda namespace, name: current if namespace == "prompts.registry" and name == "demo" else None)
+    monkeypatch.setattr(registries, "list_records", lambda namespace: history if namespace == "prompts.registry.history" else [])
+    captured = {}
+    def fake_put(namespace, name, payload, **kwargs):
+        captured["payload"] = payload
+        return {"payload": payload, "version": 8}
+    monkeypatch.setattr(registries, "put_record", fake_put)
+    result = registries.rollback_prompt("demo", 1)
+    assert result["version"] == 8
+    assert captured["payload"]["version"] == "8"
