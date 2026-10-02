@@ -206,3 +206,9 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 - Configuration Registry اکنون import/export را از UI نیز در اختیار دارد.
 - این قابلیت‌ها تا اجرای تست‌های واقعی و regression verification، در roadmap به‌عنوان تکمیل‌شده علامت نخورده‌اند.
 - Context assembly با priority/budget و verification با evidence/confidence نیز به‌صورت primitive مستقل اضافه شده‌اند.
+## GUI-First Action Layer
+
+- `my_ai/ui_actions.py` provides a central registry for graphical quick actions with module, permission, endpoint and confirmation metadata.
+- Settings exposes `/settings/ui-actions` and a graphical Action Center.
+- Learning course cards now expose Start/Resume and Pause controls instead of requiring a command/API call.
+- The roadmap now requires graphical equivalents for actionable modules wherever technically and securely possible.
