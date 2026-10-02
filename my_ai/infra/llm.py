@@ -107,7 +107,7 @@ class OllamaClient:
                     if candidate != self.model: record_route("structured",candidate,"fallback_success")
                     self.model=candidate; return parsed
                 except (httpx.HTTPError,json.JSONDecodeError,LLMError) as exc:
-                    errors.append(f"{candidate} attempt {attempt}: {exc}"); record_error("ollama",candidate); record_route("general",candidate,f"failure_attempt_{attempt}:{self.route_reason}"); record_route("structured",candidate,f"failure_attempt_{attempt}:{self.route_reason}")
+                    errors.append(f"{candidate} attempt {attempt}: {exc}"); record_error("ollama",candidate); record_route("general",candidate,f"failure_attempt_{attempt}:{getattr(self, "route_reason", "unknown")}"); record_route("structured",candidate,f"failure_attempt_{attempt}:{self.route_reason}")
                     if attempt<self._retry_attempts(): self._backoff(attempt)
         raise LLMError("Structured Ollama request failed for all model candidates: "+" | ".join(errors))
 
