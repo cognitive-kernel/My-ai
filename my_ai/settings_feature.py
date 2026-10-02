@@ -20,6 +20,7 @@ from .llm import create_llm
 from .provider_catalog import list_providers, upsert_provider, delete_provider, list_models, upsert_model, delete_model, export_catalog
 from .settings_store import get_setting, set_setting, get_bool, get_int, get_github_settings, get_setting_registry, get_configuration_schema_version, reset_setting, export_registered_settings, import_registered_settings
 from .ui_actions import list_ui_actions
+from .control_plane import list_records, get_record, put_record, set_enabled, delete_record, start_action, update_action, get_action, list_actions, namespace_catalog
 
 router = APIRouter(tags=["settings"])
 _workers = ThreadPoolExecutor(max_workers=1, thread_name_prefix="myai-learning")
@@ -474,6 +475,88 @@ def settings_model_health(provider_id: int, model_id: str, request: Request):
                 "latency_ms": round((__import__("time").perf_counter() - started) * 1000, 2),
                 "error": str(exc)}
 
+@router.get("/settings/control-plane/namespaces")
+def control_plane_namespaces(request: Request):
+    require_admin(request)
+    return {"namespaces": namespace_catalog()}
+
+@router.get("/settings/control-plane")
+def control_plane_list(request: Request, namespace: str | None = None, include_disabled: bool = True):
+    require_admin(request)
+    return {"items": list_records(namespace, include_disabled)}
+
+@router.get("/settings/control-plane/{namespace}/{name}")
+def control_plane_get(namespace: str, name: str, request: Request):
+    require_admin(request)
+    item = get_record(namespace, name)
+    if not item:
+        raise HTTPException(404, "Control-plane record not found.")
+    return item
+
+@router.put("/settings/control-plane/{namespace}")
+def control_plane_put(namespace: str, payload: ControlPlaneRecordRequest, request: Request):
+    user = require_admin(request)
+    item = put_record(namespace, payload.name, payload.payload, enabled=payload.enabled)
+    audit(user, "control-plane", "put", "200", f"{namespace}/{payload.name}")
+    return item
+
+@router.post("/settings/control-plane/{namespace}/{name}/enable")
+def control_plane_enable(namespace: str, name: str, request: Request):
+    user = require_admin(request)
+    try:
+        item = set_enabled(namespace, name, True)
+    except KeyError:
+        raise HTTPException(404, "Control-plane record not found.")
+    audit(user, "control-plane", "enable", "200", f"{namespace}/{name}")
+    return item
+
+@router.post("/settings/control-plane/{namespace}/{name}/disable")
+def control_plane_disable(namespace: str, name: str, request: Request):
+    user = require_admin(request)
+    try:
+        item = set_enabled(namespace, name, False)
+    except KeyError:
+        raise HTTPException(404, "Control-plane record not found.")
+    audit(user, "control-plane", "disable", "200", f"{namespace}/{name}")
+    return item
+
+@router.delete("/settings/control-plane/{namespace}/{name}")
+def control_plane_delete(namespace: str, name: str, request: Request):
+    user = require_admin(request)
+    deleted = delete_record(namespace, name)
+    audit(user, "control-plane", "delete", "200", f"{namespace}/{name}")
+    return {"deleted": deleted, "namespace": namespace, "name": name}
+
+@router.post("/settings/control-plane/actions")
+def control_plane_start_action(payload: ControlPlaneActionRequest, request: Request):
+    user = require_admin(request)
+    item = start_action(payload.action, payload.namespace, payload.target_id)
+    audit(user, "control-plane", "action-start", "200", item["id"])
+    return item
+
+@router.put("/settings/control-plane/actions/{action_id}")
+def control_plane_update_action(action_id: str, payload: ControlPlaneActionUpdateRequest, request: Request):
+    user = require_admin(request)
+    try:
+        item = update_action(action_id, status=payload.status, progress=payload.progress, result=payload.result, error=payload.error)
+    except KeyError:
+        raise HTTPException(404, "Action not found.")
+    audit(user, "control-plane", "action-update", "200", action_id)
+    return item
+
+@router.get("/settings/control-plane/actions/{action_id}")
+def control_plane_get_action(action_id: str, request: Request):
+    require_admin(request)
+    try:
+        return get_action(action_id)
+    except KeyError:
+        raise HTTPException(404, "Action not found.")
+
+@router.get("/settings/control-plane/actions")
+def control_plane_list_actions(request: Request, limit: int = 100):
+    require_admin(request)
+    return {"items": list_actions(limit)}
+
 @router.get("/settings/registry")
 def settings_registry(request: Request):
     require_admin(request)
@@ -499,6 +582,22 @@ def import_settings_registry(payload: SettingsImportRequest, request: Request):
         raise HTTPException(422, str(exc)) from exc
     audit(user, "settings", "import", "200", f"settings-import:{len(payload.values)}")
     return {"version": get_configuration_schema_version(), "settings": values, "imported": len(payload.values)}
+
+class ControlPlaneRecordRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    enabled: bool = True
+
+class ControlPlaneActionRequest(BaseModel):
+    action: str = Field(min_length=1, max_length=100)
+    namespace: str = Field(min_length=1, max_length=120)
+    target_id: str | None = Field(default=None, max_length=200)
+
+class ControlPlaneActionUpdateRequest(BaseModel):
+    status: str = Field(min_length=1, max_length=40)
+    progress: float = Field(default=0, ge=0, le=100)
+    result: dict[str, Any] = Field(default_factory=dict)
+    error: str = ""
 
 class SettingsRegistryValueRequest(BaseModel):
     value: Any
