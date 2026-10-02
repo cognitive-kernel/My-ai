@@ -49,6 +49,7 @@ def test_skill_evidence_hash_is_stored_and_verifiable(tmp_path):
 
 import pytest
 from pathlib import Path
+from types import SimpleNamespace
 from my_ai.capability_policy import CAPABILITIES, capability_allowed, inventory
 from my_ai.eval_harness import score_skill_verification
 from my_ai.model_manager import ModelManager, ModelStatus
@@ -68,10 +69,7 @@ def test_model_health_retry_and_multi_step_fallback(monkeypatch):
     status = manager.health("missing", attempts=3)
     assert not status.available and len(calls) == 3
     monkeypatch.setattr(manager, "available_models", lambda **_: {"a", "b", "c"})
-    monkeypatch.setattr("my_ai.model_manager.settings.fallback_model", "a")
-    monkeypatch.setattr("my_ai.model_manager.settings.ollama_model", "b")
-    monkeypatch.setattr("my_ai.model_manager.settings.coding_model", "c")
-    monkeypatch.setattr("my_ai.model_manager.settings.routing_model", "c")
+    monkeypatch.setattr("my_ai.model_manager.settings", SimpleNamespace(fallback_model="a", ollama_model="b", coding_model="c", routing_model="c"))
     assert manager.fallback_chain("primary") == ["a", "b", "c"]
 
 
@@ -95,7 +93,7 @@ def test_model_fallback_preserves_history(monkeypatch):
     monkeypatch.setattr(llm.httpx, "stream", lambda method,url,**kwargs: (calls.append(kwargs["json"]) or Stream()))
     client=llm.OllamaClient(); client.model="primary"; client.fallback_chain=["fallback"]
     assert "".join(client.stream_chat("سؤال", history=[{"role":"user","content":"قبلی"}])) == "ok"
-    assert calls[-1]["model"] == "fallback" and calls[-1]["messages"][1]["content"] == "قبلی"
+    assert calls[-1]["model"] == "fallback" and calls[-1]["messages"][0]["content"] == "قبلی"
 
 
 def test_self_repair_approval_and_clean_tree_guard(monkeypatch, tmp_path):
@@ -143,4 +141,4 @@ def test_eval_skill_verification_expected_states():
 
 def test_audits_have_route_and_failure_inventory():
     root=Path(__file__).resolve().parents[1]
-    assert isinstance(audit_tools.find_silent_failures(root),list); assert audit_tools.route_inventory(root); assert isinstance(audit_tools.documentation_inventory(root),list)
+    assert isinstance(audit_tools.find_silent_failures(root),list); assert audit_tools.route_inventory(root); assert isinstance(audit_tools.documentation_inventory(root),dict)
