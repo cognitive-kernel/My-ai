@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
-import sys
 import tempfile
 import shutil
 import uuid
