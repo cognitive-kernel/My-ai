@@ -7,9 +7,9 @@ import time
 import uuid
 from .learner import LearningEngine
 from .platform import resource_status
-from .curriculum import LANGUAGE_CURRICULA, LANGUAGE_SOURCES, canonical_language
+from .curriculum import LANGUAGE_CURRICULA, canonical_language
 from .db import connect, execute, fetch_all
-from .dynamic_learning import ensure_domain, due_domains, review_history
+from .dynamic_learning import due_domains
 from .config import settings
 from .settings_store import get_setting
 from .resource_guard import limits as resource_limits
@@ -60,8 +60,7 @@ class StudyScheduler:
         target=str(language).casefold() if language else None
         for key,(_,event) in list(self._workers.items()):
             if target and key!=target: continue
-            event.set(); self._release_lease(key)
-            execute("UPDATE learning_workers SET status='stopping',stage='stopping',updated_at=CURRENT_TIMESTAMP WHERE lower(language)=?",(key,))
+            event.set(); self._release_lease(key); execute("UPDATE learning_workers SET status='stopping',stage='stopping',updated_at=CURRENT_TIMESTAMP WHERE lower(language)=?",(key,))
         self.stage="stopping"
     def stop(self): self.stop_learning(); self.stop_review_monitor(); self.stop_learning_supervisor()
     def stop_review_monitor(self): self._review_stop.set()
