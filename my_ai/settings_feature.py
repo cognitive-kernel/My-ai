@@ -369,7 +369,7 @@ def settings_registry(request: Request):
     for key, meta in get_setting_registry().items():
         item = dict(meta)
         item["key"] = key
-        item["value"] = get_setting(key, meta["default"])
+        item["value"] = "" if meta.get("secret") else get_setting(key, meta["default"])
         items.append(item)
     return {"items": items}
 
@@ -398,8 +398,8 @@ def update_registered_setting(key: str, payload: SettingsRegistryValueRequest, r
     if key not in registry:
         raise HTTPException(404, "Unknown registered setting.")
     try:
-        set_setting(key, payload.value)
-        value = get_setting(key, registry[key]["default"])
+        set_setting(key, payload.value, secret=bool(registry[key].get("secret")))
+        value = "" if registry[key].get("secret") else get_setting(key, registry[key]["default"])
     except (KeyError, TypeError, ValueError) as exc:
         raise HTTPException(422, str(exc)) from exc
     audit(user, "settings", "update", "200", f"setting-update:{key}")
