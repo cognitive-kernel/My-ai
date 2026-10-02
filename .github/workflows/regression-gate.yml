@@ -2,7 +2,7 @@ name: regression-gate
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, backlog-completion-2026-10-02]
 jobs:
   regression:
     runs-on: ubuntu-latest
