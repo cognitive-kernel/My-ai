@@ -136,6 +136,11 @@ SETTING_REGISTRY.update({
     "observability.notification_destinations": {"version": 1, "type": "json", "default": "[]", "max_length": 20000, "description": "Persisted notification destinations."},
     "observability.dashboard_config": {"version": 1, "type": "json", "default": "{}", "max_length": 20000, "description": "Persisted dashboard configuration."},
     "observability.diagnostics_export": {"version": 1, "type": "enum", "default": "json", "choices": ["json","text"], "description": "Diagnostics export format."},
+    "database.path": {"version": 1, "type": "string", "default": "data/my_ai.db", "max_length": 2000, "description": "Database path."},
+    "database.backup.destination": {"version": 1, "type": "string", "default": "data/backups", "max_length": 2000, "description": "Backup destination directory."},
+    "database.backup.schedule": {"version": 1, "type": "string", "default": "manual", "max_length": 120, "description": "Backup schedule expression."},
+    "database.backup.retention": {"version": 1, "type": "int", "default": "7", "min": 1, "max": 3650, "description": "Number of backups to retain."},
+    "database.backup.encryption": {"version": 1, "type": "enum", "default": "none", "choices": ["none"], "description": "Backup encryption policy."},
 
     "multimodal.image_provider": {"version": 3, "type": "text", "default": "automatic1111", "max_length": 100, "description": "Image provider."},
     "multimodal.voice_provider": {"version": 3, "type": "text", "default": "local", "max_length": 100, "description": "Voice provider."},
