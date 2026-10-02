@@ -237,7 +237,7 @@ async function loadLearningSourcesCatalog(){
 async function addLearningSourceCatalog(){
   try{await req("/settings/learning-sources",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
     url:byId("ls_url").value.trim(),source_type:byId("ls_type").value.trim()||"custom",product:byId("ls_product").value.trim(),
-    version:byId("ls_version").value.trim(),priority:Number(byId("ls_priority").value||100),provenance:{ui:true}
+    version:byId("ls_version").value.trim(),priority:Number(byId("ls_priority").value||100),weight:Number(byId("ls_weight").value||1),provenance:{ui:true}
   })});await loadLearningSourcesCatalog()}catch(e){setText("catalogout","خطا: "+e.message)}
 }
 async function deleteLearningSource(id){if(!confirm("این منبع حذف شود؟"))return;try{await req("/settings/learning-sources/"+id,{method:"DELETE"});await loadLearningSourcesCatalog()}catch(e){setText("catalogout","خطا: "+e.message)}}
