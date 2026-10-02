@@ -22,3 +22,15 @@ def restore(source: str, *, target=None) -> dict:
     tmp=dst.with_suffix(dst.suffix+".restore.tmp")
     shutil.copy2(src,tmp); os.replace(tmp,dst)
     return {"path":str(dst),"size":dst.stat().st_size,"restored_at":time.time()}
+
+
+def prune_backups(destination: str, retention: int) -> list[str]:
+    directory = Path(destination)
+    if not directory.exists():
+        return []
+    files = sorted((p for p in directory.iterdir() if p.is_file()), key=lambda p: p.stat().st_mtime, reverse=True)
+    removed: list[str] = []
+    for path in files[max(1, retention):]:
+        path.unlink()
+        removed.append(str(path))
+    return removed
