@@ -44,6 +44,19 @@ def _snapshot_tag(base: str, proposal_id: str) -> str:
         raise RuntimeError("Failed to create self-repair snapshot: " + (result.stderr or result.stdout).strip())
     return tag
 
+def status():
+    head=_git("rev-parse","HEAD")
+    status=_git("status","--short")
+    proposals=list_proposals()
+    return {
+        "ok": head.returncode == 0,
+        "head": head.stdout.strip(),
+        "clean": not bool(status.stdout.strip()),
+        "status": status.stdout,
+        "proposal_count": len(proposals),
+        "latest_proposal": proposals[0] if proposals else None,
+    }
+
 def diagnose_local():
     head=_git("rev-parse","HEAD"); status=_git("status","--short"); tests_ok,tests=_tests(ROOT); lessons=recent_lessons(20)
     result={"timestamp":datetime.now(timezone.utc).isoformat(),"head":head.stdout.strip(),"clean":not bool(status.stdout.strip()),"status":status.stdout,"tests_passed":tests_ok,"tests":tests,"lessons":lessons}
