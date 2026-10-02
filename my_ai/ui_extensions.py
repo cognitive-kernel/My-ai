@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from html import escape
 from fastapi.responses import HTMLResponse, JSONResponse
+
+logger = logging.getLogger(__name__)
 
 NAV_STYLE = """
 <style id="myAiGlobalNavStyle">
