@@ -10,7 +10,7 @@ from my_ai.provider_catalog import (
     list_providers, list_models, upsert_provider, delete_provider, delete_model,
     upsert_model, delete_model, add_provider_key, list_provider_keys, rotate_provider_key,
 )
-from my_ai.settings_store import get_setting_registry, export_registered_settings, list_setting_history
+from my_ai.settings_store import get_setting_registry, export_registered_settings, list_setting_history, set_setting, reset_setting
 from my_ai.readiness import build_readiness
 
 def out(v): print(json.dumps(v, ensure_ascii=False, indent=2, default=str))
@@ -21,6 +21,8 @@ def main():
 
     s.add_parser("status"); s.add_parser("health"); s.add_parser("config")
     s.add_parser("actions"); s.add_parser("namespaces"); s.add_parser("config-history")
+    q=s.add_parser("config-set"); q.add_argument("key"); q.add_argument("value")
+    q=s.add_parser("config-reset"); q.add_argument("key")
     for n in ("sessions","memory","tools","policies","learning","repairs","rollback","diagnostics"):
         q=s.add_parser(n); q.add_argument("--namespace")
 
@@ -49,6 +51,14 @@ def main():
     elif a.cmd=="actions": out(list_actions(100))
     elif a.cmd=="namespaces": out(namespace_catalog())
     elif a.cmd=="config-history": out(list_setting_history())
+    elif a.cmd=="config-set":
+        meta=get_setting_registry().get(a.key)
+        if not meta: raise SystemExit(f"Unknown setting: {a.key}")
+        raw=a.value
+        if meta.get("type")=="int": raw=int(raw)
+        elif meta.get("type")=="float": raw=float(raw)
+        set_setting(a.key,raw,secret=bool(meta.get("secret"))); out({"key":a.key,"saved":True})
+    elif a.cmd=="config-reset": out({"key":a.key,"value":reset_setting(a.key),"reset":True})
     elif a.cmd=="sessions": out(list_records("agent.session"))
     elif a.cmd=="memory": out(list_records(a.namespace or "memory.policy"))
     elif a.cmd=="tools": out(list_records(a.namespace or "tools.catalog"))
