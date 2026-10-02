@@ -30,7 +30,8 @@ def test_stream_reconnect_reuses_persisted_session_context(monkeypatch):
     stored = []
     def fetch(sql, params=()):
         if "FROM conversations" in sql:
-            return list(stored)
+            # Production query returns newest-first and Agent reverses it to chronological order.
+            return list(reversed(stored))
         return []
     def execute(sql, params=()):
         writes.append((sql, params))
