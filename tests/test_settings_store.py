@@ -129,3 +129,16 @@ def test_persisted_registry_setting_is_reapplied_on_startup(tmp_path, monkeypatc
     config.settings.llm_retry_attempts = 1
     ss.apply_persisted_settings()
     assert config.settings.llm_retry_attempts == 5
+
+def test_registry_exposes_category_dependencies_and_delete_semantics(monkeypatch, tmp_path):
+    monkeypatch.setattr(ss, "KEY_PATH", tmp_path / "settings.key")
+    ss.ensure_schema()
+    registry = ss.get_setting_registry()
+    assert registry["llm.provider"]["category"] == "llm"
+    assert registry["llm.provider"]["depends_on"] == []
+    ss.SETTING_REGISTRY["test.dependent"] = {"version": 1, "type": "text", "default": "", "description": "", "depends_on": ["llm.provider"]}
+    try:
+        ss.set_setting("test.dependent", "x")
+        assert ss.get_setting("test.dependent") == "x"
+    finally:
+        ss.SETTING_REGISTRY.pop("test.dependent", None)
