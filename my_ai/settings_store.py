@@ -14,6 +14,7 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
     "resources.cpu_threads": {"type":"int","default":8,"min":1,"max":128,"description":"Maximum CPU threads."},
     "resources.ram_percent": {"type":"float","default":80.0,"min":1.0,"max":100.0,"description":"Maximum RAM percentage."},
     "resources.gpu_layers": {"type":"int","default":0,"min":0,"max":128,"description":"GPU layers."},
+    "llm.provider": {"type":"enum","default":"ollama","choices":["ollama","openai-compatible","custom-openai-compatible"],"description":"Active LLM provider."},
     "llm.retry_attempts": {"type":"int","default":2,"min":1,"max":5,"description":"LLM retry attempts."},
     "llm.timeout_seconds": {"type":"float","default":300.0,"min":1.0,"max":3600.0,"description":"LLM timeout in seconds."},
     "llm.custom.provider": {"type":"enum","default":"openai-compatible","choices":["openai-compatible"],"description":"Protocol used by the custom LLM provider."},
