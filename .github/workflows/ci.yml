@@ -37,7 +37,20 @@ jobs:
           name: compile-diagnostics-${{ github.sha }}
           path: compile-errors.txt
       - run: python scripts/architecture_audit.py
-      - run: python scripts/architecture_e2e_audit.py
+      - name: Architecture E2E audit
+        shell: bash
+        run: |
+          set +e
+          python scripts/architecture_e2e_audit.py > architecture-e2e.txt 2>&1
+          rc=$?
+          cat architecture-e2e.txt
+          if [ "$rc" -ne 0 ]; then exit "$rc"; fi
+      - name: Upload architecture E2E diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: architecture-e2e-diagnostics-${{ github.sha }}
+          path: architecture-e2e.txt
       - run: ruff check my_ai --select F
       - run: mypy my_ai --ignore-missing-imports
       - run: bandit -r my_ai -q -lll
