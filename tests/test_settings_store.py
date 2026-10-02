@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from my_ai import settings_store as ss
 from my_ai import git_connector
 from my_ai import settings_store
 
