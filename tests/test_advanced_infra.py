@@ -1,4 +1,5 @@
 import time
+from threading import Event
 
 import pytest
 
@@ -48,3 +49,11 @@ def test_parallel_map_preserves_input_order_and_isolates_failures():
     assert results[0].value == 2
     assert isinstance(results[1].error, ValueError)
     assert results[2].value == 6
+
+
+def test_parallel_map_honors_cancellation_before_start():
+    cancel = Event()
+    cancel.set()
+    results = map_independent(lambda value: value * 2, [1, 2, 3], cancel_event=cancel)
+    assert all(isinstance(item.error, RuntimeError) for item in results)
+    assert all(item.value is None for item in results)
