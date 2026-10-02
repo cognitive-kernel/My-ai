@@ -16,6 +16,7 @@ SCHEMA="""CREATE TABLE IF NOT EXISTS learning_source_catalog(
  weight REAL NOT NULL DEFAULT 1,
  status TEXT NOT NULL DEFAULT 'pending',
  content_hash TEXT NOT NULL DEFAULT '',
+ content_version INTEGER NOT NULL DEFAULT 1,
  product TEXT NOT NULL DEFAULT '',
  version TEXT NOT NULL DEFAULT '',
  compatibility TEXT NOT NULL DEFAULT '',
@@ -94,7 +95,37 @@ def update_content_hash(source_id,content):
     digest=hashlib.sha256(str(content).encode("utf-8")).hexdigest()
     ensure_schema()
     with connect() as c:
-        old=c.execute("SELECT content_hash FROM learning_source_catalog WHERE id=?",(source_id,)).fetchone()
+        old=c.execute("SELECT content_hash,content_version FROM learning_source_catalog WHERE id=?",(source_id,)).fetchone()
         changed=bool(old and old["content_hash"] and old["content_hash"]!=digest)
-        c.execute("UPDATE learning_source_catalog SET content_hash=? WHERE id=?",(digest,source_id)); c.commit()
-    return {"source_id":source_id,"hash":digest,"changed":changed}
+        version=int(old["content_version"] or 1) + (1 if changed else 0) if old else 1
+        c.execute("UPDATE learning_source_catalog SET content_hash=?,content_version=?,status=? WHERE id=?",
+                  (digest,version,"recheck" if changed else "pending",source_id))
+        if changed:
+            c.execute("""INSERT INTO learning_relearning_queue(source_id,reason,old_hash,new_hash,created_at)
+                         VALUES(?,?,?,?,?)""",(source_id,"source-content-changed",str(old["content_hash"]),digest,time.time()))
+        c.commit()
+    return {"source_id":source_id,"hash":digest,"changed":changed,"content_version":version,"relearning_queued":changed}
+
+def list_relearning_queue(*, source_id: int | None = None, status: str = "pending", limit: int = 100) -> list[dict[str, Any]]:
+    ensure_schema()
+    clauses, params = [], []
+    if source_id is not None: clauses.append("source_id=?"); params.append(int(source_id))
+    if status: clauses.append("status=?"); params.append(str(status))
+    params.append(max(1,min(500,int(limit))))
+    q="SELECT * FROM learning_relearning_queue"+((" WHERE "+" AND ".join(clauses)) if clauses else "")+" ORDER BY created_at,id LIMIT ?"
+    with connect() as c: return [dict(r) for r in c.execute(q,params).fetchall()]
+
+def claim_relearning_job(job_id: int) -> dict[str, Any] | None:
+    ensure_schema()
+    with connect() as c:
+        c.execute("UPDATE learning_relearning_queue SET status='processing' WHERE id=? AND status='pending'",(int(job_id),))
+        row=c.execute("SELECT * FROM learning_relearning_queue WHERE id=?",(int(job_id),)).fetchone(); c.commit()
+    return dict(row) if row else None
+
+def complete_relearning_job(job_id: int, *, success: bool = True) -> dict[str, Any] | None:
+    ensure_schema()
+    with connect() as c:
+        status="completed" if success else "failed"
+        c.execute("UPDATE learning_relearning_queue SET status=?,processed_at=? WHERE id=? AND status='processing'",(status,time.time(),int(job_id)))
+        row=c.execute("SELECT * FROM learning_relearning_queue WHERE id=?",(int(job_id),)).fetchone(); c.commit()
+    return dict(row) if row else None
