@@ -19,6 +19,7 @@ from .self_update import recent_lessons
 from .decision_log import record as record_decision
 from .access_policy import assert_mutation_allowed
 from .notifications import notify
+from .state_backup import database_snapshot, restore_database_snapshot
 
 ROOT = Path(__file__).resolve().parent.parent
 PROPOSALS = ROOT / "self-repair" / "proposals"
@@ -89,11 +90,18 @@ def apply_repair(proposal_id: str, approved: bool, health_url: str | None = None
     current=_git("rev-parse","HEAD").stdout.strip()
     if current!=proposal["base"]: raise ValueError("Repository HEAD changed since the proposal was generated; regenerate the repair.")
     if not _clean_git(): raise ValueError("Working tree must be clean before applying a repair.")
+    snapshot_path=PROPOSALS/f"{proposal_id}.db.sqlite"
+    db_snapshot=database_snapshot(snapshot_path)
+    proposal["snapshot"]=str(db_snapshot)
+    path.write_text(json.dumps(proposal,ensure_ascii=False,indent=2),encoding="utf-8")
     patch_file=PROPOSALS/f"{proposal_id}.patch"; patch_file.write_text(str(proposal["patch"]),encoding="utf-8"); applied=_git("apply",str(patch_file))
     if applied.returncode: execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_apply_failed",proposal["patch"],applied.stderr or applied.stdout,0)); raise RuntimeError("Repair patch could not be applied:\n"+(applied.stderr or applied.stdout))
     ok,tests=_tests(ROOT)
     if not ok:
-        _git("reset","--hard",proposal["base"]); execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_rolled_back",proposal["patch"],tests,0)); raise RuntimeError("Applied repair failed post-apply tests and was rolled back:\n"+tests)
+        _git("reset","--hard",proposal["base"])
+        try: restore_database_snapshot(Path(db_snapshot))
+        except Exception as restore_exc: _record_failure_lesson("self_repair_restore_failed",proposal_id,str(restore_exc))
+        execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_rolled_back",proposal["patch"],tests,0)); raise RuntimeError("Applied repair failed post-apply tests and was rolled back:\n"+tests)
     if health_url:
         deadline=time.time()+max(1.0,float(health_timeout))
         healthy=False
