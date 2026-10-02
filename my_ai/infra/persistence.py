@@ -251,9 +251,14 @@ def remember_knowledge(topic: str, title: str, content: str, source_url: str | N
     digest = _knowledge_hash(topic, content)
     from ..settings_store import get_setting
     from ..config import settings as runtime_settings
-    threshold = float(get_setting("memory.duplicate_threshold", runtime_settings.knowledge_duplicate_threshold))
+    import os
+    persisted_threshold = get_setting("memory.duplicate_threshold", None)
+    if persisted_threshold is None:
+        threshold = float(os.getenv("KNOWLEDGE_DUPLICATE_THRESHOLD", runtime_settings.knowledge_duplicate_threshold))
+    else:
+        threshold = float(persisted_threshold)
     registry_default = 0.92
-    if threshold == registry_default and runtime_settings.knowledge_duplicate_threshold != registry_default:
+    if threshold == registry_default and runtime_settings.knowledge_duplicate_threshold != registry_default and "KNOWLEDGE_DUPLICATE_THRESHOLD" in os.environ:
         threshold = float(runtime_settings.knowledge_duplicate_threshold)
     with connect() as conn:
         conn.create_function("normalize_search", 1, _normalize_search_text)
