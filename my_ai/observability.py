@@ -38,7 +38,7 @@ def configure_logging() -> None:
     try:
         from .settings_store import get_setting
         configured_level = str(get_setting("logging.level", "")).strip().upper()
-    except Exception:
+    except (KeyError, TypeError, ValueError, OSError):
         configured_level = ""
     level_name = configured_level or os.getenv("MYAI_LOG_LEVEL", "INFO").upper()
     log_level = getattr(logging, level_name, logging.INFO)
