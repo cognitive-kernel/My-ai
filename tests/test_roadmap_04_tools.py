@@ -24,3 +24,13 @@ def test_prompt_registry_is_versioned(monkeypatch):
     monkeypatch.setattr(registries, "put_record", lambda *args, **kwargs: captured.update(args=args, kwargs=kwargs) or {})
     registries.publish_prompt("p", "hello", task="chat", version="3")
     assert captured["args"][2]["version"] == "3"
+
+
+def test_tool_registry_edit_preserves_identity(monkeypatch):
+    records = {"demo": {"name": "demo", "payload": {}}}
+    monkeypatch.setattr(registries, "get_record", lambda namespace, name: records.get(name))
+    monkeypatch.setattr(registries, "put_record", lambda *args, **kwargs: {"name": args[1], "payload": args[2], "enabled": kwargs["enabled"]})
+    result = registries.update_tool("demo", "edited", {"type":"object"}, {"type":"string"}, timeout=12, retries=4, version="2")
+    assert result["name"] == "demo"
+    assert result["payload"]["description"] == "edited"
+    assert result["payload"]["version"] == "2"
