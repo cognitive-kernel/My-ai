@@ -5,9 +5,7 @@ import time
 from typing import Any
 
 from .access_policy import assert_mutation_allowed
-def connect():
-    from .db import connect as db_connect
-    return db_connect()
+from .db import connect
 from .settings_store import _decrypt, _encrypt
 
 
