@@ -1,5 +1,6 @@
 from __future__ import annotations
 import base64, os, shutil, subprocess, threading, time, webbrowser
+import logging
 from pathlib import Path
 from urllib.parse import urlparse, quote
 import httpx
@@ -83,7 +84,7 @@ class GitHubConnector:
             for subcommand in ("credential-manager","credential-manager-core"):
                 r=subprocess.run([git,subcommand,"--version"],capture_output=True,text=True,timeout=5,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
                 if r.returncode==0:return True
-        except (OSError,subprocess.SubprocessError):pass
+        except (OSError,subprocess.SubprocessError) as exc: logging.getLogger(__name__).debug("Git credential manager probe failed: %s", exc)
         try:
             r=subprocess.run([git,"config","--get-all","credential.helper"],capture_output=True,text=True,timeout=5,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
             return any("manager" in x.lower() for x in r.stdout.splitlines())
@@ -149,7 +150,7 @@ class GitHubConnector:
             if not data.get("device_code") or not data.get("user_code") or not data.get("verification_uri"):raise RuntimeError("GitHub OAuth پاسخ معتبری برنگرداند.")
             interval=max(5,int(data.get("interval",5))); expires_in=int(data.get("expires_in",900)); cls._oauth_pending={"device_code":data["device_code"],"user_code":data["user_code"],"verification_uri":data["verification_uri"],"expires_in":expires_in,"interval":interval,"expires_at":time.time()+expires_in,"next_poll_at":time.time()}; result={k:cls._oauth_pending[k] for k in ("verification_uri","user_code","expires_in","interval")}
         try:webbrowser.open(result["verification_uri"])
-        except Exception:pass
+        except Exception as exc: logging.getLogger(__name__).debug("OAuth browser open failed: %s", exc)
         return result
     @classmethod
     def oauth_poll(cls):
