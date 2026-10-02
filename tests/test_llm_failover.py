@@ -15,6 +15,7 @@ def test_structured_chat_uses_multi_stage_fallback_and_preserves_payload(monkeyp
     client.model = "primary"
     client.fallback_chain = ["fallback-a", "fallback-b"]
     client._options = lambda: {}
+    monkeypatch.setattr(client, "_retry_attempts", lambda: 1)
     calls = []
 
     def post(url, **kwargs):
