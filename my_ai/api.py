@@ -36,7 +36,7 @@ from .git_connector import GitHubConnector
 from .auth import authenticate, audit, audit_event, create_account, create_session, current_user, require_admin, revoke_session, require_user, tool_allowed
 from .platform import backup_database, choose_model, eval_retrieval, export_database, hybrid_search, import_database, model_health, resource_status, voice_status, web_fetch_policy
 from .self_update import status as self_update_status, apply_confirmed_update as self_update_apply, preview_update
-from .self_repair import diagnose_local, propose_repair, apply_repair, proposal_status
+from .self_repair import status as self_repair_status, diagnose_local, propose_repair, apply_repair, proposal_status
 from .skill_engine import ensure_skill, record_evidence, revalidate, snapshot, record_review, review_snapshot
 from .voice import status as voice_engine_status, transcribe, synthesize
 from .metrics import snapshot as metrics_snapshot, record_http_request, record_http_error
@@ -611,7 +611,7 @@ def self_update_status_api(request:Request):
 @app.get("/self-repair/status")
 def self_repair_status_api(request:Request):
     require_admin(request)
-    return diagnose_local()
+    return self_repair_status()
 
 @app.post("/self-repair/propose")
 def self_repair_propose_api(r:RepairRequest, request:Request):
