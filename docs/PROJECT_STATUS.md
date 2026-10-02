@@ -214,3 +214,10 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 - The roadmap now requires graphical equivalents for actionable modules wherever technically and securely possible.
 - Provider/Model Catalog now has graphical add/list/delete controls in Settings; model registration is also available without editing configuration files.
 - Learning now exposes Start/Resume and Pause controls in the Settings course cards.
+
+
+### GUI/CLI parity — provider/model catalog
+- Provider catalog now supports graphical enable/disable, deletion, connection health checks, and version/capability metadata.
+- Model catalog now supports graphical enable/disable, deletion, health checks, and version/capability metadata.
+- The same provider/model lifecycle is available from `scripts/myai_catalog.py` for command-line operation.
+- GUI lifecycle routes are covered by `tests/test_provider_model_gui.py`.
