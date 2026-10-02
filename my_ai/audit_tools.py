@@ -124,6 +124,25 @@ def documentation_inventory(root: Path = ROOT) -> dict[str, Any]:
             docs[str(path.relative_to(root))] = {"error": str(exc)}
     return docs
 
+def documentation_reference_audit(root: Path = ROOT) -> list[dict[str, Any]]:
+    findings = []
+    for path in sorted((root / "docs").rglob("*.md")):
+        try:
+            source = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            findings.append({"document": str(path.relative_to(root)), "error": str(exc)})
+            continue
+        references = sorted(set(re.findall(r"(?:my_ai/|scripts/|evals/)[A-Za-z0-9_./-]+(?:\\.py|\\.json|\\.md)?", source)))
+        for reference in references:
+            target = root / reference
+            findings.append({
+                "document": str(path.relative_to(root)),
+                "reference": reference,
+                "exists": target.exists(),
+            })
+    return findings
+
+
 def authorization_coverage(root: Path = ROOT) -> list[dict[str, Any]]:
     try:
         from .access_policy import permission_for_path
@@ -148,5 +167,6 @@ def run_audit(root: Path = ROOT):
         "dependency_boundaries": dependency_boundary_inventory(root),
         "startup_shutdown": startup_shutdown_inventory(root),
         "documentation": documentation_inventory(root),
+        "documentation_references": documentation_reference_audit(root),
         "authorization": authorization_coverage(root),
     }
