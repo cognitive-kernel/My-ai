@@ -1,10 +1,12 @@
 from __future__ import annotations
-import json, os, re, socket, tempfile, time
+import json, logging, os, re, socket, tempfile, time
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 import httpx
 from .db import execute
 from .network import pinned_client, resolve_public_ip
+
+logger = logging.getLogger(__name__)
 
 class LocalDAST:
     """Local-only, non-destructive dynamic web testing for owned/generated projects."""
