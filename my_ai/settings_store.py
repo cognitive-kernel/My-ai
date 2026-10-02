@@ -107,6 +107,8 @@ def get_setting(key: str, default: Any = None, *, secret: bool = False) -> Any:
     with connect() as conn:
         row = conn.execute("SELECT value,secret FROM app_settings WHERE key=?", (key,)).fetchone()
     if not row:
+        if default is None and key in SETTING_REGISTRY:
+            return str(SETTING_REGISTRY[key]["default"])
         return default
     return _decrypt(str(row["value"])) if int(row["secret"]) else str(row["value"])
 
@@ -114,7 +116,8 @@ def set_setting(key: str, value: Any, *, secret: bool = False) -> None:
     assert_mutation_allowed(f"setting:{key}")
     ensure_schema()
     if key in SETTING_REGISTRY:
-        value = validate_registered_setting(key, value)\n    text = "" if value is None else str(value)
+        value = validate_registered_setting(key, value)
+    text = "" if value is None else str(value)
     stored = _encrypt(text) if secret and text else text
     with connect() as conn:
         conn.execute(
