@@ -152,3 +152,24 @@ def compare_regression_baseline(current: dict[str, float], baseline: dict[str, f
         )
     ]
     return {**gate, "baseline": baseline, "current": current, "deltas": deltas, "regressions": sorted(regressions)}
+
+
+def load_versioned_dataset(path=None) -> dict:
+    import json
+    from pathlib import Path
+    dataset_path = Path(path) if path else Path(__file__).resolve().parents[1] / "evals" / "datasets" / "retrieval_v1.json"
+    data = json.loads(dataset_path.read_text(encoding="utf-8"))
+    if not str(data.get("version","")).startswith("retrieval-"):
+        raise ValueError("Unsupported evaluation dataset version.")
+    return data
+
+
+def metric_thresholds() -> dict[str, float]:
+    return {item.name: float(item.minimum) for item in DEFAULT_REGRESSION_THRESHOLDS}
+
+
+def regression_report(current: dict[str, float], baseline: dict[str, float]) -> dict:
+    report = compare_regression_baseline(current, baseline)
+    report["thresholds"] = metric_thresholds()
+    report["status"] = "passed" if report["passed"] else "failed"
+    return report
