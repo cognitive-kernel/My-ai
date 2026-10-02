@@ -212,3 +212,5 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 - Settings exposes `/settings/ui-actions` and a graphical Action Center.
 - Learning course cards now expose Start/Resume and Pause controls instead of requiring a command/API call.
 - The roadmap now requires graphical equivalents for actionable modules wherever technically and securely possible.
+- Provider/Model Catalog now has graphical add/list/delete controls in Settings; model registration is also available without editing configuration files.
+- Learning now exposes Start/Resume and Pause controls in the Settings course cards.
