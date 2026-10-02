@@ -193,9 +193,16 @@ def score_router_accuracy(predictions: Iterable[tuple[str, str]]) -> float:
     return sum(int(str(actual).casefold() == str(expected).casefold()) for actual, expected in rows) / len(rows)
 
 
-def score_skill_verification(states: Iterable[bool]) -> float:
-    rows = tuple(bool(x) for x in states)
-    return sum(rows) / len(rows) if rows else 0.0
+def score_skill_verification(states: Iterable[bool], expected: Iterable[bool] | None = None) -> float:
+    actual = tuple(bool(x) for x in states)
+    if not actual:
+        return 0.0
+    if expected is None:
+        return sum(actual) / len(actual)
+    target = tuple(bool(x) for x in expected)
+    if len(target) != len(actual):
+        raise ValueError("Skill verification states and expected values must have equal length.")
+    return sum(a == e for a, e in zip(actual, target)) / len(actual)
 
 
 def load_regression_dataset(path=None) -> dict:
