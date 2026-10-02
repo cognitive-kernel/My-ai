@@ -115,3 +115,8 @@ def test_version_aware_schema_migration_is_idempotent(tmp_path, monkeypatch):
     indexes = persistence.fetch_all("PRAGMA index_list(knowledge)")
     names = {row["name"] for row in indexes}
     assert "idx_knowledge_content_hash_version" in names
+
+
+def test_search_knowledge_filters_by_product_version_and_validity():
+    rows = persistence.search_knowledge("python", product="python", version="3.12", validity_status="current")
+    assert all(row["product"] == "python" and row["version"] == "3.12" and row["validity_status"] == "current" for row in rows)
