@@ -38,6 +38,8 @@ def ensure_schema():
 def add_source(url, *, course_id=None, topic_id=None, source_type="custom", title="", priority=100, weight=1,
                product="", version="", compatibility="", provenance=None):
     ensure_schema()
+    allowed_types={"official-docs","official","university","standards","github","books","book","custom","file","repository"}
+    if str(source_type).strip().lower() not in allowed_types: raise ValueError("unsupported source type")
     if not str(url).startswith(("http://","https://","file://")): raise ValueError("unsupported source URL")
     with connect() as c:
         cur=c.execute("""INSERT INTO learning_source_catalog
