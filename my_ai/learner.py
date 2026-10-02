@@ -166,7 +166,7 @@ class LearningEngine:
             if progress_callback:
                 progress_callback("source_fallback", topic["topic"])
             try:
-                local = search_knowledge(language + " " + topic["topic"], 12)
+                local = search_knowledge(language + " " + topic["topic"], 12, product=topic.get("product"), version=topic.get("version"))
             except Exception as exc:
                 logger.warning(
                     "LEARNING_LOCAL_KNOWLEDGE_FAILURE: language=%s topic=%s error_type=%s error=%s",
