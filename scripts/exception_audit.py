@@ -15,14 +15,9 @@ def audit(root: Path = ROOT) -> list[dict[str, object]]:
                 continue
             body = node.body
             meaningful = any(
-                isinstance(item, (ast.Raise, ast.Return, ast.Continue, ast.Break))
-                or any(
-                    isinstance(call, ast.Call)
-                    and isinstance(getattr(call.func, "attr", None), str)
-                    and call.func.attr in {"exception", "error", "warning", "critical", "debug", "info"}
-                    for call in ast.walk(item)
-                )
-                for item in body
+                not isinstance(statement, ast.Pass)
+                and not (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant) and statement.value.value is None)
+                for statement in body
             )
             findings.append({
                 "file": str(path.relative_to(root.parent)),
