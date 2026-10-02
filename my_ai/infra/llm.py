@@ -103,7 +103,8 @@ class OllamaClient:
                     if not isinstance(raw,str): raise LLMError("Structured Ollama response has no message content.")
                     parsed=json.loads(raw)
                     if not isinstance(parsed,dict): raise LLMError("Structured Ollama response is not an object.")
-                    record_inference("ollama",candidate,time.perf_counter()-started,prompt_tokens=data.get("prompt_eval_count"),output_tokens=data.get("eval_count"));\n                    if candidate != self.model: record_route("structured",candidate,"fallback_success")\n                    self.model=candidate; return parsed
+                    record_inference("ollama",candidate,time.perf_counter()-started,prompt_tokens=data.get("prompt_eval_count"),output_tokens=data.get("eval_count"))
+                    if candidate != self.model: record_route("structured",candidate,"fallback_success")\n                    self.model=candidate; return parsed
                 except (httpx.HTTPError,json.JSONDecodeError,LLMError) as exc:
                     errors.append(f"{candidate} attempt {attempt}: {exc}"); record_error("ollama",candidate); record_route("general",candidate,f"failure_attempt_{attempt}"); record_route("structured",candidate,f"failure_attempt_{attempt}")
                     if attempt<self._retry_attempts(): self._backoff(attempt)
@@ -121,7 +122,8 @@ class OllamaClient:
             for attempt in range(1,self._retry_attempts()+1):
                 try:
                     response=self._post_json(f"{self.base_url}/api/chat",payload); data=response.json(); content=data["message"]["content"]
-                    record_inference("ollama",candidate,time.perf_counter()-started,prompt_tokens=data.get("prompt_eval_count"),output_tokens=data.get("eval_count"));\n                    if candidate != self.model: record_route("general",candidate,"fallback_success")\n                    self.model=candidate; return str(content)
+                    record_inference("ollama",candidate,time.perf_counter()-started,prompt_tokens=data.get("prompt_eval_count"),output_tokens=data.get("eval_count"))
+                    if candidate != self.model: record_route("general",candidate,"fallback_success")\n                    self.model=candidate; return str(content)
                 except (httpx.HTTPError,KeyError,TypeError,LLMError) as exc:
                     errors.append(f"{candidate} attempt {attempt}: {exc}"); record_error("ollama",candidate)
                     if attempt<self._retry_attempts(): self._backoff(attempt)
