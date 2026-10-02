@@ -256,7 +256,9 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from .access_policy import assert_mutation_allowed
 
-from .db import connect
+def connect():
+    from .db import connect as db_connect
+    return db_connect()
 
 ROOT = Path(__file__).resolve().parent.parent
 KEY_PATH = ROOT / "data" / ".settings_key"
@@ -389,7 +391,7 @@ def import_registered_settings(values: dict[str, Any]) -> dict[str, Any]:
     for key in ordered_keys:
         value = validated[key]
         set_setting(key, value, secret=bool(SETTING_REGISTRY[key].get("secret")))
-    return {key: get_setting(key, None, secret=bool(SETTING_REGISTRY[key].get("secret"))) for key in values}
+    return validated
 
 def delete_setting(key: str) -> None:
     assert_mutation_allowed(f"setting-delete:{key}")
