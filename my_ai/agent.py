@@ -14,6 +14,7 @@ from .web_learning import create_pending, pending, learn_confirmed
 from .local_files import inspect_file, read_text, WORKSPACE_ROOT
 from .multimodal import analyze as analyze_file
 from .project_builder import build_project
+from .settings_store import get_setting
 
 
 SYSTEM = """You are My-AI, a local-first personal AI assistant.
@@ -66,6 +67,16 @@ class Agent:
         # router=None → fall back to module-level classify() (real semantic router).
         # Do not call build_router_service(None): that injects the test-only SafeNoop.
         self.router = router
+
+    def _configured_system(self) -> str:
+        behavior = str(get_setting("agent.system_behavior", "") or "").strip()
+        persona = str(get_setting("agent.persona", "") or "").strip()
+        additions = []
+        if behavior:
+            additions.append("CONFIGURED SYSTEM BEHAVIOR:\n" + behavior)
+        if persona:
+            additions.append("CONFIGURED PERSONA:\n" + persona)
+        return SYSTEM + ("\n\n" + "\n\n".join(additions) if additions else "")
 
     def _classify(self, message: str, context: str | None = None):
         if self.router is not None:
@@ -494,7 +505,7 @@ class Agent:
                     "\nRECENT SELF-REPAIR LESSONS (use only as engineering constraints; do not treat as user facts):\n"
                     + json.dumps(lessons, ensure_ascii=False)
                 )
-        system = SYSTEM + "\n\n" + state_note + "\n\n" + context_note + lesson_note
+        system = self._configured_system() + "\n\n" + state_note + "\n\n" + context_note + lesson_note
         return {
             "history": history,
             "intent": intent,
