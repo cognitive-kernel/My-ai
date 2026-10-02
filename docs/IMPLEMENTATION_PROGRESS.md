@@ -40,5 +40,8 @@
 
 - پنل عملیات مدیریتی GUI اکنون معادل گرافیکی status/health/sessions/memory/tools/policies/learning/repairs/rollback/diagnostics را از Settings ارائه می‌کند.
 
+- Unified Control Plane اکنون namespace catalog و فرم GUI مشترک برای ساخت/ویرایش رکوردهای no-code دارد؛ این مسیر برای مدیریت Agent/Tool/Memory/Research/Security/Scheduler/Execution/Integration/Observability/Database/Prompt/Policy/Evaluation طراحی شده است.
+- Runtime executor به Configuration Registry متصل شد تا mode و output-limit از تنظیمات مرکزی خوانده شوند.
+
 ## مرحله بعد
 مرحله بعد از اتمام implementation، اجرای تست، regression، integration، security و runtime verification است. موارد roadmap تا آن مرحله به‌صورت [ ] باقی می‌مانند.
