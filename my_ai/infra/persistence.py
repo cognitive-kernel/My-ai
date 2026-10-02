@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
  details TEXT,
  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX IF NOT EXISTS idx_audit_created_at ON audit_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_created_at ON audit_log(created_at);\nCREATE INDEX IF NOT EXISTS idx_audit_request_id ON audit_log(request_id);
 CREATE TABLE IF NOT EXISTS skills (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  name TEXT NOT NULL,
@@ -152,7 +152,7 @@ def init_db() -> None:
         for column, ddl in (("concept_score","REAL NOT NULL DEFAULT 0"),("implementation_score","REAL NOT NULL DEFAULT 0"),("source_score","REAL NOT NULL DEFAULT 0"),("reliability_score","REAL NOT NULL DEFAULT 0"),("knowledge_coverage_score","REAL NOT NULL DEFAULT 0"),("verified_skill_score","REAL NOT NULL DEFAULT 0")):
             if column not in cols_skills:
                 conn.execute(f"ALTER TABLE skills ADD COLUMN {column} {ddl}")
-        cols_knowledge=[r[1] for r in conn.execute("PRAGMA table_info(knowledge)").fetchall()]
+        cols_audit=[r[1] for r in conn.execute("PRAGMA table_info(audit_log)").fetchall()]\n        for column, ddl in (("request_id","TEXT"),("actor_role","TEXT"),("occurred_at","TEXT")):\n            if column not in cols_audit:\n                conn.execute(f"ALTER TABLE audit_log ADD COLUMN {column} {ddl}")\n        cols_knowledge=[r[1] for r in conn.execute("PRAGMA table_info(knowledge)").fetchall()]
         if "content_hash" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN content_hash TEXT")
         if "verification_status" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN verification_status TEXT NOT NULL DEFAULT 'unverified'")
         if "verified_at" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN verified_at TEXT")
