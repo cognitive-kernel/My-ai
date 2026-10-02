@@ -165,7 +165,14 @@ class LearningEngine:
         if failed_sources:
             if progress_callback:
                 progress_callback("source_fallback", topic["topic"])
-            local = search_knowledge(language + " " + topic["topic"], 12)
+            try:
+                local = search_knowledge(language + " " + topic["topic"], 12)
+            except Exception as exc:
+                logger.warning(
+                    "LEARNING_LOCAL_KNOWLEDGE_FAILURE: language=%s topic=%s error_type=%s error=%s",
+                    language, topic["topic"], type(exc).__name__, str(exc),
+                )
+                local = []
             if local:
                 knowledge.extend(
                     {"title": str(item.get("title") or "Local knowledge"),
