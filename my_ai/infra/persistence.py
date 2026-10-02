@@ -35,7 +35,9 @@ CREATE TABLE IF NOT EXISTS help_updates (id INTEGER PRIMARY KEY AUTOINCREMENT, c
 CREATE TABLE IF NOT EXISTS security_scans (id INTEGER PRIMARY KEY AUTOINCREMENT, project_path TEXT NOT NULL, status TEXT NOT NULL, summary TEXT NOT NULL, findings TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS learning_review_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL, status TEXT NOT NULL, added_count INTEGER NOT NULL DEFAULT 0, update_count INTEGER NOT NULL DEFAULT 0, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS fix_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT NOT NULL, patch TEXT, test_result TEXT, activated INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);\nCREATE TABLE IF NOT EXISTS decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT NOT NULL, decision TEXT NOT NULL, details TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);\nCREATE TABLE IF NOT EXISTS retrieval_judgments (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT NOT NULL, knowledge_id INTEGER NOT NULL, relevant INTEGER NOT NULL, score REAL NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS fix_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT NOT NULL, patch TEXT, test_result TEXT, activated INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT NOT NULL, decision TEXT NOT NULL, details TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS retrieval_judgments (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT NOT NULL, knowledge_id INTEGER NOT NULL, relevant INTEGER NOT NULL, score REAL NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS knowledge_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, knowledge_id INTEGER NOT NULL, user_id INTEGER, action TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(knowledge_id) REFERENCES knowledge(id) ON DELETE CASCADE);
 
 CREATE TABLE IF NOT EXISTS users (
@@ -155,7 +157,12 @@ def init_db() -> None:
         for column, ddl in (("concept_score","REAL NOT NULL DEFAULT 0"),("implementation_score","REAL NOT NULL DEFAULT 0"),("source_score","REAL NOT NULL DEFAULT 0"),("reliability_score","REAL NOT NULL DEFAULT 0"),("knowledge_coverage_score","REAL NOT NULL DEFAULT 0"),("verified_skill_score","REAL NOT NULL DEFAULT 0")):
             if column not in cols_skills:
                 conn.execute(f"ALTER TABLE skills ADD COLUMN {column} {ddl}")
-        cols_audit=[r[1] for r in conn.execute("PRAGMA table_info(audit_log)").fetchall()]\n        for column, ddl in (("request_id","TEXT"),("actor_role","TEXT"),("occurred_at","TEXT")):\n            if column not in cols_audit:\n                conn.execute(f"ALTER TABLE audit_log ADD COLUMN {column} {ddl}")\n        cols_knowledge=[r[1] for r in conn.execute("PRAGMA table_info(knowledge)").fetchall()]
+        cols_audit=[r[1] for r in conn.execute("PRAGMA table_info(audit_log)").fetchall()]
+        for column, ddl in (("request_id","TEXT"),("actor_role","TEXT"),("occurred_at","TEXT")):
+            if column not in cols_audit:
+                conn.execute(f"ALTER TABLE audit_log ADD COLUMN {column} {ddl}")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_request_id ON audit_log(request_id)")
+        cols_knowledge=[r[1] for r in conn.execute("PRAGMA table_info(knowledge)").fetchall()]
         if "content_hash" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN content_hash TEXT")
         if "verification_status" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN verification_status TEXT NOT NULL DEFAULT 'unverified'")
         if "verified_at" not in cols_knowledge: conn.execute("ALTER TABLE knowledge ADD COLUMN verified_at TEXT")
