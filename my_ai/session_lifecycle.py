@@ -172,6 +172,8 @@ def reconnect_stream(stream_id: str, user_id: int | None = None) -> dict[str, An
     if not rows:
         raise ValueError("Stream not found.")
     state = rows[0]
+    if state["status"] not in {"open", "interrupted", "failed"}:
+        raise ValueError(f"Stream cannot reconnect from state: {state["status"]}")
     execute("UPDATE stream_state SET status='open',updated_at=CURRENT_TIMESTAMP WHERE stream_id=?", (stream_id,))
     return {
         "stream_id": stream_id,
@@ -182,8 +184,10 @@ def reconnect_stream(stream_id: str, user_id: int | None = None) -> dict[str, An
     }
 
 
-def verify_integrity(session_id: int) -> dict[str, Any]:
+def verify_integrity(session_id: int, user_id: int | None = None) -> dict[str, Any]:
     ensure_schema()
+    if not fetch_all("SELECT id FROM chat_sessions WHERE id=? AND (? IS NULL OR user_id=?)", (session_id, user_id, user_id)):
+        raise ValueError("Session not found.")
     rows = fetch_all("SELECT sequence,event_type,payload,checksum FROM session_events WHERE session_id=? ORDER BY sequence", (session_id,))
     expected = 1
     valid = True
@@ -197,9 +201,14 @@ def verify_integrity(session_id: int) -> dict[str, Any]:
     return {"session_id": session_id, "valid": valid, "event_count": len(rows), "last_sequence": expected - 1}
 
 
-def expire_sessions() -> int:
+def expire_sessions() -> dict[str, int]:
     ensure_schema()
-    return execute(
+    sessions = execute(
         "UPDATE session_state SET status='expired',updated_at=CURRENT_TIMESTAMP WHERE status='active' AND expires_at IS NOT NULL AND expires_at<=?",
         (_now(),),
     )
+    streams = execute(
+        "UPDATE stream_state SET status='interrupted',updated_at=CURRENT_TIMESTAMP WHERE status='open' AND updated_at<=datetime('now', ?)",
+        (f"-{int(STREAM_TTL_SECONDS)} seconds",),
+    )
+    return {"sessions_expired": int(sessions), "streams_interrupted": int(streams)}
