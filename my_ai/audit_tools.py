@@ -117,6 +117,20 @@ def documentation_inventory(root: Path = ROOT) -> dict[str, Any]:
             docs[str(path.relative_to(root))] = {"error": str(exc)}
     return docs
 
+def authorization_coverage(root: Path = ROOT) -> list[dict[str, Any]]:
+    try:
+        from .access_policy import permission_for_path
+    except ImportError:
+        from my_ai.access_policy import permission_for_path
+    findings = []
+    for route in route_inventory(root):
+        permission = permission_for_path(route["path"], route["method"])
+        if permission is None and not route["path"].startswith(("/docs", "/openapi.json", "/redoc", "/static")):
+            findings.append({"method": route["method"], "path": route["path"], "status": "unmapped"})
+        else:
+            findings.append({"method": route["method"], "path": route["path"], "permission": permission, "status": "mapped"})
+    return findings
+
 def run_audit(root: Path = ROOT):
     return {
         "silent_failures": find_silent_failures(root),
@@ -127,4 +141,5 @@ def run_audit(root: Path = ROOT):
         "dependency_boundaries": dependency_boundary_inventory(root),
         "startup_shutdown": startup_shutdown_inventory(root),
         "documentation": documentation_inventory(root),
+        "authorization": authorization_coverage(root),
     }
