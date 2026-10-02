@@ -522,10 +522,10 @@ def test_scheduler_prevents_duplicate_live_worker(monkeypatch):
     scheduler = StudyScheduler.__new__(StudyScheduler)
     scheduler._lock = threading.RLock()
     scheduler._workers = {}
-    live = threading.Thread(target=lambda: None)
-    live.start()
-    live.join()
-    scheduler._workers["python"] = (live, threading.Event())
+    class LiveThread:
+        def is_alive(self):
+            return True
+    scheduler._workers["python"] = (LiveThread(), threading.Event())
     scheduler._acquire_lease = lambda language: (_ for _ in ()).throw(AssertionError("duplicate worker must be rejected before lease acquisition"))
     scheduler.start("Python")
 \n
