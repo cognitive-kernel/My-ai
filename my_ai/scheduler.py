@@ -50,7 +50,23 @@ class StudyScheduler:
     def _release_lease(self,language):
         normalized=self._normalize_language(language)
         execute("DELETE FROM learning_worker_leases WHERE language=? AND owner=?",(normalized,self._lease_owner))
+    def _ensure_worker_tables(self):
+        execute("CREATE TABLE IF NOT EXISTS learning_workers (id INTEGER PRIMARY KEY AUTOINCREMENT, language TEXT NOT NULL UNIQUE, session_id INTEGER, status TEXT NOT NULL DEFAULT 'idle', stage TEXT NOT NULL DEFAULT 'idle', current_topic TEXT, error TEXT, last_result TEXT, started_at TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
+        self._ensure_lease_table()
+
+    def _schedule_worker_recovery(self, language, stop_event):
+        if stop_event.is_set():
+            return
+        delay = min(60, max(1, 2 ** min(3, int(getattr(settings, "learning_max_retries", 3)))))
+        def recover():
+            if stop_event.is_set():
+                return
+            rows = fetch_all("SELECT session_id,status FROM learning_workers WHERE lower(language)=? LIMIT 1", (str(language).casefold(),))
+            self.start(language, rows[0]["session_id"] if rows else None)
+        threading.Timer(delay, recover).start()
+
     def start(self,language="Python",session_id=None):
+        self._ensure_worker_tables()
         language=self._normalize_language(language); key=language.casefold()
         with self._lock:
             existing=self._workers.get(key)
@@ -80,7 +96,7 @@ class StudyScheduler:
         for row in rows:
             item=dict(row); item["running"]=bool(self._workers.get(str(item["language"]).casefold()) and self._workers[str(item["language"]).casefold()][0].is_alive()); workers.append(item)
         active=[x for x in workers if x["running"]]; primary=active[0] if active else (workers[-1] if workers else None)
-        return {"running":bool(active),"language":primary["language"] if primary else self.language,"stage":primary["stage"] if primary else self.stage,"current_topic":primary["current_topic"] if primary else self.current_topic,"workers":workers,"active_workers":active,"resources":{**resource_status(),**resource_limits()}}
+        return {"running":bool(active),"language":primary["language"] if primary else self.language,"stage":primary["stage"] if primary else self.stage,"current_topic":primary["current_topic"] if primary else self.current_topic,"last_result":json.loads(primary["last_result"]) if primary and primary.get("last_result") else self.last_result,"error":primary.get("error") if primary else self.error,"interval_seconds":self.interval_seconds,"session_id":primary.get("session_id") if primary else None,"runtime_status":primary.get("status") if primary else "idle","runtime_updated_at":primary.get("updated_at") if primary else None,"workers":workers,"active_workers":active,"resources":{**resource_status(),**resource_limits()}}
     @staticmethod
     def _wait_for_resources(stop_event):
         while not stop_event.is_set():
@@ -106,7 +122,8 @@ class StudyScheduler:
             except Exception as exc: logger.exception("LEARNING_REVIEW_FAILURE: %s",exc)
             self._review_stop.wait(min(self.interval_seconds,3600))
     def _loop(self,language,stop_event):
-        if not self._renew_lease(language): return
+        self._ensure_worker_tables()
+        if not self._renew_lease(language) and not self._acquire_lease(language): return
         engine=LearningEngine(); errors=0
         try:
             while not stop_event.is_set():
@@ -125,7 +142,7 @@ class StudyScheduler:
                     if stop_event.wait(min(self.interval_seconds,60)): break
                 except InterruptedError: break
                 except Exception as exc:
-                    errors+=1; logger.exception("LEARNING_FAILURE: %s",exc); self._update_worker(language,"retrying",result={"status":"error","error":str(exc),"consecutive_errors":errors},error=str(exc),status="retrying")
+                    errors+=1; logger.exception("LEARNING_FAILURE: %s",exc); self._update_worker(language,"retrying",result={"status":"error","error":str(exc),"consecutive_errors":errors},error=str(exc),status="retrying"); self._schedule_worker_recovery(language, stop_event)
                     if stop_event.wait(min(60,2**min(errors,5))): break
         finally:
             self._release_lease(language); self._workers.pop(language.casefold(),None)
