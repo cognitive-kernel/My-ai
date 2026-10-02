@@ -85,3 +85,12 @@ def test_knowledge_schema_tracks_validity_window(tmp_path, monkeypatch):
     )
     row = persistence.fetch_all("SELECT valid_from,valid_until FROM knowledge WHERE id=?", (kid,))[0]
     assert row == {"valid_from": "2026-01-01", "valid_until": "2027-01-01"}
+
+def test_same_knowledge_can_coexist_across_versions(tmp_path, monkeypatch):
+    monkeypatch.setattr(persistence, "connect", _connect_factory(tmp_path / "versions.db"))
+    persistence.init_db()
+    first = persistence.remember_knowledge("Python", "API", "same", product="python", version="3.12")
+    second = persistence.remember_knowledge("Python", "API", "same", product="python", version="3.13")
+    assert second != first
+    rows = persistence.fetch_all("SELECT version FROM knowledge WHERE id IN (?,?) ORDER BY version", (first, second))
+    assert [row["version"] for row in rows] == ["3.12", "3.13"]
