@@ -126,6 +126,18 @@ async def auth_and_audit_middleware(request: Request, call_next):
     path = request.url.path
     request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
     request.state.request_id = request_id
+    configured_origins = [item.strip() for item in str(get_setting("server.cors_origins", "") or "").split(",") if item.strip()]
+    origin = request.headers.get("origin", "")
+    if request.method == "OPTIONS":
+        response = Response(status_code=204)
+        if origin and ("*" in configured_origins or origin in configured_origins):
+            response.headers["Access-Control-Allow-Origin"] = "*" if "*" in configured_origins else origin
+            response.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = request.headers.get("access-control-request-headers", "Authorization,Content-Type,X-Request-ID")
+            response.headers["Access-Control-Max-Age"] = "600"
+            if origin != "*":
+                response.headers["Vary"] = "Origin"
+        return response
     user = current_user(request)
     response: Response | None = None
     request_body = await request.body()
@@ -146,18 +158,6 @@ async def auth_and_audit_middleware(request: Request, call_next):
         count += 1; _REQUEST_RATE[rate_key]=(count,started)
     if count > rate_limit:
         response=JSONResponse({"detail":"Rate limit exceeded."},status_code=429); response.headers["Retry-After"]=str(max(1,int(60-(now-started)))); return response
-    configured_origins = [item.strip() for item in str(get_setting("server.cors_origins", "") or "").split(",") if item.strip()]
-    origin = request.headers.get("origin", "")
-    if request.method == "OPTIONS":
-        response = Response(status_code=204)
-        if origin and ("*" in configured_origins or origin in configured_origins):
-            response.headers["Access-Control-Allow-Origin"] = "*" if "*" in configured_origins else origin
-            response.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-            response.headers["Access-Control-Allow-Headers"] = request.headers.get("access-control-request-headers", "Authorization,Content-Type,X-Request-ID")
-            response.headers["Access-Control-Max-Age"] = "600"
-            if origin != "*":
-                response.headers["Vary"] = "Origin"
-        return response
     read_only = os.getenv("MYAI_READ_ONLY", "false").strip().lower() == "true" or get_bool("server.maintenance_mode", False)
     decision = policy.decide(user=user, method=request.method, path=path, read_only=read_only)
     if not decision.allowed:
