@@ -74,3 +74,14 @@ def test_persistence_schema_contains_version_columns(tmp_path, monkeypatch):
     rows = persistence.fetch_all("PRAGMA table_info(learning_experiences)")
     columns = {row["name"] for row in rows}
     assert {"model_version", "provider", "tool_version", "skill_version", "environment_version", "compatibility"} <= columns
+
+def test_knowledge_schema_tracks_validity_window(tmp_path, monkeypatch):
+    monkeypatch.setattr(persistence, "connect", _connect_factory(tmp_path / "validity.db"))
+    persistence.init_db()
+    kid = persistence.remember_knowledge(
+        "Python", "Temporal lesson", "Use the API.",
+        "https://example.test/docs", product="python", version="3.13",
+        validity_status="current", valid_from="2026-01-01", valid_until="2027-01-01",
+    )
+    row = persistence.fetch_all("SELECT valid_from,valid_until FROM knowledge WHERE id=?", (kid,))[0]
+    assert row == {"valid_from": "2026-01-01", "valid_until": "2027-01-01"}
