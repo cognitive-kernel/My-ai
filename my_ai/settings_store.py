@@ -22,6 +22,8 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
     "scheduler.interval_seconds": {"type":"int","default":3600,"min":60,"max":86400,"description":"Scheduler interval."},
     "scheduler.auto_resume": {"type":"enum","default":"false","choices":["true","false"],"description":"Automatically resume learning workers."},
     "execution.timeout_seconds": {"type":"int","default":10,"min":1,"max":3600,"description":"Execution timeout."},
+    "learning.personal_experience": {"type":"enum","default":"true","choices":["true","false"],"description":"Store personal learning experiences."},
+    "runtime.read_only": {"type":"enum","default":"false","choices":["true","false"],"description":"Block persistent mutations."},
 }
 
 def get_setting_registry() -> dict[str, dict[str, Any]]:
