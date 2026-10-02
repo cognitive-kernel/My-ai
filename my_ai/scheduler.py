@@ -59,7 +59,7 @@ class StudyScheduler:
         if stop_event.is_set():
             return
         backoff = max(0.0, float(get_setting("scheduler.retry_backoff", 5)))
-        delay = min(3600.0, max(0.0, backoff * (2 ** min(8, int(getattr(settings, "learning_max_retries", 3))))))
+        delay = min(60.0, max(0.0, backoff * (2 ** min(8, int(getattr(settings, "learning_max_retries", 3))))))
         def recover():
             if stop_event.is_set():
                 return
