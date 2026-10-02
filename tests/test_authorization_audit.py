@@ -27,6 +27,7 @@ def test_tool_permission_is_deny_by_default(tmp_path):
         (user["id"], "python", "execute"),
     )
     assert auth.tool_allowed(user, "python", "execute") is True
+    object.__setattr__(db.settings, "db_path", old)
 
 
 def test_audit_event_stores_hashes_not_raw_payload(tmp_path):
@@ -40,5 +41,4 @@ def test_audit_event_stores_hashes_not_raw_payload(tmp_path):
     assert secret not in row["details"]
     assert "request_id" in row["details"]
     assert "sha256" in row["details"]
-    object.__setattr__(db.settings, "db_path", old)
     object.__setattr__(db.settings, "db_path", old)
