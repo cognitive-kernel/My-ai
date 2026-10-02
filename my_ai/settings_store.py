@@ -201,7 +201,13 @@ def apply_persisted_settings() -> None:
         apply_runtime_setting(str(row["key"]), value)
 
 def get_setting_registry() -> dict[str, dict[str, Any]]:
-    return {k: dict(v) for k, v in SETTING_REGISTRY.items()}
+    result = {}
+    for key, spec in SETTING_REGISTRY.items():
+        item = dict(spec)
+        item.setdefault("category", key.split(".", 1)[0])
+        item.setdefault("depends_on", [])
+        result[key] = item
+    return result
 
 def get_configuration_schema_version() -> int:
     return CONFIG_SCHEMA_VERSION
