@@ -212,17 +212,18 @@ def fetch_all(sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
     with connect() as conn:
         return [dict(row) for row in conn.execute(sql, params).fetchall()]
 
-def _semantic_duplicate(topic: str, title: str, content: str, digest: str, conn) -> dict[str, Any] | None:
+def _semantic_duplicate(topic: str, title: str, content: str, digest: str, conn, threshold: float | None = None) -> dict[str, Any] | None:
     """Return the nearest existing knowledge item when semantic similarity exceeds the configured threshold."""
     try:
         from ..platform import cosine_similarity, ollama_embed
         from ..config import settings as runtime_settings
         from ..settings_store import get_setting
-        configured_threshold = get_setting("memory.duplicate_threshold", runtime_settings.knowledge_duplicate_threshold)
-        threshold = float(configured_threshold)
-        registry_default = 0.92
-        if threshold == registry_default and runtime_settings.knowledge_duplicate_threshold != registry_default:
-            threshold = float(runtime_settings.knowledge_duplicate_threshold)
+        if threshold is None:
+            configured_threshold = get_setting("memory.duplicate_threshold", runtime_settings.knowledge_duplicate_threshold)
+            threshold = float(configured_threshold)
+            registry_default = 0.92
+            if threshold == registry_default and runtime_settings.knowledge_duplicate_threshold != registry_default:
+                threshold = float(runtime_settings.knowledge_duplicate_threshold)
         query = f"{title}\n{content}\n{topic}"
         vector = ollama_embed(query, runtime_settings.embedding_model)
         rows = conn.execute(
@@ -262,7 +263,7 @@ def remember_knowledge(topic: str, title: str, content: str, source_url: str | N
                          (row["id"], None, "duplicate_exact", "content_hash matched existing knowledge"))
             conn.commit()
             return int(row["id"])
-        duplicate = _semantic_duplicate(topic, title, content, digest, conn)
+        duplicate = _semantic_duplicate(topic, title, content, digest, conn, threshold=threshold)
         if duplicate:
             conn.execute("INSERT INTO knowledge_audit(knowledge_id,user_id,action,details) VALUES(?,?,?,?)",
                          (duplicate["id"], None, "duplicate_semantic_rejected",
