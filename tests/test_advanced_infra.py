@@ -4,6 +4,7 @@ from threading import Event
 import pytest
 
 from my_ai.infra.cache import VersionedCache
+from my_ai.infra.cancellation import CancellationToken
 from my_ai.infra.event_bus import EventBus
 from my_ai.infra.execution_budget import BudgetExceeded, ExecutionBudget
 from my_ai.infra.parallel import map_independent
@@ -69,3 +70,11 @@ def test_event_bus_isolates_handler_failures():
     event = bus.publish("task.done", {"id": 9}, trace_id="trace-2")
     assert event.trace_id == "trace-2"
     assert seen == [9]
+
+
+def test_cancellation_token_controls_parallel_map():
+    token = CancellationToken()
+    token.cancel()
+    results = map_independent(lambda value: value * 2, [1, 2], cancel_event=token)
+    assert token.is_cancelled
+    assert all(isinstance(item.error, RuntimeError) for item in results)
