@@ -45,3 +45,35 @@ def test_apply_repair_rolls_back_after_post_apply_failure(tmp_path, monkeypatch)
     else:
         raise AssertionError("failed repair was not rolled back")
     assert any(args[:2] == ("reset", "--hard") for args in calls)
+
+
+def test_apply_repair_success_marks_activation(tmp_path, monkeypatch):
+    monkeypatch.setattr(self_repair, "PROPOSALS", tmp_path)
+    proposal_id = "success-test"
+    (tmp_path / f"{proposal_id}.json").write_text(
+        '{"id":"success-test","base":"base","patch":"diff --git a/x b/x\\n--- a/x\\n+++ b/x\\n","isolated_tests_passed":true,"approved":false,"applied":false}',
+        encoding="utf-8",
+    )
+    calls = []
+    def fake_git(*args, **kwargs):
+        calls.append(args)
+        if args[:2] == ("rev-parse", "HEAD"):
+            return type("R", (), {"stdout":"base\n", "returncode":0, "stderr":""})()
+        if args[:1] == ("status",):
+            return type("R", (), {"stdout":"", "returncode":0, "stderr":""})()
+        if args[:2] == ("tag", "--list"):
+            return type("R", (), {"stdout":"", "returncode":0, "stderr":""})()
+        return type("R", (), {"stdout":"", "returncode":0, "stderr":""})()
+    monkeypatch.setattr(self_repair, "_git", fake_git)
+    monkeypatch.setattr(self_repair, "_tests", lambda cwd: (True, "passed"))
+    monkeypatch.setattr(self_repair, "execute", lambda *args, **kwargs: None)
+    monkeypatch.setattr(self_repair, "record_decision", lambda *args, **kwargs: None)
+    monkeypatch.setattr(self_repair, "notify", lambda *args, **kwargs: None)
+    monkeypatch.setattr(self_repair, "assert_mutation_allowed", lambda *args: None)
+    monkeypatch.setattr(self_repair, "get_bool", lambda key, default=True: True)
+    result = self_repair.apply_repair(proposal_id, True)
+    assert result["status"] == "applied"
+    saved = self_repair.proposal_status(proposal_id)
+    assert saved["approved"] is True
+    assert saved["applied"] is True
+    assert any(args[:1] == ("tag",) for args in calls)
