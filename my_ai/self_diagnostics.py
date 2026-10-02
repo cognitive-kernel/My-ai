@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import platform
 import subprocess
@@ -49,13 +50,13 @@ def _hardware() -> dict[str, object]:
     try:
         import os
         info["cpu_count"] = os.cpu_count()
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).debug("CPU diagnostics unavailable: %s", exc)
     try:
         import psutil
         info["ram_bytes"] = psutil.virtual_memory().total
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).debug("RAM diagnostics unavailable: %s", exc)
     return info
 
 
@@ -228,8 +229,8 @@ class SelfDiagnosticsMonitor:
     def _loop(self) -> None:
         try:
             run_diagnostics()
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.getLogger(__name__).debug("Diagnostic cycle failed: %s", exc)
         while not self._stop.wait(self.interval_seconds):
             try:
                 run_diagnostics()
