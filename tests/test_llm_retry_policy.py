@@ -92,3 +92,18 @@ def test_model_inference_policy_is_independent_from_legacy_llm_policy(monkeypatc
     assert client._retry_attempts() == 1
     assert client._timeout() == 2
     client._backoff(1)
+
+
+def test_registered_llm_policy_overrides_environment_defaults(monkeypatch):
+    class Settings:
+        llm_retry_attempts = 5
+        llm_retry_backoff_seconds = 9
+        llm_timeout_seconds = 99
+        llm_model_retry_attempts = 5
+        llm_model_timeout_seconds = 99
+    values = {"llm.retry_attempts": "1", "llm.timeout_seconds": "2"}
+    monkeypatch.setattr(llm_module, "_settings", lambda: Settings())
+    monkeypatch.setattr(llm_module, "get_setting", lambda key, default=None: values.get(key, default))
+    client = llm_module.OllamaClient.__new__(llm_module.OllamaClient)
+    assert client._retry_attempts() == 1
+    assert client._timeout() == 2
