@@ -26,6 +26,6 @@ def test_structured_chat_uses_multi_stage_fallback_and_preserves_payload(monkeyp
     monkeypatch.setattr("my_ai.infra.llm.httpx.post", post)
     result = client.structured_chat_json("keep this context", {"type": "object"}, system="system")
     assert result == {"ok": True}
-    assert [item["model"] for item in calls] == ["primary", "fallback-a", "fallback-b"]
+    assert [item["model"] for item in calls] == ["primary", "primary", "fallback-a", "fallback-a", "fallback-b"]
     assert calls[-1]["messages"][-1]["content"] == "keep this context"
     assert calls[-1]["messages"][0]["content"] == "system"
