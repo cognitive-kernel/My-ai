@@ -528,4 +528,3 @@ def test_scheduler_prevents_duplicate_live_worker(monkeypatch):
     scheduler._workers["python"] = (LiveThread(), threading.Event())
     scheduler._acquire_lease = lambda language: (_ for _ in ()).throw(AssertionError("duplicate worker must be rejected before lease acquisition"))
     scheduler.start("Python")
-\n
