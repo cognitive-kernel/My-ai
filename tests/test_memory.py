@@ -23,3 +23,18 @@ def test_memory_update_removes_normalized_fts_entry(tmp_path, monkeypatch):
     assert db.search_knowledge("word")
     db.execute("UPDATE knowledge SET content=? WHERE id=?", ("new content", item_id))
     assert db.search_knowledge("word") == []
+
+
+def test_memory_retention_cleanup_uses_setting(tmp_path, monkeypatch):
+    monkeypatch.setenv("DB_PATH",str(tmp_path/"retention.db"))
+    import importlib
+    import my_ai.config as config
+    import my_ai.db as db
+    import my_ai.infra.persistence as persistence
+    import my_ai.settings_store as ss
+    config.settings=config.Settings()
+    importlib.reload(db); importlib.reload(persistence)
+    db.init_db(); item=db.remember_knowledge("test","old","old content")
+    db.execute("UPDATE knowledge SET created_at=datetime('now','-400 days') WHERE id=?",(item,))
+    monkeypatch.setattr(ss,"get_int",lambda key,default: 365)
+    assert persistence.purge_expired_knowledge() == 1
