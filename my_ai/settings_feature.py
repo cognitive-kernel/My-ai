@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
@@ -642,6 +642,31 @@ def settings_learning_source_delete(source_id: int, request: Request):
 def settings_learning_relearning(request: Request, status: str = "pending", limit: int = 100):
     require_admin(request)
     return {"items": list_relearning_queue(status=status,limit=limit)}
+
+@router.post("/settings/learning-sources/upload")
+async def learning_source_upload(request: Request, file: UploadFile = File(...), course_id: int | None = None, topic_id: int | None = None,
+                                 source_type: str = "file", priority: int = 100, weight: float = 1):
+    user=require_admin(request)
+    if source_type not in {"file","book","repository","custom"}:
+        raise HTTPException(422,"Unsupported source type for uploaded file.")
+    filename=Path(file.filename or "source.bin").name
+    if not filename or filename in {".",".."}:
+        raise HTTPException(422,"Invalid filename.")
+    root=Path(str(get_setting("execution.project_root","projects"))).expanduser().resolve()
+    target_dir=(root / ".myai" / "learning_sources").resolve()
+    target_dir.mkdir(parents=True,exist_ok=True)
+    target=(target_dir / filename).resolve()
+    if target.parent != target_dir:
+        raise HTTPException(422,"Invalid upload path.")
+    content=await file.read()
+    max_bytes=int(get_setting("learning.source_max_bytes",25*1024*1024))
+    if len(content)>max_bytes:
+        raise HTTPException(413,"Uploaded source exceeds configured size limit.")
+    target.write_bytes(content)
+    item=add_source(url=target.as_uri(),course_id=course_id,topic_id=topic_id,source_type=source_type,title=filename,
+                    priority=priority,weight=weight,provenance={"uploaded":True,"filename":filename,"size":len(content)})
+    audit(user,"learning","source-upload","200",str(item["id"]))
+    return item
 
 @router.post("/settings/learning-sources/{source_id}/{status}")
 def learning_source_review(source_id:int,status:str,request:Request):
