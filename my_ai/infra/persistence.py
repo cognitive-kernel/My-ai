@@ -182,7 +182,7 @@ def init_db() -> None:
             conn.execute("INSERT OR REPLACE INTO schema_meta(key,value) VALUES('knowledge_dedup_v1','done')")
         if not conn.execute("SELECT 1 FROM schema_meta WHERE key='knowledge_version_aware_hash_v1'").fetchone():
             conn.execute("DROP INDEX IF EXISTS idx_knowledge_content_hash")
-            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_content_hash_version ON knowledge(content_hash, product, version)")
+            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_content_hash_version ON knowledge(content_hash, COALESCE(product, ''), COALESCE(version, ''))")
             conn.execute("INSERT INTO schema_meta(key,value) VALUES('knowledge_version_aware_hash_v1','done')")
         else:
             conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_content_hash_version ON knowledge(content_hash, product, version)")
