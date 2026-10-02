@@ -90,3 +90,10 @@ def test_expired_evidence_invalidates_verification(monkeypatch):
     ]
     result = skill_engine._verification_state({"id": 1, "version": "1"}, rows, "1")
     assert result == (False, "evidence_expired")
+
+
+def test_verification_policy_version_invalidates_old_evidence(monkeypatch):
+    rows = [{"kind": "official_source", "passed": 1, "evidence": evidence({"coverage_score": 100, "source_score": 100, "skill_version": "1", "verification_policy_version": "0"})},
+            {"kind": "test", "passed": 1, "evidence": evidence({"skill_score": 100, "skill_version": "1", "verification_policy_version": "0"})},
+            {"kind": "benchmark", "passed": 1, "evidence": evidence({"skill_score": 100, "skill_version": "1", "verification_policy_version": "0"})}]
+    assert skill_engine._verification_state({"id": 1, "version": "1"}, rows, "1") == (False, "verification_policy_changed")
