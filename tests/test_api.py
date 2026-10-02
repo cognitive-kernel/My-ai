@@ -48,3 +48,20 @@ def test_learning_step_and_status_handlers(monkeypatch):
     status = api.scheduler_status(object())
     assert status["stage"] == "idle"
     assert status["error"] is None
+
+
+def test_cors_preflight_uses_persisted_origins(monkeypatch):
+    import my_ai.api as api
+    monkeypatch.setattr(api, "get_setting", lambda key, default=None: "https://example.test" if key == "server.cors_origins" else default)
+    with TestClient(api.app) as client:
+        response = client.options(
+            "/health",
+            headers={
+                "Origin": "https://example.test",
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Headers": "Authorization",
+            },
+        )
+    assert response.status_code == 204
+    assert response.headers["access-control-allow-origin"] == "https://example.test"
+    assert "GET" in response.headers["access-control-allow-methods"]
