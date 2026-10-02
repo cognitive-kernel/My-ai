@@ -8,6 +8,8 @@ import urllib.parse
 import time
 from .metrics import record_inference, record_error, record_route
 from .resource_guard import limits, wait_until_available
+from .provider import ProviderCapabilities
+from .generic_provider import GenericHTTPProviderAdapter
 from ..model_manager import ModelManager
 from ..settings_store import get_setting
 
@@ -201,6 +203,44 @@ def _provider_registry() -> ProviderRegistry:
             provider_name="custom-openai-compatible",
         ),
     )
+    try:
+        from ..provider_catalog import list_providers, list_models
+        providers = list_providers(include_disabled=False)
+        models = list_models(include_disabled=False)
+        model_by_provider = {}
+        for item in models:
+            model_by_provider.setdefault(int(item["provider_id"]), []).append(item)
+        for provider in providers:
+            protocol = str(provider.get("protocol", "")).strip().lower()
+            if protocol in {"openai-compatible", "openai", "ollama"}:
+                continue
+            candidates = model_by_provider.get(int(provider["id"]), [])
+            if not candidates:
+                continue
+            model = candidates[0]
+            capabilities = provider.get("capabilities") or {}
+            caps = ProviderCapabilities(
+                chat=bool(capabilities.get("chat", True)),
+                streaming=bool(capabilities.get("streaming", False)),
+                structured_output=bool(capabilities.get("structured_output", False)),
+                embeddings=bool(capabilities.get("embeddings", False)),
+                reasoning=bool(capabilities.get("reasoning", False)),
+                health_check=bool(capabilities.get("health_check", True)),
+            )
+            name = str(provider["name"])
+            registry.register(
+                name,
+                lambda p=provider, m=model, c=caps: GenericHTTPProviderAdapter(
+                    name=str(p["name"]),
+                    endpoint=str(p["endpoint"]),
+                    model=str(m["model_id"]),
+                    timeout=float(p.get("timeout_seconds") or 30),
+                    capabilities=c,
+                ),
+            )
+    except Exception:
+        # Optional catalog providers must not prevent built-in providers from starting.
+        pass
     return registry
 
 
