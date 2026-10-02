@@ -22,13 +22,13 @@ logger = logging.getLogger(__name__)
 
 class LearningEngine:
     @staticmethod
-    def record_experience(language, topic, kind, action, content, error=None, session_id=None, *, model_version=None, provider=None, tool_version=None, skill_version=None, environment_version=None, compatibility="unknown"):
+    def record_experience(language, topic, kind, action, content, error=None, session_id=None, *, model_version=None, provider=None, tool_version=None, skill_version=None, environment_version=None, compatibility="unknown", context=None, outcome=None, recovery=None, evidence=None):
         from .settings_store import get_bool
         if not get_bool("learning.personal_experience", True):
             return None
         execute("CREATE TABLE IF NOT EXISTS learning_experiences (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, language TEXT NOT NULL, topic TEXT NOT NULL, kind TEXT NOT NULL, action TEXT NOT NULL DEFAULT '', content TEXT NOT NULL, error TEXT, model_version TEXT, provider TEXT, tool_version TEXT, skill_version TEXT, environment_version TEXT, compatibility TEXT NOT NULL DEFAULT 'unknown', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
         cols = {row["name"] for row in fetch_all("PRAGMA table_info(learning_experiences)")}
-        for column, ddl in (("model_version","TEXT"),("provider","TEXT"),("tool_version","TEXT"),("skill_version","TEXT"),("environment_version","TEXT"),("compatibility","TEXT NOT NULL DEFAULT 'unknown'")):
+        for column, ddl in (("model_version","TEXT"),("provider","TEXT"),("tool_version","TEXT"),("skill_version","TEXT"),("environment_version","TEXT"),("compatibility","TEXT NOT NULL DEFAULT 'unknown'"),("context_json","TEXT"),("outcome","TEXT"),("recovery","TEXT"),("evidence_json","TEXT")):
             if column not in cols:
                 execute(f"ALTER TABLE learning_experiences ADD COLUMN {column} {ddl}")
         text=str(content or "").strip()
@@ -38,14 +38,14 @@ class LearningEngine:
             rows=fetch_all("SELECT id FROM learning_sessions WHERE language=? AND topic=? ORDER BY id DESC LIMIT 1",(language,topic))
             session_id=(rows[0]["id"] if "id" in rows[0].keys() else None) if rows else None
         return execute(
-            "INSERT INTO learning_experiences(session_id,language,topic,kind,action,content,error,model_version,provider,tool_version,skill_version,environment_version,compatibility) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (session_id, str(language), str(topic), str(kind), str(action or ""), text[:20000], str(error or "")[:10000] or None, model_version, provider, tool_version, skill_version, environment_version, str(compatibility or "unknown")),
+            "INSERT INTO learning_experiences(session_id,language,topic,kind,action,content,error,model_version,provider,tool_version,skill_version,environment_version,compatibility,context_json,outcome,recovery,evidence_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (session_id, str(language), str(topic), str(kind), str(action or ""), text[:20000], str(error or "")[:10000] or None, model_version, provider, tool_version, skill_version, environment_version, str(compatibility or "unknown"), json.dumps(context or {}, ensure_ascii=False)[:20000], str(outcome or "")[:5000] or None, str(recovery or "")[:5000] or None, json.dumps(evidence or [], ensure_ascii=False)[:20000]),
         )
 
     @staticmethod
     def personal_experiences(language, topic, limit=12):
         return fetch_all(
-            "SELECT id,kind,action,content,error,model_version,provider,tool_version,skill_version,environment_version,compatibility,created_at FROM learning_experiences WHERE language=? AND topic=? ORDER BY id DESC LIMIT ?",
+            "SELECT id,kind,action,content,error,model_version,provider,tool_version,skill_version,environment_version,compatibility,context_json,outcome,recovery,evidence_json,created_at FROM learning_experiences WHERE language=? AND topic=? ORDER BY id DESC LIMIT ?",
             (str(language), str(topic), max(1,min(int(limit),50))),
         )
 
