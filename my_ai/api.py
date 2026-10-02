@@ -1461,7 +1461,7 @@ async def session_event_endpoint(session_id: int, request: Request):
     recover_session(session_id, user["id"])
     body = await request.json()
     from .session_lifecycle import append_event
-    return append_event(session_id, str(body.get("event_type") or "custom"), dict(body.get("payload") or {}))
+    return append_event(session_id, str(body.get("event_type") or "custom"), dict(body.get("payload") or {}), user["id"])
 
 @app.get("/sessions/{session_id}/integrity")
 def session_integrity_endpoint(session_id: int, request: Request):
@@ -1474,24 +1474,24 @@ async def stream_open_endpoint(session_id: int, request: Request):
     user = require_user(request)
     recover_session(session_id, user["id"])
     body = await request.json()
-    return open_stream(session_id, str(body.get("context") or ""))
+    return open_stream(session_id, str(body.get("context") or ""), user["id"])
 
 @app.post("/streams/{stream_id}/chunk")
 async def stream_chunk_endpoint(stream_id: str, request: Request):
-    require_user(request)
+    user = require_user(request)
     body = await request.json()
-    return stream_chunk(stream_id, str(body.get("chunk") or ""), body.get("sequence"))
+    return stream_chunk(stream_id, str(body.get("chunk") or ""), body.get("sequence"), user["id"])
 
 @app.post("/streams/{stream_id}/reconnect")
 def stream_reconnect_endpoint(stream_id: str, request: Request):
-    require_user(request)
-    return reconnect_stream(stream_id)
+    user = require_user(request)
+    return reconnect_stream(stream_id, user["id"])
 
 @app.post("/streams/{stream_id}/close")
 async def stream_close_endpoint(stream_id: str, request: Request):
-    require_user(request)
+    user = require_user(request)
     body = await request.json()
-    return close_stream(stream_id, str(body.get("status") or "completed"))
+    return close_stream(stream_id, str(body.get("status") or "completed"), user["id"])
 
 @app.post("/state/export")
 def state_export_endpoint(request: Request, path: str):
