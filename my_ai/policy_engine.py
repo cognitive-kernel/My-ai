@@ -5,6 +5,7 @@ from fastapi import HTTPException
 
 from .access_policy import permission_for_path, read_only_blocked, is_public_path
 from .auth import tool_allowed
+from .capability_policy import capability_allowed
 
 @dataclass(frozen=True)
 class PolicyDecision:
@@ -31,6 +32,8 @@ class PolicyEngine:
         tool, action = permission
         if user is None:
             return PolicyDecision(False, tool, action, "authentication_required")
+        if not capability_allowed(user, tool, action):
+            return PolicyDecision(False, tool, action, "capability_denied")
         if user["role"] == "admin":
             return PolicyDecision(True, tool, action)
         if not tool_allowed(user, tool, action):
