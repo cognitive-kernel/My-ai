@@ -61,7 +61,17 @@ def import_state(source: str | Path, *, allow_migration: bool = False) -> dict[s
             placeholders=",".join("?" for _ in columns)
             conn.executemany(f"INSERT INTO {table} ({','.join(columns)}) VALUES ({placeholders})", [[row.get(c) for c in columns] for row in rows])
         conn.commit()
-    return {"restored":True,"format":payload["data"]["format"],"sha256":verification["actual"]}
+        counts = {}
+        for table in TABLES:
+            try:
+                counts[table] = int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            except sqlite3.OperationalError:
+                counts[table] = 0
+        expected_counts = {table: len(payload["data"]["tables"].get(table, [])) for table in TABLES}
+        if counts != expected_counts:
+            raise RuntimeError(f"State restore integrity mismatch: expected={expected_counts} actual={counts}")
+        conn.execute("PRAGMA foreign_keys=ON")
+    return {"restored":True,"format":payload["data"]["format"],"sha256":verification["actual"],"table_counts":counts,"integrity_verified":True}
 
 
 def database_snapshot(destination: str | Path) -> str:
