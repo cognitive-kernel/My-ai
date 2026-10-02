@@ -82,8 +82,8 @@ class WebLearner:
                     if target.tzinfo is None:
                         target = target.replace(tzinfo=timezone.utc)
                     return min(cls._max_backoff, max(0.0, target.timestamp() - datetime.now(timezone.utc).timestamp()))
-                except (TypeError, ValueError, OverflowError):
-                    pass
+                except (TypeError, ValueError, OverflowError) as exc:
+                    logger.debug("invalid Retry-After header: %s", exc)
         base = min(cls._max_backoff, 2.0 ** attempt)
         return min(cls._max_backoff, base * random.uniform(0.5, 1.0))
 
