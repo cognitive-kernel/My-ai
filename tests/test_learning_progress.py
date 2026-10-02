@@ -377,6 +377,7 @@ def test_scheduler_logs_full_worker_exception(monkeypatch, caplog):
     monkeypatch.setattr("my_ai.scheduler.LearningEngine", FakeEngine)
     monkeypatch.setattr("my_ai.scheduler.StudyScheduler._wait_for_resources", staticmethod(lambda stop_event: {}))
     scheduler = StudyScheduler(interval_seconds=1)
+    monkeypatch.setattr(scheduler, "_renew_lease", lambda language: True)
     class StopOnce:
         def __init__(self):
             self.stopped = False
