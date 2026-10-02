@@ -26,6 +26,7 @@ class LearningEngine:
         from .settings_store import get_bool
         if not get_bool("learning.personal_experience", True):
             return None
+        execute("CREATE TABLE IF NOT EXISTS learning_experiences (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, language TEXT NOT NULL, topic TEXT NOT NULL, kind TEXT NOT NULL, action TEXT NOT NULL DEFAULT '', content TEXT NOT NULL, error TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
         text=str(content or "").strip()
         if not text and not error:
             return None
