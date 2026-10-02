@@ -144,3 +144,23 @@ def test_custom_provider_missing_endpoint_is_rejected(monkeypatch):
         assert "base URL" in str(exc)
     else:
         raise AssertionError("Expected custom provider configuration error")
+
+
+def test_create_llm_uses_provider_adapter_registry(monkeypatch):
+    from my_ai import infra as infra_pkg  # import package to keep this test explicit
+    from my_ai import llm as module
+    monkeypatch.setattr(module, "_runtime_setting", lambda key, fallback=None: "custom-openai-compatible" if key == "llm.provider" else fallback)
+    monkeypatch.setattr(module, "_settings", lambda: type("S", (), {
+        "offline_strict": False,
+        "openai_api_key": "",
+        "openai_base_url": "http://unused",
+        "openai_model": "unused",
+    })())
+    values = {
+        "llm.custom.base_url": "http://custom",
+        "llm.custom.model": "custom-model",
+        "llm.custom.api_key": "custom-key",
+    }
+    monkeypatch.setattr(module, "_runtime_setting", lambda key, fallback=None: {"llm.provider": "custom-openai-compatible", **values}.get(key, fallback))
+    client = module.create_llm()
+    assert client.provider_name == "custom-openai-compatible"
