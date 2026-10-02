@@ -60,3 +60,54 @@ def test_ollama_client_uses_central_health_manager(monkeypatch):
     if settings.coding_model != settings.fallback_model:
         assert client.model == settings.fallback_model
         assert client.route_reason == "preflight_fallback"
+
+
+def test_ollama_chat_retries_then_succeeds_without_fallback(monkeypatch):
+    from my_ai import llm as llm_module
+    calls = []
+
+    class Response:
+        def __init__(self, ok): self.ok = ok
+        def raise_for_status(self):
+            if not self.ok: raise httpx.ConnectError("temporary")
+        def json(self): return {"message": {"content": "OK"}}
+
+    def fake_post(url, **kwargs):
+        calls.append(kwargs["json"]["model"])
+        return Response(len(calls) >= 2)
+
+    monkeypatch.setattr(llm_module.httpx, "post", fake_post)
+    monkeypatch.setattr(llm_module.OllamaClient, "_preflight_model", lambda self, requested, task: requested)
+    monkeypatch.setattr(llm_module.OllamaClient, "_backoff", lambda self, attempt: None)
+    monkeypatch.setattr(llm_module.OllamaClient, "_retry_attempts", lambda self: 2)
+    client = llm_module.OllamaClient()
+    assert client.chat("hello") == "OK"
+    assert len(calls) == 2
+    assert calls[0] == calls[1] == client.default_model
+
+
+def test_ollama_chat_uses_second_fallback_after_retry_exhaustion(monkeypatch):
+    from my_ai import llm as llm_module
+    calls = []
+    primary = settings.ollama_model
+    fallback = settings.fallback_model if settings.fallback_model != primary else settings.coding_model
+
+    class Response:
+        def __init__(self, model): self.model = model
+        def raise_for_status(self):
+            if self.model == primary: raise httpx.ConnectError("primary down")
+        def json(self): return {"message": {"content": "fallback-ok"}}
+
+    def fake_post(url, **kwargs):
+        model = kwargs["json"]["model"]; calls.append(model); return Response(model)
+
+    monkeypatch.setattr(llm_module.httpx, "post", fake_post)
+    monkeypatch.setattr(llm_module.OllamaClient, "_preflight_model", lambda self, requested, task: requested)
+    monkeypatch.setattr(llm_module.OllamaClient, "_backoff", lambda self, attempt: None)
+    monkeypatch.setattr(llm_module.OllamaClient, "_retry_attempts", lambda self: 2)
+    client = llm_module.OllamaClient()
+    client.fallback_chain = [fallback]
+    assert client.chat("hello") == "fallback-ok"
+    assert calls[:2] == [primary, primary]
+    assert calls[2] == fallback
+    assert client.model == fallback
