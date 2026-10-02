@@ -205,3 +205,4 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 - Event Bus، Execution Budget، Versioned Cache و Parallel Execution به‌عنوان primitives لایه Agent پیشرفته اضافه شده‌اند.
 - Configuration Registry اکنون import/export را از UI نیز در اختیار دارد.
 - این قابلیت‌ها تا اجرای تست‌های واقعی و regression verification، در roadmap به‌عنوان تکمیل‌شده علامت نخورده‌اند.
+- Context assembly با priority/budget و verification با evidence/confidence نیز به‌صورت primitive مستقل اضافه شده‌اند.
