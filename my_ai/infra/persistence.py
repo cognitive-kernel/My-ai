@@ -35,7 +35,9 @@ CREATE TABLE IF NOT EXISTS help_updates (id INTEGER PRIMARY KEY AUTOINCREMENT, c
 CREATE TABLE IF NOT EXISTS security_scans (id INTEGER PRIMARY KEY AUTOINCREMENT, project_path TEXT NOT NULL, status TEXT NOT NULL, summary TEXT NOT NULL, findings TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS learning_review_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL, status TEXT NOT NULL, added_count INTEGER NOT NULL DEFAULT 0, update_count INTEGER NOT NULL DEFAULT 0, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS fix_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT NOT NULL, patch TEXT, test_result TEXT, activated INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);\nCREATE TABLE IF NOT EXISTS decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT NOT NULL, decision TEXT NOT NULL, details TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);\nCREATE TABLE IF NOT EXISTS retrieval_judgments (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT NOT NULL, knowledge_id INTEGER NOT NULL, relevant INTEGER NOT NULL, score REAL NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS fix_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT NOT NULL, patch TEXT, test_result TEXT, activated INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS decision_log (id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT NOT NULL, decision TEXT NOT NULL, details TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS retrieval_judgments (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT NOT NULL, knowledge_id INTEGER NOT NULL, relevant INTEGER NOT NULL, score REAL NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS knowledge_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, knowledge_id INTEGER NOT NULL, user_id INTEGER, action TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(knowledge_id) REFERENCES knowledge(id) ON DELETE CASCADE);
 
 CREATE TABLE IF NOT EXISTS users (
@@ -145,6 +147,10 @@ def init_db() -> None:
         cols_sessions=[r[1] for r in conn.execute("PRAGMA table_info(chat_sessions)").fetchall()]
         if "pinned" not in cols_sessions: conn.execute("ALTER TABLE chat_sessions ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
         if "user_id" not in cols_sessions: conn.execute("ALTER TABLE chat_sessions ADD COLUMN user_id INTEGER")
+        cols_experiences=[r[1] for r in conn.execute("PRAGMA table_info(learning_experiences)").fetchall()]
+        for column, ddl in (("model_version","TEXT"),("provider","TEXT"),("tool_version","TEXT"),("skill_version","TEXT"),("environment_version","TEXT"),("compatibility","TEXT NOT NULL DEFAULT 'unknown'")):
+            if column not in cols_experiences:
+                conn.execute(f"ALTER TABLE learning_experiences ADD COLUMN {column} {ddl}")
         cols_learning=[r[1] for r in conn.execute("PRAGMA table_info(learning_sessions)").fetchall()]
         if "progress_percent" not in cols_learning: conn.execute("ALTER TABLE learning_sessions ADD COLUMN progress_percent REAL NOT NULL DEFAULT 0")
         if "phase" not in cols_learning: conn.execute("ALTER TABLE learning_sessions ADD COLUMN phase TEXT NOT NULL DEFAULT 'starting'")
