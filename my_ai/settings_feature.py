@@ -27,6 +27,8 @@ from .backup_manager import backup as backup_database, restore as restore_databa
 from .learning_catalog import add_source, list_sources, review_source, update_content_hash
 from .backup_manager import backup as backup_database, restore as restore_database
 from .control_plane import list_records, get_record, put_record, set_enabled, delete_record, start_action, update_action, get_action, list_actions, namespace_catalog
+from .registries import publish_prompt, activate_prompt, publish_policy, register_tool, list_tools
+from .plugin_registry import propose_plugin, approve_plugin, reject_plugin
 
 router = APIRouter(tags=["settings"])
 _workers = ThreadPoolExecutor(max_workers=1, thread_name_prefix="myai-learning")
@@ -905,6 +907,76 @@ def settings_profile_load(name: str, request: Request):
         return {"name": name, "settings": load_profile(name), "active": active_profile() == name}
     except KeyError:
         raise HTTPException(404, "Profile not found.")
+
+class PromptRegistryRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    text: str = Field(min_length=1, max_length=100000)
+    task: str = Field(default="default", max_length=120)
+    version: str = Field(default="1", max_length=120)
+    enabled: bool = False
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+class PolicyRegistryRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    policy: dict[str, Any] = Field(default_factory=dict)
+    version: str = Field(default="1", max_length=120)
+    enabled: bool = False
+
+class ToolRegistryRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    spec: dict[str, Any] = Field(default_factory=dict)
+    enabled: bool = False
+
+class PluginProposalRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    source: str = Field(min_length=1, max_length=2000)
+    version: str = Field(default="", max_length=120)
+    capabilities: list[str] = Field(default_factory=list)
+    checksum: str = Field(default="", max_length=500)
+
+@router.get("/settings/prompts")
+def settings_prompts(request: Request):
+    require_admin(request); return {"items": list_records("prompts.registry")}
+
+@router.post("/settings/prompts")
+def settings_prompt_publish(payload: PromptRegistryRequest, request: Request):
+    user=require_admin(request); item=publish_prompt(payload.name,payload.text,task=payload.task,version=payload.version,enabled=payload.enabled,metadata=payload.metadata); audit(user,"prompts","write","200",payload.name); return item
+
+@router.post("/settings/prompts/{name}/activate")
+def settings_prompt_activate(name: str, request: Request):
+    user=require_admin(request); item=activate_prompt(name); audit(user,"prompts","activate","200",name); return item
+
+@router.get("/settings/policies")
+def settings_policies(request: Request):
+    require_admin(request); return {"items": list_records("policies.registry")}
+
+@router.post("/settings/policies")
+def settings_policy_publish(payload: PolicyRegistryRequest, request: Request):
+    user=require_admin(request); item=publish_policy(payload.name,payload.policy,version=payload.version,enabled=payload.enabled); audit(user,"policies","write","200",payload.name); return item
+
+@router.get("/settings/tools")
+def settings_tools(request: Request):
+    require_admin(request); return {"items": list_tools()}
+
+@router.post("/settings/tools")
+def settings_tool_register(payload: ToolRegistryRequest, request: Request):
+    user=require_admin(request); item=register_tool(payload.name,payload.spec,enabled=payload.enabled); audit(user,"tools","write","200",payload.name); return item
+
+@router.get("/settings/plugins")
+def settings_plugins(request: Request):
+    require_admin(request); return {"items": list_records("plugins.registry")}
+
+@router.post("/settings/plugins")
+def settings_plugin_propose(payload: PluginProposalRequest, request: Request):
+    user=require_admin(request); item=propose_plugin(payload.name,payload.source,payload.version,payload.capabilities,payload.checksum); audit(user,"plugins","propose","200",payload.name); return item
+
+@router.post("/settings/plugins/{name}/approve")
+def settings_plugin_approve(name: str, request: Request):
+    user=require_admin(request); item=approve_plugin(name); audit(user,"plugins","approve","200",name); return item
+
+@router.post("/settings/plugins/{name}/reject")
+def settings_plugin_reject(name: str, request: Request, reason: str = ""):
+    user=require_admin(request); item=reject_plugin(name,reason); audit(user,"plugins","reject","200",name); return item
 
 @router.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request):
