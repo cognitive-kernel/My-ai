@@ -20,6 +20,7 @@ from .llm import create_llm
 from .provider_catalog import list_providers, upsert_provider, delete_provider, list_models, upsert_model, delete_model, export_catalog
 from .settings_store import get_setting, set_setting, get_bool, get_int, get_github_settings, get_setting_registry, get_configuration_schema_version, reset_setting, export_registered_settings, import_registered_settings
 from .ui_actions import list_ui_actions
+from .metrics import snapshot as metrics_snapshot
 from .control_plane import list_records, get_record, put_record, set_enabled, delete_record, start_action, update_action, get_action, list_actions, namespace_catalog
 
 router = APIRouter(tags=["settings"])
@@ -386,6 +387,11 @@ def _run_course(course_id: int) -> None:
 
 class SettingsImportRequest(BaseModel):
     values: dict[str, Any]
+
+@router.get("/settings/metrics")
+def settings_metrics(request: Request):
+    require_admin(request)
+    return metrics_snapshot()
 
 @router.get("/settings/ui-actions")
 def settings_ui_actions(request: Request):
