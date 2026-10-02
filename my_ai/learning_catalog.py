@@ -27,7 +27,12 @@ SCHEMA="""CREATE TABLE IF NOT EXISTS learning_source_catalog(
 
 
 def ensure_schema():
-    with connect() as c: c.executescript(SCHEMA); c.commit()
+    with connect() as c:
+        c.executescript(SCHEMA)
+        columns={str(r["name"]) for r in c.execute("PRAGMA table_info(learning_source_catalog)").fetchall()}
+        if "content_version" not in columns:
+            c.execute("ALTER TABLE learning_source_catalog ADD COLUMN content_version INTEGER NOT NULL DEFAULT 1")
+        c.commit()
 
 
 def add_source(url, *, course_id=None, topic_id=None, source_type="custom", title="", priority=100, weight=1,
