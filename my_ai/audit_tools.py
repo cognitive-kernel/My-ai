@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def find_silent_failures(root: Path = ROOT) -> list[dict[str, Any]]:
-    findings=[]
+    findings: list[dict[str, Any]]=[]
     for path in sorted((root / "my_ai").rglob("*.py")):
         try: tree=ast.parse(path.read_text(encoding="utf-8"),filename=str(path))
         except (OSError,SyntaxError) as exc:
@@ -26,13 +26,13 @@ def find_silent_failures(root: Path = ROOT) -> list[dict[str, Any]]:
                     "intentional": bool(safe),
                     "classification": "intentional_fallback" if safe else "bug_risk",
                 })
-            elif all(isinstance(x,ast.Expr) and isinstance(getattr(x,"value",None),ast.Constant) and isinstance(x.value.value,str) for x in node.body):
+            elif all(isinstance(x,ast.Expr) and isinstance(getattr(x,"value",None),ast.Constant) and isinstance(x.value, ast.Constant) and isinstance(x.value.value,str) for x in node.body):
                 findings.append({"path":str(path.relative_to(root)),"line":node.lineno,"kind":"except_docstring_only","intentional":False,"classification":"bug_risk"})
     return findings
 
 
 def architecture_inventory(root: Path = ROOT) -> dict[str, Any]:
-    modules={}
+    modules: dict[str, Any]={}
     for path in sorted((root/"my_ai").rglob("*.py")):
         rel=str(path.relative_to(root))
         try:
@@ -51,7 +51,7 @@ def architecture_inventory(root: Path = ROOT) -> dict[str, Any]:
 
 
 def api_route_inventory(app) -> list[dict[str, Any]]:
-    result=[]
+    result: list[dict[str, Any]]=[]
     for route in app.routes:
         methods=sorted(getattr(route,"methods",set()) or [])
         path=getattr(route,"path",None)
@@ -60,7 +60,7 @@ def api_route_inventory(app) -> list[dict[str, Any]]:
 
 
 def configuration_inventory(root: Path = ROOT) -> list[dict[str, str]]:
-    result=[]
+    result: list[dict[str, Any]]=[]
     pattern=re.compile(r'os\.getenv\(["\']([A-Z][A-Z0-9_]+)["\']')
     for path in sorted((root / 'my_ai').rglob('*.py')):
         try: source=path.read_text(encoding='utf-8')
@@ -69,7 +69,7 @@ def configuration_inventory(root: Path = ROOT) -> list[dict[str, str]]:
     return result
 
 def route_inventory(root: Path = ROOT) -> list[dict[str, str]]:
-    result = []
+    result: list[dict[str, Any]] = []
     for path in sorted((root / "my_ai").rglob("*.py")):
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
