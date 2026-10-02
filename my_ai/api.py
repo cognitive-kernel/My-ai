@@ -42,7 +42,7 @@ from .voice import status as voice_engine_status, transcribe, synthesize
 from .metrics import snapshot as metrics_snapshot, record_http_request, record_http_error
 from .platform import import_encrypted_database, restore_encrypted_backup
 from .self_diagnostics import SelfDiagnosticsMonitor, latest_report, report_history, paginated_report_history
-from .tooling import catalog as tool_catalog, doctor as tool_doctor, run_project_tool, run_python_snippet, sqlserver_query, sqlserver_schema, mysql_query, mysql_schema, sqlite_query, sqlite_schema
+from .tooling import catalog as tool_catalog, doctor as tool_doctor, tool_health, run_project_tool, run_python_snippet, sqlserver_query, sqlserver_schema, mysql_query, mysql_schema, sqlite_query, sqlite_schema
 from .runtime_prerequisites import startup_check, runtime_status
 from .local_files import WORKSPACE_ROOT
 from .settings_feature import shutdown_course_workers
@@ -641,6 +641,13 @@ def retrieval_judgment(query: str, knowledge_id: int, relevant: bool, score: flo
 def eval_retrieval_api(request:Request):
     require_admin(request)
     return eval_retrieval()
+
+@app.get("/tools/health")
+def tools_health_api(request: Request):
+    user=require_admin(request)
+    result=tool_health()
+    audit(user,"tools","health-check","200","toolchain health")
+    return result
 
 @app.get("/self-update/preview")
 def self_update_preview_api(request:Request):
