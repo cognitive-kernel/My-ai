@@ -7,31 +7,49 @@ import secrets
 from pathlib import Path
 from typing import Any
 SETTING_REGISTRY: dict[str, dict[str, Any]] = {
-    "logging.level": {"type":"enum","default":"WARNING","choices":["DEBUG","INFO","WARNING","ERROR","CRITICAL"],"description":"Minimum console log level."},
-    "learning.interval_seconds": {"type":"int","default":3600,"min":60,"max":86400,"description":"Learning interval in seconds."},
-    "learning.max_retries": {"type":"int","default":5,"min":1,"max":20,"description":"Maximum learning retries."},
-    "resources.cpu_percent": {"type":"float","default":70.0,"min":1.0,"max":100.0,"description":"Maximum CPU percentage."},
-    "resources.cpu_threads": {"type":"int","default":8,"min":1,"max":128,"description":"Maximum CPU threads."},
-    "resources.ram_percent": {"type":"float","default":80.0,"min":1.0,"max":100.0,"description":"Maximum RAM percentage."},
-    "resources.gpu_layers": {"type":"int","default":0,"min":0,"max":128,"description":"GPU layers."},
-    "llm.provider": {"type":"enum","default":"auto","choices":["auto","ollama","openai-compatible","custom-openai-compatible"],"description":"Active LLM provider."},
-    "llm.retry_attempts": {"type":"int","default":2,"min":1,"max":5,"description":"LLM retry attempts."},
-    "llm.timeout_seconds": {"type":"float","default":300.0,"min":1.0,"max":3600.0,"description":"LLM timeout in seconds."},
-    "llm.custom.provider": {"type":"enum","default":"openai-compatible","choices":["openai-compatible"],"description":"Protocol used by the custom LLM provider."},
-    "llm.custom.base_url": {"type":"text","default":"","max_length":1000,"description":"Base URL for a custom OpenAI-compatible LLM endpoint."},
-    "llm.custom.model": {"type":"text","default":"","max_length":300,"description":"Model ID exposed by the custom LLM provider."},
-    "llm.custom.api_key": {"type":"text","default":"","max_length":10000,"secret":True,"description":"API key for the custom LLM provider."},
-    "learning.max_concurrent_workers": {"type":"int","default":2,"min":1,"max":16,"description":"Maximum concurrent learning workers."},
-    "learning.source_timeout_seconds": {"type":"float","default":8.0,"min":1.0,"max":300.0,"description":"Learning source timeout."},
-    "learning.source_max_chars": {"type":"int","default":12000,"min":1000,"max":200000,"description":"Maximum source characters retained."},
-    "scheduler.interval_seconds": {"type":"int","default":3600,"min":60,"max":86400,"description":"Scheduler interval."},
-    "scheduler.auto_resume": {"type":"enum","default":"false","choices":["true","false"],"description":"Automatically resume learning workers."},
-    "execution.timeout_seconds": {"type":"int","default":10,"min":1,"max":3600,"description":"Execution timeout."},
-    "learning.personal_experience": {"type":"enum","default":"true","choices":["true","false"],"description":"Store personal learning experiences."},
+    "logging.level": {"version":1,type":"enum","default":"WARNING","choices":["DEBUG","INFO","WARNING","ERROR","CRITICAL"],"description":"Minimum console log level."},
+    "learning.interval_seconds": {"version":1,type":"int","default":3600,"min":60,"max":86400,"description":"Learning interval in seconds."},
+    "learning.max_retries": {"version":1,type":"int","default":5,"min":1,"max":20,"description":"Maximum learning retries."},
+    "resources.cpu_percent": {"version":1,type":"float","default":70.0,"min":1.0,"max":100.0,"description":"Maximum CPU percentage."},
+    "resources.cpu_threads": {"version":1,type":"int","default":8,"min":1,"max":128,"description":"Maximum CPU threads."},
+    "resources.ram_percent": {"version":1,type":"float","default":80.0,"min":1.0,"max":100.0,"description":"Maximum RAM percentage."},
+    "resources.gpu_layers": {"version":1,type":"int","default":0,"min":0,"max":128,"description":"GPU layers."},
+    "llm.provider": {"version":1,type":"enum","default":"auto","choices":["auto","ollama","openai-compatible","custom-openai-compatible"],"description":"Active LLM provider."},
+    "llm.retry_attempts": {"version":1,type":"int","default":2,"min":1,"max":5,"description":"LLM retry attempts."},
+    "llm.timeout_seconds": {"version":1,type":"float","default":300.0,"min":1.0,"max":3600.0,"description":"LLM timeout in seconds."},
+    "llm.custom.provider": {"version":1,type":"enum","default":"openai-compatible","choices":["openai-compatible"],"description":"Protocol used by the custom LLM provider."},
+    "llm.custom.base_url": {"version":1,type":"text","default":"","max_length":1000,"description":"Base URL for a custom OpenAI-compatible LLM endpoint."},
+    "llm.custom.model": {"version":1,type":"text","default":"","max_length":300,"description":"Model ID exposed by the custom LLM provider."},
+    "llm.custom.api_key": {"version":1,type":"text","default":"","max_length":10000,"secret":True,"description":"API key for the custom LLM provider."},
+    "learning.max_concurrent_workers": {"version":1,type":"int","default":2,"min":1,"max":16,"description":"Maximum concurrent learning workers."},
+    "learning.source_timeout_seconds": {"version":1,type":"float","default":8.0,"min":1.0,"max":300.0,"description":"Learning source timeout."},
+    "learning.source_max_chars": {"version":1,type":"int","default":12000,"min":1000,"max":200000,"description":"Maximum source characters retained."},
+    "scheduler.interval_seconds": {"version":1,type":"int","default":3600,"min":60,"max":86400,"description":"Scheduler interval."},
+    "scheduler.auto_resume": {"version":1,type":"enum","default":"false","choices":["true","false"],"description":"Automatically resume learning workers."},
+    "execution.timeout_seconds": {"version":1,type":"int","default":10,"min":1,"max":3600,"description":"Execution timeout."},
+    "learning.personal_experience": {"version":1,type":"enum","default":"true","choices":["true","false"],"description":"Store personal learning experiences."},
 }
+
+CONFIG_SCHEMA_VERSION = 1
 
 def get_setting_registry() -> dict[str, dict[str, Any]]:
     return {k: dict(v) for k, v in SETTING_REGISTRY.items()}
+
+def get_configuration_schema_version() -> int:
+    return CONFIG_SCHEMA_VERSION
+
+def migrate_configuration() -> int:
+    ensure_schema()
+    with connect() as conn:
+        row = conn.execute("SELECT COALESCE(MAX(version), 0) AS version FROM app_settings_migrations").fetchone()
+        current = int(row["version"]) if row else 0
+        if current < CONFIG_SCHEMA_VERSION:
+            conn.execute(
+                "INSERT INTO app_settings_migrations(version, description) VALUES(?, ?)",
+                (CONFIG_SCHEMA_VERSION, "Initial Configuration Registry schema."),
+            )
+            conn.commit()
+        return CONFIG_SCHEMA_VERSION
 
 def validate_registered_setting(key: str, value: Any) -> Any:
     meta = SETTING_REGISTRY.get(key)
@@ -69,7 +87,8 @@ SCHEMA = """CREATE TABLE IF NOT EXISTS app_settings (
  key TEXT PRIMARY KEY,
  value TEXT NOT NULL,
  secret INTEGER NOT NULL DEFAULT 0,
- updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+ updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ schema_version INTEGER NOT NULL DEFAULT 1
 );"""
 
 def _key() -> bytes:
@@ -106,10 +125,20 @@ def ensure_schema() -> None:
     # multiple writes and can contend with learning/background transactions.
     with connect() as conn:
         conn.executescript(SCHEMA)
+        columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(app_settings)").fetchall()}
+        if "schema_version" not in columns:
+            conn.execute("ALTER TABLE app_settings ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS app_settings_migrations (
+                version INTEGER PRIMARY KEY,
+                applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                description TEXT NOT NULL
+            )
+        """)
         conn.commit()
 
 def get_setting(key: str, default: Any = None, *, secret: bool = False) -> Any:
-    ensure_schema()
+    migrate_configuration()
     with connect() as conn:
         row = conn.execute("SELECT value,secret FROM app_settings WHERE key=?", (key,)).fetchone()
     if not row:
@@ -120,16 +149,16 @@ def get_setting(key: str, default: Any = None, *, secret: bool = False) -> Any:
 
 def set_setting(key: str, value: Any, *, secret: bool = False) -> None:
     assert_mutation_allowed(f"setting:{key}")
-    ensure_schema()
+    migrate_configuration()
     if key in SETTING_REGISTRY:
         value = validate_registered_setting(key, value)
     text = "" if value is None else str(value)
     stored = _encrypt(text) if secret and text else text
     with connect() as conn:
         conn.execute(
-            """INSERT INTO app_settings(key,value,secret) VALUES(?,?,?)
+            """INSERT INTO app_settings(key,value,secret,schema_version) VALUES(?,?,?,?)
                ON CONFLICT(key) DO UPDATE SET value=excluded.value,secret=excluded.secret,updated_at=CURRENT_TIMESTAMP""",
-            (key, stored, 1 if secret else 0),
+            (key, stored, 1 if secret else 0, int(SETTING_REGISTRY.get(key, {}).get("version", CONFIG_SCHEMA_VERSION))),
         )
         conn.commit()
 
