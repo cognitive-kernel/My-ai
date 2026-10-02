@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from .agent import Agent
 from .command_policy import parse_command
 from .config import settings
-from .settings_store import get_bool, get_int, get_github_settings, set_setting, apply_persisted_settings
+from .settings_store import get_bool, get_int, get_float, get_setting, get_github_settings, set_setting, apply_persisted_settings
 from .curriculum import canonical_language,LANGUAGE_CURRICULA
 from .db import fetch_all,init_db,execute,remember_knowledge,connect
 from .infra.persistence import _semantic_duplicate, _knowledge_hash
