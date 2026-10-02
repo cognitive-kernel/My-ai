@@ -6,6 +6,9 @@ from threading import RLock
 from typing import Any, Callable
 import time
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -41,5 +44,8 @@ class EventBus:
         with self._lock:
             handlers = list(self._handlers.get(name, ())) + list(self._handlers.get("*", ()))
         for handler in handlers:
-            handler(event)
+            try:
+                handler(event)
+            except Exception:
+                logger.exception("event handler failed", extra={"event": name, "trace_id": trace_id})
         return event
