@@ -34,7 +34,8 @@ def test_task_graph_detects_ready_dependencies():
 
 def test_agent_system_behavior_and_persona_are_configuration_driven(monkeypatch):
     values = {"agent.system_behavior": "Be concise.", "agent.persona": "Technical maintainer."}
-    import my_ai.agent as agent_module
+    import importlib
+    agent_module = importlib.import_module("my_ai.agent")
     monkeypatch.setattr(agent_module, "get_setting", lambda key, default="": values.get(key, default))
     Agent = agent_module.Agent
     system = Agent(llm=object())._configured_system()
