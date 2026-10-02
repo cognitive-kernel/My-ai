@@ -132,30 +132,49 @@ class OpenAICompatibleClient:
         if getattr(_settings(),"offline_strict",False): raise LLMError("OpenAI is disabled in offline strict mode.")
         self.base_url=_settings().openai_base_url; self.model=_settings().openai_model; self.api_key=_settings().openai_api_key
         if not self.api_key: raise LLMError("OPENAI_API_KEY is required when LLM_PROVIDER=openai")
+    def _retry_attempts(self) -> int:
+        return max(1, min(5, int(getattr(_settings(), "llm_retry_attempts", 2))))
+
+    def _timeout(self) -> float:
+        return max(1.0, float(getattr(_settings(), "llm_timeout_seconds", 300)))
+
+    def _backoff(self, attempt: int) -> None:
+        delay=max(0.0,min(10.0,float(getattr(_settings(),"llm_retry_backoff_seconds",0.5))))
+        if delay: time.sleep(delay*(2**max(0,attempt-1)))
+
     def stream_chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None)->Iterator[str]:
-        items=[{"role":i.get("role"),"content":i.get("content")} for i in history or () if i.get("role") in {"user","assistant"} and isinstance(i.get("content"),str)]; items.append({"role":"user","content":message}); payload={"model":self.model,"input":items,"stream":True}; payload.update({"instructions":system} if system else {}); started=time.perf_counter()
-        try:
-            with httpx.stream("POST",f"{self.base_url}/responses",headers={"Authorization":f"Bearer {self.api_key}","Content-Type":"application/json"},json=payload,timeout=getattr(_settings(),"llm_timeout_seconds",300)) as response:
-                response.raise_for_status()
-                for line in response.iter_lines():
-                    if not line or not line.startswith("data:"): continue
-                    raw=line[5:].strip()
-                    if raw=="[DONE]": continue
-                    data=json.loads(raw)
-                    if data.get("type")=="response.output_text.delta" and isinstance(data.get("delta"),str): yield data["delta"]
-                    elif data.get("type")=="response.completed":
-                        usage=((data.get("response") or {}).get("usage") or {}); record_inference("openai",self.model,time.perf_counter()-started,prompt_tokens=usage.get("input_tokens"),output_tokens=usage.get("output_tokens"))
-        except (httpx.HTTPError,json.JSONDecodeError) as exc: record_error("openai",self.model); raise LLMError(f"OpenAI-compatible streaming request failed: {exc}") from exc
+        items=[{"role":i.get("role"),"content":i.get("content")} for i in history or () if i.get("role") in {"user","assistant"} and isinstance(i.get("content"),str)]; items.append({"role":"user","content":message}); payload={"model":self.model,"input":items,"stream":True}; started=time.perf_counter(); errors=[]
+        for attempt in range(1,self._retry_attempts()+1):
+            try:
+                with httpx.stream("POST",f"{self.base_url}/responses",headers={"Authorization":f"Bearer {self.api_key}","Content-Type":"application/json"},json=payload,timeout=self._timeout()) as response:
+                    response.raise_for_status()
+                    for line in response.iter_lines():
+                        if not line or not line.startswith("data:"): continue
+                        raw=line[5:].strip()
+                        if raw=="[DONE]": continue
+                        data=json.loads(raw)
+                        if data.get("type")=="response.output_text.delta" and isinstance(data.get("delta"),str): yield data["delta"]
+                        elif data.get("type")=="response.completed":
+                            usage=((data.get("response") or {}).get("usage") or {}); record_inference("openai",self.model,time.perf_counter()-started,prompt_tokens=usage.get("input_tokens"),output_tokens=usage.get("output_tokens"))
+                return
+            except (httpx.HTTPError,json.JSONDecodeError) as exc:
+                errors.append(f"attempt {attempt}: {exc}"); record_error("openai",self.model); record_route(message,self.model,f"failure_attempt_{attempt}")
+                if attempt < self._retry_attempts(): self._backoff(attempt)
+        raise LLMError("OpenAI-compatible streaming request failed: "+" | ".join(errors))
     def chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None)->str:
-        items=[{"role":i.get("role"),"content":i.get("content")} for i in history or () if i.get("role") in {"user","assistant"} and isinstance(i.get("content"),str)]; items.append({"role":"user","content":message}); payload={"model":self.model,"input":items}; payload.update({"instructions":system} if system else {}); started=time.perf_counter()
-        try:
-            response=httpx.post(f"{self.base_url}/responses",headers={"Authorization":f"Bearer {self.api_key}","Content-Type":"application/json"},json=payload,timeout=getattr(_settings(),"llm_timeout_seconds",300)); response.raise_for_status()
-        except httpx.HTTPError as exc: record_error("openai",self.model); raise LLMError(f"OpenAI-compatible request failed: {exc}") from exc
-        data=response.json(); usage=data.get("usage") if isinstance(data,dict) else {}; record_inference("openai",self.model,time.perf_counter()-started,prompt_tokens=(usage or {}).get("input_tokens"),output_tokens=(usage or {}).get("output_tokens"))
-        if isinstance(data.get("output_text"),str): return data["output_text"]
-        chunks=[c["text"] for i in data.get("output",[]) if isinstance(i,dict) for c in i.get("content",[]) if isinstance(c,dict) and isinstance(c.get("text"),str)]
-        if chunks: return "".join(chunks)
-        raise LLMError(f"Unexpected OpenAI response: {data}")
+        items=[{"role":i.get("role"),"content":i.get("content")} for i in history or () if i.get("role") in {"user","assistant"} and isinstance(i.get("content"),str)]; items.append({"role":"user","content":message}); payload={"model":self.model,"input":items}; payload.update({"instructions":system} if system else {}); started=time.perf_counter(); errors=[]
+        for attempt in range(1,self._retry_attempts()+1):
+            try:
+                response=httpx.post(f"{self.base_url}/responses",headers={"Authorization":f"Bearer {self.api_key}","Content-Type":"application/json"},json=payload,timeout=self._timeout()); response.raise_for_status()
+                data=response.json(); usage=data.get("usage") if isinstance(data,dict) else {}; record_inference("openai",self.model,time.perf_counter()-started,prompt_tokens=(usage or {}).get("input_tokens"),output_tokens=(usage or {}).get("output_tokens"))
+                if isinstance(data.get("output_text"),str): return data["output_text"]
+                chunks=[c["text"] for i in data.get("output",[]) if isinstance(i,dict) for c in i.get("content",[]) if isinstance(c,dict) and isinstance(c.get("text"),str)]
+                if chunks: return "".join(chunks)
+                raise LLMError(f"Unexpected OpenAI response: {data}")
+            except (httpx.HTTPError,LLMError,json.JSONDecodeError) as exc:
+                errors.append(f"attempt {attempt}: {exc}"); record_error("openai",self.model); record_route(message,self.model,f"failure_attempt_{attempt}")
+                if attempt < self._retry_attempts(): self._backoff(attempt)
+        raise LLMError("OpenAI-compatible request failed: "+" | ".join(errors))
 
 def create_llm(task:str|None=None):
     provider=_settings().llm_provider
