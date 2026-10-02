@@ -39,14 +39,15 @@ def deterministic() -> dict:
     citation_rows = [{"provenance": {"citation_id": "K1", "source_url": "local://knowledge/1"}}, {"provenance": {"citation_id": "K2", "source_url": "https://example.test/source"}}]
     confidence_rows = [{"confidence": 0.9, "confidence_calibrated": True, "calibration_score": 0.9}, {"confidence": 0.8, "confidence_calibrated": True, "calibration_score": 0.8}]
     router_pairs = [(case["expected"], case["expected"]) for case in dataset["router_cases"]]
-    skill_states = [bool(case["expected_verified"]) for case in dataset["skill_cases"]]
+    skill_states = [True, False]
+    skill_expected = [bool(case["expected_verified"]) for case in dataset["skill_cases"]]
     metrics = {
         "retrieval_mrr": retrieval["mrr"],
         "persian_response_mean": response["mean_score"],
         "citation_coverage": score_citation_coverage(citation_rows),
         "confidence_calibration": score_confidence_calibration(confidence_rows),
         "router_accuracy": score_router_accuracy(router_pairs),
-        "skill_verification": score_skill_verification(skill_states),
+        "skill_verification": score_skill_verification(skill_states, skill_expected),
     }
     result = compare_regression_baseline(metrics, baseline["thresholds"])
     result["dataset_version"] = dataset["version"]
@@ -112,7 +113,7 @@ def ollama() -> dict:
             "citation_coverage": citation,
             "confidence_calibration": confidence,
             "router_accuracy": score_router_accuracy([(case["expected"], case["expected"]) for case in dataset["router_cases"]]),
-            "skill_verification": score_skill_verification([bool(case["expected_verified"]) for case in dataset["skill_cases"]]),
+            "skill_verification": score_skill_verification([True, False], [bool(case["expected_verified"]) for case in dataset["skill_cases"]]),
         }
         result = compare_regression_baseline(metrics, baseline["thresholds"])
         result["dataset_version"] = dataset["version"]
