@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class StudyScheduler:
     def __init__(self, interval_seconds=None):
         self.interval_seconds=int(interval_seconds or settings.scheduler_interval_seconds); self._workers={}; self._review_stop=threading.Event(); self._monitor_thread=None
-        self.language="Python"; self.last_result=None; self.current_topic=None; self.stage="idle"; self.error=None; self._lock=threading.RLock(); self._worker_slots=threading.BoundedSemaphore(max(1,get_setting("scheduler.concurrency",settings.learning_max_concurrent_workers))); self._supervisor_stop=threading.Event(); self._supervisor_thread=None; self._lease_owner=uuid.uuid4().hex; self._lease_seconds=30.0
+        self.language="Python"; self.last_result=None; self.current_topic=None; self.stage="idle"; self.error=None; self._lock=threading.RLock(); self._worker_slots=threading.BoundedSemaphore(max(1,int(get_setting("scheduler.concurrency",settings.learning_max_concurrent_workers)))) self._supervisor_stop=threading.Event(); self._supervisor_thread=None; self._lease_owner=uuid.uuid4().hex; self._lease_seconds=30.0
     def start_learning_supervisor(self):
         if self._supervisor_thread and self._supervisor_thread.is_alive(): return
         self._supervisor_stop.clear(); self._supervisor_thread=threading.Thread(target=self._supervisor_loop,daemon=True); self._supervisor_thread.start()
@@ -141,7 +141,6 @@ class StudyScheduler:
                 try:
                     self._renew_lease(language)
                     self._wait_for_resources(stop_event)
-                    self._worker_slots = threading.BoundedSemaphore(max(1, get_setting("scheduler.concurrency", settings.learning_max_concurrent_workers)))
                     acquired=self._worker_slots.acquire(timeout=max(1.0,float(getattr(settings,"resource_wait_seconds",30))))
                     if not acquired:
                         raise TimeoutError("learning worker concurrency limit reached")
