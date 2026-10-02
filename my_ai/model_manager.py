@@ -78,7 +78,7 @@ class ModelManager:
 
     def fallback_chain(self, requested: str, *, timeout: float = 5.0) -> list[str]:
         available = self.available_models(timeout=timeout)
-        candidates = [settings.fallback_model, settings.ollama_model, settings.coding_model, settings.routing_model]
+        candidates = [item["model"] for item in self.inventory()]
         return list(dict.fromkeys(model for model in candidates if model and model != requested and model in available))
 
     def choose_fallback(self, requested: str, *, timeout: float = 5.0) -> str | None:
