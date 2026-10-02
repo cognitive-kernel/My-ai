@@ -39,6 +39,7 @@ async function loadRegistry(){
     }).join("")||"Registry خالی است";
   }catch(e){box.textContent="خطا: "+e.message}
 }
+function filterRegistry(query){ var q=String(query||"").toLowerCase(); var box=byId("settings-registry"); if(!box)return; Array.from(box.children).forEach(function(row){ row.style.display=(!q || row.textContent.toLowerCase().indexOf(q)>=0)?"":"none"; }); }
 async function resetRegisteredSetting(key){try{await req("/settings/registry/"+encodeURIComponent(key)+"/reset",{method:"POST"});setText("registryout","تنظیم "+key+" بازنشانی شد.");await loadSettings();await loadRegistry()}catch(e){setText("registryout","خطا: "+e.message)}}
 
 function byId(id) { return document.getElementById(id); }
