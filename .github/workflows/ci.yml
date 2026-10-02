@@ -51,7 +51,20 @@ jobs:
         with:
           name: architecture-e2e-diagnostics-${{ github.sha }}
           path: architecture-e2e.txt
-      - run: ruff check my_ai --select F
+      - name: Ruff F diagnostics
+        shell: bash
+        run: |
+          set +e
+          ruff check my_ai --select F > ruff-f.txt 2>&1
+          rc=$?
+          cat ruff-f.txt
+          if [ "$rc" -ne 0 ]; then exit "$rc"; fi
+      - name: Upload Ruff diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ruff-diagnostics-${{ github.sha }}
+          path: ruff-f.txt
       - run: mypy my_ai --ignore-missing-imports
       - run: bandit -r my_ai -q -lll
       - run: pip-audit
