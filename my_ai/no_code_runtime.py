@@ -23,6 +23,28 @@ def observability_policy(name, default=None): return configured("observability.d
 def prompt(name, default=None): return configured("prompts.registry",name,default)
 def policy(name, default=None): return configured("policies.registry",name,default)
 
+def learning_source(name, default=None): return configured("learning.sources",name,default)
+def learning_policy(name, default=None): return configured("learning.policy",name,default)
+def knowledge(name, default=None): return configured("knowledge.registry",name,default)
+def security_role(name, default=None): return configured("security.roles",name,default)
+def security_capability(name, default=None): return configured("security.capabilities",name,default)
+def security_approval(name, default=None): return configured("security.approvals",name,default)
+def filesystem_policy(name, default=None): return configured("security.filesystem",name,default)
+def subprocess_policy(name, default=None): return configured("security.subprocess",name,default)
+def scheduler_job(name, default=None): return configured("scheduler.jobs",name,default)
+def scheduler_worker(name, default=None): return configured("scheduler.workers",name,default)
+def integration_event(name, default=None): return configured("integrations.events",name,default)
+def webhook(name, default=None): return configured("integrations.webhooks",name,default)
+def evaluation(name, default=None): return configured("agent.evaluation",name,default)
+def regression(name, default=None): return configured("agent.regression",name,default)
+def budget(name, default=None): return configured("agent.budget",name,default)
+def cache_policy(name, default=None): return configured("agent.cache",name,default)
+def skill(name, default=None): return configured("agent.skills",name,default)
+def knowledge_graph(name, default=None): return configured("agent.knowledge_graph",name,default)
+def research_agent(name, default=None): return configured("research.policy",name,default)
+def event_policy(name, default=None): return configured("integrations.events",name,default)
+
+
 
 class WorkflowEngine:
     """No-code workflow definition and deterministic execution."""
