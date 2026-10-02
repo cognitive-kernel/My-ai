@@ -194,7 +194,7 @@ def apply_runtime_setting(key: str, value: Any) -> None:
 
 def apply_persisted_settings() -> None:
     ensure_schema()
-    with _connect() as conn:
+    with connect() as conn:
         rows = conn.execute("SELECT key,value,secret FROM app_settings").fetchall()
     for row in rows:
         value = _decrypt(str(row["value"])) if int(row["secret"]) else str(row["value"])
@@ -214,7 +214,7 @@ def get_configuration_schema_version() -> int:
 
 def migrate_configuration() -> int:
     ensure_schema()
-    with _connect() as conn:
+    with connect() as conn:
         row = conn.execute("SELECT COALESCE(MAX(version), 0) AS version FROM app_settings_migrations").fetchone()
         current = int(row["version"]) if row else 0
         if current < CONFIG_SCHEMA_VERSION:
@@ -256,9 +256,9 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from .access_policy import assert_mutation_allowed
 
-def _connect():
-    from .db import connect
-    return connect()
+def connect():
+    from .db import connect as db_connect
+    return db_connect()
 
 ROOT = Path(__file__).resolve().parent.parent
 KEY_PATH = ROOT / "data" / ".settings_key"
@@ -311,7 +311,7 @@ def ensure_schema() -> None:
     # Settings access is on a hot path, including the learning scheduler.
     # Do not run the full DB migration on every read: init_db() performs
     # multiple writes and can contend with learning/background transactions.
-    with _connect() as conn:
+    with connect() as conn:
         conn.executescript(SCHEMA)
         columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(app_settings)").fetchall()}
         if "schema_version" not in columns:
@@ -327,7 +327,7 @@ def ensure_schema() -> None:
 
 def get_setting(key: str, default: Any = None, *, secret: bool = False) -> Any:
     migrate_configuration()
-    with _connect() as conn:
+    with connect() as conn:
         row = conn.execute("SELECT value,secret FROM app_settings WHERE key=?", (key,)).fetchone()
     if not row:
         if default is None and key in SETTING_REGISTRY:
@@ -343,7 +343,7 @@ def set_setting(key: str, value: Any, *, secret: bool = False) -> None:
     text = "" if value is None else str(value)
     stored = _encrypt(text) if secret and text else text
     version = int(SETTING_REGISTRY.get(key, {}).get("version", CONFIG_SCHEMA_VERSION))
-    with _connect() as conn:
+    with connect() as conn:
         previous = conn.execute("SELECT value,secret FROM app_settings WHERE key=?", (key,)).fetchone()
         old_value = None if not previous else ("[SECRET]" if int(previous["secret"]) else str(previous["value"]))
         new_value = "[SECRET]" if secret and text else text
@@ -365,7 +365,7 @@ def list_setting_history(key: str | None = None, limit: int = 200) -> list[dict[
         params.append(key)
     sql += " ORDER BY id DESC LIMIT ?"
     params.append(max(1, min(1000, int(limit))))
-    with _connect() as conn:
+    with connect() as conn:
         return [dict(row) for row in conn.execute(sql, params).fetchall()]
 
 def export_registered_settings() -> dict[str, Any]:
@@ -392,7 +392,7 @@ def import_registered_settings(values: dict[str, Any]) -> dict[str, Any]:
 def delete_setting(key: str) -> None:
     assert_mutation_allowed(f"setting-delete:{key}")
     ensure_schema()
-    with _connect() as conn:
+    with connect() as conn:
         conn.execute("DELETE FROM app_settings WHERE key=?", (key,))
         conn.commit()
 
