@@ -13,6 +13,7 @@ from .dynamic_learning import due_domains
 from .config import settings
 from .settings_store import get_setting
 from .resource_guard import limits as resource_limits
+from .scheduler_resilience import mark_stale, record as record_scheduler_event
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +28,12 @@ class StudyScheduler:
     def _supervisor_loop(self):
         while not self._supervisor_stop.is_set():
             try:
+                mark_stale()
                 for row in fetch_all("SELECT language,session_id,status FROM learning_workers WHERE status IN ('running','retrying')"):
                     language=str(row["language"] or "").strip(); key=language.casefold()
-                    if language and not (self._workers.get(key) and self._workers[key][0].is_alive()): self.start(language,row["session_id"])
+                    if language and not (self._workers.get(key) and self._workers[key][0].is_alive()):
+                        record_scheduler_event(language,"worker_recovery",session_id=row["session_id"])
+                        self.start(language,row["session_id"])
             except Exception: logger.exception("LEARNING_SUPERVISOR_FAILURE")
             self._supervisor_stop.wait(2)
     def start_review_monitor(self):
@@ -72,6 +76,7 @@ class StudyScheduler:
             if target and key!=target: continue
             event.set(); self._release_lease(key); execute("UPDATE learning_workers SET status='stopping',stage='stopping',updated_at=CURRENT_TIMESTAMP WHERE lower(language)=?",(key,))
         self.stage="stopping"
+        record_scheduler_event(language or "all","stop_requested")
     def stop(self): self.stop_learning(); self.stop_review_monitor(); self.stop_learning_supervisor()
     def stop_review_monitor(self): self._review_stop.set()
     def running(self): return any(t.is_alive() for t,_ in self._workers.values())
