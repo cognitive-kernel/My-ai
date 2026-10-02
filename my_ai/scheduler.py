@@ -91,11 +91,28 @@ class StudyScheduler:
             execute("""INSERT INTO learning_workers(language,session_id,status,stage,started_at,updated_at) VALUES(?,?,?,'starting',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(language) DO UPDATE SET session_id=excluded.session_id,status='running',stage='starting',updated_at=CURRENT_TIMESTAMP""",(language,session_id,"running")); thread.start()
     def stop_learning(self,language=None):
         target=str(language).casefold() if language else None
-        for key,(_,event) in list(self._workers.items()):
+        selected=[]
+        for key,(thread,event) in list(self._workers.items()):
             if target and key!=target: continue
-            event.set(); self._release_lease(key); execute("UPDATE learning_workers SET status='stopping',stage='stopping',updated_at=CURRENT_TIMESTAMP WHERE lower(language)=?",(key,))
+            event.set()
+            self._release_lease(key)
+            execute("UPDATE learning_workers SET status='stopping',stage='stopping',updated_at=CURRENT_TIMESTAMP WHERE lower(language)=?",(key,))
+            selected.append((key,thread))
+        for key,thread in selected:
+            if thread is not threading.current_thread():
+                thread.join(timeout=2.0)
+            if not thread.is_alive():
+                with self._lock:
+                    self._workers.pop(key, None)
         self.stage="stopping"
-    def stop(self): self.stop_learning(); self.stop_review_monitor(); self.stop_learning_supervisor()
+    def stop(self):
+        self.stop_learning()
+        self.stop_review_monitor()
+        self.stop_learning_supervisor()
+        if self._monitor_thread and self._monitor_thread is not threading.current_thread():
+            self._monitor_thread.join(timeout=2.0)
+        if self._supervisor_thread and self._supervisor_thread is not threading.current_thread():
+            self._supervisor_thread.join(timeout=2.0)
     def stop_review_monitor(self): self._review_stop.set()
     def running(self): return any(t.is_alive() for t,_ in self._workers.values())
     def status(self):
