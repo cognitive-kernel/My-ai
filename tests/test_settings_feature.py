@@ -116,3 +116,6 @@ def test_course_form_exposes_auto_manual_sources_and_learning_policy_controls():
     html = sf.SETTINGS_HTML
     for token in ("course_mode", "Auto Discover", "Manual Sources", "course_source_policy", "manual-first", "course_llm", "course_schedule", "course_mastery"):
         assert token in html
+def test_database_health_route_is_registered():
+    paths = {getattr(route, "path", "") for route in sf.router.routes}
+    assert "/settings/database/health" in paths
