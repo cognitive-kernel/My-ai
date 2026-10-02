@@ -572,6 +572,11 @@ def control_plane_namespaces(request: Request):
     require_admin(request)
     return {"namespaces": namespace_catalog()}
 
+@router.get("/settings/control-plane/namespaces")
+def control_plane_namespaces(request: Request):
+    require_admin(request)
+    return {"items": namespace_catalog()}
+
 @router.get("/settings/control-plane")
 def control_plane_list(request: Request, namespace: str | None = None, include_disabled: bool = True):
     require_admin(request)
