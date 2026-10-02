@@ -203,8 +203,9 @@ def _validate_chat_attachments(items):
         if not path.is_file():
             raise HTTPException(404,f"Attachment not found: {path.name}")
         size=path.stat().st_size
-        if size > 100 * 1024 * 1024:
-            raise HTTPException(413,"Each chat attachment is limited to 100 MiB.")
+        upload_limit_mb=max(1,get_int("server.upload_limit_mb",50))
+        if size > upload_limit_mb * 1024 * 1024:
+            raise HTTPException(413,f"Each chat attachment is limited to {upload_limit_mb} MiB.")
         result.append({
             "path":str(path),
             "name":str(item.get("name") or path.name),
