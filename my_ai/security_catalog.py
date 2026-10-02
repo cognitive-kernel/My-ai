@@ -30,3 +30,7 @@ def set_subprocess_policy(name, commands=None, timeout=30):
 
 def list_security_policies():
     return {n:list_records(n) for n in ("security.roles","security.capabilities","security.approvals","security.network","security.filesystem","security.subprocess")}
+
+
+def set_self_modification_policy(name, allowed_paths=None, require_approval=True, require_tests=True):
+    return put_record("security.self_modification", name, {"allowed_paths": allowed_paths or [], "require_approval": bool(require_approval), "require_tests": bool(require_tests)}, enabled=True)
