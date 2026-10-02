@@ -23,5 +23,6 @@ def test_filewise_runner_stops_on_first_timeout(tmp_path, monkeypatch):
     monkeypatch.setattr("my_ai.test_runner.subprocess.run", fake_run)
     ok, details = run_test_suite(Path(tmp_path), per_file_timeout=30)
     assert ok is False
-    assert "should not be used" in details
+    assert "pytest timeout (30s)" in details
+    assert "test_one.py" in details
     assert len(calls) == 2
