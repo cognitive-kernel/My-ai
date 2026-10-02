@@ -611,7 +611,12 @@ def self_update_status_api(request:Request):
 @app.get("/self-repair/status")
 def self_repair_status_api(request:Request):
     require_admin(request)
-    return diagnose_local()
+    # Status must remain cheap and non-blocking; full diagnosis runs compileall/pytest.
+    return {
+        "enabled": bool(get_bool("self_repair.enabled", True)),
+        "require_approval": bool(get_bool("self_repair.require_approval", True)),
+        "proposals": list_proposals(),
+    }
 
 @app.post("/self-repair/propose")
 def self_repair_propose_api(r:RepairRequest, request:Request):
