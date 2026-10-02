@@ -144,7 +144,7 @@ from .access_policy import assert_mutation_allowed
 ROOT = Path(__file__).resolve().parent.parent
 KEY_PATH = ROOT / "data" / ".settings_key"
 SECRET_PREFIX = "enc:v1:"
-SCHEMA = """CREATE TABLE IF NOT EXISTS app_settings (
+SCHEMA = """CREATE TABLE IF NOT EXISTS app_settings_history (\n id INTEGER PRIMARY KEY AUTOINCREMENT,\n key TEXT NOT NULL,\n old_value TEXT,\n new_value TEXT,\n schema_version INTEGER NOT NULL,\n changed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP\n);\nCREATE TABLE IF NOT EXISTS app_settings (
  key TEXT PRIMARY KEY,
  value TEXT NOT NULL,
  secret INTEGER NOT NULL DEFAULT 0,
@@ -215,14 +215,30 @@ def set_setting(key: str, value: Any, *, secret: bool = False) -> None:
         value = validate_registered_setting(key, value)
     text = "" if value is None else str(value)
     stored = _encrypt(text) if secret and text else text
+    version = int(SETTING_REGISTRY.get(key, {}).get("version", CONFIG_SCHEMA_VERSION))
     with connect() as conn:
+        previous = conn.execute("SELECT value,secret FROM app_settings WHERE key=?", (key,)).fetchone()
+        old_value = None if not previous else ("[SECRET]" if int(previous["secret"]) else str(previous["value"]))
+        new_value = "[SECRET]" if secret and text else text
         conn.execute(
             """INSERT INTO app_settings(key,value,secret,schema_version) VALUES(?,?,?,?)
-               ON CONFLICT(key) DO UPDATE SET value=excluded.value,secret=excluded.secret,updated_at=CURRENT_TIMESTAMP""",
-            (key, stored, 1 if secret else 0, int(SETTING_REGISTRY.get(key, {}).get("version", CONFIG_SCHEMA_VERSION))),
+               ON CONFLICT(key) DO UPDATE SET value=excluded.value,secret=excluded.secret,updated_at=CURRENT_TIMESTAMP,schema_version=excluded.schema_version""",
+            (key, stored, 1 if secret else 0, version),
         )
+        conn.execute("INSERT INTO app_settings_history(key,old_value,new_value,schema_version) VALUES(?,?,?,?)", (key, old_value, new_value, version))
         conn.commit()
 
+def list_setting_history(key: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
+    ensure_schema()
+    sql = "SELECT id,key,old_value,new_value,schema_version,changed_at FROM app_settings_history"
+    params = []
+    if key:
+        sql += " WHERE key=?"
+        params.append(key)
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(max(1, min(1000, int(limit))))
+    with connect() as conn:
+        return [dict(row) for row in conn.execute(sql, params).fetchall()]
 
 def export_registered_settings() -> dict[str, Any]:
     return {
