@@ -431,6 +431,12 @@ def _run_course(course_id: int) -> None:
 class SettingsImportRequest(BaseModel):
     values: dict[str, Any]
 
+@router.get("/settings/audit")
+def settings_audit(request: Request, limit: int = 200):
+    require_admin(request)
+    rows=fetch_all("SELECT id,user_id,username,tool_name,action,status,details,created_at FROM audit_log ORDER BY id DESC LIMIT ?",(max(1,min(1000,int(limit))),))
+    return {"items":[dict(r) for r in rows]}
+
 @router.get("/settings/security-policies")
 def settings_security_policies(request: Request):
     require_admin(request); return list_security_policies()
