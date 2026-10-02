@@ -19,7 +19,8 @@ def test_tool_permission_is_deny_by_default(tmp_path):
     old = db.settings.db_path
     object.__setattr__(db.settings, "db_path", str(tmp_path / "auth.db"))
     db.init_db()
-    user = auth.create_account("policy-user", "a-secure-password")
+    auth.create_account("bootstrap", "a-secure-password")
+    user = auth.create_account("policy-user", "another-secure-password")
     assert auth.tool_allowed(user, "python", "execute") is False
     db.execute(
         "INSERT INTO tool_permissions(user_id,tool_name,action,allowed) VALUES(?,?,?,1)",
@@ -28,7 +29,10 @@ def test_tool_permission_is_deny_by_default(tmp_path):
     assert auth.tool_allowed(user, "python", "execute") is True
 
 
-def test_audit_event_stores_hashes_not_raw_payload(client_db):
+def test_audit_event_stores_hashes_not_raw_payload(tmp_path):
+    old = db.settings.db_path
+    object.__setattr__(db.settings, "db_path", str(tmp_path / "audit.db"))
+    db.init_db()
     user = auth.create_account("audit-user", "a-secure-password")
     secret = "do-not-store-this-secret"
     auth.audit_event(user, "python", "execute", "failure", request_id="req-1", input_data=secret, error="failed")
@@ -36,4 +40,5 @@ def test_audit_event_stores_hashes_not_raw_payload(client_db):
     assert secret not in row["details"]
     assert "request_id" in row["details"]
     assert "sha256" in row["details"]
+    object.__setattr__(db.settings, "db_path", old)
     object.__setattr__(db.settings, "db_path", old)
