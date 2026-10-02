@@ -30,6 +30,7 @@ from .registries import publish_prompt, activate_prompt, publish_policy, registe
 from .plugin_registry import propose_plugin, approve_plugin, reject_plugin
 from .evaluation_registry import upsert_suite, list_suites, create_baseline, propose_candidate, get_candidate, verify_candidate, list_candidates, compare_metrics
 from .integration_catalog import register_integration, list_integrations, register_webhook, list_webhooks, map_event_action, list_event_actions
+from .security_catalog import define_role, define_capability, set_permission, set_network_policy, set_filesystem_policy, set_subprocess_policy, list_security_policies
 
 router = APIRouter(tags=["settings"])
 _workers = ThreadPoolExecutor(max_workers=1, thread_name_prefix="myai-learning")
@@ -429,6 +430,42 @@ def _run_course(course_id: int) -> None:
 
 class SettingsImportRequest(BaseModel):
     values: dict[str, Any]
+
+@router.get("/settings/security-policies")
+def settings_security_policies(request: Request):
+    require_admin(request); return list_security_policies()
+
+@router.post("/settings/security/roles")
+def settings_security_role(payload: ControlPlaneRecordRequest, request: Request):
+    user=require_admin(request); caps=payload.payload.get("capabilities", [])
+    if not isinstance(caps,list): raise HTTPException(400,"capabilities must be a list")
+    item=define_role(payload.name,[str(x) for x in caps],version=str(payload.payload.get("version","1")),enabled=payload.enabled); audit(user,"security","role-write","200",payload.name); return item
+
+@router.post("/settings/security/capabilities")
+def settings_security_capability(payload: ControlPlaneRecordRequest, request: Request):
+    user=require_admin(request); actions=payload.payload.get("actions", [])
+    if not isinstance(actions,list): raise HTTPException(400,"actions must be a list")
+    item=define_capability(payload.name,[str(x) for x in actions],resource=str(payload.payload.get("resource","*")),version=str(payload.payload.get("version","1"))); audit(user,"security","capability-write","200",payload.name); return item
+
+@router.post("/settings/security/permissions")
+def settings_security_permission(payload: ControlPlaneRecordRequest, request: Request):
+    user=require_admin(request); p=payload.payload
+    item=set_permission(str(p.get("role") or payload.name),str(p.get("resource") or "*"),[str(x) for x in (p.get("actions") or [])],users=p.get("users") or []); audit(user,"security","permission-write","200",payload.name); return item
+
+@router.post("/settings/security/network")
+def settings_security_network(payload: ControlPlaneRecordRequest, request: Request):
+    user=require_admin(request); p=payload.payload
+    item=set_network_policy(payload.name,p.get("allowlist") or [],p.get("denylist") or [],default=str(p.get("default","deny"))); audit(user,"security","network-write","200",payload.name); return item
+
+@router.post("/settings/security/filesystem")
+def settings_security_filesystem(payload: ControlPlaneRecordRequest, request: Request):
+    user=require_admin(request); p=payload.payload
+    item=set_filesystem_policy(payload.name,p.get("roots") or [],read=bool(p.get("read",True)),write=bool(p.get("write",False))); audit(user,"security","filesystem-write","200",payload.name); return item
+
+@router.post("/settings/security/subprocess")
+def settings_security_subprocess(payload: ControlPlaneRecordRequest, request: Request):
+    user=require_admin(request); p=payload.payload
+    item=set_subprocess_policy(payload.name,p.get("commands") or [],timeout=float(p.get("timeout",30))); audit(user,"security","subprocess-write","200",payload.name); return item
 
 @router.get("/settings/capabilities")
 def settings_capability_inventory(request: Request):
