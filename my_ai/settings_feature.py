@@ -24,7 +24,7 @@ from .metrics import snapshot as metrics_snapshot
 from .no_code_catalog import inventory as no_code_inventory
 from .config_profiles import save_profile, active_profile, load_profile
 from .learning_catalog import add_source, list_sources, review_source, update_content_hash, update_source, delete_source, list_relearning_queue
-from .backup_manager import backup as backup_database, restore as restore_database
+from .backup_manager import backup as backup_database, restore as restore_database, prune_backups
 from .control_plane import list_records, get_record, put_record, set_enabled, delete_record, start_action, update_action, get_action, list_actions, namespace_catalog
 from .registries import publish_prompt, activate_prompt, publish_policy, register_tool, update_tool, list_tools, list_prompt_history, rollback_prompt, prompt_diff
 from .plugin_registry import propose_plugin, approve_plugin, reject_plugin
@@ -777,6 +777,8 @@ def settings_database_backup(payload: BackupRequest, request: Request):
         destination = str(get_setting("database.backup.destination", "data/backups"))
     try:
         result=backup_database(destination,overwrite=payload.overwrite)
+        retention=get_int("database.backup.retention", 7)
+        result["removed"]=prune_backups(Path(destination).parent if Path(destination).suffix else Path(destination), retention)
     except (OSError,FileNotFoundError,FileExistsError) as exc: raise HTTPException(400,str(exc))
     audit(user,"database","backup","200",result["path"]); return result
 
