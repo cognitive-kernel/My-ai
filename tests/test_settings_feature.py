@@ -80,3 +80,12 @@ def test_settings_registry_update_route_exists():
     assert "PUT" in routes["/settings/registry/{key:path}"]
     assert "/settings/registry/export" in routes
     assert "/settings/registry/import" in routes
+
+
+def test_learning_source_form_exposes_type_priority_weight_and_review_controls():
+    html = sf.SETTINGS_HTML
+    for field in ("ls_url", "ls_type", "ls_priority", "ls_weight"):
+        assert "id='" + field + "'" in html
+    script = __import__("pathlib").Path("my_ai/settings_script.js").read_text(encoding="utf-8")
+    assert "reviewLearningSource" in script
+    assert "weight:Number(byId(\"ls_weight\").value||1)" in script
