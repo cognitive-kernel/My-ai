@@ -119,6 +119,26 @@ async function loginGit(){try{var j=await req("/git/login",{method:"POST"});setT
 async function logoutGit(){try{var j=await req("/git/logout",{method:"POST"});setText("gitout",j.message||"خروج انجام شد");await loadSettings()}catch(e){setText("gitout",e.message)}}
 async function createCourse(){try{var lines=byId("ct").value.split(/\n+/).map(function(x){return x.trim()}).filter(Boolean);var topics=lines.map(function(x){var p=x.split("|").map(function(v){return v.trim()});return{title:p[0],goal:p[1]||"",source_url:p[2]||""}});var j=await req("/settings/courses",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:byId("cn").value,description:byId("cd").value,topics:topics})});setText("courseout","آموزش ساخته شد: "+j.id);await loadCourses()}catch(e){setText("courseout",e.message)}}
 async function startCourse(id){try{await req("/settings/courses/"+id+"/start",{method:"POST"});await loadCourses()}catch(e){setText("courseout",e.message)}}
+
+async function loadUIActions(){
+  var box=byId("ui-actions");if(!box)return;
+  try{
+    var j=await req("/settings/ui-actions");
+    box.innerHTML=(j.items||[]).map(function(a){
+      return "<div class='topic'><b>"+esc(a.label)+"</b><div class='muted'>"+esc(a.description)+"</div><button type='button' data-action-id='"+esc(a.id)+"' data-method='"+esc(a.method)+"' data-endpoint='"+esc(a.endpoint)+"'>اجرا</button><span id='action-"+esc(a.id)+"' class='muted' style='margin-right:8px'></span></div>";
+    }).join("")||"عملیات گرافیکی ثبت نشده است";
+    box.querySelectorAll("[data-action-id]").forEach(function(button){
+      button.addEventListener("click",function(){runUIAction(this.dataset.actionId,this.dataset.method,this.dataset.endpoint)});
+    });
+  }catch(e){box.textContent="خطا در بارگذاری عملیات گرافیکی: "+e.message}
+}
+async function runUIAction(id,method,endpoint){
+  var out=byId("action-"+id);if(out)out.textContent="در حال اجرا...";
+  try{var j=await req(endpoint,{method:method});if(out)out.textContent="انجام شد: "+JSON.stringify(j).slice(0,300)}
+  catch(e){if(out)out.textContent="خطا: "+e.message}
+}
+async function pauseCourse(id){try{await req("/settings/courses/"+id+"/pause",{method:"POST"});setText("courseout","آموزش متوقف شد.");await loadCourses()}catch(e){setText("courseout",e.message)}}
+
 async function loadCourses(){var box=byId("courses");if(!box)return;try{var j=await req("/settings/courses");box.innerHTML=(j.items||[]).map(function(c){return "<div class=\"card\"><h3>"+esc(c.name)+"</h3><p>"+esc(c.description)+"</p><div class=\"bar\"><div class=\"fill\" style=\"width:"+c.progress_percent+"%\">"+c.progress_percent+"%</div></div><p class=\"muted\">"+c.completed_topics+" از "+c.total_topics+" سرفصل کامل شده"+(c.current?" · اکنون: "+esc(c.current.title)+" · مرحله: "+esc(c.current.phase):"")+"</p></div>"}).join("")||"آموزشی نیست"}catch(e){box.textContent="خطا در بارگذاری آموزش‌ها: "+e.message}}
 
-loadSettings();loadRegistry();loadUsers();loadPermissions();loadCourses();setInterval(loadCourses,10000);setInterval(loadResourceStatus,5000);
+loadSettings();loadRegistry();loadUsers();loadPermissions();loadCourses();loadUIActions();setInterval(loadCourses,10000);setInterval(loadResourceStatus,5000);
