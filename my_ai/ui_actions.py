@@ -21,6 +21,8 @@ _ACTIONS = (
     UIAction("control-plane.actions", "control-plane", "تاریخچه عملیات", "نمایش وضعیت عملیات GUI/CLI.", "GET", "/settings/control-plane/actions", "settings:read"),
     UIAction("metrics.snapshot", "observability", "مشاهده Metrics", "مشاهده مصرف مدل، latency، خطا و routing.", "GET", "/settings/metrics", "observability:read"),
     UIAction("learning.sources", "learning", "مدیریت منابع یادگیری", "نمایش منابع، provenance و وضعیت approval.", "GET", "/settings/learning-sources", "learning:read"),
+    UIAction("profiles.list", "configuration", "مدیریت پروفایل‌ها", "نمایش پروفایل‌های پیکربندی.", "GET", "/settings/profiles", "settings:read"),
+    UIAction("capabilities.list", "configuration", "فهرست قابلیت‌ها", "نمایش قابلیت‌های قابل مدیریت بدون کدنویسی.", "GET", "/settings/capabilities", "settings:read"),
 
     UIAction("github.check", "github", "بررسی اتصال GitHub", "وضعیت اتصال GitHub را بررسی می‌کند.", "GET", "/git/check", "github:read"),
     UIAction("image.health", "image", "بررسی موتور تصویر", "وضعیت موتور تصویر محلی را بررسی می‌کند.", "GET", "/settings/image/status", "tools:read"),
