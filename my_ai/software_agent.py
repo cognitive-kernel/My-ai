@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -109,8 +110,8 @@ def _research(plan: dict[str, Any]) -> ResearchBundle:
             "INSERT INTO software_research(goal,plan_json,sources_json) VALUES(?,?,?)",
             (_safe_text(plan.get("goal"), 10000), json.dumps(plan, ensure_ascii=False), json.dumps(bundle.sources, ensure_ascii=False)),
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).debug("software research persistence failed: %s", exc)
     return bundle
 
 
