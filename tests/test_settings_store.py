@@ -100,3 +100,14 @@ def test_configuration_schema_is_versioned_and_migrated(tmp_path, monkeypatch):
     with ss.connect() as conn:
         row = conn.execute("SELECT schema_version FROM app_settings WHERE key=?", ("execution.timeout_seconds",)).fetchone()
         assert int(row["schema_version"]) == ss.SETTING_REGISTRY["execution.timeout_seconds"]["version"]
+
+
+def test_registry_setting_updates_runtime_configuration(tmp_path, monkeypatch):
+    import sqlite3
+    from my_ai import config
+    monkeypatch.setattr(ss, "connect", lambda: sqlite3.connect(tmp_path / "runtime.db"))
+    original = config.settings.llm_retry_attempts
+    ss.ensure_schema()
+    ss.set_setting("llm.retry_attempts", 4)
+    assert config.settings.llm_retry_attempts == 4
+    config.settings.llm_retry_attempts = original
