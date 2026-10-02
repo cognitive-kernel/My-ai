@@ -137,7 +137,7 @@ def evidence_snapshot(skill_id: int) -> list[dict[str, Any]]:
 def snapshot() -> list[dict[str, Any]]:
     skills = fetch_all("""SELECT s.*, COUNT(e.id) AS evidence_count, CASE WHEN s.last_verified IS NULL OR s.last_verified < datetime('now','-30 days') THEN 1 ELSE 0 END AS review_due FROM skills s LEFT JOIN skill_evidence e ON e.skill_id=s.id GROUP BY s.id ORDER BY s.id DESC""")
     for skill in skills:
-        skill["evidence"] = evidence_snapshot(int(skill["id"])); skill["verification_state"] = "verified" if int(skill.get("verified") or 0) else "unverified"; skill["knowledge_coverage_score"] = float(skill.get("knowledge_coverage_score") or 0.0); skill["verified_skill_score"] = float(skill.get("verified_skill_score") or skill.get("score") or 0.0)
+        skill["verified"] = bool(skill.get("verified")); skill["evidence"] = evidence_snapshot(int(skill["id"])); skill["verification_state"] = "verified" if skill["verified"] else "unverified"; skill["knowledge_coverage_score"] = float(skill.get("knowledge_coverage_score") or 0.0); skill["verified_skill_score"] = float(skill.get("verified_skill_score") or skill.get("score") or 0.0)
     return skills
 
 
