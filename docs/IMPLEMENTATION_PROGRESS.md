@@ -92,3 +92,15 @@
 - Tightened version-aware knowledge selection so a mismatched version is not treated as current knowledge unless explicit compatibility is recorded.
 - Confirmed existing implementation for schema-driven Settings Registry, prompt/policy/tool registries, security catalogs, workflow runtime, hybrid retrieval, knowledge graph, context planning, confidence, evaluation, parallel task graph, budgets, event lifecycle, self-update/self-repair APIs, and advanced-agent primitives.
 - No tests, regression, CI or runtime verification were executed.
+
+
+## Implementation completion pass — 2026-10-02 / cycle 3 (no tests)
+- Re-audited remaining roadmap implementation gaps against the current repository.
+- Fixed Provider API-key rotation so rotation actually promotes a different eligible key; added explicit key activation and audit.
+- Provider health checks now use the currently active catalog key rather than only the legacy provider secret.
+- Fixed the Tool Registry Settings API to persist description, input/output schemas, permissions, timeout, retries, task scope and version instead of calling the registry with an incompatible signature.
+- Added persistent learning relearning-queue schema and ensured source URL changes create a recheck/relearning job.
+- Added a persistent Evaluation/Regression Registry for suites, baselines, runs, candidates and verification/approval state, with Settings API endpoints.
+- Expanded the GUI Action Registry for evaluation and relearning visibility.
+- Removed a duplicate Control Plane namespace route.
+- No tests, pytest, CI, regression, integration or runtime verification were executed.
