@@ -17,7 +17,7 @@ from .auth import require_admin, require_user, audit
 from .db import connect, execute, fetch_all, init_db
 from .git_connector import GitHubConnector
 from .llm import create_llm
-from .provider_catalog import list_providers, upsert_provider, delete_provider, list_models, upsert_model, delete_model, export_catalog
+from .provider_catalog import list_providers, upsert_provider, delete_provider, list_models, upsert_model, delete_model, export_catalog, add_provider_key, list_provider_keys, rotate_provider_key
 from .settings_store import get_setting, set_setting, get_bool, get_int, get_github_settings, get_setting_registry, get_configuration_schema_version, reset_setting, export_registered_settings, import_registered_settings
 from .ui_actions import list_ui_actions
 from .metrics import snapshot as metrics_snapshot
@@ -399,6 +399,27 @@ def settings_metrics(request: Request):
 def settings_ui_actions(request: Request):
     require_admin(request)
     return {"items": list_ui_actions()}
+
+class ProviderKeyRequest(BaseModel):
+    key_name: str = Field(min_length=1, max_length=120)
+    secret: str = Field(min_length=1, max_length=10000)
+    priority: int = Field(default=100, ge=0, le=100000)
+
+@router.get("/settings/providers/{provider_id}/keys")
+def settings_provider_keys(provider_id:int, request:Request):
+    require_admin(request); return {"items":list_provider_keys(provider_id)}
+
+@router.post("/settings/providers/{provider_id}/keys")
+def settings_provider_key_add(provider_id:int,payload:ProviderKeyRequest,request:Request):
+    require_admin(request)
+    try: return add_provider_key(provider_id,payload.key_name,payload.secret,priority=payload.priority)
+    except ValueError as exc: raise HTTPException(422,str(exc))
+
+@router.post("/settings/providers/{provider_id}/keys/rotate")
+def settings_provider_key_rotate(provider_id:int,request:Request):
+    require_admin(request)
+    try: return rotate_provider_key(provider_id)
+    except ValueError as exc: raise HTTPException(422,str(exc))
 
 @router.get("/settings/providers")
 def settings_providers(request: Request):
