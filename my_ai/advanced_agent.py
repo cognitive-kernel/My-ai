@@ -129,13 +129,48 @@ class EvaluationLab:
 
 
 class ResearchPipeline:
-    def __init__(self, search, fetch, verifier=None):
+    def __init__(self, search, fetch, verifier=None, freshness=None, ranker=None):
         self.search,self.fetch,self.verifier=search,fetch,verifier
-    def run(self, question: str, manual_sources: list[str] | None=None, limit:int=8):
+        self.freshness,self.ranker=freshness,ranker
+
+    def run(self, question: str, manual_sources: list[str] | None=None, limit:int=8, *,
+            allowed_domains: Iterable[str] | None=None, require_fresh: bool=False) -> dict[str,Any]:
         urls=list(dict.fromkeys((manual_sources or [])+list(self.search(question,limit))))
-        evidence=[self.fetch(u) for u in urls]
-        if self.verifier: evidence=[x for x in evidence if self.verifier(x)]
-        return {"question":question,"sources":urls,"evidence":evidence,"generated_at":time.time()}
+        domains={str(x).lower().lstrip(".") for x in (allowed_domains or [])}
+        if domains:
+            urls=[u for u in urls if any(str(u).lower().split("/")[2].endswith(d) for d in domains if "://" in str(u))]
+        evidence=[]
+        for url in urls:
+            try:
+                item=self.fetch(url)
+                if isinstance(item, tuple) and len(item)>=2:
+                    title, content=item[0], item[1]
+                    record={"url":url,"title":str(title),"content":str(content)}
+                elif isinstance(item,dict):
+                    record=dict(item); record.setdefault("url",url)
+                else:
+                    record={"url":url,"content":str(item)}
+                record["freshness"]=self.freshness(record) if self.freshness else None
+                if require_fresh and self.freshness and not bool(record["freshness"]):
+                    continue
+                if self.verifier and not self.verifier(record):
+                    continue
+                evidence.append(record)
+            except Exception as exc:
+                evidence.append({"url":url,"error":str(exc),"verified":False})
+        if self.ranker:
+            evidence=list(self.ranker(question,evidence))
+        # Lightweight contradiction detection: expose competing normalized claims to the caller
+        # instead of silently selecting one source.
+        claims=[str(x.get("claim") or x.get("summary") or "").strip() for x in evidence if str(x.get("claim") or x.get("summary") or "").strip()]
+        contradictions=[]
+        for i,left in enumerate(claims):
+            for right in claims[i+1:]:
+                if left.casefold()!=right.casefold() and any(token in right.casefold() for token in ("not ","false","deprecated","obsolete")):
+                    contradictions.append({"left":left,"right":right})
+        return {"question":question,"sources":[x.get("url") for x in evidence],"evidence":evidence,
+                "contradictions":contradictions,"provenance":[{"url":x.get("url"),"title":x.get("title","")} for x in evidence],
+                "generated_at":time.time()}
 
 
 class SecureEnvironment:
