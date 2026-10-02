@@ -117,7 +117,7 @@ async function loadPermissions(){var box=byId("permissions");if(!box)return;box.
 async function setPermission(uid,tool,action,allowed){try{await req("/settings/tool-permissions",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:uid,tool_name:tool,action:action,allowed:allowed})})}catch(e){alert("خطا در ذخیره مجوز: "+e.message);await loadPermissions()}}
 async function loginGit(){try{var j=await req("/git/login",{method:"POST"});setText("gitout",j.message||"درخواست ورود ارسال شد")}catch(e){setText("gitout",e.message)}}
 async function logoutGit(){try{var j=await req("/git/logout",{method:"POST"});setText("gitout",j.message||"خروج انجام شد");await loadSettings()}catch(e){setText("gitout",e.message)}}
-async function createCourse(){try{var lines=byId("ct").value.split(/\n+/).map(function(x){return x.trim()}).filter(Boolean);var topics=lines.map(function(x){var p=x.split("|").map(function(v){return v.trim()});return{title:p[0],goal:p[1]||"",source_url:p[2]||""}});var j=await req("/settings/courses",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:byId("cn").value,description:byId("cd").value,topics:topics})});setText("courseout","آموزش ساخته شد: "+j.id);await loadCourses()}catch(e){setText("courseout",e.message)}}
+async function createCourse(){try{var lines=byId("ct").value.split(/\n+/).map(function(x){return x.trim()}).filter(Boolean);var topics=lines.map(function(x){var p=x.split("|").map(function(v){return v.trim()});return{title:p[0],goal:p[1]||"",source_url:p[2]||""}});var j=await req("/settings/courses",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({provider_id:(byId("pc_provider_id").value?Number(byId("pc_provider_id").value):null),name:byId("cn").value,description:byId("cd").value,topics:topics})});setText("courseout","آموزش ساخته شد: "+j.id);await loadCourses()}catch(e){setText("courseout",e.message)}}
 async function startCourse(id){try{await req("/settings/courses/"+id+"/start",{method:"POST"});await loadCourses()}catch(e){setText("courseout",e.message)}}
 
 
@@ -129,6 +129,9 @@ async function loadProviderCatalog(){
       var action=x.enabled?"غیرفعال‌کردن":"فعال‌کردن";
       return "<div class='topic'><b>#"+esc(x.id)+" "+esc(x.name)+"</b> — "+esc(x.protocol)+" — "+(x.enabled?"فعال":"غیرفعال")+
         " <button type='button' onclick='toggleProviderCatalog("+x.id+","+(!x.enabled)+")'>"+action+"</button>"+
+        " <button type='button' onclick='editProviderCatalog("+x.id+")'>ویرایش</button>"+
+        " <button type='button' onclick='addProviderKeyGUI("+x.id+")'>افزودن کلید</button>"+
+        " <button type='button' onclick='rotateProviderKeyGUI("+x.id+")'>چرخش کلید</button>"+
         " <button type='button' onclick='healthProviderCatalog("+x.id+")'>بررسی اتصال</button>"+
         " <button type='button' onclick='deleteProviderCatalog("+x.id+")'>حذف</button>"+
         " <span id='provider-health-"+x.id+"' class='muted'></span></div>";
@@ -141,6 +144,19 @@ async function loadProviderCatalog(){
         " <span id='model-health-"+x.provider_id+"-"+esc(x.model_id)+"' class='muted'></span></div>";
     }).join("")||"Model ثبت نشده است";
   }catch(e){if(p)p.textContent="خطا: "+e.message}
+}
+async function editProviderCatalog(id){
+  try{var j=await req("/settings/providers"),x=(j.providers||[]).find(function(v){return Number(v.id)===Number(id)});if(!x)throw Error("Provider پیدا نشد");
+    byId("pc_provider_id").value=x.id;byId("pc_name").value=x.name||"";byId("pc_protocol").value=x.protocol||"";byId("pc_endpoint").value=x.endpoint||"";byId("pc_auth").value=x.auth_type||"none";byId("pc_version").value=x.version||"";byId("pc_secret").value="";setText("catalogout","Provider #"+x.id+" برای ویرایش بارگذاری شد.");
+  }catch(e){setText("catalogout","خطا: "+e.message)}
+}
+async function addProviderKeyGUI(id){
+  var name=prompt("نام کلید:");if(!name)return;var secret=prompt("مقدار کلید:");if(!secret)return;
+  try{await req("/settings/providers/"+id+"/keys",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key_name:name,secret:secret,priority:100})});setText("catalogout","کلید ثبت شد.");}catch(e){setText("catalogout","خطا: "+e.message)}
+}
+async function rotateProviderKeyGUI(id){
+  if(!confirm("کلید فعال این Provider جابه‌جا شود؟"))return;
+  try{var j=await req("/settings/providers/"+id+"/keys/rotate",{method:"POST"});setText("catalogout","کلید فعال: "+(j.active_key||"نامشخص"));}catch(e){setText("catalogout","خطا: "+e.message)}
 }
 async function toggleProviderCatalog(id,enabled){
   try{
