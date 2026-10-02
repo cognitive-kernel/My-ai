@@ -63,6 +63,7 @@ def test_scheduler_retry_backoff_uses_setting(monkeypatch):
     monkeypatch.setattr(scheduler_module.threading, "Timer", FakeTimer)
     monkeypatch.setattr(scheduler_module, "fetch_all", lambda *args, **kwargs: [])
     monkeypatch.setattr(scheduler_module, "get_setting", lambda key, default: 7 if key == "scheduler.retry_backoff" else default)
+    monkeypatch.setattr(scheduler_module.settings, "learning_max_retries", 3)
     scheduler = scheduler_module.StudyScheduler()
     scheduler._schedule_worker_recovery("Python", scheduler_module.threading.Event())
     assert captured["started"] is True
