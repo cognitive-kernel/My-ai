@@ -26,7 +26,7 @@ def dispatch(event: str, payload, executor, *, event_id=None):
     delivery_id=str(event_id or event_key(event,payload))
     import json
     with connect() as conn:
-        row=conn.execute("SELECT status,attempts,result_json FROM integration_event_delivery WHERE event_id=?", (delivery_id,)).fetchone()
+        row=conn.execute("SELECT status,attempts FROM integration_event_delivery WHERE event_id=?", (delivery_id,)).fetchone()
         if row and row["status"]=="completed":
             return {"status":"duplicate","event_id":delivery_id}
         if not row:
