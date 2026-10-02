@@ -86,9 +86,15 @@ class ModelManager:
             if health.available:
                 rule_priority = next((int(r.get("priority",100)) for r in explicit if r.get("model_id")==item["model_id"]), None)
                 priority = rule_priority if rule_priority is not None else int(item.get("priority", 100))
-                ranked.append((priority, str(provider["name"]), str(item["model_id"]), float(health.latency_ms or 0)))
+                latency = float(health.latency_ms or 0)
+                limits = item.get("limits") or {}
+                cost = float(limits.get("cost_per_1k_tokens", limits.get("cost", 0)) or 0)
+                cost_weight = float(get_setting("llm.routing.cost_weight", "0") or 0)
+                latency_weight = float(get_setting("llm.routing.latency_weight", "1") or 1)
+                score = priority + latency * latency_weight + cost * cost_weight
+                ranked.append((score, str(provider["name"]), str(item["model_id"]), latency))
         if ranked:
-            ranked.sort(key=lambda x: (x[0], x[3], x[1], x[2]))
+            ranked.sort(key=lambda x: (x[0], x[1], x[2]))
             return ranked[0][2]
         return None
 
