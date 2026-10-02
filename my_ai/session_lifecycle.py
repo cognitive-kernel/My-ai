@@ -71,15 +71,15 @@ def create_session(user_id: int | None = None, title: str = "گفتگوی جدی
         return session_id
 
 
-def recover_session(session_id: int) -> dict[str, Any]:
+def recover_session(session_id: int, user_id: int | None = None) -> dict[str, Any]:
     ensure_schema()
     rows = fetch_all(
         """SELECT s.id,s.title,s.kind,s.language,s.pinned,s.created_at,s.updated_at,
                   COALESCE(st.status,'active') status,st.version,st.expires_at,
                   COALESCE(st.last_sequence,0) last_sequence
            FROM chat_sessions s LEFT JOIN session_state st ON st.session_id=s.id
-           WHERE s.id=?""",
-        (session_id,),
+           WHERE s.id=? AND (? IS NULL OR s.user_id=?)""",
+        (session_id, user_id, user_id),
     )
     if not rows:
         raise ValueError("Session not found.")
@@ -100,10 +100,10 @@ def recover_session(session_id: int) -> dict[str, Any]:
     return state
 
 
-def append_event(session_id: int, event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
+def append_event(session_id: int, event_type: str, payload: dict[str, Any], user_id: int | None = None) -> dict[str, Any]:
     ensure_schema()
     with connect() as conn:
-        row = conn.execute("SELECT status,last_sequence FROM session_state WHERE session_id=?", (session_id,)).fetchone()
+        row = conn.execute("SELECT st.status,st.last_sequence FROM session_state st JOIN chat_sessions s ON s.id=st.session_id WHERE st.session_id=? AND (? IS NULL OR s.user_id=?)", (session_id,user_id,user_id)).fetchone()
         if not row:
             raise ValueError("Session state not found.")
         if row["status"] not in {"active", "recovering"}:
