@@ -32,3 +32,13 @@ def update_tool(name: str, description: str, input_schema: dict[str,Any], output
 
 
 def list_tools(): return list_records("tools.catalog")
+
+
+def publish_workflow(name: str, stages: list[dict[str, Any]], *, version: str="1", enabled: bool=True):
+    return put_record("agent.workflows", name, {"stages": stages, "version": version}, enabled=enabled)
+
+def update_workflow(name: str, stages: list[dict[str, Any]], *, version: str="1", enabled: bool=True):
+    if not get_record("agent.workflows", name): raise KeyError(name)
+    return publish_workflow(name, stages, version=version, enabled=enabled)
+
+def list_workflows(): return list_records("agent.workflows")
