@@ -13,7 +13,7 @@ def main() -> int:
     report=run_audit(ROOT)
     out=ROOT/"audit-report.json"
     out.write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
-    print(json.dumps({"silent_failure_count":len(report["silent_failures"]),"module_count":len(report["architecture"])},ensure_ascii=False))
+    print(json.dumps({"silent_failure_count":len(report["silent_failures"]),"module_count":len(report["architecture"]),"silent_failures":report["silent_failures"]},ensure_ascii=False))
     return 0
 
 if __name__=="__main__":
