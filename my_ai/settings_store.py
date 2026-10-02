@@ -391,7 +391,7 @@ def import_registered_settings(values: dict[str, Any]) -> dict[str, Any]:
     for key in ordered_keys:
         value = validated[key]
         set_setting(key, value, secret=bool(SETTING_REGISTRY[key].get("secret")))
-    return validated
+    return {key: get_setting(key, SETTING_REGISTRY[key]["default"]) for key in validated}
 
 def delete_setting(key: str) -> None:
     assert_mutation_allowed(f"setting-delete:{key}")
