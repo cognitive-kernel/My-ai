@@ -4,7 +4,6 @@ import hashlib, time
 from typing import Any
 from .db import connect
 
-
 SCHEMA="""CREATE TABLE IF NOT EXISTS learning_source_catalog(
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  course_id INTEGER,
@@ -36,7 +35,6 @@ CREATE TABLE IF NOT EXISTS learning_relearning_queue(
  FOREIGN KEY(source_id) REFERENCES learning_source_catalog(id) ON DELETE CASCADE
 );"""
 
-
 def ensure_schema():
     with connect() as c:
         c.executescript(SCHEMA)
@@ -44,7 +42,6 @@ def ensure_schema():
         if "content_version" not in columns:
             c.execute("ALTER TABLE learning_source_catalog ADD COLUMN content_version INTEGER NOT NULL DEFAULT 1")
         c.commit()
-
 
 def add_source(url, *, course_id=None, topic_id=None, source_type="custom", title="", priority=100, weight=1,
                product="", version="", compatibility="", provenance=None):
@@ -60,14 +57,12 @@ def add_source(url, *, course_id=None, topic_id=None, source_type="custom", titl
         c.commit()
         return get_source(cur.lastrowid)
 
-
 def get_source(source_id):
     ensure_schema()
     with connect() as c:
         r=c.execute("SELECT * FROM learning_source_catalog WHERE id=?",(source_id,)).fetchone()
     if not r:return None
-    x=dict(r); x["provenance"]=__import__("json").loads(x.pop("provenance_json") or "{}"); return x
-
+    x=dict(r); raw_provenance=x.pop("provenance_json", "{}"); x["provenance"]=__import__("json").loads(raw_provenance or "{}"); return x
 
 def list_sources(course_id=None, topic_id=None, status=None):
     ensure_schema()
@@ -79,9 +74,8 @@ def list_sources(course_id=None, topic_id=None, status=None):
     with connect() as c: rows=c.execute(q,params).fetchall()
     out=[]
     for r in rows:
-        x=dict(r); x["provenance"]=__import__("json").loads(x.pop("provenance_json") or "{}"); out.append(x)
+        x=dict(r); raw_provenance=x.pop("provenance_json", "{}"); x["provenance"]=__import__("json").loads(raw_provenance or "{}"); out.append(x)
     return out
-
 
 def update_source(source_id: int, **changes) -> dict[str, Any] | None:
     ensure_schema()
@@ -95,8 +89,7 @@ def update_source(source_id: int, **changes) -> dict[str, Any] | None:
         sets=', '.join(f'{k}=?' for k in changes)
         c.execute(f'UPDATE learning_source_catalog SET {sets} WHERE id=?', tuple(changes.values())+(int(source_id),))
         if 'url' in changes and str(changes['url']) != str(row['url']):
-            c.execute("UPDATE learning_source_catalog SET status='recheck',content_version=? WHERE id=?",
-                      (int(row['content_version'] or 1)+1,int(source_id)))
+            c.execute("UPDATE learning_source_catalog SET status='recheck',content_version=? WHERE id=?",(int(row['content_version'] or 1)+1,int(source_id)))
             c.execute("""INSERT INTO learning_relearning_queue(source_id,reason,old_hash,new_hash,created_at)
                          VALUES(?,?,?,?,?)""",(int(source_id),"source-location-changed",str(row['content_hash'] or ''),'',time.time()))
         c.commit()
@@ -115,7 +108,6 @@ def review_source(source_id,status):
         c.execute("UPDATE learning_source_catalog SET status=?,reviewed_at=? WHERE id=?",(status,time.time(),source_id)); c.commit()
     return get_source(source_id)
 
-
 def update_content_hash(source_id,content):
     digest=hashlib.sha256(str(content).encode("utf-8")).hexdigest()
     ensure_schema()
@@ -123,8 +115,7 @@ def update_content_hash(source_id,content):
         old=c.execute("SELECT content_hash,content_version FROM learning_source_catalog WHERE id=?",(source_id,)).fetchone()
         changed=bool(old and old["content_hash"] and old["content_hash"]!=digest)
         version=int(old["content_version"] or 1) + (1 if changed else 0) if old else 1
-        c.execute("UPDATE learning_source_catalog SET content_hash=?,content_version=?,status=? WHERE id=?",
-                  (digest,version,"recheck" if changed else "pending",source_id))
+        c.execute("UPDATE learning_source_catalog SET content_hash=?,content_version=?,status=? WHERE id=?",(digest,version,"recheck" if changed else "pending",source_id))
         if changed:
             c.execute("""INSERT INTO learning_relearning_queue(source_id,reason,old_hash,new_hash,created_at)
                          VALUES(?,?,?,?,?)""",(source_id,"source-content-changed",str(old["content_hash"]),digest,time.time()))
