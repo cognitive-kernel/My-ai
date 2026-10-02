@@ -24,4 +24,11 @@ def register_tool(name: str, description: str, input_schema: dict[str,Any], outp
     },enabled=enabled)
 
 
+def update_tool(name: str, description: str, input_schema: dict[str,Any], output_schema: dict[str,Any], *, permissions=None, timeout=30, retries=2, tasks=None, version="1", enabled=True):
+    current = get_record("tools.catalog", name)
+    if not current:
+        raise KeyError(name)
+    return register_tool(name, description, input_schema, output_schema, permissions=permissions, timeout=timeout, retries=retries, tasks=tasks, version=version, enabled=enabled)
+
+
 def list_tools(): return list_records("tools.catalog")
