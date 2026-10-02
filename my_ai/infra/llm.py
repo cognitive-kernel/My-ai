@@ -54,12 +54,23 @@ class OllamaClient:
         response=httpx.post(url,json=payload,headers=headers,timeout=self._timeout()); response.raise_for_status(); return response
 
     def _select_model(self, task: str | None) -> str:
-        if not task: self.route_reason="default"; return self.default_model
-        low=task.lower()
-        if any(x in low for x in ("code","python","sql","debug","coding","patch","کد","برنامه","پروژه","رفع باگ")): self.route_reason="coding_task"; return getattr(_settings(),"coding_model",self.default_model)
-        if any(x in low for x in ("route","routing","classify","intent","simple","ساده","دسته")): self.route_reason="routing_task"; return getattr(_settings(),"routing_model",self.default_model)
-        if any(x in low for x in ("complex","reasoning","analysis","معماری","تحلیل","پیچیده")): self.route_reason="complex_task"; return self.default_model
-        self.route_reason="general_task"; return self.default_model
+        if not task:
+            self.route_reason = "default"
+            return self.default_model
+        low = task.lower()
+        task_kind = "general"
+        if any(x in low for x in ("code","python","sql","debug","coding","patch","کد","برنامه","پروژه","رفع باگ")):
+            task_kind = "coding"
+        elif any(x in low for x in ("route","routing","classify","intent","simple","ساده","دسته")):
+            task_kind = "routing"
+        elif any(x in low for x in ("complex","reasoning","analysis","معماری","تحلیل","پیچیده")):
+            task_kind = "reasoning"
+        selected = self.model_manager.select_for_task(task_kind)
+        if selected:
+            self.route_reason = "catalog_capability"
+            return selected
+        self.route_reason = task_kind + "_fallback"
+        return getattr(_settings(), f"{task_kind}_model", self.default_model) if task_kind in {"coding","routing"} else self.default_model
 
     def _preflight_model(self, requested: str, task: str | None) -> str:
         status=self.model_manager.health(requested)
