@@ -34,7 +34,7 @@ def test_watchdog_restores_database_snapshot_after_failed_health(monkeypatch, tm
     monkeypatch.setattr(watchdog.httpx, "get", lambda *args, **kwargs: type("R", (), {"status_code": 503})())
     monkeypatch.setattr(watchdog, "_git", lambda *args: type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})())
     class Child:
-        def poll(self): return None
+        def poll(self): return 1
         def terminate(self): pass
         def wait(self, timeout=0): pass
     monkeypatch.setattr(watchdog.subprocess, "Popen", lambda *args, **kwargs: Child())
