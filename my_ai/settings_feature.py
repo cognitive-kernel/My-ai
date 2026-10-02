@@ -22,6 +22,7 @@ from .settings_store import get_setting, set_setting, get_bool, get_int, get_git
 from .ui_actions import list_ui_actions
 from .metrics import snapshot as metrics_snapshot
 from .learning_catalog import add_source, list_sources, review_source, update_content_hash
+from .backup_manager import backup as backup_database, restore as restore_database
 from .control_plane import list_records, get_record, put_record, set_enabled, delete_record, start_action, update_action, get_action, list_actions, namespace_catalog
 
 router = APIRouter(tags=["settings"])
@@ -519,6 +520,24 @@ def learning_source_review(source_id:int,status:str,request:Request):
 def learning_source_hash(source_id:int, request:Request, content:str=""):
     require_admin(request)
     return update_content_hash(source_id,content)
+
+class BackupRequest(BaseModel):
+    path: str = Field(min_length=1, max_length=2000)
+    overwrite: bool = False
+
+@router.post("/settings/database/backup")
+def settings_database_backup(payload: BackupRequest, request: Request):
+    user=require_admin(request)
+    try: result=backup_database(payload.path,overwrite=payload.overwrite)
+    except (OSError,FileNotFoundError,FileExistsError) as exc: raise HTTPException(400,str(exc))
+    audit(user,"database","backup","200",result["path"]); return result
+
+@router.post("/settings/database/restore")
+def settings_database_restore(payload: BackupRequest, request: Request):
+    user=require_admin(request)
+    try: result=restore_database(payload.path)
+    except (OSError,FileNotFoundError) as exc: raise HTTPException(400,str(exc))
+    audit(user,"database","restore","200",result["path"]); return result
 
 @router.get("/settings/control-plane/namespaces")
 def control_plane_namespaces(request: Request):
