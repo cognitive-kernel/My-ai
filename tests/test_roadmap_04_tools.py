@@ -1,0 +1,26 @@
+from my_ai import registries
+
+
+def test_tool_registry_publishes_full_runtime_contract(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(registries, "put_record", lambda *args, **kwargs: captured.update(args=args, kwargs=kwargs) or {"ok": True})
+    result = registries.register_tool(
+        "demo", "Demo tool", {"type": "object"}, {"type": "object"},
+        permissions=["read"], timeout=12, retries=3, tasks=["chat"], version="2", enabled=True
+    )
+    assert result["ok"] is True
+    payload = captured["args"][2]
+    assert payload["description"] == "Demo tool"
+    assert payload["input_schema"]["type"] == "object"
+    assert payload["permissions"] == ["read"]
+    assert payload["timeout"] == 12
+    assert payload["retries"] == 3
+    assert payload["version"] == "2"
+    assert captured["kwargs"]["enabled"] is True
+
+
+def test_prompt_registry_is_versioned(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(registries, "put_record", lambda *args, **kwargs: captured.update(args=args, kwargs=kwargs) or {})
+    registries.publish_prompt("p", "hello", task="chat", version="3")
+    assert captured["args"][2]["version"] == "3"
