@@ -151,10 +151,11 @@ class LearningEngine:
                     language, topic["topic"], url, type(exc).__name__, message,
                 )
                 knowledge.append({"title":"Source unavailable","url":url,"error":message})
-                try:
-                    self.record_experience(language, topic["topic"], "error", "source_fetch", f"منبع آموزشی در دسترس نبود: {url}", message)
-                except (KeyError, RuntimeError, ValueError) as record_exc:
-                    logger.warning("LEARNING_SOURCE_EXPERIENCE_FAILURE: %s", record_exc)
+                if progress_callback:
+                    try:
+                        self.record_experience(language, topic["topic"], "error", "source_fetch", f"منبع آموزشی در دسترس نبود: {url}", message)
+                    except (KeyError, RuntimeError, ValueError) as record_exc:
+                        logger.warning("LEARNING_SOURCE_EXPERIENCE_FAILURE: %s", record_exc)
                 if progress_callback:
                     progress_callback("source_unavailable",topic["topic"])
                 continue
