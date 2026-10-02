@@ -57,8 +57,8 @@ def _hardware() -> dict[str, object]:
     try:
         import psutil
         info["ram_bytes"] = psutil.virtual_memory().total
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("SELF_DIAGNOSTICS_PSUTIL_UNAVAILABLE: %s", exc)
     return info
 
 
