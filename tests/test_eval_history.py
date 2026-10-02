@@ -19,7 +19,7 @@ def test_regression_gate_uses_versioned_baseline(monkeypatch, tmp_path):
     assert result["mode"]=="deterministic"
 
 def test_regression_history_payload_is_json_and_versioned():
-    result=compare_regression_baseline({"router_accuracy":1.0},{"router_accuracy":0.9})
+    result=compare_regression_baseline({"retrieval_mrr":1.0,"persian_response_mean":1.0,"citation_coverage":1.0,"confidence_calibration":1.0,"router_accuracy":1.0,"skill_verification":1.0},{"retrieval_mrr":0.9,"persian_response_mean":0.9,"citation_coverage":1.0,"confidence_calibration":0.9,"router_accuracy":0.9,"skill_verification":0.9})
     payload=json.dumps({"dataset_version":"baseline-v1","result":result},ensure_ascii=False)
     decoded=json.loads(payload)
     assert decoded["dataset_version"]=="baseline-v1"
