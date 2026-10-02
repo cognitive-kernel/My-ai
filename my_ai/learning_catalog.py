@@ -23,6 +23,17 @@ SCHEMA="""CREATE TABLE IF NOT EXISTS learning_source_catalog(
  provenance_json TEXT NOT NULL DEFAULT '{}',
  discovered_at REAL NOT NULL,
  reviewed_at REAL
+);
+CREATE TABLE IF NOT EXISTS learning_relearning_queue(
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ source_id INTEGER NOT NULL,
+ reason TEXT NOT NULL,
+ old_hash TEXT NOT NULL DEFAULT '',
+ new_hash TEXT NOT NULL DEFAULT '',
+ status TEXT NOT NULL DEFAULT 'pending',
+ created_at REAL NOT NULL,
+ processed_at REAL,
+ FOREIGN KEY(source_id) REFERENCES learning_source_catalog(id) ON DELETE CASCADE
 );"""
 
 
@@ -79,9 +90,16 @@ def update_source(source_id: int, **changes) -> dict[str, Any] | None:
     if 'url' in changes and not str(changes['url']).startswith(('http://','https://','file://')): raise ValueError('unsupported source URL')
     if not changes: return get_source(source_id)
     with connect() as c:
-        if not c.execute('SELECT id FROM learning_source_catalog WHERE id=?',(int(source_id),)).fetchone(): return None
+        row=c.execute('SELECT id,url,content_hash,content_version FROM learning_source_catalog WHERE id=?',(int(source_id),)).fetchone()
+        if not row: return None
         sets=', '.join(f'{k}=?' for k in changes)
-        c.execute(f'UPDATE learning_source_catalog SET {sets} WHERE id=?', tuple(changes.values())+(int(source_id),)); c.commit()
+        c.execute(f'UPDATE learning_source_catalog SET {sets} WHERE id=?', tuple(changes.values())+(int(source_id),))
+        if 'url' in changes and str(changes['url']) != str(row['url']):
+            c.execute("UPDATE learning_source_catalog SET status='recheck',content_version=? WHERE id=?",
+                      (int(row['content_version'] or 1)+1,int(source_id)))
+            c.execute("""INSERT INTO learning_relearning_queue(source_id,reason,old_hash,new_hash,created_at)
+                         VALUES(?,?,?,?,?)""",(int(source_id),"source-location-changed",str(row['content_hash'] or ''),'',time.time()))
+        c.commit()
     return get_source(source_id)
 
 def delete_source(source_id: int) -> bool:
