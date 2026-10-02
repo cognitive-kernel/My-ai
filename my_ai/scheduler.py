@@ -11,7 +11,6 @@ from .curriculum import LANGUAGE_CURRICULA, canonical_language
 from .db import connect, execute, fetch_all
 from .dynamic_learning import due_domains
 from .config import settings
-from .settings_store import get_setting
 from .resource_guard import limits as resource_limits
 from .scheduler_resilience import mark_stale, record as record_scheduler_event
 
