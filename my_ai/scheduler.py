@@ -70,7 +70,12 @@ class StudyScheduler:
     def start(self,language="Python",session_id=None):
         self._ensure_worker_tables()
         language=self._normalize_language(language); key=language.casefold()
+        max_workers=max(1,int(get_setting("scheduler.worker_count", 2)))
         with self._lock:
+            active_count=sum(1 for thread,_event in self._workers.values() if thread.is_alive())
+            if active_count >= max_workers and key not in self._workers:
+                logger.info("Scheduler worker limit reached: %s", max_workers)
+                return
             existing=self._workers.get(key)
             if existing and existing[0].is_alive():
                 return
