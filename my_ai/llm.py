@@ -5,6 +5,10 @@ from .settings_store import get_setting
 from .infra.llm import LLMError, HistoryMessage, OllamaClient, OpenAICompatibleClient, create_llm as _infra_create_llm
 
 
+def _settings():
+    return settings
+
+
 def _runtime_setting(key: str, fallback=None):
     try:
         return get_setting(key, fallback)
@@ -21,4 +25,4 @@ def create_llm():
     return _infra_create_llm()
 
 
-__all__ = ["LLMError", "HistoryMessage", "OllamaClient", "OpenAICompatibleClient", "create_llm", "httpx", "settings", "_runtime_setting"]
+__all__ = ["LLMError", "HistoryMessage", "OllamaClient", "OpenAICompatibleClient", "create_llm", "httpx", "settings", "_settings", "_runtime_setting"]
