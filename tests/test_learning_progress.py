@@ -108,6 +108,7 @@ def test_scheduler_worker_uses_its_own_stop_event(monkeypatch):
     monkeypatch.setattr("my_ai.scheduler.LearningEngine", FakeEngine)
     monkeypatch.setattr("my_ai.scheduler.StudyScheduler._wait_for_resources", staticmethod(lambda stop_event: {}))
     scheduler = StudyScheduler(interval_seconds=60)
+    monkeypatch.setattr(scheduler, "_renew_lease", lambda language: True)
     old_stop = threading.Event()
     old_thread = threading.Thread(target=scheduler._loop, args=("Python", old_stop), daemon=True)
     old_thread.start()
