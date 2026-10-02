@@ -1467,7 +1467,7 @@ async def session_event_endpoint(session_id: int, request: Request):
 def session_integrity_endpoint(session_id: int, request: Request):
     user = require_user(request)
     recover_session(session_id, user["id"])
-    return verify_integrity(session_id)
+    return verify_integrity(session_id, user["id"])
 
 @app.post("/sessions/{session_id}/stream")
 async def stream_open_endpoint(session_id: int, request: Request):
