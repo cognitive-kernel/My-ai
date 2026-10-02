@@ -5,7 +5,9 @@ import time
 from typing import Any
 
 from .access_policy import assert_mutation_allowed
-from .db import connect
+def _connect():
+    from .db import connect
+    return connect()
 from .settings_store import _decrypt, _encrypt
 
 
@@ -71,7 +73,7 @@ CREATE TABLE IF NOT EXISTS llm_models (
 
 
 def ensure_schema() -> None:
-    with connect() as conn:
+    with _connect() as conn:
         conn.executescript(SCHEMA)
         conn.commit()
 
