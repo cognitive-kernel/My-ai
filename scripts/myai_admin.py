@@ -7,7 +7,7 @@ from my_ai.control_plane import (
     start_action, update_action, list_actions, namespace_catalog,
 )
 from my_ai.provider_catalog import (
-    list_providers, list_models, upsert_provider, delete_provider,
+    list_providers, list_models, upsert_provider, delete_provider, delete_model,
     upsert_model, delete_model, add_provider_key, list_provider_keys, rotate_provider_key,
 )
 from my_ai.settings_store import get_setting_registry, export_registered_settings
