@@ -31,6 +31,7 @@ from .plugin_registry import propose_plugin, approve_plugin, reject_plugin
 from .evaluation_registry import upsert_suite, list_suites, create_baseline, propose_candidate, get_candidate, verify_candidate, list_candidates, compare_metrics
 from .integration_catalog import register_integration, list_integrations, register_webhook, list_webhooks, map_event_action, list_event_actions
 from .security_catalog import define_role, define_capability, set_permission, set_network_policy, set_filesystem_policy, set_subprocess_policy, set_self_modification_policy, list_security_policies
+from .registries import publish_workflow, update_workflow, list_workflows
 
 router = APIRouter(tags=["settings"])
 _workers = ThreadPoolExecutor(max_workers=1, thread_name_prefix="myai-learning")
@@ -436,6 +437,24 @@ def settings_audit(request: Request, limit: int = 200):
     require_admin(request)
     rows=fetch_all("SELECT id,user_id,username,tool_name,action,status,details,created_at FROM audit_log ORDER BY id DESC LIMIT ?",(max(1,min(1000,int(limit))),))
     return {"items":[dict(r) for r in rows]}
+
+@router.get("/settings/workflows")
+def settings_workflows(request: Request):
+    require_admin(request); return {"items": list_workflows()}
+
+@router.post("/settings/workflows")
+def settings_workflow(payload: ControlPlaneRecordRequest, request: Request):
+    user=require_admin(request); stages=payload.payload.get("stages", [])
+    if not isinstance(stages,list): raise HTTPException(400,"stages must be a list")
+    item=publish_workflow(payload.name,stages,version=str(payload.payload.get("version","1")),enabled=payload.enabled); audit(user,"workflows","write","200",payload.name); return item
+
+@router.put("/settings/workflows/{name}")
+def settings_workflow_update(name: str, payload: ControlPlaneRecordRequest, request: Request):
+    user=require_admin(request); stages=payload.payload.get("stages", [])
+    if payload.name != name or not isinstance(stages,list): raise HTTPException(400,"invalid workflow update")
+    try: item=update_workflow(name,stages,version=str(payload.payload.get("version","1")),enabled=payload.enabled)
+    except KeyError as exc: raise HTTPException(404,"workflow not found") from exc
+    audit(user,"workflows","update","200",name); return item
 
 @router.get("/settings/security-policies")
 def settings_security_policies(request: Request):
