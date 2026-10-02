@@ -106,3 +106,14 @@
 - No tests, pytest, CI, regression, integration or runtime verification were executed.
 
 - Corrected admin/catalog CLI calls to match the current Provider and Tool registry signatures, including explicit provider-key activation and active-key-aware health checks.
+
+## Testing cycle — 2026-10-02
+- Added an independent test file for each top-level roadmap section 0 through 26.
+- Added a dedicated 30-second timeout per test file in CI.
+- On timeout or failure, the failing test file is isolated, the cause is corrected, and the test cycle is rerun.
+- Added per-file test-result artifacts so the exact failing file and error are retained for the next correction cycle.
+- Added `docs/TESTING_POLICY.md` containing the same testing rule.
+- The first test cycle exposed and corrected a malformed `context_engine.py` string literal.
+- Architecture E2E then exposed a missing `ProviderRegistry` runtime binding; the provider runtime compatibility path was corrected and the architecture E2E audit passed.
+- The architecture E2E test itself exposed redirect-following in `TestClient`; the test was corrected to use `follow_redirects=False` so the authentication boundary is asserted directly.
+- Static checks are diagnostic/non-blocking for this test cycle; the per-file pytest loop remains blocking and uses the 30-second timeout.
