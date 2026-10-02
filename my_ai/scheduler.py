@@ -105,7 +105,7 @@ class StudyScheduler:
                 try:
                     self._renew_lease(language)
                     self._wait_for_resources(stop_event)
-                    acquired=self._worker_slots.acquire(timeout=max(1.0,float(get_setting("resources.wait_seconds",str(getattr(settings,"resource_wait_seconds",30))))))
+                    acquired=self._worker_slots.acquire(timeout=max(1.0,float(getattr(settings,"resource_wait_seconds",30))))
                     if not acquired:
                         raise TimeoutError("learning worker concurrency limit reached")
                     try:
