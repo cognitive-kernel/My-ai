@@ -52,3 +52,8 @@
 - Added profile/capability entries to the GUI Action Registry.
 - Existing generic Control Plane GUI now supports record edit, enable/disable, and delete alongside CLI CRUD operations.
 - No tests, pytest, CI, or regression verification were run in this pass by explicit project instruction.
+
+- Control Plane GUI lifecycle was completed for record create/edit/enable/disable/delete and action start/status/update, including progress/result/error fields; the corresponding API and CLI lifecycle remain backed by the same persistence layer.
+- Expanded GUI Action Registry coverage for configuration history, provider/model catalog, learning catalog, database policy, security roles and evaluation/regression.
+- The Settings page now exposes the Control Plane action lifecycle without requiring direct endpoint or CLI usage.
+- Coding remains intentionally separate from verification: no test execution was started in this pass.
