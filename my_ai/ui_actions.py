@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Literal
+from typing import Literal, Any
+from .control_plane import list_records, put_record
 
 
 @dataclass(frozen=True)
@@ -44,5 +45,17 @@ _ACTIONS = (
 )
 
 
+def register_ui_action(action: UIAction) -> dict[str, Any]:
+    if action.method not in {"GET","POST"}: raise ValueError("unsupported UI action method")
+    return put_record("ui.actions", action.id, asdict(action), enabled=True)
+
+def ensure_ui_action_registry() -> None:
+    for action in _ACTIONS:
+        current = list_records("ui.actions", include_disabled=True)
+        if not any(x["name"] == action.id for x in current):
+            register_ui_action(action)
+
 def list_ui_actions() -> list[dict]:
-    return [asdict(action) for action in _ACTIONS]
+    ensure_ui_action_registry()
+    items = list_records("ui.actions", include_disabled=True)
+    return [dict(x["payload"], enabled=x["enabled"], version=x["version"]) for x in items]
