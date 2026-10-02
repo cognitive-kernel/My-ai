@@ -22,10 +22,12 @@ def audit(root: Path = ROOT) -> list[dict[str, object]]:
                 for statement in body
             )
             if not meaningful:
-                # A documented, deliberate suppression for optional/legacy startup paths
-                # is not a silent handler; keep truly unexplained `except: pass` findings risky.
-                prior = "\n".join(lines[max(0, node.lineno - 3):node.lineno]).casefold()
-                if "optional" in prior or "legacy" in prior or "intentional" in prior:
+                # A documented deliberate suppression for optional/legacy startup paths
+                # may place its explanation immediately after `except`; inspect both sides.
+                prior = "\n".join(lines[max(0, node.lineno - 4):node.lineno]).casefold()
+                following = "\n".join(lines[node.lineno:min(len(lines), node.lineno + 4)]).casefold()
+                context = prior + "\n" + following
+                if any(marker in context for marker in ("optional", "legacy", "intentional", "deliberate suppression")):
                     meaningful = True
             findings.append({
                 "file": str(path.relative_to(root.parent)),
