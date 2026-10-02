@@ -164,6 +164,49 @@ def load_versioned_dataset(path=None) -> dict:
     return data
 
 
+def score_citation_coverage(items: Iterable[dict]) -> float:
+    rows = tuple(items)
+    if not rows:
+        return 0.0
+    valid = 0
+    for item in rows:
+        provenance = item.get("provenance") if isinstance(item, dict) else None
+        valid += int(isinstance(provenance, dict) and bool(provenance.get("citation_id")) and bool(provenance.get("source_url")))
+    return valid / len(rows)
+
+
+def score_confidence_calibration(items: Iterable[dict]) -> float:
+    rows = tuple(items)
+    calibrated = [item for item in rows if isinstance(item, dict) and item.get("confidence") is not None and item.get("confidence_calibrated")]
+    if not calibrated:
+        return 0.0
+    # Calibration evidence is supplied by the retrieval judgment layer. Prefer its
+    # explicit calibration score when present; otherwise use the calibrated-hit rate.
+    scores = [float(item.get("calibration_score")) for item in calibrated if item.get("calibration_score") is not None]
+    return max(0.0, min(1.0, sum(scores) / len(scores))) if scores else len(calibrated) / len(rows)
+
+
+def score_router_accuracy(predictions: Iterable[tuple[str, str]]) -> float:
+    rows = tuple(predictions)
+    if not rows:
+        return 0.0
+    return sum(int(str(actual).casefold() == str(expected).casefold()) for actual, expected in rows) / len(rows)
+
+
+def score_skill_verification(states: Iterable[bool]) -> float:
+    rows = tuple(bool(x) for x in states)
+    return sum(rows) / len(rows) if rows else 0.0
+
+
+def load_regression_dataset(path=None) -> dict:
+    import json
+    from pathlib import Path
+    dataset_path = Path(path) if path else Path(__file__).resolve().parents[1] / "evals" / "datasets" / "regression_v1.json"
+    data = json.loads(dataset_path.read_text(encoding="utf-8"))
+    if str(data.get("version")) != "regression-v1":
+        raise ValueError("Unsupported regression dataset version.")
+    return data
+
 def metric_thresholds() -> dict[str, float]:
     return {item.name: float(item.minimum) for item in DEFAULT_REGRESSION_THRESHOLDS}
 
