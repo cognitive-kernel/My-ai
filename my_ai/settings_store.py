@@ -16,6 +16,10 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
     "resources.gpu_layers": {"type":"int","default":0,"min":0,"max":128,"description":"GPU layers."},
     "llm.retry_attempts": {"type":"int","default":2,"min":1,"max":5,"description":"LLM retry attempts."},
     "llm.timeout_seconds": {"type":"float","default":300.0,"min":1.0,"max":3600.0,"description":"LLM timeout in seconds."},
+    "llm.custom.provider": {"type":"enum","default":"openai-compatible","choices":["openai-compatible"],"description":"Protocol used by the custom LLM provider."},
+    "llm.custom.base_url": {"type":"text","default":"","max_length":1000,"description":"Base URL for a custom OpenAI-compatible LLM endpoint."},
+    "llm.custom.model": {"type":"text","default":"","max_length":300,"description":"Model ID exposed by the custom LLM provider."},
+    "llm.custom.api_key": {"type":"text","default":"","max_length":10000,"secret":True,"description":"API key for the custom LLM provider."},
     "learning.max_concurrent_workers": {"type":"int","default":2,"min":1,"max":16,"description":"Maximum concurrent learning workers."},
     "learning.source_timeout_seconds": {"type":"float","default":8.0,"min":1.0,"max":300.0,"description":"Learning source timeout."},
     "learning.source_max_chars": {"type":"int","default":12000,"min":1000,"max":200000,"description":"Maximum source characters retained."},
@@ -39,6 +43,7 @@ def validate_registered_setting(key: str, value: Any) -> Any:
         try: value = float(value)
         except (TypeError, ValueError) as exc: raise ValueError(f"{key} must be number") from exc
     else: value = str(value)
+    if meta.get("type") == "text" and len(value) > int(meta.get("max_length", 10000)): raise ValueError(f"{key} is too long")
     if "min" in meta and value < meta["min"]: raise ValueError(f"{key} below minimum")
     if "max" in meta and value > meta["max"]: raise ValueError(f"{key} above maximum")
     if "choices" in meta and value not in meta["choices"]: raise ValueError(f"{key} has invalid choice")
@@ -132,6 +137,7 @@ def export_registered_settings() -> dict[str, Any]:
     return {
         key: get_setting(key, meta["default"])
         for key, meta in SETTING_REGISTRY.items()
+        if not meta.get("secret")
     }
 
 def import_registered_settings(values: dict[str, Any]) -> dict[str, Any]:
@@ -145,7 +151,7 @@ def import_registered_settings(values: dict[str, Any]) -> dict[str, Any]:
         for key, value in values.items()
     }
     for key, value in validated.items():
-        set_setting(key, value)
+        set_setting(key, value, secret=bool(SETTING_REGISTRY[key].get("secret")))
     return export_registered_settings()
 
 def delete_setting(key: str) -> None:
