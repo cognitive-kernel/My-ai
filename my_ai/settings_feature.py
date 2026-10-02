@@ -1205,6 +1205,30 @@ def add_course_topic(course_id: int, r: CourseTopicRequest, request: Request):
     audit(user, "learning", "write", "200", f"course-topic-added:{course_id}:{tid}")
     return {"id": tid, "course_id": course_id, "topic_order": order, "status": "planned"}
 
+@router.post("/settings/courses/{course_id}/topics/{topic_id}/pause")
+def course_topic_pause(course_id:int,topic_id:int,request:Request):
+    user=require_admin(request); _setup()
+    if not fetch_all("SELECT id FROM custom_course_topics WHERE id=? AND course_id=?",(topic_id,course_id)): raise HTTPException(404,"Topic not found.")
+    _set_topic(topic_id,"paused",0,"paused")
+    audit(user,"learning","topic-pause","200",f"{course_id}:{topic_id}")
+    return {"status":"paused","topic_id":topic_id}
+
+@router.post("/settings/courses/{course_id}/topics/{topic_id}/resume")
+def course_topic_resume(course_id:int,topic_id:int,request:Request):
+    user=require_admin(request); _setup()
+    if not fetch_all("SELECT id FROM custom_course_topics WHERE id=? AND course_id=?",(topic_id,course_id)): raise HTTPException(404,"Topic not found.")
+    _set_topic(topic_id,"planned",0,"planned")
+    audit(user,"learning","topic-resume","200",f"{course_id}:{topic_id}")
+    return {"status":"resumed","topic_id":topic_id}
+
+@router.post("/settings/courses/{course_id}/topics/{topic_id}/reset")
+def course_topic_reset(course_id:int,topic_id:int,request:Request):
+    user=require_admin(request); _setup()
+    if not fetch_all("SELECT id FROM custom_course_topics WHERE id=? AND course_id=?",(topic_id,course_id)): raise HTTPException(404,"Topic not found.")
+    execute("UPDATE custom_course_progress SET status='planned',progress_percent=0,phase='planned',lesson=NULL,score=NULL,last_attempt_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE topic_id=?",(topic_id,))
+    audit(user,"learning","topic-reset","200",f"{course_id}:{topic_id}")
+    return {"status":"reset","topic_id":topic_id}
+
 @router.get("/settings/courses/{course_id}/progress")
 def course_progress(course_id:int,request:Request):
     require_user(request); _setup()
