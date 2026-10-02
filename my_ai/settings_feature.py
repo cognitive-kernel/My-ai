@@ -456,12 +456,23 @@ def settings_provider_health(provider_id: int, request: Request):
 @router.post("/settings/models/{provider_id}/{model_id:path}/health")
 def settings_model_health(provider_id: int, model_id: str, request: Request):
     require_admin(request)
-    from .model_manager import ModelManager
     provider = next((x for x in list_providers() if int(x["id"]) == int(provider_id)), None)
     if not provider:
         raise HTTPException(404, "Provider not found.")
-    status = ModelManager().health(model_id, provider=str(provider["name"]))
-    return status.__dict__
+    started = __import__("time").perf_counter()
+    try:
+        response = httpx.get(str(provider["endpoint"]).rstrip("/") + "/models",
+                             timeout=float(provider.get("timeout_seconds") or 30))
+        response.raise_for_status()
+        payload = response.json()
+        models = {str(item.get("id")) for item in payload.get("data", []) if isinstance(item, dict) and item.get("id")}
+        available = model_id in models if models else True
+        return {"provider_id": provider_id, "model": model_id, "available": available,
+                "latency_ms": round((__import__("time").perf_counter() - started) * 1000, 2)}
+    except Exception as exc:
+        return {"provider_id": provider_id, "model": model_id, "available": False,
+                "latency_ms": round((__import__("time").perf_counter() - started) * 1000, 2),
+                "error": str(exc)}
 
 @router.get("/settings/registry")
 def settings_registry(request: Request):
