@@ -49,3 +49,21 @@ def test_scheduler_concurrency_semaphore_uses_persisted_limit(monkeypatch):
     scheduler._worker_slots.release()
     scheduler._worker_slots.release()
     scheduler._worker_slots.release()
+
+
+def test_scheduler_retry_backoff_uses_setting(monkeypatch):
+    import my_ai.scheduler as scheduler_module
+    captured = {}
+    class FakeTimer:
+        def __init__(self, delay, callback):
+            captured["delay"] = delay
+            captured["callback"] = callback
+        def start(self):
+            captured["started"] = True
+    monkeypatch.setattr(scheduler_module.threading, "Timer", FakeTimer)
+    monkeypatch.setattr(scheduler_module, "fetch_all", lambda *args, **kwargs: [])
+    monkeypatch.setattr(scheduler_module, "get_setting", lambda key, default: 7 if key == "scheduler.retry_backoff" else default)
+    scheduler = scheduler_module.StudyScheduler()
+    scheduler._schedule_worker_recovery("Python", scheduler_module.threading.Event())
+    assert captured["started"] is True
+    assert captured["delay"] == 7 * (2 ** 3)
