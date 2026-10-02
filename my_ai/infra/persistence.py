@@ -245,7 +245,8 @@ def remember_knowledge(topic: str, title: str, content: str, source_url: str | N
         raise PermissionError("MYAI_READ_ONLY blocks database mutation.")
     digest = _knowledge_hash(topic, content)
     from ..settings_store import get_setting
-    threshold = float(get_setting("memory.duplicate_threshold", settings.knowledge_duplicate_threshold))
+    from ..config import settings as runtime_settings
+    threshold = float(get_setting("memory.duplicate_threshold", runtime_settings.knowledge_duplicate_threshold))
     with connect() as conn:
         conn.execute("CREATE TABLE IF NOT EXISTS knowledge_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, knowledge_id INTEGER NOT NULL, user_id INTEGER, action TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
         row = conn.execute("SELECT id,source_url FROM knowledge WHERE content_hash=?", (digest,)).fetchone()
