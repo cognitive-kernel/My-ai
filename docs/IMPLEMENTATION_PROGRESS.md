@@ -81,3 +81,14 @@
 - Hardened cache invalidation hooks, event retry/idempotency/dead-letter persistence, and Meta-Agent candidate sandbox/verification/approval flow.
 - Routed project execution root through the Configuration Registry.
 - No tests, pytest, CI, regression, integration or runtime verification were executed.
+
+
+## Implementation completion pass — 2026-10-02 / cycle 2 (no tests)
+- Re-audited the roadmap's currently unchecked implementation areas against the repository rather than treating stale checkboxes as missing code.
+- Added persistent/versioned GUI Action Registry management and a Settings API for registering actions.
+- Added manual learning-source file upload with validated sandboxed destination, configurable size limit and provenance.
+- Completed Course create/update persistence for LLM, schedule, mastery, source policy and mode; added Course and Topic resume/reset lifecycle controls.
+- Extended the Research Pipeline with manual + discovered sources, allowlist filtering, freshness hooks, verification, ranking, provenance and contradiction reporting.
+- Tightened version-aware knowledge selection so a mismatched version is not treated as current knowledge unless explicit compatibility is recorded.
+- Confirmed existing implementation for schema-driven Settings Registry, prompt/policy/tool registries, security catalogs, workflow runtime, hybrid retrieval, knowledge graph, context planning, confidence, evaluation, parallel task graph, budgets, event lifecycle, self-update/self-repair APIs, and advanced-agent primitives.
+- No tests, regression, CI or runtime verification were executed.
