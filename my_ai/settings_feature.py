@@ -1221,6 +1221,23 @@ def course_start(course_id:int,request:Request):
     audit(user,"learning","execute","202",f"course-start:{course_id}")
     return {"status":"started","course_id":course_id}
 
+@router.post("/settings/courses/{course_id}/resume")
+def course_resume(course_id:int,request:Request):
+    user=require_admin(request); _setup()
+    if not _course(course_id): raise HTTPException(404,"Course not found.")
+    execute("UPDATE custom_course_progress SET status='planned',phase='planned',updated_at=CURRENT_TIMESTAMP WHERE course_id=? AND status='paused'",(course_id,))
+    if course_id not in _running: _workers.submit(_run_course,course_id)
+    audit(user,"learning","resume","202",f"course-resume:{course_id}")
+    return {"status":"resumed","course_id":course_id}
+
+@router.post("/settings/courses/{course_id}/reset")
+def course_reset(course_id:int,request:Request):
+    user=require_admin(request); _setup()
+    if not _course(course_id): raise HTTPException(404,"Course not found.")
+    execute("UPDATE custom_course_progress SET status='planned',progress_percent=0,phase='planned',lesson=NULL,score=NULL,last_attempt_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE course_id=?",(course_id,))
+    audit(user,"learning","reset","200",f"course-reset:{course_id}")
+    return {"status":"reset","course_id":course_id}
+
 @router.post("/settings/courses/{course_id}/pause")
 def course_pause(course_id:int,request:Request):
     user=require_admin(request); _setup()
