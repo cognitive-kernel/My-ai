@@ -62,3 +62,31 @@ def test_resource_wait_honors_stop_event(monkeypatch):
         pass
     else:
         raise AssertionError("stopped scheduler must not wait indefinitely")
+
+
+def test_scheduler_persists_worker_state_on_start(monkeypatch):
+    scheduler = StudyScheduler(interval_seconds=1)
+    executed = []
+    monkeypatch.setattr(scheduler, "_ensure_worker_tables", lambda: None)
+    monkeypatch.setattr(scheduler, "_acquire_lease", lambda language: True)
+    monkeypatch.setattr("my_ai.scheduler.fetch_all", lambda *args, **kwargs: [])
+    monkeypatch.setattr("my_ai.scheduler.execute", lambda *args, **kwargs: executed.append((args, kwargs)))
+    class Thread:
+        def __init__(self, *args, **kwargs): pass
+        def start(self): pass
+        def is_alive(self): return True
+    monkeypatch.setattr("my_ai.scheduler.threading.Thread", Thread)
+    scheduler.start("Python", session_id=17)
+    assert any("learning_workers" in str(args[0]) and "INSERT" in str(args[0]) for args, _ in executed)
+
+
+def test_scheduler_failure_uses_bounded_recovery_backoff(monkeypatch):
+    scheduler = StudyScheduler(interval_seconds=1)
+    scheduled = []
+    class Timer:
+        def __init__(self, delay, fn): scheduled.append((delay, fn))
+        def start(self): pass
+    monkeypatch.setattr("my_ai.scheduler.threading.Timer", Timer)
+    scheduler._schedule_worker_recovery("Python", threading.Event())
+    assert scheduled
+    assert 1 <= scheduled[0][0] <= 60
