@@ -30,5 +30,13 @@
 - Plugin registry با approval gate
 - Hard-coded configuration inventory
 
+## تکمیل‌های اخیر در لایه مدیریت بدون کدنویسی
+- Provider Catalog اکنون ویرایش مستقیم یک Provider موجود را با شناسه پشتیبانی می‌کند.
+- GUI برای Provider شامل ویرایش، افزودن کلید و rotation کلید فعال شده است.
+- CLI ادمین عملیات record CRUD، enable/disable، lifecycle action، provider/model CRUD و multi-key rotation را با همان persistence فراهم می‌کند.
+- CLI برای Configuration Registry عملیات set/reset/import/export و مشاهده history دارد.
+- Configuration Registry اکنون history تغییرات را در DB ثبت می‌کند و API تاریخچه نیز در Settings ارائه شده است.
+- GUI و CLI همچنان از یک Control Plane/Registry مشترک استفاده می‌کنند.
+
 ## مرحله بعد
 مرحله بعد از اتمام implementation، اجرای تست، regression، integration، security و runtime verification است. موارد roadmap تا آن مرحله به‌صورت [ ] باقی می‌مانند.
