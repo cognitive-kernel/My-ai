@@ -24,7 +24,7 @@ def test_main_request_boundary_propagates_policy_and_request_id(tmp_path):
     object.__setattr__(db.settings, "db_path", str(tmp_path / "architecture-auth.db"))
     db.init_db()
     try:
-        client = TestClient(app)
+        client = TestClient(app, follow_redirects=False)
         response = client.post("/tools/python", json={})
         assert response.status_code in {303, 401, 403, 422}
         assert response.headers.get("X-Request-ID")
