@@ -154,6 +154,7 @@ def list_providers(*, include_disabled: bool = True) -> list[dict[str, Any]]:
 
 def upsert_provider(
     *,
+    provider_id: int | None = None,
     name: str,
     protocol: str,
     endpoint: str,
@@ -164,7 +165,7 @@ def upsert_provider(
     timeout_seconds: float = 30,
     enabled: bool = True,
 ) -> dict[str, Any]:
-    assert_mutation_allowed(f"llm-provider:{name}")
+    assert_mutation_allowed(f"llm-provider:{provider_id or name}")
     name, protocol, endpoint = name.strip(), protocol.strip(), endpoint.strip()
     if not name or not protocol or not endpoint:
         raise ValueError("provider name, protocol and endpoint are required")
@@ -172,23 +173,39 @@ def upsert_provider(
         raise ValueError("provider endpoint must use http:// or https://")
     if timeout_seconds <= 0:
         raise ValueError("provider timeout must be positive")
+    if provider_id is not None and int(provider_id) <= 0:
+        raise ValueError("provider_id must be positive")
     ensure_schema()
     now = time.time()
     encrypted = _encrypt(secret) if secret else ""
     with connect() as conn:
-        conn.execute(
-            """INSERT INTO llm_providers(name,protocol,endpoint,auth_type,auth_secret,capabilities_json,version,enabled,timeout_seconds,created_at,updated_at)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?)
-               ON CONFLICT(name) DO UPDATE SET protocol=excluded.protocol,endpoint=excluded.endpoint,
-               auth_type=excluded.auth_type,auth_secret=CASE WHEN excluded.auth_secret='' THEN llm_providers.auth_secret ELSE excluded.auth_secret END,
-               capabilities_json=excluded.capabilities_json,version=excluded.version,enabled=excluded.enabled,
-               timeout_seconds=excluded.timeout_seconds,updated_at=excluded.updated_at""",
-            (name, protocol, endpoint, auth_type, encrypted, json.dumps(capabilities or {}, ensure_ascii=False), version, int(enabled), timeout_seconds, now, now),
-        )
-        row = conn.execute("SELECT * FROM llm_providers WHERE name=?", (name,)).fetchone()
+        if provider_id is not None:
+            existing = conn.execute("SELECT id,auth_secret FROM llm_providers WHERE id=?", (int(provider_id),)).fetchone()
+            if not existing:
+                raise KeyError(f"Unknown provider id: {provider_id}")
+            conn.execute(
+                """UPDATE llm_providers
+                   SET name=?,protocol=?,endpoint=?,auth_type=?,
+                       auth_secret=CASE WHEN ?='' THEN auth_secret ELSE ? END,
+                       capabilities_json=?,version=?,enabled=?,timeout_seconds=?,updated_at=?
+                   WHERE id=?""",
+                (name, protocol, endpoint, auth_type, encrypted, encrypted,
+                 json.dumps(capabilities or {}, ensure_ascii=False), version, int(enabled), timeout_seconds, now, int(provider_id)),
+            )
+            row = conn.execute("SELECT * FROM llm_providers WHERE id=?", (int(provider_id),)).fetchone()
+        else:
+            conn.execute(
+                """INSERT INTO llm_providers(name,protocol,endpoint,auth_type,auth_secret,capabilities_json,version,enabled,timeout_seconds,created_at,updated_at)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(name) DO UPDATE SET protocol=excluded.protocol,endpoint=excluded.endpoint,
+                   auth_type=excluded.auth_type,auth_secret=CASE WHEN excluded.auth_secret='' THEN llm_providers.auth_secret ELSE excluded.auth_secret END,
+                   capabilities_json=excluded.capabilities_json,version=excluded.version,enabled=excluded.enabled,
+                   timeout_seconds=excluded.timeout_seconds,updated_at=excluded.updated_at""",
+                (name, protocol, endpoint, auth_type, encrypted, json.dumps(capabilities or {}, ensure_ascii=False), version, int(enabled), timeout_seconds, now, now),
+            )
+            row = conn.execute("SELECT * FROM llm_providers WHERE name=?", (name,)).fetchone()
         conn.commit()
     return _row(row)
-
 
 def delete_model(provider_id: int, model_id: str) -> None:
     assert_mutation_allowed(f"llm-model-delete:{provider_id}:{model_id}")
