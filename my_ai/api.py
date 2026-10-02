@@ -1413,7 +1413,7 @@ def project_tasks(request:Request):
 @app.post("/scheduler/start")
 def scheduler_start(r:SchedulerRequest, request:Request):
     require_user(request)
-    interval=get_int("learning.interval_seconds",r.interval_seconds) if get_bool("learning.fast_enabled",False) else r.interval_seconds
+    interval=get_int("learning.interval_seconds",r.interval_seconds)
     if not 60<=interval<=86400: raise HTTPException(400,"interval_seconds must be 60..86400")
     scheduler.interval_seconds=interval; scheduler.start(r.language); return {"status":"started","language":r.language,"interval_seconds":interval}
 @app.get("/scheduler/status")
@@ -1423,7 +1423,7 @@ def scheduler_status(request:Request):
 @app.post("/learning/learn")
 def learning_learn(r:LearnRequest, request:Request):
     require_user(request)
-    interval=get_int("learning.interval_seconds",r.interval_seconds) if get_bool("learning.fast_enabled",False) else r.interval_seconds
+    interval=get_int("learning.interval_seconds",r.interval_seconds)
     if not 60<=interval<=86400: raise HTTPException(400,"interval_seconds must be 60..86400")
     scheduler.interval_seconds=interval; scheduler.start(r.language); return {"status":"started","language":r.language,"interval_seconds":interval}
 @app.post("/scheduler/stop")
