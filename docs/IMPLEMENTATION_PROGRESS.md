@@ -38,5 +38,7 @@
 - Configuration Registry اکنون history تغییرات را در DB ثبت می‌کند و API تاریخچه نیز در Settings ارائه شده است.
 - GUI و CLI همچنان از یک Control Plane/Registry مشترک استفاده می‌کنند.
 
+- پنل عملیات مدیریتی GUI اکنون معادل گرافیکی status/health/sessions/memory/tools/policies/learning/repairs/rollback/diagnostics را از Settings ارائه می‌کند.
+
 ## مرحله بعد
 مرحله بعد از اتمام implementation، اجرای تست، regression، integration، security و runtime verification است. موارد roadmap تا آن مرحله به‌صورت [ ] باقی می‌مانند.
