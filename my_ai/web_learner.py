@@ -106,6 +106,16 @@ class WebLearner:
             if allowed and not any(host == d or host.endswith("."+d) for d in allowed): continue
             results.append({"title":title,"url":url})
             if len(results)>=limit: break
+        rank = [x.strip().lower() for x in str(getattr(settings, "research_source_rank", "") or "").split(",") if x.strip()]
+        if rank:
+            def rank_key(item):
+                host=(urlparse(item.get("url","")).hostname or "").lower()
+                for i,label in enumerate(rank):
+                    if label=="official" and any(host.endswith(s) for s in ("gov","edu")): return i
+                    if label=="docs" and ("docs." in host or "/docs" in item.get("url","").lower()): return i
+                    if label=="academic" and any(host.endswith(s) for s in ("arxiv.org","acm.org","ieee.org")): return i
+                return len(rank)
+            results.sort(key=rank_key)
         return results
     @staticmethod
     def _safe_host(host):
