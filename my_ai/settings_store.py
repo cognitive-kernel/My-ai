@@ -240,6 +240,9 @@ def validate_registered_setting(key: str, value: Any) -> Any:
     if "min" in meta and value < meta["min"]: raise ValueError(f"{key} below minimum")
     if "max" in meta and value > meta["max"]: raise ValueError(f"{key} above maximum")
     if "choices" in meta and value not in meta["choices"]: raise ValueError(f"{key} has invalid choice")
+    dependencies = meta.get("depends_on", []) or []
+    missing = [dep for dep in dependencies if not str(get_setting(str(dep), "") or "").strip()]
+    if missing: raise ValueError(f"{key} requires settings: {\", \".join(missing)}")
     return value
 
 def reset_setting(key: str) -> Any:
