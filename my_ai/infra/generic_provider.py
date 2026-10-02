@@ -34,6 +34,10 @@ class GenericHTTPProviderAdapter:
         response_path: str = "text",
         usage_paths: dict[str, str] | None = None,
         health_endpoint: str | None = None,
+        stream_response_path: str = "delta",
+        stream_format: str = "ndjson",
+        stream_prefix: str = "data:",
+        stream_done_value: str = "[DONE]",
     ) -> None:
         if not name.strip() or not endpoint.startswith(("http://", "https://")) or not model.strip():
             raise ValueError("name, HTTPS/HTTP endpoint and model are required")
@@ -51,6 +55,10 @@ class GenericHTTPProviderAdapter:
         self.response_path = response_path
         self.usage_paths = usage_paths or {}
         self.health_endpoint = health_endpoint
+        self.stream_response_path = stream_response_path
+        self.stream_format = stream_format.lower().strip()
+        self.stream_prefix = stream_prefix
+        self.stream_done_value = stream_done_value
 
     def _headers(self) -> dict[str, str]:
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
@@ -127,7 +135,36 @@ class GenericHTTPProviderAdapter:
     ) -> Iterator[str]:
         if not self.capabilities.streaming:
             raise ProviderAdapterError(f"{self.name}: streaming is not supported by this provider")
-        raise ProviderAdapterError(f"{self.name}: streaming transport requires an explicit stream mapping")
+        if self.stream_format not in {"ndjson", "sse"}:
+            raise ProviderAdapterError(f"{self.name}: unsupported stream format '{self.stream_format}'")
+        started = time.perf_counter()
+        try:
+            with httpx.stream(
+                "POST", self.endpoint, headers=self._headers(),
+                json=self._payload(message, system, history), timeout=self.timeout,
+            ) as response:
+                response.raise_for_status()
+                for line in response.iter_lines():
+                    if not line:
+                        continue
+                    raw = line
+                    if self.stream_format == "sse":
+                        if not raw.startswith(self.stream_prefix):
+                            continue
+                        raw = raw[len(self.stream_prefix):].strip()
+                    if raw == self.stream_done_value:
+                        break
+                    try:
+                        data = json.loads(raw)
+                    except json.JSONDecodeError as exc:
+                        raise ProviderAdapterError(f"{self.name}: invalid stream JSON") from exc
+                    chunk = self._path_get(data, self.stream_response_path)
+                    if isinstance(chunk, str) and chunk:
+                        yield chunk
+        except (httpx.HTTPError, ValueError, TypeError) as exc:
+            raise ProviderAdapterError(
+                f"{self.name}: streaming request failed after {time.perf_counter() - started:.3f}s: {exc}"
+            ) from exc
 
     def structured_chat_json(
         self,
