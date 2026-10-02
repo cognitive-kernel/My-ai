@@ -231,3 +231,10 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 - Added version-aware knowledge/experience evolution and learning source catalog with approval/provenance.
 - Added provider/model routing selection and capability-aware fallback infrastructure.
 - This implementation pass is intentionally not marked test-complete yet; verification/regression is deferred to the requested next phase.
+
+
+### آخرین pass پیاده‌سازی بدون تست
+- ویرایش Provider از GUI/CLI، مدیریت چند کلید و rotation در مسیر مشترک Catalog اضافه شد.
+- عملیات Configuration Registry در CLI با GUI هم‌تراز شد: set/reset/import/export/history.
+- تاریخچه تغییرات تنظیمات در DB ثبت و از Settings قابل مشاهده API شد.
+- طبق دستور پروژه، در این pass هیچ test/CI/regression اجرا نشده است.
