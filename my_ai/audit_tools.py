@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 from typing import Any
 
@@ -50,5 +51,23 @@ def api_route_inventory(app) -> list[dict[str, Any]]:
     return sorted(result,key=lambda x:(x["path"],x["methods"]))
 
 
+def configuration_inventory(root: Path = ROOT) -> list[dict[str, str]]:
+    result=[]
+    pattern=re.compile(r'os\\.getenv\\(["\\\']([A-Z][A-Z0-9_]+)["\\\']')
+    for path in sorted((root / 'my_ai').rglob('*.py')):
+        try: source=path.read_text(encoding='utf-8')
+        except OSError: continue
+        for name in sorted(set(pattern.findall(source))): result.append({'path':str(path.relative_to(root)),'environment_variable':name})
+    return result
+
+def route_inventory(root: Path = ROOT) -> list[dict[str, str]]:
+    result=[]
+    pattern=re.compile(r'@app\\.(get|post|put|patch|delete)\\(["\\\']([^"\\\']+)["\\\']')
+    path=root/'my_ai'/'api.py'
+    if path.exists():
+        source=path.read_text(encoding='utf-8')
+        for method, route in pattern.findall(source): result.append({'method':method.upper(),'path':route})
+    return sorted(result,key=lambda x:(x['path'],x['method']))
+
 def run_audit(root: Path = ROOT) -> dict[str, Any]:
-    return {"silent_failures":find_silent_failures(root),"architecture":architecture_inventory(root)}
+    return {"silent_failures":find_silent_failures(root),"architecture":architecture_inventory(root),"configuration":configuration_inventory(root),"routes":route_inventory(root)}
