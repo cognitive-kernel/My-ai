@@ -171,6 +171,22 @@ async function deleteModelCatalog(providerId,modelId){
   try{await req("/settings/models/"+providerId+"/"+encodeURIComponent(modelId),{method:"DELETE"});await loadProviderCatalog()}catch(e){setText("catalogout","خطا: "+e.message)}
 }
 
+async function loadLearningSourcesCatalog(){
+  var box=byId("learning-sources-catalog");if(!box)return;
+  try{var j=await req("/settings/learning-sources");box.innerHTML=(j.items||[]).map(function(x){
+    return "<div class='topic'><b>"+esc(x.title||x.url)+"</b> · "+esc(x.source_type)+" · v"+esc(x.version)+" · "+esc(x.status)+
+      " <button type='button' onclick='reviewLearningSource("+x.id+",\'approved\')'>تأیید</button>"+
+      " <button type='button' onclick='reviewLearningSource("+x.id+",\'rejected\')'>رد</button></div>";
+  }).join("")||"منبع ثبت نشده است"}catch(e){box.textContent="خطا: "+e.message}
+}
+async function addLearningSourceCatalog(){
+  try{await req("/settings/learning-sources",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+    url:byId("ls_url").value.trim(),source_type:byId("ls_type").value.trim()||"custom",product:byId("ls_product").value.trim(),
+    version:byId("ls_version").value.trim(),priority:Number(byId("ls_priority").value||100),provenance:{ui:true}
+  })});await loadLearningSourcesCatalog()}catch(e){setText("catalogout","خطا: "+e.message)}
+}
+async function reviewLearningSource(id,status){try{await req("/settings/learning-sources/"+id+"/"+status,{method:"POST"});await loadLearningSourcesCatalog()}catch(e){setText("catalogout","خطا: "+e.message)}}
+
 async function loadControlPlane(){
   var ns=byId("cp_namespace"),box=byId("controlplane");if(!box)return;
   try{
@@ -223,3 +239,5 @@ async function pauseCourse(id){try{await req("/settings/courses/"+id+"/pause",{m
 async function loadCourses(){var box=byId("courses");if(!box)return;try{var j=await req("/settings/courses");box.innerHTML=(j.items||[]).map(function(c){return "<div class=\"card\"><h3>"+esc(c.name)+"</h3><p>"+esc(c.description)+"</p><div class=\"bar\"><div class=\"fill\" style=\"width:"+c.progress_percent+"%\">"+c.progress_percent+"%</div></div><p class=\"muted\">"+c.completed_topics+" از "+c.total_topics+" سرفصل کامل شده"+(c.current?" · اکنون: "+esc(c.current.title)+" · مرحله: "+esc(c.current.phase):"")+"</p><button type=\"button\" onclick=\"startCourse("+c.id+")\">شروع / ادامه یادگیری</button> <button type=\"button\" onclick=\"pauseCourse("+c.id+")\">توقف</button></div>"}).join("")||"آموزشی نیست"}catch(e){box.textContent="خطا در بارگذاری آموزش‌ها: "+e.message}}
 
 loadSettings();loadRegistry();loadUsers();loadPermissions();loadCourses();loadUIActions();loadProviderCatalog();setInterval(loadCourses,10000);setInterval(loadResourceStatus,5000);
+
+loadLearningSourcesCatalog();
