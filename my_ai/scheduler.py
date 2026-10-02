@@ -52,8 +52,16 @@ class StudyScheduler:
         execute("DELETE FROM learning_worker_leases WHERE language=? AND owner=?",(normalized,self._lease_owner))
     def start(self,language="Python",session_id=None):
         language=self._normalize_language(language); key=language.casefold()
+        with self._lock:
+            existing=self._workers.get(key)
+            if existing and existing[0].is_alive():
+                return
         if not self._acquire_lease(language): return
         with self._lock:
+            existing=self._workers.get(key)
+            if existing and existing[0].is_alive():
+                self._release_lease(language)
+                return
             if session_id is None:
                 rows=fetch_all("SELECT session_id FROM learning_workers WHERE lower(language)=? LIMIT 1",(key,)); session_id=rows[0]["session_id"] if rows else None
             stop_event=threading.Event(); thread=threading.Thread(target=self._loop,args=(language,stop_event),daemon=True,name=f"myai-learning-{language}"); self._workers[key]=(thread,stop_event); self.language=language; self.stage="starting"
