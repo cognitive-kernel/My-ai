@@ -135,7 +135,7 @@ def test_settings_config_exposes_observability_controls(monkeypatch):
 
 def test_backup_uses_configured_destination_when_path_omitted(monkeypatch):
     from my_ai import settings_feature
-    monkeypatch.setattr(settings_feature, "require_admin", lambda request: 1)
+    monkeypatch.setattr(settings_feature, "require_admin", lambda request: {"id": 1, "username": "test"})
     monkeypatch.setattr(settings_feature, "get_setting", lambda key, default="": "data/configured-backups" if key == "database.backup.destination" else default)
     captured = {}
     monkeypatch.setattr(settings_feature, "backup_database", lambda path, overwrite=False: captured.update(path=path, overwrite=overwrite) or {"path": path})
