@@ -1,3 +1,6 @@
+async function loadRegistry(){var box=byId("settings-registry");if(!box)return;try{var j=await req("/settings/registry");box.innerHTML=(j.items||[]).map(function(x){return "<div class='topic'><b>"+esc(x.key)+"</b> — "+esc(x.description||"")+"<div class='muted'>فعلی: "+esc(x.value)+" · پیش‌فرض: "+esc(x.default)+"</div><button type='button' onclick='resetRegisteredSetting(\\'"+esc(x.key)+"\\')'>بازنشانی</button></div>"}).join("")||"Registry خالی است"}catch(e){box.textContent="خطا: "+e.message}}
+async function resetRegisteredSetting(key){try{await req("/settings/registry/"+encodeURIComponent(key)+"/reset",{method:"POST"});setText("registryout","تنظیم "+key+" بازنشانی شد.");await loadSettings();await loadRegistry()}catch(e){setText("registryout","خطا: "+e.message)}}
+
 function byId(id) { return document.getElementById(id); }
 
 async function req(url, opt) {
@@ -78,4 +81,4 @@ async function createCourse(){try{var lines=byId("ct").value.split(/\n+/).map(fu
 async function startCourse(id){try{await req("/settings/courses/"+id+"/start",{method:"POST"});await loadCourses()}catch(e){setText("courseout",e.message)}}
 async function loadCourses(){var box=byId("courses");if(!box)return;try{var j=await req("/settings/courses");box.innerHTML=(j.items||[]).map(function(c){return "<div class=\"card\"><h3>"+esc(c.name)+"</h3><p>"+esc(c.description)+"</p><div class=\"bar\"><div class=\"fill\" style=\"width:"+c.progress_percent+"%\">"+c.progress_percent+"%</div></div><p class=\"muted\">"+c.completed_topics+" از "+c.total_topics+" سرفصل کامل شده"+(c.current?" · اکنون: "+esc(c.current.title)+" · مرحله: "+esc(c.current.phase):"")+"</p></div>"}).join("")||"آموزشی نیست"}catch(e){box.textContent="خطا در بارگذاری آموزش‌ها: "+e.message}}
 
-loadSettings();loadUsers();loadPermissions();loadCourses();setInterval(loadCourses,10000);setInterval(loadResourceStatus,5000);
+loadSettings();loadRegistry();loadUsers();loadPermissions();loadCourses();setInterval(loadCourses,10000);setInterval(loadResourceStatus,5000);
