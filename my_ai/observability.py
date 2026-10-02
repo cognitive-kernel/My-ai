@@ -50,12 +50,12 @@ def configure_logging() -> None:
         pass
     if destination.startswith("file:"):
         raw_path = Path(destination[5:].strip()).expanduser()
-        root = Path("data/logs").resolve()
+        log_root = Path("data/logs").resolve()
         target = raw_path.resolve() if raw_path.is_absolute() else (Path.cwd() / raw_path).resolve()
         try:
-            target.relative_to(root)
+            target.relative_to(log_root)
         except ValueError:
-            target = root / "my-ai.log"
+            target = log_root / "my-ai.log"
         target.parent.mkdir(parents=True, exist_ok=True)
         if not any(isinstance(h, logging.FileHandler) and Path(getattr(h, "baseFilename", "")).resolve() == target for h in root.handlers):
             file_handler = logging.FileHandler(target, encoding="utf-8")
