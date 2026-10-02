@@ -155,3 +155,8 @@ def test_select_for_task_uses_quality_weight(monkeypatch):
     monkeypatch.setattr(manager, "health", lambda model, **kwargs: type("H", (), {"available": True, "latency_ms": 1, "error": None})())
     monkeypatch.setattr("my_ai.model_manager.get_setting", lambda key, default=None, **kwargs: {"llm.routing.quality_weight": "10", "llm.routing.latency_weight": "0", "llm.routing.cost_weight": "0"}.get(key, default))
     assert manager.select_for_task("coding") == "slower-high-quality"
+
+
+def test_quality_routing_setting_is_registered():
+    from my_ai.settings_store import SETTING_REGISTRY
+    assert "llm.routing.quality_weight" in SETTING_REGISTRY
