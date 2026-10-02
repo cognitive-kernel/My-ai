@@ -775,10 +775,14 @@ def settings_database_backup(payload: BackupRequest, request: Request):
     destination = payload.path
     if not destination.strip():
         destination = str(get_setting("database.backup.destination", "data/backups"))
+    destination_path = Path(destination)
+    if destination_path.suffix == "":
+        destination_path.mkdir(parents=True, exist_ok=True)
+        destination = str(destination_path / f"my_ai-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.db")
     try:
         result=backup_database(destination,overwrite=payload.overwrite)
         retention=get_int("database.backup.retention", 7)
-        result["removed"]=prune_backups(Path(destination).parent if Path(destination).suffix else Path(destination), retention)
+        result["removed"]=prune_backups(str(Path(destination).parent), retention)
     except (OSError,FileNotFoundError,FileExistsError) as exc: raise HTTPException(400,str(exc))
     audit(user,"database","backup","200",result["path"]); return result
 
