@@ -38,3 +38,15 @@ def test_routing_and_fallback_catalog_persist(monkeypatch, tmp_path):
     catalog.set_fallback_chain("ui", "chat", ["chat-b", "chat-a"])
     assert [x["model_id"] for x in catalog.list_fallback_chain("ui", "chat")] == ["chat-b", "chat-a"]
     assert catalog.list_routing_rules(task="chat")[0]["model_id"] == "chat-b"
+
+def test_provider_edit_uses_provider_id_and_preserves_secret(monkeypatch, tmp_path):
+    monkeypatch.setattr(catalog, "connect", _connect_factory(tmp_path / "edit.db"))
+    monkeypatch.setattr(catalog, "assert_mutation_allowed", lambda action: None)
+    catalog.ensure_schema()
+    provider = catalog.upsert_provider(name="original", protocol="generic", endpoint="http://localhost:1", secret="keep-me")
+    edited = catalog.upsert_provider(provider_id=provider["id"], name="renamed", protocol="generic-v2", endpoint="http://localhost:2")
+    assert edited["id"] == provider["id"]
+    assert edited["name"] == "renamed"
+    assert edited["protocol"] == "generic-v2"
+    runtime = catalog.get_provider_runtime_config(provider["id"])
+    assert runtime["api_key"] == "keep-me"
