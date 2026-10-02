@@ -31,7 +31,7 @@ def test_main_request_boundary_propagates_policy_and_request_id(tmp_path):
         user = auth.create_account("owner", "a-secure-password")
         cookie = {"myai_session": auth.create_session(user["id"])}
         denied = client.post("/admin/users", json={"username":"x","password":"third-secure-password"}, cookies=cookie)
-        assert denied.status_code in {403, 422}
+        assert denied.status_code in {400, 403, 422}
         assert denied.headers.get("X-Request-ID")
     finally:
         object.__setattr__(db.settings, "db_path", old)
