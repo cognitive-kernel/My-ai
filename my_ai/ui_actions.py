@@ -23,6 +23,13 @@ _ACTIONS = (
     UIAction("learning.sources", "learning", "مدیریت منابع یادگیری", "نمایش منابع، provenance و وضعیت approval.", "GET", "/settings/learning-sources", "learning:read"),
     UIAction("profiles.list", "configuration", "مدیریت پروفایل‌ها", "نمایش پروفایل‌های پیکربندی.", "GET", "/settings/profiles", "settings:read"),
     UIAction("capabilities.list", "configuration", "فهرست قابلیت‌ها", "نمایش قابلیت‌های قابل مدیریت بدون کدنویسی.", "GET", "/settings/capabilities", "settings:read"),
+    UIAction("config.history", "configuration", "تاریخچه تنظیمات", "نمایش تغییرات ثبت‌شده در Configuration Registry.", "GET", "/settings/registry/history", "settings:read"),
+    UIAction("provider.catalog", "llm", "کاتالوگ Provider و Model", "نمایش Providerها و Modelهای قابل مدیریت.", "GET", "/settings/providers", "models:read"),
+    UIAction("learning.catalog", "learning", "کاتالوگ آموزش", "نمایش مسیرها و منابع یادگیری.", "GET", "/learning/catalog", "learning:read"),
+    UIAction("profiles.catalog", "configuration", "پروفایل‌های تنظیمات", "نمایش پروفایل‌های ذخیره‌شده.", "GET", "/settings/profiles", "settings:read"),
+    UIAction("database.backup.policy", "database", "وضعیت Backup", "نمایش سیاست‌های Backup و Database.", "GET", "/settings/control-plane?namespace=database.backup", "database:read"),
+    UIAction("security.roles", "security", "مدیریت Security Policy", "نمایش رکوردهای نقش، قابلیت و کنترل دسترسی.", "GET", "/settings/control-plane?namespace=security.roles", "security:read"),
+    UIAction("evaluation.regression", "evaluation", "Regression Intelligence", "نمایش تنظیمات ارزیابی و regression.", "GET", "/settings/control-plane?namespace=evaluation.regression", "eval:read"),
 
     UIAction("github.check", "github", "بررسی اتصال GitHub", "وضعیت اتصال GitHub را بررسی می‌کند.", "GET", "/git/check", "github:read"),
     UIAction("image.health", "image", "بررسی موتور تصویر", "وضعیت موتور تصویر محلی را بررسی می‌کند.", "GET", "/settings/image/status", "tools:read"),
