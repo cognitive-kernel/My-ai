@@ -1,6 +1,8 @@
 """Versioned prompt, policy and tool registries used by the control plane."""
 from __future__ import annotations
 from typing import Any
+import difflib
+import json
 from .control_plane import put_record, list_records, get_record
 
 
@@ -55,3 +57,13 @@ def update_workflow(name: str, stages: list[dict[str, Any]], *, version: str="1"
     return publish_workflow(name, stages, version=version, enabled=enabled)
 
 def list_workflows(): return list_records("agent.workflows")
+
+
+def prompt_diff(name: str, from_version: int, to_version: int):
+    versions = {int(x["version"]): x for x in list_prompt_history(name)}
+    current = get_record("prompts.registry", name)
+    if current: versions[int(current["version"])] = current
+    if from_version not in versions or to_version not in versions: raise KeyError(name)
+    left=json.dumps(versions[from_version]["payload"],ensure_ascii=False,indent=2,sort_keys=True).splitlines()
+    right=json.dumps(versions[to_version]["payload"],ensure_ascii=False,indent=2,sort_keys=True).splitlines()
+    return {"name":name,"from_version":from_version,"to_version":to_version,"diff":"\n".join(difflib.unified_diff(left,right,fromfile=f"v{from_version}",tofile=f"v{to_version}",lineterm=""))}
