@@ -9,6 +9,7 @@ from typing import Any
 
 from .executor import run_python
 from .config import settings
+from .settings_store import get_setting
 
 LANGUAGE_TOOLS = {
     "Python": {"toolchains":["python","pytest","ruff","mypy"],"tests":["python -m pytest"],"build":["python -m compileall"],"lint":["ruff check ."]},
@@ -34,7 +35,7 @@ def catalog()->dict[str,Any]:
     return {"languages":LANGUAGE_TOOLS,"databases":{"SQL Server":["schema","tables","columns","readonly_query"],"MySQL":["schema","tables","columns","readonly_query"],"SQLite":["schema","tables","readonly_query"]}}
 
 def _safe_root(cwd:str|None)->Path:
-    root=Path(os.getenv("MYAI_PROJECT_ROOT","projects")).resolve()
+    root=Path(str(get_setting("execution.project_root", os.getenv("MYAI_PROJECT_ROOT","projects")))).expanduser().resolve()
     root.mkdir(parents=True,exist_ok=True)
     path=(Path(cwd).expanduser().resolve() if cwd else root)
     try: path.relative_to(root)
