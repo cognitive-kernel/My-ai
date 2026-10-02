@@ -1,6 +1,7 @@
 import os
 
 import pytest
+from datetime import datetime, timezone
 
 from my_ai import auth, db
 
@@ -49,3 +50,13 @@ def test_concurrent_first_accounts_create_only_one_admin(isolated_db):
     with ThreadPoolExecutor(max_workers=2) as pool:
         users=list(pool.map(create, (1,2)))
     assert sorted(u["role"] for u in users) == ["admin", "user"]
+
+
+def test_session_timeout_uses_persisted_setting(isolated_db, monkeypatch):
+    monkeypatch.setattr(auth, "get_int", lambda key, default: 120)
+    user = auth.create_account("owner", "a-secure-password")
+    token = auth.create_session(user["id"])
+    row = db.fetch_all("SELECT expires_at FROM auth_sessions WHERE token=?", (token,))[0]
+    expires = datetime.fromisoformat(row["expires_at"])
+    remaining = (expires - datetime.now(timezone.utc)).total_seconds()
+    assert 100 <= remaining <= 130
