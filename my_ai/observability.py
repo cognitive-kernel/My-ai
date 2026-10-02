@@ -46,7 +46,7 @@ def configure_logging() -> None:
     destination = "console"
     try:
         destination = str(get_setting("observability.log_destination", "console") or "console").strip()
-    except Exception:
+    except (KeyError, TypeError, ValueError, OSError):
         pass
     if destination.startswith("file:"):
         raw_path = Path(destination[5:].strip()).expanduser()
