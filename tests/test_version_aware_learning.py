@@ -106,3 +106,12 @@ def test_learning_experience_records_context_outcome_recovery_and_evidence(monke
     )
     insert = next(item for item in captured if "INSERT INTO learning_experiences" in item[0])
     assert insert[1][-4:] == ('{"provider": "local"}', "passed", "none", '[{"kind": "test", "passed": true}]')
+
+
+def test_version_aware_schema_migration_is_idempotent(tmp_path, monkeypatch):
+    monkeypatch.setattr(persistence, "connect", _connect_factory(tmp_path / "migration.db"))
+    persistence.init_db()
+    persistence.init_db()
+    indexes = persistence.fetch_all("PRAGMA index_list(knowledge)")
+    names = {row["name"] for row in indexes}
+    assert "idx_knowledge_content_hash_version" in names
