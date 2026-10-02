@@ -277,6 +277,34 @@ async function saveControlRecordGUI(){
   try{var ns=byId("cp_namespace").value,name=byId("cp_name").value.trim(),payload=JSON.parse(byId("cp_payload").value||"{}");var x=await req("/settings/control-plane/"+encodeURIComponent(ns),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name,payload:payload,enabled:byId("cp_enabled").checked})});setText("cp_out","ذخیره شد: "+x.name+" v"+x.version);await loadControlRecordsGUI()}
   catch(e){setText("cp_out","خطا: "+e.message)}
 }
+async function loadProfilesGUI(){
+  try{
+    var j=await req("/settings/profiles"),box=byId("profiles");
+    if(!box)return;
+    box.innerHTML=(j.items||[]).filter(function(x){return x.name!=="__active__"}).map(function(x){
+      var active=j.active===x.name;
+      return "<div class='topic'><b>"+esc(x.name)+"</b> v"+esc(x.version)+" — "+(active?"فعال":"ذخیره‌شده")+
+        " <button type='button' onclick='editProfileGUI("+JSON.stringify(x.name)+")'>ویرایش</button></div>";
+    }).join("")||"پروفایلی ثبت نشده است";
+  }catch(e){setText("profileout","خطا: "+e.message)}
+}
+async function editProfileGUI(name){
+  try{
+    var j=await req("/settings/profiles/"+encodeURIComponent(name));
+    byId("profile_name").value=j.name;
+    byId("profile_settings").value=JSON.stringify(j.settings||{},null,2);
+    byId("profile_activate").checked=!!j.active;
+  }catch(e){setText("profileout","خطا: "+e.message)}
+}
+async function saveProfileGUI(){
+  try{
+    var name=byId("profile_name").value.trim(),settings=JSON.parse(byId("profile_settings").value||"{}");
+    if(!name)throw Error("نام پروفایل الزامی است");
+    var j=await req("/settings/profiles",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name,settings:settings,activate:byId("profile_activate").checked})});
+    setText("profileout","پروفایل ذخیره شد: "+j.name);await loadProfilesGUI();
+  }catch(e){setText("profileout","خطا: "+e.message)}
+}
+
 async function loadUIActions(){
   var box=byId("ui-actions");if(!box)return;
   try{
@@ -300,4 +328,4 @@ async function loadCourses(){var box=byId("courses");if(!box)return;try{var j=aw
 
 loadSettings();loadRegistry();loadUsers();loadPermissions();loadCourses();loadUIActions();loadProviderCatalog();setInterval(loadCourses,10000);setInterval(loadResourceStatus,5000);
 
-loadLearningSourcesCatalog();
+loadLearningSourcesCatalog();loadProfilesGUI();
