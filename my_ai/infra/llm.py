@@ -188,15 +188,26 @@ class OpenAICompatibleClient:
                 if attempt < self._retry_attempts(): self._backoff(attempt)
         raise LLMError("OpenAI-compatible request failed: "+" | ".join(errors))
 
-def create_llm(task:str|None=None):
-    provider=str(_runtime_setting("llm.provider", _settings().llm_provider))
-    if provider == "custom-openai-compatible":
-        return OpenAICompatibleClient(
+def _provider_registry() -> ProviderRegistry:
+    registry = ProviderRegistry()
+    registry.register("ollama", lambda task=None: OllamaClient(task=task))
+    registry.register("openai-compatible", lambda: OpenAICompatibleClient())
+    registry.register(
+        "custom-openai-compatible",
+        lambda: OpenAICompatibleClient(
             base_url=str(_runtime_setting("llm.custom.base_url", "")),
             model=str(_runtime_setting("llm.custom.model", "")),
             api_key=str(_runtime_setting("llm.custom.api_key", "")),
             provider_name="custom-openai-compatible",
-        )
-    if provider in {"openai","openai-compatible","openai_compatible"}: return OpenAICompatibleClient()
-    if provider=="auto": return OpenAICompatibleClient() if _settings().openai_api_key and not getattr(_settings(),"offline_strict",False) else OllamaClient(task=task)
-    return OllamaClient(task=task)
+        ),
+    )
+    return registry
+
+
+def create_llm(task: str | None = None):
+    provider = str(_runtime_setting("llm.provider", _settings().llm_provider))
+    if provider in {"openai", "openai-compatible", "openai_compatible"}:
+        provider = "openai-compatible"
+    if provider == "auto":
+        provider = "openai-compatible" if _settings().openai_api_key and not getattr(_settings(), "offline_strict", False) else "ollama"
+    return _provider_registry().create(provider, task=task) if provider == "ollama" else _provider_registry().create(provider)
