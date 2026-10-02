@@ -181,3 +181,17 @@ def sqlite_query(path:str,sql:str,limit:int=1000)->dict[str,Any]:
         rows=[dict(zip(columns,row)) for row in cur.fetchmany(max(1,min(int(limit),5000)))]
         return {"columns":columns,"rows":rows,"row_count":len(rows)}
     finally: conn.close()
+
+
+def tool_health() -> dict[str, Any]:
+    """Return a deterministic health report for configured local toolchains."""
+    report = {}
+    for language in LANGUAGE_TOOLS:
+        try:
+            checks = doctor(language).get(language, {})
+            available = [name for name, ok in checks.items() if ok]
+            missing = [name for name, ok in checks.items() if not ok]
+            report[language] = {"healthy": not missing, "available": available, "missing": missing}
+        except Exception as exc:
+            report[language] = {"healthy": False, "error": str(exc)}
+    return {"healthy": all(bool(x.get("healthy")) for x in report.values()), "languages": report}
