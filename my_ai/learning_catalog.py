@@ -64,6 +64,24 @@ def list_sources(course_id=None, topic_id=None, status=None):
     return out
 
 
+def update_source(source_id: int, **changes) -> dict[str, Any] | None:
+    ensure_schema()
+    allowed = {'url','source_type','title','priority','weight','product','version','compatibility','course_id','topic_id'}
+    changes = {k:v for k,v in changes.items() if k in allowed}
+    if 'url' in changes and not str(changes['url']).startswith(('http://','https://','file://')): raise ValueError('unsupported source URL')
+    if not changes: return get_source(source_id)
+    with connect() as c:
+        if not c.execute('SELECT id FROM learning_source_catalog WHERE id=?',(int(source_id),)).fetchone(): return None
+        sets=', '.join(f'{k}=?' for k in changes)
+        c.execute(f'UPDATE learning_source_catalog SET {sets} WHERE id=?', tuple(changes.values())+(int(source_id),)); c.commit()
+    return get_source(source_id)
+
+def delete_source(source_id: int) -> bool:
+    ensure_schema()
+    with connect() as c:
+        cur=c.execute('DELETE FROM learning_source_catalog WHERE id=?',(int(source_id),)); c.commit()
+    return cur.rowcount > 0
+
 def review_source(source_id,status):
     if status not in {"approved","rejected","pending","recheck","deprecated"}: raise ValueError("invalid source status")
     ensure_schema()
