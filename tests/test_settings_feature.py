@@ -123,7 +123,7 @@ def test_database_health_route_is_registered():
 
 def test_settings_config_exposes_observability_controls(monkeypatch):
     from my_ai import settings_feature
-    monkeypatch.setattr(settings_feature, "require_admin", lambda request: 1)
+    monkeypatch.setattr(settings_feature, "require_admin", lambda request: {"id": 1, "username": "test"})
     monkeypatch.setattr(settings_feature, "get_bool", lambda key, default=False: default)
     monkeypatch.setattr(settings_feature, "get_setting", lambda key, default="": {"observability.alert_rules": '[{"name":"latency"}]', "observability.notification_destinations": '["webhook"]', "observability.dashboard_config": '{"refresh":30}', "observability.diagnostics_export": "json"}.get(key, default))
     config = settings_feature.settings_config(object())
