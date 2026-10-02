@@ -19,7 +19,9 @@ def rollback_prompt(name: str, version: int):
     history = next((x for x in list_prompt_history(name) if int(x["version"]) == int(version)), None)
     if not history: raise KeyError(f"{name}@{version}")
     payload = dict(history["payload"])
-    payload["version"] = str(int(version) + 1)
+    current = get_record("prompts.registry", name)
+    next_version = int(current["version"]) + 1 if current else int(version) + 1
+    payload["version"] = str(next_version)
     return put_record("prompts.registry", name, payload, enabled=True)
 
 
