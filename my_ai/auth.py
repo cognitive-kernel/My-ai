@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import HTTPException, Request
 
 from .db import connect, execute, fetch_all
+from .settings_store import get_int
 
 
 SESSION_TTL_HOURS = 24
@@ -88,7 +89,8 @@ def authenticate(username: str, password: str) -> dict[str, Any] | None:
 def create_session(user_id: int) -> str:
     execute("DELETE FROM auth_sessions WHERE expires_at <= ?", (datetime.now(timezone.utc).isoformat(),))
     token = secrets.token_urlsafe(48)
-    expires = (datetime.now(timezone.utc) + timedelta(hours=SESSION_TTL_HOURS)).isoformat()
+    ttl_seconds=max(60,get_int("server.session_timeout",SESSION_TTL_HOURS*3600))
+    expires = (datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)).isoformat()
     execute("INSERT INTO auth_sessions(token,user_id,expires_at) VALUES(?,?,?)", (token, user_id, expires))
     return token
 
