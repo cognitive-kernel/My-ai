@@ -16,11 +16,11 @@ def audit(root: Path = ROOT) -> list[dict[str, object]]:
             body = node.body
             meaningful = any(
                 isinstance(item, (ast.Raise, ast.Return, ast.Continue, ast.Break))
-                or (
-                    isinstance(item, ast.Expr)
-                    and isinstance(item.value, ast.Call)
-                    and isinstance(getattr(item.value.func, "attr", None), str)
-                    and item.value.func.attr in {"exception", "error", "warning", "critical"}
+                or any(
+                    isinstance(call, ast.Call)
+                    and isinstance(getattr(call.func, "attr", None), str)
+                    and call.func.attr in {"exception", "error", "warning", "critical", "debug", "info"}
+                    for call in ast.walk(item)
                 )
                 for item in body
             )
