@@ -15,6 +15,7 @@ CAPABILITIES = {
     'code-execution': Capability('code-execution'),
     'code-generation': Capability('code-generation'),
     'database': Capability('database'),
+    'session': Capability('session', frozenset({'admin','user'}), frozenset({'admin','user'}), frozenset({'admin','user'})),
     'self-update': Capability('self-update'),
     'self-repair': Capability('self-repair'),
     'admin': Capability('admin'),
