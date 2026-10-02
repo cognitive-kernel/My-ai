@@ -91,7 +91,45 @@ SETTING_REGISTRY.update({
     "experience.current_version_priority": {"version": 2, "type": "float", "default": 2.0, "min": 0, "max": 100, "description": "Current-version experience retrieval weight."},
 })
 
-CONFIG_SCHEMA_VERSION = 2
+
+SETTING_REGISTRY.update({
+    "llm.routing.default_task": {"version": 3, "type": "enum", "default": "general", "choices": ["general","chat","coding","reasoning","embedding","routing"], "description": "Default task class for model routing."},
+    "llm.routing.cost_weight": {"version": 3, "type": "float", "default": 0.0, "min": 0, "max": 100, "description": "Relative cost weight used by model routing."},
+    "llm.routing.latency_weight": {"version": 3, "type": "float", "default": 1.0, "min": 0, "max": 100, "description": "Relative latency weight used by model routing."},
+    "llm.routing.availability_required": {"version": 3, "type": "enum", "default": "true", "choices": ["true","false"], "description": "Require healthy models for automatic routing."},
+    "learning.mode": {"version": 3, "type": "enum", "default": "auto", "choices": ["auto","manual","hybrid"], "description": "Learning source selection mode."},
+    "learning.mastery_threshold": {"version": 3, "type": "float", "default": 0.8, "min": 0, "max": 1, "description": "Minimum mastery score."},
+    "learning.review_interval_seconds": {"version": 3, "type": "int", "default": 604800, "min": 60, "max": 31536000, "description": "Learning review interval."},
+    "learning.manual_source_priority": {"version": 3, "type": "float", "default": 2.0, "min": 0, "max": 100, "description": "Weight applied to manually supplied sources."},
+    "agent.early_exit_enabled": {"version": 3, "type": "enum", "default": "true", "choices": ["true","false"], "description": "Allow verified early exit."},
+    "agent.multi_agent_mode": {"version": 3, "type": "enum", "default": "adaptive", "choices": ["off","adaptive","always"], "description": "Multi-agent escalation policy."},
+    "agent.verification_escalation": {"version": 3, "type": "enum", "default": "true", "choices": ["true","false"], "description": "Escalate low-confidence verification."},
+    "agent.context_budget_tokens": {"version": 3, "type": "int", "default": 16000, "min": 256, "max": 200000, "description": "Context planner token budget."},
+    "agent.budget_steps": {"version": 3, "type": "int", "default": 20, "min": 1, "max": 1000, "description": "Task step budget."},
+    "agent.budget_tokens": {"version": 3, "type": "int", "default": 16000, "min": 256, "max": 1000000, "description": "Task token budget."},
+    "agent.budget_seconds": {"version": 3, "type": "int", "default": 300, "min": 1, "max": 86400, "description": "Task time budget."},
+    "agent.budget_tool_calls": {"version": 3, "type": "int", "default": 20, "min": 0, "max": 10000, "description": "Task tool-call budget."},
+    "agent.cache_ttl_seconds": {"version": 3, "type": "int", "default": 300, "min": 0, "max": 86400, "description": "Agent cache freshness."},
+    "agent.cache_enabled": {"version": 3, "type": "enum", "default": "true", "choices": ["true","false"], "description": "Enable version-aware agent caching."},
+    "agent.events_enabled": {"version": 3, "type": "enum", "default": "true", "choices": ["true","false"], "description": "Enable event-driven workflows."},
+    "agent.events_retry_limit": {"version": 3, "type": "int", "default": 3, "min": 0, "max": 20, "description": "Event retry limit."},
+    "agent.events_dead_letter": {"version": 3, "type": "enum", "default": "true", "choices": ["true","false"], "description": "Enable dead-letter handling."},
+    "research.require_freshness": {"version": 3, "type": "enum", "default": "false", "choices": ["true","false"], "description": "Require freshness checks for research sources."},
+    "research.manual_first_policy": {"version": 3, "type": "enum", "default": "hybrid", "choices": ["manual-first","hybrid","auto-first"], "description": "Manual versus discovered source precedence."},
+    "execution.project_root": {"version": 3, "type": "text", "default": "projects", "max_length": 1000, "description": "Validated project root."},
+    "execution.max_processes": {"version": 3, "type": "int", "default": 32, "min": 1, "max": 1000, "description": "Maximum process count."},
+    "execution.sandbox_enabled": {"version": 3, "type": "enum", "default": "true", "choices": ["true","false"], "description": "Sandbox execution."},
+    "scheduler.default_quota": {"version": 3, "type": "int", "default": 10, "min": 1, "max": 100000, "description": "Default per-user task quota."},
+    "database.path": {"version": 3, "type": "text", "default": "data/my_ai.db", "max_length": 1000, "description": "Active database path; restart may be required to relocate it."},
+    "server.feature_flags": {"version": 3, "type": "text", "default": "{}", "max_length": 20000, "description": "JSON feature flag map."},
+    "server.health_policy": {"version": 3, "type": "enum", "default": "standard", "choices": ["standard","strict","minimal"], "description": "Health/readiness policy."},
+    "observability.log_destination": {"version": 3, "type": "text", "default": "console", "max_length": 200, "description": "Log destination policy."},
+    "observability.alerts_enabled": {"version": 3, "type": "enum", "default": "true", "choices": ["true","false"], "description": "Alert processing."},
+    "multimodal.image_provider": {"version": 3, "type": "text", "default": "automatic1111", "max_length": 100, "description": "Image provider."},
+    "multimodal.voice_provider": {"version": 3, "type": "text", "default": "local", "max_length": 100, "description": "Voice provider."},
+})
+
+CONFIG_SCHEMA_VERSION = 3
 
 def get_setting_registry() -> dict[str, dict[str, Any]]:
     return {k: dict(v) for k, v in SETTING_REGISTRY.items()}
