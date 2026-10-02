@@ -22,6 +22,8 @@ from .settings_store import get_setting, set_setting, get_bool, get_int, get_git
 from .ui_actions import list_ui_actions
 from .metrics import snapshot as metrics_snapshot
 from .no_code_catalog import inventory as no_code_inventory
+from .config_profiles import save_profile, active_profile, load_profile
+from .backup_manager import backup as backup_database, restore as restore_database
 from .learning_catalog import add_source, list_sources, review_source, update_content_hash
 from .backup_manager import backup as backup_database, restore as restore_database
 from .control_plane import list_records, get_record, put_record, set_enabled, delete_record, start_action, update_action, get_action, list_actions, namespace_catalog
@@ -877,6 +879,32 @@ def save_tool_permission(r: ToolPermissionRequest, request: Request):
               ON CONFLICT(user_id,tool_name,action) DO UPDATE SET allowed=excluded.allowed,updated_at=CURRENT_TIMESTAMP""",(r.user_id,r.tool_name,r.action,1 if r.allowed else 0))
     audit(user,"tool-permissions","write","200",f"{r.user_id}:{r.tool_name}:{r.action}:{r.allowed}")
     return {"ok":True}
+
+class ProfileRequest(BaseModel):
+    name: str
+    settings: dict[str, Any] = Field(default_factory=dict)
+    activate: bool = False
+
+@router.get("/settings/profiles")
+def settings_profiles(request: Request):
+    require_admin(request)
+    from .control_plane import list_records
+    return {"items": list_records("config.profiles"), "active": active_profile()}
+
+@router.post("/settings/profiles")
+def settings_profile_save(payload: ProfileRequest, request: Request):
+    user = require_admin(request)
+    item = save_profile(payload.name, payload.settings, activate=payload.activate)
+    audit(user, "profiles", "write", "200", payload.name)
+    return item
+
+@router.get("/settings/profiles/{name}")
+def settings_profile_load(name: str, request: Request):
+    require_admin(request)
+    try:
+        return {"name": name, "settings": load_profile(name), "active": active_profile() == name}
+    except KeyError:
+        raise HTTPException(404, "Profile not found.")
 
 @router.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request):
