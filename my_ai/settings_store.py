@@ -335,6 +335,11 @@ def get_setting(key: str, default: Any = None, *, secret: bool = False) -> Any:
         return default
     return _decrypt(str(row["value"])) if int(row["secret"]) else str(row["value"])
 
+def has_setting(key: str) -> bool:
+    migrate_configuration()
+    with connect() as conn:
+        return conn.execute("SELECT 1 FROM app_settings WHERE key=?", (key,)).fetchone() is not None
+
 def set_setting(key: str, value: Any, *, secret: bool = False) -> None:
     assert_mutation_allowed(f"setting:{key}")
     migrate_configuration()
