@@ -9,6 +9,7 @@ import time
 from .metrics import record_inference, record_error, record_route
 from .resource_guard import limits, wait_until_available
 from ..model_manager import ModelManager
+from ..settings_store import get_setting
 
 def _settings():
     from .. import llm as legacy_llm
@@ -16,6 +17,12 @@ def _settings():
 
 class LLMError(RuntimeError):
     pass
+
+def _runtime_setting(key: str, fallback):
+    try:
+        return get_setting(key, fallback)
+    except Exception:
+        return fallback
 HistoryMessage = dict[str, str]
 
 class OllamaClient:
@@ -34,9 +41,9 @@ class OllamaClient:
         self.model = self._preflight_model(self._select_model(task), task)
 
     def _retry_attempts(self) -> int:
-        return max(1, min(5, int(getattr(_settings(), "llm_model_retry_attempts", getattr(_settings(), "llm_retry_attempts", 2)))))
+        return max(1, min(5, int(_runtime_setting("llm.retry_attempts", getattr(_settings(), "llm_model_retry_attempts", getattr(_settings(), "llm_retry_attempts", 2))))))
     def _timeout(self) -> float:
-        return max(1.0, float(getattr(_settings(), "llm_model_timeout_seconds", getattr(_settings(), "llm_timeout_seconds", 300))))
+        return max(1.0, float(_runtime_setting("llm.timeout_seconds", getattr(_settings(), "llm_model_timeout_seconds", getattr(_settings(), "llm_timeout_seconds", 300)))))
     def _backoff(self, attempt: int) -> None:
         delay=max(0.0,min(10.0,float(getattr(_settings(),"llm_model_retry_backoff_seconds",getattr(_settings(),"llm_retry_backoff_seconds",0.5)))))
         if delay: time.sleep(delay*(2**max(0,attempt-1)))
