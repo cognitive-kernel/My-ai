@@ -75,9 +75,13 @@ def test_custom_course_progress_tracks_last_attempt_column():
 
 
 def test_settings_registry_update_route_exists():
-    routes = {getattr(route, "path", ""): getattr(route, "methods", set()) for route in sf.router.routes}
+    routes = {}
+    for route in sf.router.routes:
+        path = getattr(route, "path", "")
+        if path:
+            routes.setdefault(path, set()).update(getattr(route, "methods", set()))
     assert "/settings/registry/{key:path}" in routes
-    assert "PUT" in routes["/settings/registry/{key:path}"]
+    assert {"PUT", "DELETE"} <= routes["/settings/registry/{key:path}"]
     assert "/settings/registry/export" in routes
     assert "/settings/registry/import" in routes
 
