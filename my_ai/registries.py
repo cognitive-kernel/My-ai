@@ -9,7 +9,7 @@ from .control_plane import put_record, list_records, get_record
 def publish_prompt(name: str, text: str, *, task: str="default", version: str="1", enabled: bool=False, metadata=None):
     current = get_record("prompts.registry", name)
     if current:
-        put_record("prompts.registry.history", f"{name}@{current["version"]}", current["payload"], enabled=True)
+        put_record("prompts.registry.history", f"{name}@{current['version']}", current["payload"], enabled=True)
     return put_record("prompts.registry", name, {"text":text,"task":task,"version":version,"metadata":metadata or {}}, enabled=enabled)
 
 def list_prompt_history(name: str):
