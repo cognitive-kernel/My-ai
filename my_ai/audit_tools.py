@@ -61,13 +61,45 @@ def configuration_inventory(root: Path = ROOT) -> list[dict[str, str]]:
     return result
 
 def route_inventory(root: Path = ROOT) -> list[dict[str, str]]:
-    result=[]
-    pattern=re.compile(r'os\.getenv\(["\']([A-Z][A-Z0-9_]+)["\']')
-    path=root/'my_ai'/'api.py'
-    if path.exists():
-        source=path.read_text(encoding='utf-8')
-        for method, route in pattern.findall(source): result.append({'method':method.upper(),'path':route})
-    return sorted(result,key=lambda x:(x['path'],x['method']))
+    result = []
+    path = root / "my_ai" / "api.py"
+    if not path.exists():
+        return result
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (OSError, SyntaxError):
+        return result
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for decorator in node.decorator_list:
+            if not isinstance(decorator, ast.Call) or not isinstance(decorator.func, ast.Attribute):
+                continue
+            if decorator.func.attr.lower() not in {"get", "post", "put", "patch", "delete"}:
+                continue
+            if not decorator.args or not isinstance(decorator.args[0], ast.Constant):
+                continue
+            result.append({"method": decorator.func.attr.upper(), "path": str(decorator.args[0].value)})
+    return sorted(result, key=lambda x: (x["path"], x["method"]))
+
+def sensitive_route_inventory(root: Path = ROOT) -> list[dict[str, str]]:
+    sensitive = ("/admin", "/tools", "/skills/", "/sessions", "/streams/", "/state/", "/self-repair", "/self-update", "/security")
+    return [route for route in route_inventory(root) if any(route["path"].startswith(prefix) for prefix in sensitive)]
+
+def dependency_boundary_inventory(root: Path = ROOT) -> dict[str, list[str]]:
+    architecture = architecture_inventory(root)
+    boundaries = {}
+    for module, info in architecture.items():
+        imports = info.get("imports", []) if isinstance(info, dict) else []
+        boundaries[module] = sorted({item for item in imports if not ("from ." in item or "import my_ai" in item)})
+    return boundaries
 
 def run_audit(root: Path = ROOT) -> dict[str, Any]:
-    return {"silent_failures":find_silent_failures(root),"architecture":architecture_inventory(root),"configuration":configuration_inventory(root),"routes":route_inventory(root)}
+    return {
+        "silent_failures": find_silent_failures(root),
+        "architecture": architecture_inventory(root),
+        "configuration": configuration_inventory(root),
+        "routes": route_inventory(root),
+        "sensitive_routes": sensitive_route_inventory(root),
+        "dependency_boundaries": dependency_boundary_inventory(root),
+    }
