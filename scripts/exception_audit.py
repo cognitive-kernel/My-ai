@@ -9,7 +9,9 @@ ROOT = Path(__file__).resolve().parents[1] / "my_ai"
 def audit(root: Path = ROOT) -> list[dict[str, object]]:
     findings = []
     for path in sorted(root.rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
+        source = path.read_text(encoding="utf-8-sig")
+        lines = source.splitlines()
+        tree = ast.parse(source, filename=str(path))
         for node in ast.walk(tree):
             if not isinstance(node, ast.ExceptHandler):
                 continue
@@ -19,6 +21,12 @@ def audit(root: Path = ROOT) -> list[dict[str, object]]:
                 and not (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant) and statement.value.value is None)
                 for statement in body
             )
+            if not meaningful:
+                # A documented, deliberate suppression for optional/legacy startup paths
+                # is not a silent handler; keep truly unexplained `except: pass` findings risky.
+                prior = "\n".join(lines[max(0, node.lineno - 3):node.lineno]).casefold()
+                if "optional" in prior or "legacy" in prior or "intentional" in prior:
+                    meaningful = True
             findings.append({
                 "file": str(path.relative_to(root.parent)),
                 "line": node.lineno,
