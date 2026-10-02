@@ -216,8 +216,8 @@ def _semantic_duplicate(topic: str, title: str, content: str, digest: str, conn)
     try:
         from ..platform import cosine_similarity, ollama_embed
         from ..config import settings as runtime_settings
-        import os
-        threshold = float(os.getenv("KNOWLEDGE_DUPLICATE_THRESHOLD", str(runtime_settings.knowledge_duplicate_threshold)))
+        from ..settings_store import get_setting
+        threshold = float(get_setting("memory.duplicate_threshold", runtime_settings.knowledge_duplicate_threshold))
         query = f"{title}\n{content}\n{topic}"
         vector = ollama_embed(query, runtime_settings.embedding_model)
         rows = conn.execute(
@@ -243,8 +243,8 @@ def remember_knowledge(topic: str, title: str, content: str, source_url: str | N
     if _write_blocked():
         raise PermissionError("MYAI_READ_ONLY blocks database mutation.")
     digest = _knowledge_hash(topic, content)
-    import os
-    threshold = float(os.getenv("KNOWLEDGE_DUPLICATE_THRESHOLD", str(settings.knowledge_duplicate_threshold)))
+    from ..settings_store import get_setting
+    threshold = float(get_setting("memory.duplicate_threshold", settings.knowledge_duplicate_threshold))
     with connect() as conn:
         conn.execute("CREATE TABLE IF NOT EXISTS knowledge_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, knowledge_id INTEGER NOT NULL, user_id INTEGER, action TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
         row = conn.execute("SELECT id,source_url FROM knowledge WHERE content_hash=?", (digest,)).fetchone()
