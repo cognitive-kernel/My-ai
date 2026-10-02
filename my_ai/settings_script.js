@@ -255,6 +255,7 @@ function editControlPlane(x){byId("cp_namespace").value=x.namespace;byId("cp_nam
 async function toggleControlPlane(ns,name,enabled){await req("/settings/control-plane/"+encodeURIComponent(ns)+"/"+encodeURIComponent(name)+"/"+(enabled?"enable":"disable"),{method:"POST"});await loadControlPlane()}
 async function deleteControlPlane(ns,name){if(!confirm("این رکورد حذف شود؟"))return;await req("/settings/control-plane/"+encodeURIComponent(ns)+"/"+encodeURIComponent(name),{method:"DELETE"});await loadControlPlane()}
 
+async function adminGUI(kind){try{var endpoint=kind==="status"?"/settings/providers":kind==="health"?"/settings/metrics":"/settings/control-plane?namespace="+encodeURIComponent(kind==="sessions"?"agent.session":kind==="memory"?"memory.policy":kind==="tools"?"tools.catalog":kind==="policies"?"policies.registry":kind==="learning"?"knowledge.registry":kind==="repairs"?"self_repair.policy":kind==="rollback"?"self_update.policy":"");var x=await req(endpoint);setText("adminguiout",JSON.stringify(x,null,2));}catch(e){setText("adminguiout","خطا: "+e.message)}}
 async function loadUIActions(){
   var box=byId("ui-actions");if(!box)return;
   try{
