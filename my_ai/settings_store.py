@@ -132,6 +132,11 @@ SETTING_REGISTRY.update({
     "server.health_policy": {"version": 3, "type": "enum", "default": "standard", "choices": ["standard","strict","minimal"], "description": "Health/readiness policy."},
     "observability.log_destination": {"version": 3, "type": "text", "default": "console", "max_length": 200, "description": "Log destination policy."},
     "observability.alerts_enabled": {"version": 3, "type": "enum", "default": "true", "choices": ["true","false"], "description": "Alert processing."},
+    "observability.alert_rules": {"version": 1, "type": "json", "default": "[]", "max_length": 20000, "description": "Persisted alert rules."},
+    "observability.notification_destinations": {"version": 1, "type": "json", "default": "[]", "max_length": 20000, "description": "Persisted notification destinations."},
+    "observability.dashboard_config": {"version": 1, "type": "json", "default": "{}", "max_length": 20000, "description": "Persisted dashboard configuration."},
+    "observability.diagnostics_export": {"version": 1, "type": "enum", "default": "json", "choices": ["json","text"], "description": "Diagnostics export format."},
+
     "multimodal.image_provider": {"version": 3, "type": "text", "default": "automatic1111", "max_length": 100, "description": "Image provider."},
     "multimodal.voice_provider": {"version": 3, "type": "text", "default": "local", "max_length": 100, "description": "Voice provider."},
 })
