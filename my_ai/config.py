@@ -24,6 +24,8 @@ class Settings:
     llm_retry_attempts: int = max(1, min(5, int(os.getenv("LLM_RETRY_ATTEMPTS", "2"))))
     llm_retry_backoff_seconds: float = max(0.0, min(10.0, float(os.getenv("LLM_RETRY_BACKOFF_SECONDS", "0.5"))))
     llm_timeout_seconds: float = max(1.0, float(os.getenv("LLM_TIMEOUT_SECONDS", "300")))
+    llm_health_timeout_seconds: float = max(0.1, float(os.getenv("LLM_HEALTH_TIMEOUT_SECONDS", "5")))
+    llm_max_fallback_models: int = max(1, min(10, int(os.getenv("LLM_MAX_FALLBACK_MODELS", "5")))
     openai_base_url: str = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
