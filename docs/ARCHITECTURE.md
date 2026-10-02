@@ -1,43 +1,37 @@
-# My-AI Architecture
+# My-AI Architecture Boundaries
 
 ## Runtime layers
 
-1. API/UI — FastAPI routes, authentication, static UI and streaming.
-2. Application — use-case composition and dependency injection.
-3. Domain — pure intent/business decisions with no infrastructure imports.
-4. Core — protocols and stable contracts.
-5. Infrastructure — LLM, persistence and host/network adapters.
-6. Capabilities — learning, memory, coding, files, voice, GitHub and security services.
-7. Execution — sandboxed Python/project tooling and the remote executor service.
-8. Maintenance — diagnostics, self-repair proposals and deny-by-default self-update.
+1. API/UI — my_ai/api.py and my_ai/static/; HTTP/authentication/transport only.
+2. Application — my_ai/application/; dependency injection and use-case composition.
+3. Domain — my_ai/domain/; pure business decisions and schemas. Domain code depends only on my_ai/core and standard-library code.
+4. Core — my_ai/core/; stable protocols and shared contracts with no infrastructure/application imports.
+5. Infrastructure — my_ai/infra/; LLM, persistence, network and host adapters.
 
-## Request flow
+Legacy top-level modules such as my_ai/router.py, my_ai/llm.py and my_ai/db.py are compatibility facades only. New code must import the layered implementation directly.
 
-HTTP request -> authentication -> central access policy -> application service -> domain/capability -> persistence -> audit
+## Dependency enforcement
 
-Chat follows:
+The dependency graph is enforced by tests/test_architecture_boundaries.py using AST import inspection:
 
-message -> history/attachments -> application router service -> domain structured intent -> policy -> hybrid memory retrieval -> selected LLM -> response
+- Domain cannot import API/UI, application, infrastructure, database, LLM or configuration adapters.
+- Core cannot import application/domain/infrastructure/API packages.
+- Application cannot import API/UI; external adapters are injected through core protocols.
+- Infrastructure cannot import application or API layers.
+- Critical flat modules are verified to contain no implementation of routing, LLM or persistence.
 
-The router is advisory and never grants permission.
+## Router boundary
 
-## Dependency rules
+The router is a domain service with the StructuredRouter protocol injected by the application layer. Provider adapters live in my_ai/infra/router_llm.py.
 
-- Domain imports only core contracts and standard-library code.
-- Application depends on domain/core and injects infrastructure adapters through protocols.
-- Infrastructure never depends on application or API layers.
-- API is the composition/transport boundary and may call application services and capabilities.
-- Legacy top-level router.py, llm.py and db.py are compatibility facades only.
-- tests/test_architecture_boundaries.py statically enforces these rules on every CI run.
+Routing uses strict schema-constrained structured output; there is no keyword/regex intent table or free-form JSON fallback. The router only returns intent data. Authorization, confirmation and execution remain separate policy concerns.
 
-## Structured routing
+## Persistence boundary
 
-Routing is provider-backed structured output with a strict JSON Schema. Ollama uses its schema-constrained format; OpenAI-compatible Responses uses strict text.format.type=json_schema. No keyword/regex classifier or free-form JSON fallback is used.
+SQLite implementation lives in my_ai/infra/persistence.py. my_ai/db.py remains a compatibility facade for existing integrations.
 
-## Security boundaries
+## Acceptance surfaces
 
-- File paths are resolved and constrained to approved roots.
-- SQL integrations expose read-only query validation.
-- Code execution is sandboxed/remote when configured.
-- External security operations are policy constrained.
-- Self-update is deny-by-default and requires isolated tests, approval, snapshot and health/rollback supervision.
+/admin/readiness, /eval/retrieval, /skills/reviews, /self-update/status, and the browser E2E suite expose operational acceptance state.
+
+Self-update remains disabled by default; enabling it requires the explicit runtime enable flag and explicit approval.
