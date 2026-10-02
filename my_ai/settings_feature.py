@@ -16,7 +16,7 @@ from .auth import require_admin, require_user, audit
 from .db import connect, execute, fetch_all, init_db
 from .git_connector import GitHubConnector
 from .llm import create_llm
-from .settings_store import get_setting, set_setting, get_bool, get_int, get_github_settings, get_setting_registry, reset_setting
+from .settings_store import get_setting, set_setting, get_bool, get_int, get_github_settings, get_setting_registry, reset_setting, export_registered_settings, import_registered_settings
 
 router = APIRouter(tags=["settings"])
 _workers = ThreadPoolExecutor(max_workers=1, thread_name_prefix="myai-learning")
@@ -359,6 +359,9 @@ def _run_course(course_id: int) -> None:
         _running.discard(course_id)
 
 
+class SettingsImportRequest(BaseModel):
+    values: dict[str, Any]
+
 @router.get("/settings/registry")
 def settings_registry(request: Request):
     require_admin(request)
@@ -369,6 +372,21 @@ def settings_registry(request: Request):
         item["value"] = get_setting(key, meta["default"])
         items.append(item)
     return {"items": items}
+
+@router.get("/settings/registry/export")
+def export_settings_registry(request: Request):
+    require_admin(request)
+    return {"version": 1, "settings": export_registered_settings()}
+
+@router.post("/settings/registry/import")
+def import_settings_registry(payload: SettingsImportRequest, request: Request):
+    user = require_admin(request)
+    try:
+        values = import_registered_settings(payload.values)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+    audit(user, "settings", "import", "200", f"settings-import:{len(payload.values)}")
+    return {"version": 1, "settings": values, "imported": len(payload.values)}
 
 @router.post("/settings/registry/{key:path}/reset")
 def reset_registered_setting(key: str, request: Request):
