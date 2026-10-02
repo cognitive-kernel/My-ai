@@ -53,7 +53,8 @@ def _run_remote(code:str)->ExecutionResult:
 
 def run_python(code:str)->ExecutionResult:
     if not isinstance(code,str) or not code.strip(): return ExecutionResult("","No Python code supplied.",False,2,settings.exec_mode)
-    mode=_mode()\n    if mode=="remote": return _run_remote(code)
+    mode=_mode()
+    if mode=="remote": return _run_remote(code)
     if mode in ("container","sandbox"): return _run_container(code)
     if mode in ("subprocess","local"): return _run_subprocess(code)
     raise ValueError("execution.mode must be local, sandbox, container, or remote.")
