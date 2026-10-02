@@ -14,6 +14,14 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
     "resources.cpu_threads": {"type":"int","default":8,"min":1,"max":128,"description":"Maximum CPU threads."},
     "resources.ram_percent": {"type":"float","default":80.0,"min":1.0,"max":100.0,"description":"Maximum RAM percentage."},
     "resources.gpu_layers": {"type":"int","default":0,"min":0,"max":128,"description":"GPU layers."},
+    "llm.retry_attempts": {"type":"int","default":2,"min":1,"max":5,"description":"LLM retry attempts."},
+    "llm.timeout_seconds": {"type":"float","default":300.0,"min":1.0,"max":3600.0,"description":"LLM timeout in seconds."},
+    "learning.max_concurrent_workers": {"type":"int","default":2,"min":1,"max":16,"description":"Maximum concurrent learning workers."},
+    "learning.source_timeout_seconds": {"type":"float","default":8.0,"min":1.0,"max":300.0,"description":"Learning source timeout."},
+    "learning.source_max_chars": {"type":"int","default":12000,"min":1000,"max":200000,"description":"Maximum source characters retained."},
+    "scheduler.interval_seconds": {"type":"int","default":3600,"min":60,"max":86400,"description":"Scheduler interval."},
+    "scheduler.auto_resume": {"type":"enum","default":"false","choices":["true","false"],"description":"Automatically resume learning workers."},
+    "execution.timeout_seconds": {"type":"int","default":10,"min":1,"max":3600,"description":"Execution timeout."},
 }
 
 def get_setting_registry() -> dict[str, dict[str, Any]]:
