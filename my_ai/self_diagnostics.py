@@ -231,10 +231,10 @@ class SelfDiagnosticsMonitor:
     def _loop(self) -> None:
         try:
             run_diagnostics()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.exception("SELF_DIAGNOSTICS_INITIAL_RUN_FAILED: %s", exc)
         while not self._stop.wait(self.interval_seconds):
             try:
                 run_diagnostics()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.exception("SELF_DIAGNOSTICS_PERIODIC_RUN_FAILED: %s", exc)
