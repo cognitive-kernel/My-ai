@@ -224,7 +224,7 @@ DEFAULT_NAMESPACES = (
     "observability.logs", "observability.metrics", "observability.traces",
     "observability.telemetry", "observability.alerts", "observability.dashboard",
     "database.backup", "database.migration",
-    "prompts.registry", "policies.registry", "config.profiles",
+    "prompts.registry", "policies.registry", "config.profiles", "ui.actions",
     "plugins.registry", "skills.registry", "knowledge.registry",
     "evaluation.benchmarks", "evaluation.regression", "evaluation.ab",
     "experience.evolution", "experience.lessons", "agent.skills", "agent.knowledge_graph",
