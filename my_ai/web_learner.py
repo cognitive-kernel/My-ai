@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 import re
 import time
 import threading
@@ -88,10 +88,25 @@ class WebLearner:
         return min(cls._max_backoff, base * random.uniform(0.5, 1.0))
 
     def search(self,query,domains=None,limit=6):
-        q=query+((" site:"+" OR site:".join(domains)) if domains else "")
-        r=httpx.get("https://html.duckduckgo.com/html/?q="+quote_plus(q),timeout=20,follow_redirects=True,headers={"User-Agent":"My-AI/0.2"}); r.raise_for_status()
+        provider = str(getattr(settings, "research_search_provider", "duckduckgo-html") or "duckduckgo-html")
+        if provider != "duckduckgo-html": raise ValueError(f"Unsupported research search provider: {provider}")
+        configured_allow = [x.strip().lower() for x in str(getattr(settings, "research_domain_allowlist", "") or "").split(",") if x.strip()]
+        configured_deny = [x.strip().lower() for x in str(getattr(settings, "research_domain_denylist", "") or "").split(",") if x.strip()]
+        requested = [str(x).strip().lower() for x in (domains or []) if str(x).strip()]
+        allowed = requested or configured_allow
+        q=query+((" site:"+" OR site:".join(allowed)) if allowed else "")
+        timeout=float(getattr(settings, "research_source_timeout", 15) or 15)
+        r=httpx.get("https://html.duckduckgo.com/html/?q="+quote_plus(q),timeout=timeout,follow_redirects=True,headers={"User-Agent":"My-AI/0.2"}); r.raise_for_status()
         soup=BeautifulSoup(r.text,"html.parser")
-        return [{"title":a.get_text(" ",strip=True),"url":a.get("href")} for a in soup.select("a.result__a")[:limit] if a.get("href") and a.get_text(" ",strip=True)]
+        results=[]
+        for a in soup.select("a.result__a"):
+            url=a.get("href"); title=a.get_text(" ",strip=True); host=(urlparse(url).hostname or "").lower() if url else ""
+            if not url or not title: continue
+            if configured_deny and any(host == d or host.endswith("."+d) for d in configured_deny): continue
+            if allowed and not any(host == d or host.endswith("."+d) for d in allowed): continue
+            results.append({"title":title,"url":url})
+            if len(results)>=limit: break
+        return results
     @staticmethod
     def _safe_host(host):
         try:
@@ -135,7 +150,7 @@ class WebLearner:
         if not self._robots_allowed(url):
             self._record_failure(host)
             raise ValueError("robots.txt disallows this URL or could not be verified.")
-        timeout=httpx.Timeout(settings.learning_source_timeout_seconds, connect=min(3.0, settings.learning_source_timeout_seconds))
+        timeout=httpx.Timeout(float(getattr(settings, "research_source_timeout", settings.learning_source_timeout_seconds)), connect=min(3.0, float(getattr(settings, "research_source_timeout", settings.learning_source_timeout_seconds))))
         semaphore = self._host_semaphore(host)
         acquired = semaphore.acquire(timeout=settings.learning_source_timeout_seconds)
         if not acquired:
@@ -193,6 +208,6 @@ class WebLearner:
             soup=BeautifulSoup(r.text,"html.parser")
             for n in soup(["script","style","noscript","svg","nav","footer"]): n.decompose()
             title=soup.title.get_text(" ",strip=True) if soup.title else url
-            return title,re.sub(r"\s+"," ",soup.get_text(" ",strip=True))[:settings.max_web_chars]
+            return title,re.sub(r"\s+"," ",soup.get_text(" ",strip=True))[:int(getattr(settings, "max_web_chars", settings.max_web_chars))]
         finally:
             semaphore.release()
