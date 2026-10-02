@@ -42,3 +42,11 @@ def test_audit_event_stores_hashes_not_raw_payload(tmp_path):
     assert "request_id" in row["details"]
     assert "sha256" in row["details"]
     object.__setattr__(db.settings, "db_path", old)
+
+
+def test_configuration_registry_mutations_require_admin():
+    from my_ai import settings_feature as sf
+    routes = {(route.path, method) for route in sf.router.routes for method in getattr(route, "methods", set())}
+    assert ("/settings/registry/{key:path}", "PUT") in routes
+    assert ("/settings/registry/{key:path}/reset", "POST") in routes
+    assert ("/settings/registry/import", "POST") in routes
