@@ -252,6 +252,7 @@ def remember_knowledge(topic: str, title: str, content: str, source_url: str | N
     from ..config import settings as runtime_settings
     threshold = float(get_setting("memory.duplicate_threshold", runtime_settings.knowledge_duplicate_threshold))
     with connect() as conn:
+        conn.create_function("normalize_search", 1, _normalize_search_text)
         conn.execute("CREATE TABLE IF NOT EXISTS knowledge_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, knowledge_id INTEGER NOT NULL, user_id INTEGER, action TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
         row = conn.execute("SELECT id,source_url FROM knowledge WHERE content_hash=?", (digest,)).fetchone()
         if row:
