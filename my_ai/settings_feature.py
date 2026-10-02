@@ -772,7 +772,11 @@ class BackupRequest(BaseModel):
 @router.post("/settings/database/backup")
 def settings_database_backup(payload: BackupRequest, request: Request):
     user=require_admin(request)
-    try: result=backup_database(payload.path,overwrite=payload.overwrite)
+    destination = payload.path
+    if not destination.strip():
+        destination = str(get_setting("database.backup.destination", "data/backups"))
+    try:
+        result=backup_database(destination,overwrite=payload.overwrite)
     except (OSError,FileNotFoundError,FileExistsError) as exc: raise HTTPException(400,str(exc))
     audit(user,"database","backup","200",result["path"]); return result
 
