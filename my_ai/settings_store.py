@@ -127,6 +127,27 @@ def set_setting(key: str, value: Any, *, secret: bool = False) -> None:
         )
         conn.commit()
 
+
+def export_registered_settings() -> dict[str, Any]:
+    return {
+        key: get_setting(key, meta["default"])
+        for key, meta in SETTING_REGISTRY.items()
+    }
+
+def import_registered_settings(values: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(values, dict):
+        raise ValueError("Settings import must be an object.")
+    unknown = sorted(set(values) - set(SETTING_REGISTRY))
+    if unknown:
+        raise ValueError("Unknown registered settings: " + ", ".join(unknown))
+    validated = {
+        key: validate_registered_setting(key, value)
+        for key, value in values.items()
+    }
+    for key, value in validated.items():
+        set_setting(key, value)
+    return export_registered_settings()
+
 def delete_setting(key: str) -> None:
     assert_mutation_allowed(f"setting-delete:{key}")
     ensure_schema()
