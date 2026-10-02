@@ -91,7 +91,7 @@ def add_provider_key(provider_id: int, key_name: str, secret: str, *, priority: 
     ensure_schema()
     if not key_name.strip() or not secret: raise ValueError("key name and secret are required")
     now=time.time()
-    with connect() as conn:
+    with _connect() as conn:
         conn.execute("""INSERT INTO llm_provider_keys(provider_id,key_name,secret,active,priority,created_at)
                         VALUES(?,?,?,?,?,?) ON CONFLICT(provider_id,key_name) DO UPDATE SET
                         secret=excluded.secret,active=excluded.active,priority=excluded.priority""",
@@ -101,7 +101,7 @@ def add_provider_key(provider_id: int, key_name: str, secret: str, *, priority: 
 
 def list_provider_keys(provider_id: int) -> list[dict[str, Any]]:
     ensure_schema()
-    with connect() as conn:
+    with _connect() as conn:
         rows=conn.execute("SELECT id,provider_id,key_name,active,priority,created_at,last_used_at FROM llm_provider_keys WHERE provider_id=? ORDER BY priority,id",(int(provider_id),)).fetchall()
     return [dict(r)|{"active":bool(r["active"])} for r in rows]
 
@@ -109,7 +109,7 @@ def rotate_provider_key(provider_id: int) -> dict[str, Any]:
     """Promote the next eligible key instead of re-selecting the current key."""
     assert_mutation_allowed(f"llm-provider-key-rotate:{provider_id}")
     ensure_schema()
-    with connect() as conn:
+    with _connect() as conn:
         rows = conn.execute(
             "SELECT id,key_name,active,priority FROM llm_provider_keys WHERE provider_id=? ORDER BY active DESC, priority, id",
             (int(provider_id),),
@@ -133,7 +133,7 @@ def rotate_provider_key(provider_id: int) -> dict[str, Any]:
 def activate_provider_key(provider_id: int, key_name: str) -> dict[str, Any]:
     assert_mutation_allowed(f"llm-provider-key-activate:{provider_id}:{key_name}")
     ensure_schema()
-    with connect() as conn:
+    with _connect() as conn:
         row = conn.execute("SELECT id,key_name FROM llm_provider_keys WHERE provider_id=? AND key_name=?", (int(provider_id), str(key_name).strip())).fetchone()
         if not row:
             raise ValueError("provider key not found")
@@ -145,7 +145,7 @@ def activate_provider_key(provider_id: int, key_name: str) -> dict[str, Any]:
 
 def list_providers(*, include_disabled: bool = True) -> list[dict[str, Any]]:
     ensure_schema()
-    with connect() as conn:
+    with _connect() as conn:
         rows = conn.execute(
             "SELECT id,name,protocol,endpoint,auth_type,auth_secret,capabilities_json,version,enabled,timeout_seconds,created_at,updated_at FROM llm_providers"
             + ("" if include_disabled else " WHERE enabled=1")
@@ -180,7 +180,7 @@ def upsert_provider(
     ensure_schema()
     now = time.time()
     encrypted = _encrypt(secret) if secret else ""
-    with connect() as conn:
+    with _connect() as conn:
         if provider_id is not None:
             existing = conn.execute("SELECT id,auth_secret FROM llm_providers WHERE id=?", (int(provider_id),)).fetchone()
             if not existing:
@@ -212,7 +212,7 @@ def upsert_provider(
 def delete_model(provider_id: int, model_id: str) -> None:
     assert_mutation_allowed(f"llm-model-delete:{provider_id}:{model_id}")
     ensure_schema()
-    with connect() as conn:
+    with _connect() as conn:
         conn.execute("DELETE FROM llm_models WHERE provider_id=? AND model_id=?", (int(provider_id), str(model_id).strip()))
         conn.commit()
 
@@ -220,7 +220,7 @@ def delete_model(provider_id: int, model_id: str) -> None:
 def delete_provider(provider_id: int) -> None:
     assert_mutation_allowed(f"llm-provider-delete:{provider_id}")
     ensure_schema()
-    with connect() as conn:
+    with _connect() as conn:
         conn.execute("DELETE FROM llm_providers WHERE id=?", (int(provider_id),))
         conn.commit()
 
@@ -240,7 +240,7 @@ def upsert_model(
     if not model_id.strip() or priority < 0 or (context_length is not None and context_length <= 0):
         raise ValueError("invalid model catalog metadata")
     ensure_schema()
-    with connect() as conn:
+    with _connect() as conn:
         conn.execute(
             """INSERT INTO llm_models(provider_id,model_id,tasks_json,context_length,limits_json,priority,enabled,version)
                VALUES(?,?,?,?,?,?,?,?)
@@ -266,7 +266,7 @@ def list_models(*, provider_id: int | None = None, include_disabled: bool = True
     if not include_disabled:
         clauses.append("enabled=1")
     where = " WHERE " + " AND ".join(clauses) if clauses else ""
-    with connect() as conn:
+    with _connect() as conn:
         rows = conn.execute("SELECT * FROM llm_models" + where + " ORDER BY priority, model_id", params).fetchall()
     items = []
     for row in rows:
@@ -281,7 +281,7 @@ def list_models(*, provider_id: int | None = None, include_disabled: bool = True
 def get_provider_runtime_config(provider_id: int) -> dict[str, Any]:
     """Return decrypted runtime configuration only at the adapter boundary."""
     ensure_schema()
-    with connect() as conn:
+    with _connect() as conn:
         provider = conn.execute("SELECT * FROM llm_providers WHERE id=?", (int(provider_id),)).fetchone()
         if not provider: raise KeyError(f"Unknown provider id: {provider_id}")
         key = conn.execute("SELECT key_name,secret FROM llm_provider_keys WHERE provider_id=? AND active=1 ORDER BY priority,id LIMIT 1", (int(provider_id),)).fetchone()
@@ -304,7 +304,7 @@ def set_routing_rule(task: str, model_id: str, *, provider_id: int | None = None
         raise ValueError("task, model_id and non-negative priority are required")
     ensure_schema()
     now = time.time()
-    with connect() as conn:
+    with _connect() as conn:
         conn.execute("""INSERT INTO llm_routing_rules(task,model_id,provider_id,priority,enabled,created_at,updated_at)
             VALUES(?,?,?,?,?,?,?) ON CONFLICT(task) DO UPDATE SET model_id=excluded.model_id,
             provider_id=excluded.provider_id,priority=excluded.priority,enabled=excluded.enabled,updated_at=excluded.updated_at""",
@@ -319,13 +319,13 @@ def list_routing_rules(*, task: str | None = None, include_disabled: bool = True
     if task: clauses.append("task=?"); params.append(str(task).strip().lower())
     if not include_disabled: clauses.append("enabled=1")
     q = "SELECT * FROM llm_routing_rules" + ((" WHERE " + " AND ".join(clauses)) if clauses else "") + " ORDER BY priority,task"
-    with connect() as conn:
+    with _connect() as conn:
         return [dict(r) | {"enabled": bool(r["enabled"])} for r in conn.execute(q, params).fetchall()]
 
 def delete_routing_rule(task: str) -> bool:
     assert_mutation_allowed(f"llm-routing-delete:{task}")
     ensure_schema()
-    with connect() as conn:
+    with _connect() as conn:
         cur = conn.execute("DELETE FROM llm_routing_rules WHERE task=?", (str(task).strip().lower(),))
         conn.commit()
     return cur.rowcount > 0
@@ -337,7 +337,7 @@ def set_fallback_chain(name: str, task: str, model_ids: list[str], *, enabled: b
     if not name or not task or not model_ids:
         raise ValueError("fallback name, task and at least one model are required")
     ensure_schema()
-    with connect() as conn:
+    with _connect() as conn:
         conn.execute("DELETE FROM llm_fallback_chains WHERE name=? AND task=?", (name, task))
         for position, model_id in enumerate(model_ids):
             conn.execute("INSERT INTO llm_fallback_chains(name,task,model_id,position,enabled) VALUES(?,?,?,?,?)",
@@ -347,7 +347,7 @@ def set_fallback_chain(name: str, task: str, model_ids: list[str], *, enabled: b
 
 def list_fallback_chain(name: str, task: str = "general") -> list[dict[str, Any]]:
     ensure_schema()
-    with connect() as conn:
+    with _connect() as conn:
         rows = conn.execute("SELECT * FROM llm_fallback_chains WHERE name=? AND task=? AND enabled=1 ORDER BY position,id",
                             (str(name).strip(), str(task).strip().lower())).fetchall()
     return [dict(r) | {"enabled": bool(r["enabled"])} for r in rows]
@@ -355,7 +355,7 @@ def list_fallback_chain(name: str, task: str = "general") -> list[dict[str, Any]
 def delete_fallback_chain(name: str, task: str = "general") -> bool:
     assert_mutation_allowed(f"llm-fallback-delete:{name}:{task}")
     ensure_schema()
-    with connect() as conn:
+    with _connect() as conn:
         cur = conn.execute("DELETE FROM llm_fallback_chains WHERE name=? AND task=?", (str(name).strip(), str(task).strip().lower()))
         conn.commit()
     return cur.rowcount > 0
@@ -384,7 +384,7 @@ def import_catalog(payload: dict[str, Any]) -> dict[str, int]:
 
 def export_catalog() -> dict[str, Any]:
     providers = list_providers()
-    with connect() as conn:
+    with _connect() as conn:
         models = [dict(row) for row in conn.execute("SELECT * FROM llm_models ORDER BY id").fetchall()]
     for item in providers:
         item.pop("auth_configured", None)
@@ -395,7 +395,7 @@ def export_catalog() -> dict[str, Any]:
         item["limits"] = json.loads(item.pop("limits_json") or "{}")
         provider = next((p for p in providers if int(p["id"]) == int(item["provider_id"])), None)
         item["provider_name"] = provider["name"] if provider else ""
-    with connect() as conn:
+    with _connect() as conn:
         rules = [dict(r) for r in conn.execute("SELECT * FROM llm_routing_rules ORDER BY priority,task").fetchall()]
         chains = [dict(r) for r in conn.execute("SELECT * FROM llm_fallback_chains ORDER BY name,task,position").fetchall()]
     for row in rules + chains:
