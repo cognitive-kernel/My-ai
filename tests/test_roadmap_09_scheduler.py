@@ -15,3 +15,37 @@ def test_scheduler_endpoint_uses_persisted_interval_setting(monkeypatch):
     monkeypatch.setattr(api.scheduler, "start", lambda language: None)
     result = api.scheduler_start(type("R", (), {"interval_seconds": 3600, "language": "Python"})(), object())
     assert result["interval_seconds"] == 900
+
+def test_scheduler_worker_count_limits_distinct_languages(monkeypatch):
+    import my_ai.scheduler as scheduler_module
+    class FakeThread:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+        def is_alive(self):
+            return True
+        def start(self):
+            return None
+    monkeypatch.setattr(scheduler_module, "fetch_all", lambda *args, **kwargs: [])
+    monkeypatch.setattr(scheduler_module, "execute", lambda *args, **kwargs: 0)
+    monkeypatch.setattr(scheduler_module.threading, "Thread", FakeThread)
+    monkeypatch.setattr(scheduler_module.StudyScheduler, "_ensure_worker_tables", lambda self: None)
+    monkeypatch.setattr(scheduler_module.StudyScheduler, "_acquire_lease", lambda self, language: True)
+    monkeypatch.setattr(scheduler_module.StudyScheduler, "_release_lease", lambda self, language: None)
+    monkeypatch.setattr(scheduler_module, "get_setting", lambda key, default: 1 if key == "scheduler.worker_count" else default)
+    scheduler = scheduler_module.StudyScheduler()
+    scheduler.start("Python")
+    scheduler.start("C")
+    assert list(scheduler._workers) == ["python"]
+
+
+def test_scheduler_concurrency_semaphore_uses_persisted_limit(monkeypatch):
+    import my_ai.scheduler as scheduler_module
+    monkeypatch.setattr(scheduler_module, "get_setting", lambda key, default: 3 if key == "scheduler.concurrency" else default)
+    scheduler = scheduler_module.StudyScheduler()
+    assert scheduler._worker_slots.acquire(timeout=0)
+    assert scheduler._worker_slots.acquire(timeout=0)
+    assert scheduler._worker_slots.acquire(timeout=0)
+    assert not scheduler._worker_slots.acquire(timeout=0)
+    scheduler._worker_slots.release()
+    scheduler._worker_slots.release()
+    scheduler._worker_slots.release()
