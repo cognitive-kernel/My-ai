@@ -67,3 +67,17 @@ def test_success_resets_failure_state():
     WebLearner._record_success("example.com")
     assert "example.com" not in WebLearner._host_failures
     assert "example.com" not in WebLearner._host_last_failure
+
+
+def test_search_applies_configured_domain_policy(monkeypatch):
+    import httpx
+    from my_ai import web_learner
+    from my_ai.config import settings
+    settings.research_domain_allowlist = "example.com"
+    settings.research_domain_denylist = "blocked.example.com"
+    class R:
+        text = '<a class="result__a" href="https://example.com/a">Allowed</a><a class="result__a" href="https://blocked.example.com/b">Blocked</a>'
+        def raise_for_status(self): pass
+    monkeypatch.setattr(web_learner.httpx, "get", lambda *a, **k: R())
+    result = web_learner.WebLearner().search("topic")
+    assert [x["url"] for x in result] == ["https://example.com/a"]
