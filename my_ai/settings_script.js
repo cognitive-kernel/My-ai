@@ -12,6 +12,22 @@ async function updateRegisteredSetting(key){
     setText("registryout","تنظیم "+key+" ذخیره شد: "+j.value); await loadRegistry();
   }catch(e){setText("registryout","خطا: "+e.message)}
 }
+async function exportRegistry(){
+  try{
+    var j=await req("/settings/registry/export");
+    var blob=new Blob([JSON.stringify(j,null,2)],{type:"application/json"});
+    var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="my-ai-settings-v"+j.version+".json";a.click();URL.revokeObjectURL(a.href);
+    setText("registryout","خروجی تنظیمات ایجاد شد.");
+  }catch(e){setText("registryout","خطا: "+e.message)}
+}
+async function importRegistryFile(file){
+  if(!file)return;
+  try{
+    var text=await file.text(), payload=JSON.parse(text);
+    var j=await req("/settings/registry/import",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    setText("registryout","تنظیمات وارد شد: "+j.imported);await loadSettings();await loadRegistry();
+  }catch(e){setText("registryout","خطا: "+e.message)}
+}
 async function loadRegistry(){
   var box=byId("settings-registry");if(!box)return;
   try{
