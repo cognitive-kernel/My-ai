@@ -9,6 +9,7 @@ from .learner import LearningEngine
 from .platform import resource_status
 from .curriculum import LANGUAGE_CURRICULA, canonical_language
 from .db import connect, execute, fetch_all
+from .infra.persistence import purge_expired_knowledge
 from .dynamic_learning import due_domains
 from .config import settings
 from .settings_store import get_setting
@@ -128,6 +129,10 @@ class StudyScheduler:
         engine=LearningEngine(); errors=0
         try:
             while not stop_event.is_set():
+                try:
+                    purge_expired_knowledge()
+                except Exception:
+                    logger.exception("MEMORY_RETENTION_CLEANUP_FAILURE")
                 try:
                     self._renew_lease(language)
                     self._wait_for_resources(stop_event)
