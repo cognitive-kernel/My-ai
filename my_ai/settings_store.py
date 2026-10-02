@@ -256,9 +256,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from .access_policy import assert_mutation_allowed
 
-def connect():
-    from .db import connect as db_connect
-    return db_connect()
+from .db import connect
 
 ROOT = Path(__file__).resolve().parent.parent
 KEY_PATH = ROOT / "data" / ".settings_key"
