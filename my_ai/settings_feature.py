@@ -18,7 +18,7 @@ from .db import connect, execute, fetch_all, init_db
 from .git_connector import GitHubConnector
 from .llm import create_llm
 from .provider_catalog import list_providers, upsert_provider, delete_provider, list_models, upsert_model, delete_model, export_catalog, add_provider_key, list_provider_keys, rotate_provider_key
-from .settings_store import get_setting, set_setting, get_bool, get_int, get_github_settings, get_setting_registry, get_configuration_schema_version, reset_setting, export_registered_settings, import_registered_settings
+from .settings_store import get_setting, set_setting, get_bool, get_int, get_github_settings, get_setting_registry, get_configuration_schema_version, reset_setting, export_registered_settings, import_registered_settings, list_setting_history
 from .ui_actions import list_ui_actions
 from .metrics import snapshot as metrics_snapshot
 from .no_code_catalog import inventory as no_code_inventory
@@ -648,6 +648,11 @@ def control_plane_get_action(action_id: str, request: Request):
 def control_plane_list_actions(request: Request, limit: int = 100):
     require_admin(request)
     return {"items": list_actions(limit)}
+
+@router.get("/settings/registry/history")
+def settings_registry_history(request: Request, key: str | None = None, limit: int = 200):
+    require_admin(request)
+    return {"items": list_setting_history(key, limit)}
 
 @router.get("/settings/registry")
 def settings_registry(request: Request):
