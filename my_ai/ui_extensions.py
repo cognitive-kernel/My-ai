@@ -107,7 +107,8 @@ def install_ui_extensions(app) -> None:
                 image=bool(re.search(r'(ساخت\s*تصویر|ساختن\s*تصویر|تولید\s*تصویر|بساز.*تصویر|generate\s+(?:an?\s+)?image|create\s+(?:an?\s+)?image|make\s+(?:an?\s+)?image)',low))
                 if image:return JSONResponse({'answer':'درخواست ساخت تصویر فقط در صفحه «ساخت تصویر» اجرا می‌شود.','redirect':'/image'},status_code=409)
                 if learning and not learning_page:return JSONResponse({'answer':'این درخواست در صفحه چت اصلی اجرا نمی‌شود. برای یادگیری به «پیشرفت و یادگیری» بروید.','redirect':'/learning'},status_code=409)
-            except json.JSONDecodeError:pass
+            except json.JSONDecodeError as exc:
+                logger.debug("UI_REQUEST_BODY_NOT_JSON: %s", exc)
         response=await call_next(request)
         if not hasattr(response,'body') or not response.body:return response
         content_type=response.headers.get('content-type','')
