@@ -212,6 +212,38 @@ def list_models(*, provider_id: int | None = None, include_disabled: bool = True
     return items
 
 
+def get_provider_runtime_config(provider_id: int) -> dict[str, Any]:
+    """Return decrypted runtime configuration only at the adapter boundary."""
+    ensure_schema()
+    with connect() as conn:
+        provider = conn.execute("SELECT * FROM llm_providers WHERE id=?", (int(provider_id),)).fetchone()
+        if not provider: raise KeyError(f"Unknown provider id: {provider_id}")
+        key = conn.execute("SELECT key_name,secret FROM llm_provider_keys WHERE provider_id=? AND active=1 ORDER BY priority,id LIMIT 1", (int(provider_id),)).fetchone()
+    if key: secret, key_name = _decrypt(str(key["secret"])), str(key["key_name"])
+    else: secret, key_name = (_decrypt(str(provider["auth_secret"])) if provider["auth_secret"] else ""), ""
+    return {
+        "id": int(provider["id"]), "name": str(provider["name"]), "protocol": str(provider["protocol"]),
+        "endpoint": str(provider["endpoint"]), "auth_type": str(provider["auth_type"]),
+        "api_key": secret, "key_name": key_name,
+        "capabilities": json.loads(provider["capabilities_json"] or "{}"),
+        "version": str(provider["version"] or ""), "timeout_seconds": float(provider["timeout_seconds"] or 30),
+        "enabled": bool(provider["enabled"]),
+    }
+
+def import_catalog(payload: dict[str, Any]) -> dict[str, int]:
+    """Import provider/model metadata while preserving existing secrets."""
+    if not isinstance(payload, dict) or int(payload.get("version", 0)) != 1: raise ValueError("Unsupported catalog version.")
+    imported = {"providers": 0, "models": 0}; provider_ids: dict[str, int] = {}
+    for item in payload.get('providers', []):
+        current = upsert_provider(name=str(item['name']), protocol=str(item['protocol']), endpoint=str(item['endpoint']), auth_type=str(item.get('auth_type','none')), capabilities=dict(item.get('capabilities') or {}), version=str(item.get('version','')), timeout_seconds=float(item.get('timeout_seconds',30)), enabled=bool(item.get('enabled',True)))
+        provider_ids[str(item['name'])] = int(current['id']); imported['providers'] += 1
+    for item in payload.get('models', []):
+        pid = provider_ids.get(str(item.get('provider_name','')), int(item.get('provider_id',0)))
+        if pid <= 0: raise ValueError("Model record references an unknown provider.")
+        upsert_model(provider_id=pid, model_id=str(item['model_id']), tasks=list(item.get('tasks') or []), context_length=item.get('context_length'), limits=dict(item.get('limits') or {}), priority=int(item.get('priority',100)), version=str(item.get('version','')), enabled=bool(item.get('enabled',True)))
+        imported['models'] += 1
+    return imported
+
 def export_catalog() -> dict[str, Any]:
     providers = list_providers()
     with connect() as conn:
@@ -223,4 +255,6 @@ def export_catalog() -> dict[str, Any]:
     for item in models:
         item["tasks"] = json.loads(item.pop("tasks_json") or "[]")
         item["limits"] = json.loads(item.pop("limits_json") or "{}")
+        provider = next((p for p in providers if int(p["id"]) == int(item["provider_id"])), None)
+        item["provider_name"] = provider["name"] if provider else ""
     return {"version": 1, "providers": providers, "models": models}
