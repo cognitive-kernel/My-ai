@@ -49,6 +49,15 @@ def activate_with_safety(proposal_id: str, base_ref: str, apply_patch, run_tests
             result['database_restored'] = False
             result['restore_error'] = str(restore_error)
         result['activated'] = False
+        try:
+            import subprocess
+            rollback = subprocess.run(["git", "reset", "--hard", base_ref], cwd=ROOT, text=True, capture_output=True, timeout=120)
+            result["git_rolled_back"] = rollback.returncode == 0
+            if rollback.returncode != 0:
+                result["git_rollback_error"] = (rollback.stderr or rollback.stdout).strip()
+        except Exception as rollback_error:
+            result["git_rolled_back"] = False
+            result["git_rollback_error"] = str(rollback_error)
         lesson = STATE / 'lessons.jsonl'
         with lesson.open('a', encoding='utf-8') as handle:
             handle.write(json.dumps({'timestamp': datetime.now(timezone.utc).isoformat(), 'event':'activation_failed', **result}, ensure_ascii=False) + '\n')
