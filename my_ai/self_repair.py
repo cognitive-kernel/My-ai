@@ -17,6 +17,7 @@ from .self_update import recent_lessons
 from .decision_log import record as record_decision
 from .access_policy import assert_mutation_allowed
 from .notifications import notify
+from .test_runner import run_test_suite
 
 ROOT = Path(__file__).resolve().parent.parent
 PROPOSALS = ROOT / "self-repair" / "proposals"
@@ -25,12 +26,8 @@ logger = logging.getLogger(__name__)
 def _run(args, cwd: Path, timeout: int): return subprocess.run(args, cwd=cwd, text=True, capture_output=True, timeout=timeout)
 def _git(*args: str, cwd: Path = ROOT, timeout: int = 120): return _run(["git", *args], cwd, timeout)
 
-def _tests(cwd: Path):
-    compile_run=_run([sys.executable,"-m","compileall","-q","my_ai"],cwd,120)
-    if compile_run.returncode: return False,"compileall failed:\n"+(compile_run.stdout+compile_run.stderr).strip()
-    test_run=_run([sys.executable,"-m","pytest","-q"],cwd,300)
-    if test_run.returncode: return False,"pytest failed:\n"+(test_run.stdout+test_run.stderr).strip()
-    return True,"compileall + pytest passed"
+def _tests(cwd):
+    return run_test_suite(cwd, per_file_timeout=30)
 
 def _clean_git(): return not bool(_git("status","--porcelain").stdout.strip())
 
