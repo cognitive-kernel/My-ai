@@ -17,7 +17,7 @@ from .auth import require_admin, require_user, audit
 from .db import connect, execute, fetch_all, init_db
 from .git_connector import GitHubConnector
 from .llm import create_llm
-from .provider_catalog import list_providers, upsert_provider, delete_provider, list_models, upsert_model, delete_model, export_catalog, add_provider_key, list_provider_keys, rotate_provider_key, set_routing_rule, list_routing_rules, delete_routing_rule, set_fallback_chain, list_fallback_chain, delete_fallback_chain
+from .provider_catalog import list_providers, upsert_provider, delete_provider, list_models, upsert_model, delete_model, export_catalog, add_provider_key, list_provider_keys, rotate_provider_key, activate_provider_key, set_routing_rule, list_routing_rules, delete_routing_rule, set_fallback_chain, list_fallback_chain, delete_fallback_chain
 from .settings_store import get_setting, set_setting, get_bool, get_int, get_github_settings, get_setting_registry, get_configuration_schema_version, reset_setting, export_registered_settings, import_registered_settings, list_setting_history
 from .ui_actions import UIAction, list_ui_actions, register_ui_action
 from .metrics import snapshot as metrics_snapshot
@@ -477,9 +477,23 @@ def settings_provider_key_add(provider_id:int,payload:ProviderKeyRequest,request
 
 @router.post("/settings/providers/{provider_id}/keys/rotate")
 def settings_provider_key_rotate(provider_id:int,request:Request):
-    require_admin(request)
-    try: return rotate_provider_key(provider_id)
-    except ValueError as exc: raise HTTPException(422,str(exc))
+    user=require_admin(request)
+    try:
+        result=rotate_provider_key(provider_id)
+    except ValueError as exc:
+        raise HTTPException(422,str(exc))
+    audit(user,"models","key-rotate","200",str(provider_id))
+    return result
+
+@router.post("/settings/providers/{provider_id}/keys/{key_name}/activate")
+def settings_provider_key_activate(provider_id:int,key_name:str,request:Request):
+    user=require_admin(request)
+    try:
+        result=activate_provider_key(provider_id,key_name)
+    except ValueError as exc:
+        raise HTTPException(422,str(exc))
+    audit(user,"models","key-activate","200",f"{provider_id}:{key_name}")
+    return result
 
 @router.get("/settings/routing")
 def settings_routing(request: Request):
@@ -697,11 +711,6 @@ def settings_database_restore(payload: BackupRequest, request: Request):
     try: result=restore_database(payload.path)
     except (OSError,FileNotFoundError) as exc: raise HTTPException(400,str(exc))
     audit(user,"database","restore","200",result["path"]); return result
-
-@router.get("/settings/control-plane/namespaces")
-def control_plane_namespaces(request: Request):
-    require_admin(request)
-    return {"namespaces": namespace_catalog()}
 
 @router.get("/settings/control-plane/namespaces")
 def control_plane_namespaces(request: Request):
