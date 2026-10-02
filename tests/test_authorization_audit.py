@@ -15,7 +15,10 @@ def test_sensitive_routes_have_explicit_capabilities():
         assert permission[1] in {"write", "execute"}
 
 
-def test_tool_permission_is_deny_by_default(client_db):
+def test_tool_permission_is_deny_by_default(tmp_path):
+    old = db.settings.db_path
+    object.__setattr__(db.settings, "db_path", str(tmp_path / "auth.db"))
+    db.init_db()
     user = auth.create_account("policy-user", "a-secure-password")
     assert auth.tool_allowed(user, "python", "execute") is False
     db.execute(
@@ -33,3 +36,4 @@ def test_audit_event_stores_hashes_not_raw_payload(client_db):
     assert secret not in row["details"]
     assert "request_id" in row["details"]
     assert "sha256" in row["details"]
+    object.__setattr__(db.settings, "db_path", old)
