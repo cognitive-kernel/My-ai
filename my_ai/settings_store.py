@@ -132,6 +132,57 @@ SETTING_REGISTRY.update({
 
 CONFIG_SCHEMA_VERSION = 3
 
+_RUNTIME_SETTING_ATTRS = {
+    "llm.provider": "llm_provider",
+    "llm.retry_attempts": "llm_retry_attempts",
+    "llm.timeout_seconds": "llm_timeout_seconds",
+    "memory.embedding_model": "embedding_model",
+    "memory.duplicate_threshold": "knowledge_duplicate_threshold",
+    "agent.execution_timeout": "llm_timeout_seconds",
+    "execution.timeout_seconds": "exec_timeout",
+    "execution.mode": "exec_mode",
+    "execution.max_output_chars": "exec_output_chars",
+    "server.host": "host",
+    "server.port": "port",
+    "database.path": "db_path",
+    "learning.max_retries": "learning_max_retries",
+    "learning.max_concurrent_workers": "learning_max_concurrent_workers",
+    "learning.source_timeout_seconds": "learning_source_timeout_seconds",
+    "learning.source_max_chars": "learning_source_max_chars",
+    "scheduler.interval_seconds": "scheduler_interval_seconds",
+    "scheduler.auto_resume": "scheduler_auto_resume",
+    "resources.cpu_percent": "scheduler_max_cpu_percent",
+    "resources.ram_percent": "scheduler_max_ram_percent",
+    "cache.ttl_seconds": "cache_ttl_seconds",
+}
+
+def _coerce_runtime_value(current: Any, value: Any) -> Any:
+    if isinstance(current, bool):
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+    if isinstance(current, int) and not isinstance(current, bool):
+        return int(value)
+    if isinstance(current, float):
+        return float(value)
+    return str(value)
+
+def apply_runtime_setting(key: str, value: Any) -> None:
+    attr = _RUNTIME_SETTING_ATTRS.get(key)
+    if not attr:
+        return
+    from .config import settings
+    if not hasattr(settings, attr):
+        return
+    current = getattr(settings, attr)
+    setattr(settings, attr, _coerce_runtime_value(current, value))
+
+def apply_persisted_settings() -> None:
+    ensure_schema()
+    with connect() as conn:
+        rows = conn.execute("SELECT key,value,secret FROM app_settings").fetchall()
+    for row in rows:
+        value = _decrypt(str(row["value"])) if int(row["secret"]) else str(row["value"])
+        apply_runtime_setting(str(row["key"]), value)
+
 def get_setting_registry() -> dict[str, dict[str, Any]]:
     return {k: dict(v) for k, v in SETTING_REGISTRY.items()}
 
@@ -274,6 +325,7 @@ def set_setting(key: str, value: Any, *, secret: bool = False) -> None:
         )
         conn.execute("INSERT INTO app_settings_history(key,old_value,new_value,schema_version) VALUES(?,?,?,?)", (key, old_value, new_value, version))
         conn.commit()
+    apply_runtime_setting(key, text)
 
 def list_setting_history(key: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
     ensure_schema()
