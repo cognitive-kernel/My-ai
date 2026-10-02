@@ -104,3 +104,5 @@
 - Expanded the GUI Action Registry for evaluation and relearning visibility.
 - Removed a duplicate Control Plane namespace route.
 - No tests, pytest, CI, regression, integration or runtime verification were executed.
+
+- Corrected admin/catalog CLI calls to match the current Provider and Tool registry signatures, including explicit provider-key activation and active-key-aware health checks.
