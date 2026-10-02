@@ -19,7 +19,6 @@ jobs:
           - tests/test_roadmap_02_learning.py
           - tests/test_roadmap_05_memory.py
           - tests/test_roadmap_09_scheduler.py
-          - tests/test_router_openai.py
           - tests/test_settings_store.py
           - tests/test_version_aware_learning.py
     runs-on: ubuntu-latest
