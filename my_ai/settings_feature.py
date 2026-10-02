@@ -123,6 +123,11 @@ class CourseTopicRequest(BaseModel):
 class CourseUpdateRequest(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     description: str = Field(default="", max_length=2000)
+    llm_model: str = Field(default="", max_length=300)
+    schedule: str = Field(default="weekly", max_length=120)
+    mastery_threshold: float = Field(default=0.8, ge=0, le=1)
+    source_policy: str = Field(default="hybrid", max_length=40)
+    mode: str = Field(default="auto", max_length=40)
 
 
 class TokenRequest(BaseModel):
