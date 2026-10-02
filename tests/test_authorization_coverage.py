@@ -37,11 +37,11 @@ def test_public_paths_are_explicit_not_wildcard():
 
 def test_audit_event_records_hashes_without_raw_payload(monkeypatch):
     captured = []
-    monkeypatch.setattr(auth, "audit", lambda *args: captured.append(args))
+    monkeypatch.setattr(auth, "execute", lambda *args: captured.append(args))
     user = {"id": 7, "username": "user", "role": "user"}
     secret = "super-secret-password"
     auth.audit_event(user, "python", "execute", "403", request_id="req-1", input_data=secret, error="denied")
-    details = captured[0][-1]
+    details = captured[0][1][5]
     assert secret not in details
     assert "sha256" in details
     assert "req-1" in details
