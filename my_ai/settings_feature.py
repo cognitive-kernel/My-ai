@@ -1060,7 +1060,14 @@ class PolicyRegistryRequest(BaseModel):
 
 class ToolRegistryRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    spec: dict[str, Any] = Field(default_factory=dict)
+    description: str = Field(default="", max_length=4000)
+    input_schema: dict[str, Any] = Field(default_factory=dict)
+    output_schema: dict[str, Any] = Field(default_factory=dict)
+    permissions: list[str] = Field(default_factory=list, max_length=50)
+    timeout: float = Field(default=30, gt=0, le=3600)
+    retries: int = Field(default=2, ge=0, le=20)
+    tasks: list[str] = Field(default_factory=list, max_length=50)
+    version: str = Field(default="1", max_length=120)
     enabled: bool = False
 
 class PluginProposalRequest(BaseModel):
@@ -1096,7 +1103,21 @@ def settings_tools(request: Request):
 
 @router.post("/settings/tools")
 def settings_tool_register(payload: ToolRegistryRequest, request: Request):
-    user=require_admin(request); item=register_tool(payload.name,payload.spec,enabled=payload.enabled); audit(user,"tools","write","200",payload.name); return item
+    user=require_admin(request)
+    item=register_tool(
+        payload.name,
+        payload.description,
+        payload.input_schema,
+        payload.output_schema,
+        permissions=payload.permissions,
+        timeout=payload.timeout,
+        retries=payload.retries,
+        tasks=payload.tasks,
+        version=payload.version,
+        enabled=payload.enabled,
+    )
+    audit(user,"tools","write","200",payload.name)
+    return item
 
 @router.get("/settings/plugins")
 def settings_plugins(request: Request):
