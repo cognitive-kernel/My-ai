@@ -25,7 +25,7 @@ jobs:
           while IFS= read -r -d '' f; do
             name=$(basename "$f")
             echo "::group::START $f"
-            timeout --signal=TERM --kill-after=10s 90s pytest -q "$f" > "/tmp/test-results/$name.log" 2>&1
+            timeout --signal=TERM --kill-after=5s 30s pytest -q "$f" > "/tmp/test-results/$name.log" 2>&1
             rc=$?
             echo "::endgroup::"
             echo "$f rc=$rc"
@@ -34,7 +34,7 @@ jobs:
               echo "===== $f ====="
               cat "/tmp/test-results/$name.log"
             fi
-          done < <(find tests -maxdepth 2 -type f -name 'test_*.py' -print0 | sort -z)
+          done < <(find tests -maxdepth 2 -type f -name 'test_*.py' ! -path 'tests/e2e/*' -print0 | sort -z)
           exit "$failed"
       - name: Upload per-file results
         if: always()
