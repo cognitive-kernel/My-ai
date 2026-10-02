@@ -39,7 +39,7 @@ def test_apply_repair_rolls_back_after_post_apply_failure(tmp_path, monkeypatch)
     monkeypatch.setattr(self_repair, "assert_mutation_allowed", lambda *args: None)
     monkeypatch.setattr(self_repair, "get_bool", lambda key, default=True: True)
     try:
-        self_repair.apply_repair(proposal_id, True)
+        self_repair.apply_repair(proposal_id, True, approver_id=1)
     except RuntimeError as exc:
         assert "rolled back" in str(exc)
     else:
