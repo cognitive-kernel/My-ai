@@ -4,7 +4,7 @@ import time
 from functools import lru_cache
 
 from .config import settings
-from .db import remember_knowledge
+from .db import execute, remember_knowledge
 from .platform import hybrid_search, invalidate_hybrid_search_cache
 
 
@@ -30,7 +30,19 @@ def remember(topic, title, content, source_url=None, *, product=None, version=No
     return result
 
 
+def delete_memory(knowledge_id: int) -> int:
+    """Delete one persisted knowledge item and invalidate retrieval caches."""
+    result = execute("DELETE FROM knowledge WHERE id=?", (int(knowledge_id),))
+    _recall_cached.cache_clear()
+    invalidate_hybrid_search_cache()
+    return result
+
+
 def recall(query, limit=8):
     limit = max(1, min(limit, 50))
     bucket = int(time.monotonic() // max(1, settings.cache_ttl_seconds))
     return _recall_cached(str(query).strip(), limit, bucket)
+
+
+forget = delete_memory
+clear_memory = delete_memory
