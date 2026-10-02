@@ -8,6 +8,7 @@ import my_ai.skill_engine as skill_engine
 def evidence(details):
     value = dict(details)
     value.setdefault("observed_at", datetime.now(timezone.utc).isoformat())
+    value.setdefault("verification_policy_version", skill_engine.VERIFICATION_POLICY_VERSION)
     canonical = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     value["evidence_hash"] = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return json.dumps(value, ensure_ascii=False, sort_keys=True)
