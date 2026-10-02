@@ -67,3 +67,17 @@
 - CLI مدیریت Prompt/Policy/Tool/Plugin با همان لایه persistent پروژه اضافه شد.
 - GUI Action Registry برای Provider، Learning، Prompt، Policy، Plugin و Tool گسترش یافت.
 - طبق دستور پروژه، در این pass هیچ تست، pytest، CI یا regression اجرا نشده است.
+
+
+## Implementation completion pass — 2026-10-02 (no tests)
+- Added persistent routing rules and fallback chains to the Provider/Model Catalog and wired them into model selection.
+- Added Settings API/GUI controls for task routing and fallback chains.
+- Added learning-source content versioning and a persistent relearning queue; source changes now enter `recheck` and queue a relearning job.
+- Added learning-source edit/delete lifecycle to Settings.
+- Added configurable Course LLM, schedule, mastery threshold, source precedence and Auto/Manual/Hybrid mode.
+- Expanded the versioned Configuration Registry with routing, learning, agent budget/cache/event, research, execution, scheduler, server, observability, multimodal and database controls.
+- Expanded the unified Control Plane with advanced-agent namespaces for skills, knowledge graph, retrieval, context, verification, confidence, cache, budget, events, meta-agent, Agent OS, research and snapshots.
+- Added adaptive reasoning-cycle, verification escalation and complexity-aware ensemble primitives.
+- Hardened cache invalidation hooks, event retry/idempotency/dead-letter persistence, and Meta-Agent candidate sandbox/verification/approval flow.
+- Routed project execution root through the Configuration Registry.
+- No tests, pytest, CI, regression, integration or runtime verification were executed.
