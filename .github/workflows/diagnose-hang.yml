@@ -1,0 +1,20 @@
+name: diagnose-hang
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.lock
+      - run: pip install -e .[dev] --no-deps
+      - run: |
+          set +e
+          find tests -maxdepth 1 -name 'test_*.py' -print0 | xargs -0 -n1 -P6 sh -c 'f="$0"; echo "=== START $f ==="; timeout 60s pytest -q "$f" > "/tmp/$(basename "$f").log" 2>&1; rc=$?; echo "=== END $f rc=$rc ==="; if [ $rc -ne 0 ]; then cat "/tmp/$(basename "$f").log"; fi'
+          exit 0
