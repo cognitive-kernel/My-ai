@@ -238,3 +238,10 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 - عملیات Configuration Registry در CLI با GUI هم‌تراز شد: set/reset/import/export/history.
 - تاریخچه تغییرات تنظیمات در DB ثبت و از Settings قابل مشاهده API شد.
 - طبق دستور پروژه، در این pass هیچ test/CI/regression اجرا نشده است.
+
+### Latest implementation pass — 2026-10-02
+- Unified admin CLI now covers configuration profiles, backup/restore, learning-source catalog operations and capability inventory in addition to control-plane CRUD/action lifecycle and provider/model administration.
+- Settings exposes configuration-profile management through the same persistent control plane.
+- GUI Action Registry exposes profile and capability discovery.
+- No-code runtime adapters now expose learning, security, scheduler, integration, evaluation, regression, budget, cache, skills and knowledge-graph namespaces directly to runtime consumers.
+- Verification remains intentionally deferred; no tests or CI were executed.
