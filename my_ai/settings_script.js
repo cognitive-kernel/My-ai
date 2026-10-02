@@ -1,4 +1,28 @@
-async function loadRegistry(){var box=byId("settings-registry");if(!box)return;try{var j=await req("/settings/registry");box.innerHTML=(j.items||[]).map(function(x){return "<div class='topic'><b>"+esc(x.key)+"</b> — "+esc(x.description||"")+"<div class='muted'>فعلی: "+esc(x.value)+" · پیش‌فرض: "+esc(x.default)+"</div><button type='button' onclick='resetRegisteredSetting(\\'"+esc(x.key)+"\\')'>بازنشانی</button></div>"}).join("")||"Registry خالی است"}catch(e){box.textContent="خطا: "+e.message}}
+function registryInput(x){
+  var key=esc(x.key), value=esc(x.value), type=x.type==="int"||x.type==="float"?"number":"text";
+  var step=x.type==="float"?"any":"1";
+  var attrs=type==="number"?" type=\"number\" step=\""+step+"\"":" type=\"text\"";
+  return "<input id=\"reg-"+key+"\""+attrs+" value=\""+value+"\" style=\"max-width:220px\">";
+}
+async function updateRegisteredSetting(key){
+  try{
+    var meta=(await req("/settings/registry")).items.find(function(x){return x.key===key});
+    var raw=byId("reg-"+key).value, value=meta.type==="int"?Number.parseInt(raw,10):meta.type==="float"?Number.parseFloat(raw):raw;
+    var j=await req("/settings/registry/"+encodeURIComponent(key),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({value:value})});
+    setText("registryout","تنظیم "+key+" ذخیره شد: "+j.value); await loadRegistry();
+  }catch(e){setText("registryout","خطا: "+e.message)}
+}
+async function loadRegistry(){
+  var box=byId("settings-registry");if(!box)return;
+  try{
+    var j=await req("/settings/registry");
+    box.innerHTML=(j.items||[]).map(function(x){
+      var choices=x.choices||[];
+      var editor=choices.length?"<select id=\"reg-"+esc(x.key)+"\">"+choices.map(function(v){return "<option value=\""+esc(v)+"\" "+(String(v)===String(x.value)?"selected":"")+">"+esc(v)+"</option>"}).join("")+"</select>":registryInput(x);
+      return "<div class='topic'><b>"+esc(x.key)+"</b> — "+esc(x.description||"")+"<div class='muted'>"+editor+" · پیش‌فرض: "+esc(x.default)+"</div><button type='button' onclick='updateRegisteredSetting(\\'"+esc(x.key)+"\\')'>ذخیره</button> <button type='button' onclick='resetRegisteredSetting(\\'"+esc(x.key)+"\\')'>بازنشانی</button></div>";
+    }).join("")||"Registry خالی است";
+  }catch(e){box.textContent="خطا: "+e.message}
+}
 async function resetRegisteredSetting(key){try{await req("/settings/registry/"+encodeURIComponent(key)+"/reset",{method:"POST"});setText("registryout","تنظیم "+key+" بازنشانی شد.");await loadSettings();await loadRegistry()}catch(e){setText("registryout","خطا: "+e.message)}}
 
 function byId(id) { return document.getElementById(id); }
