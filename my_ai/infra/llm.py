@@ -14,7 +14,6 @@ def _settings():
     from .. import llm as legacy_llm
     return legacy_llm.settings
 
-
 class LLMError(RuntimeError):
     pass
 HistoryMessage = dict[str, str]
@@ -34,39 +33,39 @@ class OllamaClient:
         self.route_reason = "default"
         requested = self._select_model(task)
         self.model = self._preflight_model(requested, task)
+
+    def _retry_attempts(self) -> int:
+        return max(1, min(5, int(getattr(_settings(), "llm_retry_attempts", 2))))
+
+    def _timeout(self) -> float:
+        return max(1.0, float(getattr(_settings(), "llm_timeout_seconds", 300)))
+
+    def _backoff(self, attempt: int) -> None:
+        delay = max(0.0, min(10.0, float(getattr(_settings(), "llm_retry_backoff_seconds", 0.5))))
+        if delay:
+            time.sleep(delay * (2 ** max(0, attempt - 1)))
+
     def _select_model(self, task: str | None) -> str:
-        if not task:
-            self.route_reason = "default"
-            return self.default_model
+        if not task: self.route_reason = "default"; return self.default_model
         low = task.lower()
         if any(x in low for x in ("code","python","sql","debug","coding","patch","کد","برنامه","پروژه","رفع باگ")):
-            self.route_reason = "coding_task"
-            return getattr(_settings(), "coding_model", self.default_model)
+            self.route_reason = "coding_task"; return getattr(_settings(), "coding_model", self.default_model)
         if any(x in low for x in ("route","routing","classify","intent","simple","ساده","دسته")):
-            self.route_reason = "routing_task"
-            return getattr(_settings(), "routing_model", self.default_model)
+            self.route_reason = "routing_task"; return getattr(_settings(), "routing_model", self.default_model)
         if any(x in low for x in ("complex","reasoning","analysis","معماری","تحلیل","پیچیده")):
-            self.route_reason = "complex_task"
-            return self.default_model
-        self.route_reason = "general_task"
-        return self.default_model
+            self.route_reason = "complex_task"; return self.default_model
+        self.route_reason = "general_task"; return self.default_model
 
     def _preflight_model(self, requested: str, task: str | None) -> str:
         status = self.model_manager.health(requested)
         if status.error is not None:
-            record_route(task or "general", requested, "preflight_unknown")
-            return requested
+            record_route(task or "general", requested, "preflight_unknown"); return requested
         if status.available:
-            record_route(task or "general", requested, self.route_reason)
-            return requested
+            record_route(task or "general", requested, self.route_reason); return requested
         fallback = self.model_manager.choose_fallback(requested)
         if fallback:
-            previous = self.route_reason
-            self.route_reason = "preflight_fallback"
-            record_route(task or "general", fallback, previous + ":fallback")
-            return fallback
-        record_route(task or "general", requested, self.route_reason + ":unavailable")
-        return requested
+            previous = self.route_reason; self.route_reason = "preflight_fallback"; record_route(task or "general", fallback, previous + ":fallback"); return fallback
+        record_route(task or "general", requested, self.route_reason + ":unavailable"); return requested
 
     def health(self) -> dict[str, object]:
         status = self.model_manager.health(self.model)
@@ -74,88 +73,90 @@ class OllamaClient:
 
     def _options(self) -> dict[str, int]:
         cfg=limits(); return {"num_ctx":int(_settings().ollama_num_ctx),"num_thread":int(cfg["cpu_threads"]),"num_gpu":int(cfg["gpu_layers"])}
+
+    def _post_json(self, url: str, payload: dict, *, headers: dict | None = None) -> httpx.Response:
+        last: Exception | None = None
+        for attempt in range(1, self._retry_attempts() + 1):
+            try:
+                response = httpx.post(url, json=payload, headers=headers, timeout=self._timeout())
+                response.raise_for_status()
+                return response
+            except httpx.HTTPError as exc:
+                last = exc
+                if attempt < self._retry_attempts(): self._backoff(attempt)
+        raise LLMError(f"LLM request failed after {self._retry_attempts()} bounded attempts: {last}") from last
+
     def stream_chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None,stop_event=None)->Iterator[str]:
-        wait_until_available(stop_event, max_wait=_settings().resource_wait_seconds); messages: list[HistoryMessage] = []; payload={"model":self.model,"stream":True,"options":self._options(),"keep_alive":_settings().ollama_keep_alive,"messages":messages}
+        wait_until_available(stop_event, max_wait=_settings().resource_wait_seconds)
+        messages: list[HistoryMessage] = []
         if system: messages.append({"role":"system","content":system})
         for item in history or ():
             if item.get("role") in {"user","assistant"} and isinstance(item.get("content"),str): messages.append({"role":item["role"],"content":item["content"]})
-        messages.append({"role":"user","content":message}); yielded=False; started=time.perf_counter()
-        try:
-            with httpx.stream("POST",f"{self.base_url}/api/chat",json=payload,timeout=300) as response:
-                response.raise_for_status()
-                for line in response.iter_lines():
-                    if not line: continue
-                    data=json.loads(line); chunk=data.get("message",{}).get("content")
-                    if chunk: yielded=True; yield str(chunk)
-                    if data.get("done"): record_inference("ollama",self.model,time.perf_counter()-started,prompt_tokens=data.get("prompt_eval_count"),output_tokens=data.get("eval_count"))
-        except (httpx.HTTPError,json.JSONDecodeError) as exc:
-            record_error("ollama",self.model)
-            if not yielded and self.model!=self.fallback_model:
-                wait_until_available(stop_event, max_wait=_settings().resource_wait_seconds); fallback_payload=dict(payload); fallback_payload["model"]=self.fallback_model; fallback_payload["options"]=self._options()
+        messages.append({"role":"user","content":message})
+        candidates=[self.model]+[m for m in self.fallback_chain if m != self.model]
+        errors=[]; started=time.perf_counter()
+        for candidate in candidates:
+            payload={"model":candidate,"stream":True,"options":self._options(),"keep_alive":_settings().ollama_keep_alive,"messages":messages}
+            for attempt in range(1,self._retry_attempts()+1):
+                yielded=False
                 try:
-                    with httpx.stream("POST",f"{self.base_url}/api/chat",json=fallback_payload,timeout=300) as response:
-                        response.raise_for_status(); self.model=self.fallback_model
+                    with httpx.stream("POST",f"{self.base_url}/api/chat",json=payload,timeout=self._timeout()) as response:
+                        response.raise_for_status()
                         for line in response.iter_lines():
                             if not line: continue
                             data=json.loads(line); chunk=data.get("message",{}).get("content")
-                            if chunk: yield str(chunk)
-                            if data.get("done"): record_inference("ollama",self.model,time.perf_counter()-started,prompt_tokens=data.get("prompt_eval_count"),output_tokens=data.get("eval_count"))
-                        return
-                except (httpx.HTTPError,json.JSONDecodeError) as fallback_exc: raise LLMError(f"Ollama streaming request failed for primary and fallback models: {exc}; {fallback_exc}") from fallback_exc
-            raise LLMError(f"Ollama streaming request failed: {exc}") from exc
+                            if chunk: yielded=True; yield str(chunk)
+                            if data.get("done"): record_inference("ollama",candidate,time.perf_counter()-started,prompt_tokens=data.get("prompt_eval_count"),output_tokens=data.get("eval_count"))
+                    self.model=candidate
+                    return
+                except (httpx.HTTPError,json.JSONDecodeError) as exc:
+                    record_error("ollama",candidate); errors.append(f"{candidate} attempt {attempt}: {exc}")
+                    if yielded or attempt >= self._retry_attempts(): break
+                    self._backoff(attempt)
+        raise LLMError("Ollama streaming request failed for all model candidates: " + " | ".join(errors))
+
     def structured_chat_json(self, message: str, schema: dict, system: str | None = None) -> dict:
         wait_until_available(None)
-        messages = []
-        if system: messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": message})
-        payload = {"model": self.model, "stream": False, "format": schema, "options": self._options(), "keep_alive": _settings().ollama_keep_alive, "messages": messages}
-        started = time.perf_counter()
-        candidates = [self.model] + [m for m in self.fallback_chain if m != self.model]
-        errors = []
-        for candidate in candidates:
-            try:
-                attempt = dict(payload); attempt["model"] = candidate
-                response = httpx.post(f"{self.base_url}/api/chat", json=attempt, timeout=120); response.raise_for_status(); data = response.json()
-                record_inference("ollama", candidate, time.perf_counter() - started, prompt_tokens=data.get("prompt_eval_count"), output_tokens=data.get("eval_count"))
-                raw = ((data.get("message") or {}).get("content"))
-                if not isinstance(raw, str): raise LLMError("Structured Ollama response has no message content.")
-                parsed = json.loads(raw)
-                if not isinstance(parsed, dict): raise LLMError("Structured Ollama response is not an object.")
-                self.model = candidate
-                return parsed
-            except (httpx.HTTPError, json.JSONDecodeError, LLMError) as exc:
-                errors.append(f"{candidate}: {exc}")
-                record_error("ollama", candidate)
+        messages=[]
+        if system: messages.append({"role":"system","content":system})
+        messages.append({"role":"user","content":message})
+        payload={"model":self.model,"stream":False,"format":schema,"options":self._options(),"keep_alive":_settings().ollama_keep_alive,"messages":messages}
+        started=time.perf_counter(); errors=[]
+        for candidate in [self.model]+[m for m in self.fallback_chain if m != self.model]:
+            for attempt in range(1,self._retry_attempts()+1):
+                try:
+                    attempt_payload=dict(payload); attempt_payload["model"]=candidate
+                    response=self._post_json(f"{self.base_url}/api/chat",attempt_payload); data=response.json()
+                    record_inference("ollama",candidate,time.perf_counter()-started,prompt_tokens=data.get("prompt_eval_count"),output_tokens=data.get("eval_count"))
+                    raw=((data.get("message") or {}).get("content"))
+                    if not isinstance(raw,str): raise LLMError("Structured Ollama response has no message content.")
+                    parsed=json.loads(raw)
+                    if not isinstance(parsed,dict): raise LLMError("Structured Ollama response is not an object.")
+                    self.model=candidate; return parsed
+                except (httpx.HTTPError,json.JSONDecodeError,LLMError) as exc:
+                    errors.append(f"{candidate} attempt {attempt}: {exc}"); record_error("ollama",candidate)
+                    if attempt < self._retry_attempts(): self._backoff(attempt)
         raise LLMError("Structured Ollama request failed for all model candidates: " + " | ".join(errors))
 
     def chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None,stop_event=None)->str:
-        wait_until_available(stop_event); messages: list[HistoryMessage] = []; payload={"model":self.model,"stream":False,"options":self._options(),"keep_alive":_settings().ollama_keep_alive,"messages":messages}
+        wait_until_available(stop_event)
+        messages=[]
         if system: messages.append({"role":"system","content":system})
         for item in history or ():
             role=item.get("role"); content=item.get("content")
             if role in {"user","assistant"} and isinstance(content,str) and content.strip(): messages.append({"role":role,"content":content})
-        messages.append({"role":"user","content":message}); started=time.perf_counter()
-        try:
-            response=httpx.post(f"{self.base_url}/api/chat",json=payload,timeout=300); response.raise_for_status()
-        except httpx.HTTPError as exc:
-            record_error("ollama",self.model)
-            errors = [str(exc)]
-            for fallback in self.fallback_chain:
-                if fallback == self.model:
-                    continue
-                wait_until_available(stop_event)
-                fallback_payload = dict(payload); fallback_payload["model"] = fallback; fallback_payload["options"] = self._options()
+        messages.append({"role":"user","content":message}); started=time.perf_counter(); errors=[]
+        for candidate in [self.model]+[m for m in self.fallback_chain if m != self.model]:
+            payload={"model":candidate,"stream":False,"options":self._options(),"keep_alive":_settings().ollama_keep_alive,"messages":messages}
+            for attempt in range(1,self._retry_attempts()+1):
                 try:
-                    response = httpx.post(f"{self.base_url}/api/chat", json=fallback_payload, timeout=300)
-                    response.raise_for_status(); self.model = fallback
-                    break
-                except httpx.HTTPError as fallback_exc:
-                    errors.append(f"{fallback}: {fallback_exc}")
-            else:
-                raise LLMError("Ollama request failed for all model candidates: " + " | ".join(errors)) from exc
-        data=response.json(); record_inference("ollama",self.model,time.perf_counter()-started,prompt_tokens=data.get("prompt_eval_count"),output_tokens=data.get("eval_count"))
-        try: return str(data["message"]["content"])
-        except (KeyError,TypeError) as exc: raise LLMError(f"Unexpected Ollama response: {data}") from exc
+                    response=self._post_json(f"{self.base_url}/api/chat",payload); data=response.json()
+                    record_inference("ollama",candidate,time.perf_counter()-started,prompt_tokens=data.get("prompt_eval_count"),output_tokens=data.get("eval_count"))
+                    self.model=candidate; return str(data["message"]["content"])
+                except (httpx.HTTPError,KeyError,TypeError,LLMError) as exc:
+                    errors.append(f"{candidate} attempt {attempt}: {exc}"); record_error("ollama",candidate)
+                    if attempt < self._retry_attempts(): self._backoff(attempt)
+        raise LLMError("Ollama request failed for all model candidates: " + " | ".join(errors))
 
 class OpenAICompatibleClient:
     def __init__(self)->None:
@@ -163,44 +164,33 @@ class OpenAICompatibleClient:
         self.base_url=_settings().openai_base_url; self.model=_settings().openai_model; self.api_key=_settings().openai_api_key
         if not self.api_key: raise LLMError("OPENAI_API_KEY is required when LLM_PROVIDER=openai")
     def stream_chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None)->Iterator[str]:
-        input_items: list[HistoryMessage] = []
-        for item in history or ():
-            role=item.get("role"); content=item.get("content")
-            if role in {"user","assistant"} and isinstance(content,str) and content.strip(): input_items.append({"role":role,"content":content})
+        input_items=[{"role":item.get("role"),"content":item.get("content")} for item in history or () if item.get("role") in {"user","assistant"} and isinstance(item.get("content"),str)]
         input_items.append({"role":"user","content":message}); payload={"model":self.model,"input":input_items,"stream":True}
         if system: payload["instructions"]=system
         started=time.perf_counter()
         try:
-            with httpx.stream("POST",f"{self.base_url}/responses",headers={"Authorization":f"Bearer {self.api_key}","Content-Type":"application/json"},json=payload,timeout=300) as response:
+            with httpx.stream("POST",f"{self.base_url}/responses",headers={"Authorization":f"Bearer {self.api_key}","Content-Type":"application/json"},json=payload,timeout=getattr(_settings(),"llm_timeout_seconds",300)) as response:
                 response.raise_for_status()
                 for line in response.iter_lines():
                     if not line or not line.startswith("data:"): continue
                     raw=line[5:].strip()
                     if raw=="[DONE]": continue
                     data=json.loads(raw)
-                    if data.get("type")=="response.output_text.delta":
-                        delta=data.get("delta")
-                        if isinstance(delta,str) and delta: yield delta
+                    if data.get("type")=="response.output_text.delta" and isinstance(data.get("delta"),str): yield data["delta"]
                     elif data.get("type")=="response.completed":
                         usage=((data.get("response") or {}).get("usage") or {}); record_inference("openai",self.model,time.perf_counter()-started,prompt_tokens=usage.get("input_tokens"),output_tokens=usage.get("output_tokens"))
         except (httpx.HTTPError,json.JSONDecodeError) as exc: record_error("openai",self.model); raise LLMError(f"OpenAI-compatible streaming request failed: {exc}") from exc
     def chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None)->str:
-        input_items: list[HistoryMessage] = []
-        for item in history or ():
-            role=item.get("role"); content=item.get("content")
-            if role in {"user","assistant"} and isinstance(content,str) and content.strip(): input_items.append({"role":role,"content":content})
+        input_items=[{"role":item.get("role"),"content":item.get("content")} for item in history or () if item.get("role") in {"user","assistant"} and isinstance(item.get("content"),str)]
         input_items.append({"role":"user","content":message}); payload={"model":self.model,"input":input_items}
         if system: payload["instructions"]=system
         started=time.perf_counter()
         try:
-            response=httpx.post(f"{self.base_url}/responses",headers={"Authorization":f"Bearer {self.api_key}","Content-Type":"application/json"},json=payload,timeout=300); response.raise_for_status()
+            response=httpx.post(f"{self.base_url}/responses",headers={"Authorization":f"Bearer {self.api_key}","Content-Type":"application/json"},json=payload,timeout=getattr(_settings(),"llm_timeout_seconds",300)); response.raise_for_status()
         except httpx.HTTPError as exc: record_error("openai",self.model); raise LLMError(f"OpenAI-compatible request failed: {exc}") from exc
         data=response.json(); usage=data.get("usage") if isinstance(data,dict) else {}; record_inference("openai",self.model,time.perf_counter()-started,prompt_tokens=(usage or {}).get("input_tokens"),output_tokens=(usage or {}).get("output_tokens"))
         if isinstance(data.get("output_text"),str): return data["output_text"]
-        chunks: list[str] = []
-        for item in data.get("output",[]) if isinstance(data,dict) else []:
-            for content in item.get("content",[]) if isinstance(item,dict) else []:
-                if isinstance(content,dict) and isinstance(content.get("text"),str): chunks.append(content["text"])
+        chunks=[content["text"] for item in data.get("output",[]) if isinstance(item,dict) for content in item.get("content",[]) if isinstance(content,dict) and isinstance(content.get("text"),str)]
         if chunks: return "".join(chunks)
         raise LLMError(f"Unexpected OpenAI response: {data}")
 
