@@ -16,7 +16,7 @@ from .auth import require_admin, require_user, audit
 from .db import connect, execute, fetch_all, init_db
 from .git_connector import GitHubConnector
 from .llm import create_llm
-from .settings_store import get_setting, set_setting, get_bool, get_int, get_github_settings
+from .settings_store import get_setting, set_setting, get_bool, get_int, get_github_settings, get_setting_registry, reset_setting
 
 router = APIRouter(tags=["settings"])
 _workers = ThreadPoolExecutor(max_workers=1, thread_name_prefix="myai-learning")
@@ -358,6 +358,26 @@ def _run_course(course_id: int) -> None:
     finally:
         _running.discard(course_id)
 
+
+@router.get("/settings/registry")
+def settings_registry(request: Request):
+    require_admin(request)
+    items = []
+    for key, meta in get_setting_registry().items():
+        item = dict(meta)
+        item["key"] = key
+        item["value"] = get_setting(key, meta["default"])
+        items.append(item)
+    return {"items": items}
+
+@router.post("/settings/registry/{key:path}/reset")
+def reset_registered_setting(key: str, request: Request):
+    user = require_admin(request)
+    if key not in get_setting_registry():
+        raise HTTPException(404, "Unknown registered setting.")
+    value = reset_setting(key)
+    audit(user, "settings", "reset", "200", f"setting-reset:{key}")
+    return {"key": key, "value": value, "reset": True}
 
 @router.get("/settings/config")
 def settings_config(request: Request):
