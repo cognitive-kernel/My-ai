@@ -47,7 +47,9 @@ class StudyScheduler:
     def _renew_lease(self,language):
         with connect() as conn:
             cur=conn.execute("UPDATE learning_worker_leases SET lease_until=? WHERE language=? AND owner=?",(time.time()+self._lease_seconds,language,self._lease_owner)); conn.commit(); return cur.rowcount==1
-    def _release_lease(self,language): execute("DELETE FROM learning_worker_leases WHERE language=? AND owner=?",(language,self._lease_owner))
+    def _release_lease(self,language):
+        normalized=self._normalize_language(language)
+        execute("DELETE FROM learning_worker_leases WHERE language=? AND owner=?",(normalized,self._lease_owner))
     def start(self,language="Python",session_id=None):
         language=self._normalize_language(language); key=language.casefold()
         if not self._acquire_lease(language): return
@@ -101,7 +103,16 @@ class StudyScheduler:
         try:
             while not stop_event.is_set():
                 try:
-                    self._renew_lease(language); self._wait_for_resources(stop_event); result=engine.learn_next(language,progress_callback=lambda stage,topic=None:self._update_worker(language,stage,topic),stop_event=stop_event); errors=0; self._update_worker(language,self.stage,result=result,status="running")
+                    self._renew_lease(language)
+                    self._wait_for_resources(stop_event)
+                    acquired=self._worker_slots.acquire(timeout=max(1.0,float(get_setting("resources.wait_seconds",str(getattr(settings,"resource_wait_seconds",30))))))
+                    if not acquired:
+                        raise TimeoutError("learning worker concurrency limit reached")
+                    try:
+                        result=engine.learn_next(language,progress_callback=lambda stage,topic=None:self._update_worker(language,stage,topic),stop_event=stop_event)
+                    finally:
+                        self._worker_slots.release()
+                    errors=0; self._update_worker(language,self.stage,result=result,status="running")
                     if result.get("status")=="complete": self._update_worker(language,"completed",result=result,status="completed"); break
                     if stop_event.wait(min(self.interval_seconds,60)): break
                 except InterruptedError: break
