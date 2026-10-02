@@ -89,3 +89,12 @@ def test_learning_source_form_exposes_type_priority_weight_and_review_controls()
     script = __import__("pathlib").Path("my_ai/settings_script.js").read_text(encoding="utf-8")
     assert "reviewLearningSource" in script
     assert "weight:Number(byId(\"ls_weight\").value||1)" in script
+
+
+def test_configuration_registry_ui_is_schema_driven():
+    script = __import__("pathlib").Path("my_ai/settings_script.js").read_text(encoding="utf-8")
+    assert "j.items||[]" in script
+    assert "registryInput(x)" in script
+    assert "x.choices||[]" in script
+    assert "x.default" in script
+    assert "updateRegisteredSetting" in script
