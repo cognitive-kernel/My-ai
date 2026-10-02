@@ -30,7 +30,7 @@ from .registries import publish_prompt, activate_prompt, publish_policy, registe
 from .plugin_registry import propose_plugin, approve_plugin, reject_plugin
 from .evaluation_registry import upsert_suite, list_suites, create_baseline, propose_candidate, get_candidate, verify_candidate, list_candidates, compare_metrics
 from .integration_catalog import register_integration, list_integrations, register_webhook, list_webhooks, map_event_action, list_event_actions
-from .security_catalog import define_role, define_capability, set_permission, set_network_policy, set_filesystem_policy, set_subprocess_policy, list_security_policies
+from .security_catalog import define_role, define_capability, set_permission, set_network_policy, set_filesystem_policy, set_subprocess_policy, set_self_modification_policy, list_security_policies
 
 router = APIRouter(tags=["settings"])
 _workers = ThreadPoolExecutor(max_workers=1, thread_name_prefix="myai-learning")
@@ -461,6 +461,11 @@ def settings_security_network(payload: ControlPlaneRecordRequest, request: Reque
 def settings_security_filesystem(payload: ControlPlaneRecordRequest, request: Request):
     user=require_admin(request); p=payload.payload
     item=set_filesystem_policy(payload.name,p.get("roots") or [],read=bool(p.get("read",True)),write=bool(p.get("write",False))); audit(user,"security","filesystem-write","200",payload.name); return item
+
+@router.post("/settings/security/self-modification")
+def settings_security_self_modification(payload: ControlPlaneRecordRequest, request: Request):
+    user=require_admin(request); p=payload.payload
+    item=set_self_modification_policy(payload.name,p.get("allowed_paths") or [],bool(p.get("require_approval",True)),bool(p.get("require_tests",True))); audit(user,"security","self-modification-write","200",payload.name); return item
 
 @router.post("/settings/security/subprocess")
 def settings_security_subprocess(payload: ControlPlaneRecordRequest, request: Request):
