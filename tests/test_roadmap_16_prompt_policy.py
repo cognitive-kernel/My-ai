@@ -32,3 +32,18 @@ def test_prompt_history_and_rollback(monkeypatch):
     assert history
     restored=registries.rollback_prompt("demo",1)
     assert restored["payload"]["text"]=="old"
+
+
+def test_prompt_diff_between_history_versions(monkeypatch):
+    import my_ai.registries as registries
+    records = [
+        {"name":"demo@1","payload":{"text":"old","version":"1","task":"default","metadata":{}},"version":1},
+        {"name":"demo@2","payload":{"text":"new","version":"2","task":"default","metadata":{}},"version":2},
+    ]
+    monkeypatch.setattr(registries, "list_records", lambda namespace: records if namespace == "prompts.registry.history" else [])
+    monkeypatch.setattr(registries, "get_record", lambda namespace, name: None)
+    result = registries.prompt_diff("demo", 1, 2)
+    assert result["from_version"] == 1
+    assert result["to_version"] == 2
+    assert "-  \"text\": \"old\"" in result["diff"]
+    assert "+  \"text\": \"new\"" in result["diff"]
