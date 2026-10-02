@@ -109,8 +109,8 @@ def _research(plan: dict[str, Any]) -> ResearchBundle:
             "INSERT INTO software_research(goal,plan_json,sources_json) VALUES(?,?,?)",
             (_safe_text(plan.get("goal"), 10000), json.dumps(plan, ensure_ascii=False), json.dumps(bundle.sources, ensure_ascii=False)),
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("SOFTWARE_AGENT_PERSISTENCE_FAILED: %s", exc)
     return bundle
 
 
