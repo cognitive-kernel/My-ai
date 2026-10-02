@@ -104,14 +104,42 @@ def list_provider_keys(provider_id: int) -> list[dict[str, Any]]:
     return [dict(r)|{"active":bool(r["active"])} for r in rows]
 
 def rotate_provider_key(provider_id: int) -> dict[str, Any]:
+    """Promote the next eligible key instead of re-selecting the current key."""
+    assert_mutation_allowed(f"llm-provider-key-rotate:{provider_id}")
     ensure_schema()
     with connect() as conn:
-        row=conn.execute("SELECT id,key_name FROM llm_provider_keys WHERE provider_id=? AND active=1 ORDER BY priority,id LIMIT 1",(int(provider_id),)).fetchone()
-        if not row: raise ValueError("no active provider key")
-        conn.execute("UPDATE llm_provider_keys SET active=0 WHERE provider_id=?",(int(provider_id),))
-        conn.execute("UPDATE llm_provider_keys SET active=1,last_used_at=? WHERE id=?",(time.time(),int(row["id"])))
+        rows = conn.execute(
+            "SELECT id,key_name,active,priority FROM llm_provider_keys WHERE provider_id=? ORDER BY active DESC, priority, id",
+            (int(provider_id),),
+        ).fetchall()
+        if not rows:
+            raise ValueError("no provider keys configured")
+        current = next((r for r in rows if bool(r["active"])), None)
+        candidates = [r for r in rows if not bool(r["active"])]
+        if not current:
+            chosen = rows[0]
+        elif not candidates:
+            raise ValueError("no inactive provider key available for rotation")
+        else:
+            chosen = candidates[0]
+        conn.execute("UPDATE llm_provider_keys SET active=0 WHERE provider_id=?", (int(provider_id),))
+        conn.execute("UPDATE llm_provider_keys SET active=1,last_used_at=? WHERE id=?", (time.time(), int(chosen["id"])))
         conn.commit()
-    return {"provider_id":provider_id,"active_key":row["key_name"]}
+    return {"provider_id": provider_id, "active_key": str(chosen["key_name"]), "previous_key": str(current["key_name"]) if current else None}
+
+
+def activate_provider_key(provider_id: int, key_name: str) -> dict[str, Any]:
+    assert_mutation_allowed(f"llm-provider-key-activate:{provider_id}:{key_name}")
+    ensure_schema()
+    with connect() as conn:
+        row = conn.execute("SELECT id,key_name FROM llm_provider_keys WHERE provider_id=? AND key_name=?", (int(provider_id), str(key_name).strip())).fetchone()
+        if not row:
+            raise ValueError("provider key not found")
+        conn.execute("UPDATE llm_provider_keys SET active=0 WHERE provider_id=?", (int(provider_id),))
+        conn.execute("UPDATE llm_provider_keys SET active=1,last_used_at=? WHERE id=?", (time.time(), int(row["id"])))
+        conn.commit()
+    return {"provider_id": provider_id, "active_key": str(row["key_name"])}
+
 
 def list_providers(*, include_disabled: bool = True) -> list[dict[str, Any]]:
     ensure_schema()
@@ -243,6 +271,7 @@ def get_provider_runtime_config(provider_id: int) -> dict[str, Any]:
     return {
         "id": int(provider["id"]), "name": str(provider["name"]), "protocol": str(provider["protocol"]),
         "endpoint": str(provider["endpoint"]), "auth_type": str(provider["auth_type"]),
+        "auth_header": "Authorization", "auth_scheme": "Bearer",
         "api_key": secret, "key_name": key_name,
         "capabilities": json.loads(provider["capabilities_json"] or "{}"),
         "version": str(provider["version"] or ""), "timeout_seconds": float(provider["timeout_seconds"] or 30),
