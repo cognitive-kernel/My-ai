@@ -405,6 +405,35 @@ def knowledge_list(request: Request, status: str | None = None, limit: int = 200
         (limit,),
     )}
 
+@app.get("/memory/knowledge/export")
+def knowledge_export(request: Request):
+    user = require_admin(request)
+    items = [dict(row) for row in fetch_all("SELECT title,content,topic,source_url,content_hash,verification_status,confidence FROM knowledge WHERE verification_status != 'deleted' ORDER BY id")]
+    audit(user, "knowledge", "export", "200", f"count:{len(items)}")
+    return {"version": 1, "items": items}
+
+@app.post("/memory/knowledge/import")
+def knowledge_import(payload: dict[str, object], request: Request):
+    user = require_admin(request)
+    raw = payload.get("items") if isinstance(payload, dict) else None
+    if not isinstance(raw, list):
+        raise HTTPException(400, "items must be a list.")
+    imported = 0
+    for item in raw:
+        if not isinstance(item, dict):
+            raise HTTPException(400, "Every knowledge item must be an object.")
+        title = str(item.get("title") or "").strip(); topic = str(item.get("topic") or "").strip(); content = str(item.get("content") or "").strip()
+        source = str(item.get("source_url") or "").strip() or None
+        if not title or not topic or not content:
+            raise HTTPException(400, "title, topic and content are required for every imported item.")
+        try:
+            remember_knowledge(topic, title, content, source)
+            imported += 1
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+    audit(user, "knowledge", "import", "200", f"count:{imported}")
+    return {"imported": imported, "version": 1}
+
 @app.put("/memory/knowledge/{knowledge_id}")
 def knowledge_update(knowledge_id:int, r:KnowledgeUpdateRequest, request:Request):
     user=require_admin(request)
