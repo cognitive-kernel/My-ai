@@ -1,3 +1,5 @@
+import pytest
+
 from my_ai.advanced_agent import (
     AgentOS, ContextPlanner, ConfidenceEngine, EvaluationLab, HybridRetriever,
     KnowledgeGraph, MetaAgent, ReasoningCycle, ResearchPipeline, SkillRegistry,
@@ -40,3 +42,11 @@ def test_task_graph_batches_independent_nodes_and_respects_dependencies():
     assert set(batches[0]) == {"a", "b"}
     assert batches[1] == ["c"]
     assert result == {"a": 1, "b": 2, "c": 3}
+
+
+def test_task_graph_detects_cycles():
+    graph = TaskGraph()
+    graph.add("a", lambda: 1, deps=("b",))
+    graph.add("b", lambda: 2, deps=("a",))
+    with pytest.raises(RuntimeError, match="dependency cycle"):
+        graph.run(lambda batch: {})
