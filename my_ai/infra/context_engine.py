@@ -33,10 +33,7 @@ def assemble_context(
 
 
 def render_context(items: Iterable[ContextItem]) -> str:
-    return "
-
-".join(
-        f"[source={item.source or 'unknown'} priority={item.priority:g}]
-{item.text}"
+    return "\n\n".join(
+        f"[source={item.source or 'unknown'} priority={item.priority:g}]\n{item.text}"
         for item in items
     )
