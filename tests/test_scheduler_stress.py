@@ -1,6 +1,7 @@
 import threading
 import time
 
+from my_ai.resource_guard import limits, wait_until_available
 from my_ai.scheduler import StudyScheduler
 
 
@@ -41,3 +42,23 @@ def test_scheduler_worker_registry_is_singleton_per_language(monkeypatch):
     worker.start()
     assert scheduler._workers["python"][0] is worker
     worker.join()
+
+
+def test_resource_limits_are_bounded():
+    cfg = limits()
+    assert 1 <= cfg["cpu_percent"] <= 100
+    assert 1 <= cfg["ram_percent"] <= 100
+    assert 1 <= cfg["cpu_threads"] <= 128
+    assert 0 <= cfg["gpu_layers"] <= 128
+
+
+def test_resource_wait_honors_stop_event(monkeypatch):
+    event = threading.Event()
+    event.set()
+    monkeypatch.setattr("my_ai.resource_guard.snapshot", lambda: {"within_limits": False})
+    try:
+        wait_until_available(event, max_wait=0.1)
+    except InterruptedError:
+        pass
+    else:
+        raise AssertionError("stopped scheduler must not wait indefinitely")
