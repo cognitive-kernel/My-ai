@@ -1138,7 +1138,8 @@ def create_course(r: CourseRequest, request: Request):
     user=require_admin(request); _setup()
     name=r.name.strip()
     if not name: raise HTTPException(400,"Course name is required.")
-    try: cid=execute("INSERT INTO custom_courses(name,description) VALUES(?,?)",(name,r.description.strip()))
+    try: cid=execute("INSERT INTO custom_courses(name,description,llm_model,schedule,mastery_threshold,source_policy,mode) VALUES(?,?,?,?,?,?,?)",
+                    (name,r.description.strip(),r.llm_model.strip(),r.schedule.strip() or "weekly",r.mastery_threshold,r.source_policy.strip() or "hybrid",r.mode.strip() or "auto"))
     except Exception as exc: raise HTTPException(400,"Course name already exists.") from exc
     for order,item in enumerate(r.topics,1):
         title=str(item.get("title","")).strip(); goal=str(item.get("goal","")).strip(); source=(str(item.get("source_url","")).strip() or None)
@@ -1157,7 +1158,8 @@ def update_course(course_id: int, r: CourseUpdateRequest, request: Request):
     if not name:
         raise HTTPException(400, "Course name is required.")
     try:
-        execute("UPDATE custom_courses SET name=?, description=? WHERE id=?", (name, r.description.strip(), course_id))
+        execute("UPDATE custom_courses SET name=?, description=?, llm_model=?, schedule=?, mastery_threshold=?, source_policy=?, mode=? WHERE id=?",
+                 (name, r.description.strip(), r.llm_model.strip(), r.schedule.strip() or "weekly", r.mastery_threshold, r.source_policy.strip() or "hybrid", r.mode.strip() or "auto", course_id))
     except Exception as exc:
         raise HTTPException(400, "Course name already exists.") from exc
     _ensure_custom_review_schedule(course_id)
