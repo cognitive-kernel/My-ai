@@ -21,6 +21,7 @@ from .provider_catalog import list_providers, upsert_provider, delete_provider, 
 from .settings_store import get_setting, set_setting, get_bool, get_int, get_github_settings, get_setting_registry, get_configuration_schema_version, reset_setting, export_registered_settings, import_registered_settings
 from .ui_actions import list_ui_actions
 from .metrics import snapshot as metrics_snapshot
+from .no_code_catalog import inventory as no_code_inventory
 from .learning_catalog import add_source, list_sources, review_source, update_content_hash
 from .backup_manager import backup as backup_database, restore as restore_database
 from .control_plane import list_records, get_record, put_record, set_enabled, delete_record, start_action, update_action, get_action, list_actions, namespace_catalog
@@ -389,6 +390,11 @@ def _run_course(course_id: int) -> None:
 
 class SettingsImportRequest(BaseModel):
     values: dict[str, Any]
+
+@router.get("/settings/capabilities")
+def settings_capability_inventory(request: Request):
+    require_admin(request)
+    return no_code_inventory()
 
 @router.get("/settings/metrics")
 def settings_metrics(request: Request):
