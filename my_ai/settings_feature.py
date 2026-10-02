@@ -17,14 +17,14 @@ from .auth import require_admin, require_user, audit
 from .db import connect, execute, fetch_all, init_db
 from .git_connector import GitHubConnector
 from .llm import create_llm
-from .provider_catalog import list_providers, upsert_provider, delete_provider, list_models, upsert_model, delete_model, export_catalog, add_provider_key, list_provider_keys, rotate_provider_key
+from .provider_catalog import list_providers, upsert_provider, delete_provider, list_models, upsert_model, delete_model, export_catalog, add_provider_key, list_provider_keys, rotate_provider_key, set_routing_rule, list_routing_rules, delete_routing_rule, set_fallback_chain, list_fallback_chain, delete_fallback_chain
 from .settings_store import get_setting, set_setting, get_bool, get_int, get_github_settings, get_setting_registry, get_configuration_schema_version, reset_setting, export_registered_settings, import_registered_settings, list_setting_history
 from .ui_actions import list_ui_actions
 from .metrics import snapshot as metrics_snapshot
 from .no_code_catalog import inventory as no_code_inventory
 from .config_profiles import save_profile, active_profile, load_profile
 from .backup_manager import backup as backup_database, restore as restore_database
-from .learning_catalog import add_source, list_sources, review_source, update_content_hash
+from .learning_catalog import add_source, list_sources, review_source, update_content_hash, update_source, delete_source, list_relearning_queue
 from .backup_manager import backup as backup_database, restore as restore_database
 from .control_plane import list_records, get_record, put_record, set_enabled, delete_record, start_action, update_action, get_action, list_actions, namespace_catalog
 from .registries import publish_prompt, activate_prompt, publish_policy, register_tool, list_tools
@@ -90,6 +90,19 @@ class ModelCatalogRequest(BaseModel):
     limits: dict[str, Any] = Field(default_factory=dict)
     priority: int = Field(default=100, ge=0, le=100000)
     version: str = Field(default="", max_length=120)
+    enabled: bool = True
+
+class RoutingRuleRequest(BaseModel):
+    task: str = Field(min_length=1, max_length=80)
+    model_id: str = Field(min_length=1, max_length=300)
+    provider_id: int | None = Field(default=None, gt=0)
+    priority: int = Field(default=100, ge=0, le=100000)
+    enabled: bool = True
+
+class FallbackChainRequest(BaseModel):
+    name: str = Field(default="ui", min_length=1, max_length=100)
+    task: str = Field(default="general", min_length=1, max_length=80)
+    model_ids: list[str] = Field(min_length=1, max_length=50)
     enabled: bool = True
 
 class CourseRequest(BaseModel):
@@ -432,6 +445,39 @@ def settings_provider_key_rotate(provider_id:int,request:Request):
     try: return rotate_provider_key(provider_id)
     except ValueError as exc: raise HTTPException(422,str(exc))
 
+@router.get("/settings/routing")
+def settings_routing(request: Request):
+    require_admin(request)
+    return {"rules": list_routing_rules(), "fallbacks": {task: list_fallback_chain("ui", task) for task in ("general","chat","coding","reasoning","embedding")}}
+
+@router.put("/settings/routing/rule")
+def settings_routing_rule(payload: RoutingRuleRequest, request: Request):
+    user=require_admin(request)
+    item=set_routing_rule(payload.task,payload.model_id,provider_id=payload.provider_id,priority=payload.priority,enabled=payload.enabled)
+    audit(user,"models","routing-write","200",payload.task)
+    return item
+
+@router.delete("/settings/routing/rule/{task}")
+def settings_routing_rule_delete(task: str, request: Request):
+    user=require_admin(request)
+    ok=delete_routing_rule(task)
+    audit(user,"models","routing-delete","200",task)
+    return {"deleted":ok,"task":task}
+
+@router.put("/settings/routing/fallback")
+def settings_routing_fallback(payload: FallbackChainRequest, request: Request):
+    user=require_admin(request)
+    item=set_fallback_chain(payload.name,payload.task,payload.model_ids,enabled=payload.enabled)
+    audit(user,"models","fallback-write","200",payload.task)
+    return {"items":item}
+
+@router.delete("/settings/routing/fallback/{task}")
+def settings_routing_fallback_delete(task: str, request: Request):
+    user=require_admin(request)
+    ok=delete_fallback_chain("ui",task)
+    audit(user,"models","fallback-delete","200",task)
+    return {"deleted":ok,"task":task}
+
 @router.get("/settings/providers")
 def settings_providers(request: Request):
     require_admin(request)
@@ -539,6 +585,26 @@ def learning_source_add(payload: LearningSourceRequest, request: Request):
     item=add_source(**payload.model_dump())
     audit(user,"learning","source-add","200",str(item["id"]))
     return item
+
+@router.put("/settings/learning-sources/{source_id}")
+def settings_learning_source_update(source_id: int, payload: LearningSourceRequest, request: Request):
+    user=require_admin(request)
+    item=update_source(source_id,**payload.model_dump(exclude_unset=True))
+    if item is None: raise HTTPException(404,"Learning source not found.")
+    audit(user,"learning","source-update","200",str(source_id))
+    return item
+
+@router.delete("/settings/learning-sources/{source_id}")
+def settings_learning_source_delete(source_id: int, request: Request):
+    user=require_admin(request)
+    ok=delete_source(source_id)
+    audit(user,"learning","source-delete","200",str(source_id))
+    return {"deleted":ok,"source_id":source_id}
+
+@router.get("/settings/learning-sources/relearning")
+def settings_learning_relearning(request: Request, status: str = "pending", limit: int = 100):
+    require_admin(request)
+    return {"items": list_relearning_queue(status=status,limit=limit)}
 
 @router.post("/settings/learning-sources/{source_id}/{status}")
 def learning_source_review(source_id:int,status:str,request:Request):
