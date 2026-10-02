@@ -34,3 +34,13 @@ def test_tool_registry_edit_preserves_identity(monkeypatch):
     assert result["name"] == "demo"
     assert result["payload"]["description"] == "edited"
     assert result["payload"]["version"] == "2"
+
+
+def test_workflow_registry_edit_preserves_identity(monkeypatch):
+    import my_ai.registries as registries
+    records={"demo":{"name":"demo","payload":{}}}
+    monkeypatch.setattr(registries,"get_record",lambda namespace,name: records.get(name))
+    monkeypatch.setattr(registries,"put_record",lambda *args,**kwargs: {"name":args[1],"payload":args[2],"enabled":kwargs["enabled"]})
+    result=registries.update_workflow("demo",[{"name":"stage1","enabled":True}],version="2")
+    assert result["name"]=="demo"
+    assert result["payload"]["version"]=="2"
