@@ -104,7 +104,8 @@ def get_setting(key: str, default: Any = None, *, secret: bool = False) -> Any:
 def set_setting(key: str, value: Any, *, secret: bool = False) -> None:
     assert_mutation_allowed(f"setting:{key}")
     ensure_schema()
-    if key in SETTING_REGISTRY:\n        value = validate_registered_setting(key, value)\n    text = "" if value is None else str(value)
+    if key in SETTING_REGISTRY:
+        value = validate_registered_setting(key, value)\n    text = "" if value is None else str(value)
     stored = _encrypt(text) if secret and text else text
     with connect() as conn:
         conn.execute(
