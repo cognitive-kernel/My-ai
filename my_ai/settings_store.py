@@ -144,7 +144,15 @@ from .access_policy import assert_mutation_allowed
 ROOT = Path(__file__).resolve().parent.parent
 KEY_PATH = ROOT / "data" / ".settings_key"
 SECRET_PREFIX = "enc:v1:"
-SCHEMA = """CREATE TABLE IF NOT EXISTS app_settings_history (\n id INTEGER PRIMARY KEY AUTOINCREMENT,\n key TEXT NOT NULL,\n old_value TEXT,\n new_value TEXT,\n schema_version INTEGER NOT NULL,\n changed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP\n);\nCREATE TABLE IF NOT EXISTS app_settings (
+SCHEMA = """CREATE TABLE IF NOT EXISTS app_settings_history (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ key TEXT NOT NULL,
+ old_value TEXT,
+ new_value TEXT,
+ schema_version INTEGER NOT NULL,
+ changed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS app_settings (
  key TEXT PRIMARY KEY,
  value TEXT NOT NULL,
  secret INTEGER NOT NULL DEFAULT 0,
