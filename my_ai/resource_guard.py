@@ -27,9 +27,9 @@ def _number(key: str, env_name: str, default: float, low: float, high: float) ->
 def limits() -> dict[str, float | int]:
     return {
         "cpu_percent": _number("resources.cpu_percent", "RESOURCES_CPU_PERCENT", DEFAULT_CPU_PERCENT, 1.0, 100.0),
-        "cpu_threads": max(1, min(128, int(float(_setting("resources.cpu_threads", "RESOURCES_CPU_THREADS", str(DEFAULT_CPU_THREADS))))),
+        "cpu_threads": max(1, min(128, int(float(_setting("resources.cpu_threads", "RESOURCES_CPU_THREADS", str(DEFAULT_CPU_THREADS)))))),
         "ram_percent": _number("resources.ram_percent", "RESOURCES_RAM_PERCENT", DEFAULT_RAM_PERCENT, 1.0, 100.0),
-        "gpu_layers": max(0, min(128, int(float(_setting("resources.gpu_layers", "RESOURCES_GPU_LAYERS", str(DEFAULT_GPU_LAYERS))))),
+        "gpu_layers": max(0, min(128, int(float(_setting("resources.gpu_layers", "RESOURCES_GPU_LAYERS", str(DEFAULT_GPU_LAYERS)))))),
     }
 
 
