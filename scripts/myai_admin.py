@@ -10,7 +10,7 @@ from my_ai.provider_catalog import (
     list_providers, list_models, upsert_provider, delete_provider, delete_model,
     upsert_model, delete_model, add_provider_key, list_provider_keys, rotate_provider_key,
 )
-from my_ai.settings_store import get_setting_registry, export_registered_settings
+from my_ai.settings_store import get_setting_registry, export_registered_settings, list_setting_history
 from my_ai.readiness import build_readiness
 
 def out(v): print(json.dumps(v, ensure_ascii=False, indent=2, default=str))
@@ -20,7 +20,7 @@ def main():
     s=p.add_subparsers(dest="cmd", required=True)
 
     s.add_parser("status"); s.add_parser("health"); s.add_parser("config")
-    s.add_parser("actions"); s.add_parser("namespaces")
+    s.add_parser("actions"); s.add_parser("namespaces"); s.add_parser("config-history")
     for n in ("sessions","memory","tools","policies","learning","repairs","rollback","diagnostics"):
         q=s.add_parser(n); q.add_argument("--namespace")
 
@@ -48,6 +48,7 @@ def main():
     elif a.cmd=="config": out({"registry":get_setting_registry(),"values":export_registered_settings()})
     elif a.cmd=="actions": out(list_actions(100))
     elif a.cmd=="namespaces": out(namespace_catalog())
+    elif a.cmd=="config-history": out(list_setting_history())
     elif a.cmd=="sessions": out(list_records("agent.session"))
     elif a.cmd=="memory": out(list_records(a.namespace or "memory.policy"))
     elif a.cmd=="tools": out(list_records(a.namespace or "tools.catalog"))
