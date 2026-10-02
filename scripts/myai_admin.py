@@ -23,6 +23,8 @@ def main():
     s.add_parser("actions"); s.add_parser("namespaces"); s.add_parser("config-history")
     q=s.add_parser("config-set"); q.add_argument("key"); q.add_argument("value")
     q=s.add_parser("config-reset"); q.add_argument("key")
+    q=s.add_parser("config-export"); q.add_argument("path")
+    q=s.add_parser("config-import"); q.add_argument("path")
     for n in ("sessions","memory","tools","policies","learning","repairs","rollback","diagnostics"):
         q=s.add_parser(n); q.add_argument("--namespace")
 
@@ -59,6 +61,15 @@ def main():
         elif meta.get("type")=="float": raw=float(raw)
         set_setting(a.key,raw,secret=bool(meta.get("secret"))); out({"key":a.key,"saved":True})
     elif a.cmd=="config-reset": out({"key":a.key,"value":reset_setting(a.key),"reset":True})
+    elif a.cmd=="config-export":
+        with open(a.path,"w",encoding="utf-8") as f: json.dump(export_registered_settings(),f,ensure_ascii=False,indent=2); out({"path":a.path,"exported":True})
+    elif a.cmd=="config-import":
+        with open(a.path,encoding="utf-8") as f: values=json.load(f)
+        if not isinstance(values,dict): raise SystemExit("config import must be a JSON object")
+        for key,value in values.items():
+            meta=get_setting_registry().get(key)
+            if meta: set_setting(key,value,secret=bool(meta.get("secret")))
+        out({"path":a.path,"imported":len(values)})
     elif a.cmd=="sessions": out(list_records("agent.session"))
     elif a.cmd=="memory": out(list_records(a.namespace or "memory.policy"))
     elif a.cmd=="tools": out(list_records(a.namespace or "tools.catalog"))
