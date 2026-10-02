@@ -78,3 +78,10 @@ def test_cancellation_token_controls_parallel_map():
     results = map_independent(lambda value: value * 2, [1, 2], cancel_event=token)
     assert token.is_cancelled
     assert all(isinstance(item.error, RuntimeError) for item in results)
+
+
+def test_cancellation_token_raises_when_cancelled():
+    token = CancellationToken()
+    token.cancel()
+    with pytest.raises(InterruptedError):
+        token.raise_if_cancelled()
