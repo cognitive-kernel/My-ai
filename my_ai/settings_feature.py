@@ -21,6 +21,7 @@ from .provider_catalog import list_providers, upsert_provider, delete_provider, 
 from .settings_store import get_setting, set_setting, get_bool, get_int, get_github_settings, get_setting_registry, get_configuration_schema_version, reset_setting, export_registered_settings, import_registered_settings
 from .ui_actions import list_ui_actions
 from .metrics import snapshot as metrics_snapshot
+from .learning_catalog import add_source, list_sources, review_source, update_content_hash
 from .control_plane import list_records, get_record, put_record, set_enabled, delete_record, start_action, update_action, get_action, list_actions, namespace_catalog
 
 router = APIRouter(tags=["settings"])
@@ -480,6 +481,44 @@ def settings_model_health(provider_id: int, model_id: str, request: Request):
         return {"provider_id": provider_id, "model": model_id, "available": False,
                 "latency_ms": round((__import__("time").perf_counter() - started) * 1000, 2),
                 "error": str(exc)}
+
+class LearningSourceRequest(BaseModel):
+    url: str = Field(min_length=8, max_length=2000)
+    course_id: int | None = None
+    topic_id: int | None = None
+    source_type: str = "custom"
+    title: str = ""
+    priority: int = Field(default=100, ge=0)
+    weight: float = Field(default=1, ge=0)
+    product: str = ""
+    version: str = ""
+    compatibility: str = ""
+    provenance: dict[str, Any] = Field(default_factory=dict)
+
+@router.get("/settings/learning-sources")
+def learning_sources_list(request: Request, course_id: int | None = None, topic_id: int | None = None, status: str | None = None):
+    require_admin(request)
+    return {"items": list_sources(course_id, topic_id, status)}
+
+@router.post("/settings/learning-sources")
+def learning_source_add(payload: LearningSourceRequest, request: Request):
+    user=require_admin(request)
+    item=add_source(**payload.model_dump())
+    audit(user,"learning","source-add","200",str(item["id"]))
+    return item
+
+@router.post("/settings/learning-sources/{source_id}/{status}")
+def learning_source_review(source_id:int,status:str,request:Request):
+    user=require_admin(request)
+    try: item=review_source(source_id,status)
+    except ValueError as exc: raise HTTPException(422,str(exc))
+    audit(user,"learning","source-review","200",f"{source_id}:{status}")
+    return item
+
+@router.post("/settings/learning-sources/{source_id}/hash")
+def learning_source_hash(source_id:int, request:Request, content:str=""):
+    require_admin(request)
+    return update_content_hash(source_id,content)
 
 @router.get("/settings/control-plane/namespaces")
 def control_plane_namespaces(request: Request):
