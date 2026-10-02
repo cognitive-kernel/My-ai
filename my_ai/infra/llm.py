@@ -141,6 +141,8 @@ class OpenAICompatibleClient:
         self.model=model or _settings().openai_model
         self.api_key=api_key or _settings().openai_api_key
         self.provider_name=provider_name
+        if not self.base_url or not self.base_url.startswith(("http://","https://")): raise LLMError(f"{provider_name} base URL is required")
+        if not self.model: raise LLMError(f"{provider_name} model ID is required")
         if not self.api_key: raise LLMError(f"{provider_name} API key is required")
     def _retry_attempts(self) -> int:
         return max(1, min(5, int(_runtime_setting("llm.retry_attempts", getattr(_settings(), "llm_retry_attempts", 2)))))
@@ -176,13 +178,13 @@ class OpenAICompatibleClient:
         for attempt in range(1,self._retry_attempts()+1):
             try:
                 response=httpx.post(f"{self.base_url}/responses",headers={"Authorization":f"Bearer {self.api_key}","Content-Type":"application/json"},json=payload,timeout=self._timeout()); response.raise_for_status()
-                data=response.json(); usage=data.get("usage") if isinstance(data,dict) else {}; record_inference("openai",self.model,time.perf_counter()-started,prompt_tokens=(usage or {}).get("input_tokens"),output_tokens=(usage or {}).get("output_tokens"))
+                data=response.json(); usage=data.get("usage") if isinstance(data,dict) else {}; record_inference(self.provider_name,self.model,time.perf_counter()-started,prompt_tokens=(usage or {}).get("input_tokens"),output_tokens=(usage or {}).get("output_tokens"))
                 if isinstance(data.get("output_text"),str): return data["output_text"]
                 chunks=[c["text"] for i in data.get("output",[]) if isinstance(i,dict) for c in i.get("content",[]) if isinstance(c,dict) and isinstance(c.get("text"),str)]
                 if chunks: return "".join(chunks)
                 raise LLMError(f"Unexpected OpenAI response: {data}")
             except (httpx.HTTPError,LLMError,json.JSONDecodeError) as exc:
-                errors.append(f"attempt {attempt}: {exc}"); record_error("openai",self.model); record_route(message,self.model,f"failure_attempt_{attempt}")
+                errors.append(f"attempt {attempt}: {exc}"); record_error(self.provider_name,self.model); record_route(message,self.model,f"failure_attempt_{attempt}")
                 if attempt < self._retry_attempts(): self._backoff(attempt)
         raise LLMError("OpenAI-compatible request failed: "+" | ".join(errors))
 
