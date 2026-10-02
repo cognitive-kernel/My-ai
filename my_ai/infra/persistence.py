@@ -180,7 +180,12 @@ def init_db() -> None:
         if not conn.execute("SELECT 1 FROM schema_meta WHERE key='knowledge_dedup_v1'").fetchone():
             _deduplicate_knowledge(conn)
             conn.execute("INSERT OR REPLACE INTO schema_meta(key,value) VALUES('knowledge_dedup_v1','done')")
-        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_content_hash ON knowledge(content_hash)")
+        if not conn.execute("SELECT 1 FROM schema_meta WHERE key='knowledge_version_aware_hash_v1'").fetchone():
+            conn.execute("DROP INDEX IF EXISTS idx_knowledge_content_hash")
+            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_content_hash_version ON knowledge(content_hash, product, version)")
+            conn.execute("INSERT INTO schema_meta(key,value) VALUES('knowledge_version_aware_hash_v1','done')")
+        else:
+            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_content_hash_version ON knowledge(content_hash, product, version)")
         conn.executescript("""
         CREATE TRIGGER IF NOT EXISTS knowledge_ai AFTER INSERT ON knowledge BEGIN
           INSERT INTO knowledge_fts(rowid,title,content,topic,source_url) VALUES(new.id,normalize_search(new.title),normalize_search(new.content),normalize_search(new.topic),normalize_search(new.source_url));
