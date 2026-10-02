@@ -131,3 +131,14 @@ def test_settings_config_exposes_observability_controls(monkeypatch):
     assert config["observability"]["notification_destinations"] == ["webhook"]
     assert config["observability"]["dashboard_config"]["refresh"] == 30
     assert config["observability"]["diagnostics_export"] == "json"
+
+
+def test_backup_uses_configured_destination_when_path_omitted(monkeypatch):
+    from my_ai import settings_feature
+    monkeypatch.setattr(settings_feature, "require_admin", lambda request: 1)
+    monkeypatch.setattr(settings_feature, "get_setting", lambda key, default="": "data/configured-backups" if key == "database.backup.destination" else default)
+    captured = {}
+    monkeypatch.setattr(settings_feature, "backup_database", lambda path, overwrite=False: captured.update(path=path, overwrite=overwrite) or {"path": path})
+    result = settings_feature.settings_database_backup(settings_feature.BackupRequest(), object())
+    assert captured["path"] == "data/configured-backups"
+    assert result["path"] == "data/configured-backups"
