@@ -29,7 +29,7 @@ class OllamaClient:
         self.default_model = getattr(_settings(), "ollama_model", "qwen2.5:7b")
         self.fallback_model = getattr(_settings(), "fallback_model", self.default_model)
         self.model_manager = ModelManager()
-        self.fallback_chain = self.model_manager.fallback_chain(self.default_model)
+        self.fallback_chain = self.model_manager.fallback_chain(self.default_model)[:int(getattr(_settings(), "llm_max_fallback_models", 5))]
         self.route_reason = "default"
         self.model = self._preflight_model(self._select_model(task), task)
 
