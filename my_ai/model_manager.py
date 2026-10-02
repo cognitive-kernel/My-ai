@@ -60,6 +60,35 @@ class ModelManager:
             pass
         return items
 
+    def select_for_task(self, task: str | None = None, *, timeout: float = 5.0) -> str | None:
+        """Select an enabled catalog model by declared task capability and priority."""
+        requested = str(task or "general").strip().lower()
+        aliases = {
+            "chat": {"chat", "general"},
+            "coding": {"coding", "code"},
+            "reasoning": {"reasoning", "complex", "analysis"},
+            "embedding": {"embedding", "embeddings"},
+            "routing": {"routing", "classification", "classify"},
+        }
+        wanted = aliases.get(requested, {requested, "general"})
+        catalog = list_models(include_disabled=False)
+        providers = {int(p["id"]): p for p in list_providers(include_disabled=False)}
+        ranked = []
+        for item in catalog:
+            provider = providers.get(int(item["provider_id"]))
+            if not provider or not provider.get("enabled"):
+                continue
+            tasks = {str(x).strip().lower() for x in (item.get("tasks") or [])}
+            if tasks and not (tasks & wanted):
+                continue
+            health = self.health(str(item["model_id"]), provider=str(provider["name"]), timeout=timeout)
+            if health.available:
+                ranked.append((int(item.get("priority", 100)), str(provider["name"]), str(item["model_id"])))
+        if ranked:
+            ranked.sort(key=lambda x: (x[0], x[1], x[2]))
+            return ranked[0][2]
+        return None
+
     def _provider_for_model(self, model: str) -> str:
         for item in self.inventory():
             if item["model"] == model:
