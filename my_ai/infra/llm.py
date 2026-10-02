@@ -175,6 +175,36 @@ class OpenAICompatibleClient:
                 errors.append(f"attempt {attempt}: {exc}"); record_error(self.provider_name,self.model); record_route(message,self.model,f"failure_attempt_{attempt}")
                 if attempt < self._retry_attempts(): self._backoff(attempt)
         raise LLMError("OpenAI-compatible streaming request failed: "+" | ".join(errors))
+    def structured_chat_json(self,message:str,schema:dict,system:str|None=None)->dict:
+        payload={"model":self.model,"input":[{"role":"user","content":message}],"text":{"format":{"type":"json_schema","name":"my_ai_structured","schema":schema,"strict":True}}}
+        if system:
+            payload["instructions"]=system
+        try:
+            response=httpx.post(f"{self.base_url}/responses",headers={"Authorization":f"Bearer {self.api_key}","Content-Type":"application/json"},json=payload,timeout=self._timeout())
+            response.raise_for_status()
+            data=response.json()
+            raw=data.get("output_text")
+            if not isinstance(raw,str):
+                chunks=[c.get("text") for i in data.get("output",[]) if isinstance(i,dict) for c in i.get("content",[]) if isinstance(c,dict) and isinstance(c.get("text"),str)]
+                raw="".join(chunks)
+            parsed=json.loads(raw)
+            if not isinstance(parsed,dict):
+                raise LLMError("Structured OpenAI-compatible response is not an object.")
+            return parsed
+        except (httpx.HTTPError,json.JSONDecodeError,TypeError,LLMError) as exc:
+            record_error(self.provider_name,self.model)
+            raise LLMError(f"Structured {self.provider_name} request failed: {exc}") from exc
+
+    def health(self, *, timeout: float = 5.0):
+        from .provider import ProviderHealth
+        started=time.perf_counter()
+        try:
+            response=httpx.get(f"{self.base_url}/models",headers={"Authorization":f"Bearer {self.api_key}"},timeout=timeout)
+            response.raise_for_status()
+            return ProviderHealth(self.provider_name,True,(time.perf_counter()-started)*1000)
+        except httpx.HTTPError as exc:
+            return ProviderHealth(self.provider_name,False,(time.perf_counter()-started)*1000,error=str(exc))
+
     def chat(self,message:str,system:str|None=None,history:Sequence[HistoryMessage]|None=None)->str:
         items=[{"role":i.get("role"),"content":i.get("content")} for i in history or () if i.get("role") in {"user","assistant"} and isinstance(i.get("content"),str)]; items.append({"role":"user","content":message}); payload={"model":self.model,"input":items}; payload.update({"instructions":system} if system else {}); started=time.perf_counter(); errors=[]
         for attempt in range(1,self._retry_attempts()+1):
