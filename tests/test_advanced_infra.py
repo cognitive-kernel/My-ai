@@ -57,3 +57,15 @@ def test_parallel_map_honors_cancellation_before_start():
     results = map_independent(lambda value: value * 2, [1, 2, 3], cancel_event=cancel)
     assert all(isinstance(item.error, RuntimeError) for item in results)
     assert all(item.value is None for item in results)
+
+
+def test_event_bus_isolates_handler_failures():
+    bus = EventBus()
+    seen = []
+    def broken(event):
+        raise RuntimeError("boom")
+    bus.subscribe("task.done", broken)
+    bus.subscribe("task.done", lambda event: seen.append(event.payload["id"]))
+    event = bus.publish("task.done", {"id": 9}, trace_id="trace-2")
+    assert event.trace_id == "trace-2"
+    assert seen == [9]
