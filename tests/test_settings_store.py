@@ -73,3 +73,19 @@ def test_registered_default_is_returned_after_reset(tmp_path, monkeypatch):
     ss.set_setting("execution.timeout_seconds", 45)
     ss.reset_setting("execution.timeout_seconds")
     assert ss.get_setting("execution.timeout_seconds") == "10"
+
+
+def test_registered_settings_export_import_is_validated(tmp_path, monkeypatch):
+    monkeypatch.setattr(ss, "KEY_PATH", tmp_path / "settings.key")
+    ss.ensure_schema()
+    ss.set_setting("execution.timeout_seconds", 25)
+    exported = ss.export_registered_settings()
+    assert exported["execution.timeout_seconds"] == "25"
+    imported = dict(exported)
+    imported["execution.timeout_seconds"] = 40
+    result = ss.import_registered_settings(imported)
+    assert result["execution.timeout_seconds"] == "40"
+    with pytest.raises(ValueError, match="Unknown registered settings"):
+        ss.import_registered_settings({"not.registered": 1})
+    with pytest.raises(ValueError):
+        ss.import_registered_settings({"execution.timeout_seconds": 0})
