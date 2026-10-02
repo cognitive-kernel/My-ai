@@ -42,7 +42,6 @@ _ACTIONS = (
     UIAction("image.health", "image", "بررسی موتور تصویر", "وضعیت موتور تصویر محلی را بررسی می‌کند.", "GET", "/settings/image/status", "tools:read"),
     UIAction("scheduler.status", "scheduler", "بررسی زمان‌بندی", "وضعیت scheduler و workerها را نمایش می‌دهد.", "GET", "/scheduler/status", "scheduler:read"),
     UIAction("self-repair.status", "self-repair", "بررسی Self-Repair", "وضعیت و آخرین proposalهای تعمیر را بررسی می‌کند.", "GET", "/self-repair/status", "self-repair:read"),
-    UIAction("provider.health", "llm", "Health Check Provider", "بررسی سلامت Provider فعال.", "POST", "/settings/providers/1/health", "models:read", True),
     UIAction("evaluation.suites", "evaluation", "Evaluation Suites", "مشاهده مجموعه‌های ارزیابی پایدار.", "GET", "/settings/evaluation/suites", "eval:read"),
     UIAction("evaluation.candidates", "evaluation", "Evaluation Candidates", "مشاهده candidateهای بهبود و وضعیت verification.", "GET", "/settings/evaluation/candidates", "eval:read"),
     UIAction("learning.relearning", "learning", "صف Relearning", "مشاهده منابعی که به‌دلیل تغییر محتوا نیازمند بازآموزی هستند.", "GET", "/settings/learning-sources/relearning", "learning:read"),
