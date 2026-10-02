@@ -273,6 +273,11 @@ async function editControlRecordGUI(name){
   try{var ns=byId("cp_namespace").value,x=await req("/settings/control-plane/"+encodeURIComponent(ns)+"/"+encodeURIComponent(name));byId("cp_name").value=x.name;byId("cp_payload").value=JSON.stringify(x.payload,null,2);byId("cp_enabled").checked=!!x.enabled}
   catch(e){setText("cp_out","خطا: "+e.message)}
 }
+async function toggleControlRecordGUI(name,enabled){try{var ns=byId("cp_namespace").value;await req("/settings/control-plane/"+encodeURIComponent(ns)+"/"+encodeURIComponent(name)+"/"+(enabled?"enable":"disable"),{method:"POST"});await loadControlRecordsGUI();setText("cp_out",enabled?"رکورد فعال شد.":"رکورد غیرفعال شد.")}catch(e){setText("cp_out","خطا: "+e.message)}}
+async function deleteControlRecordGUI(name){if(!confirm("این رکورد حذف شود؟"))return;try{var ns=byId("cp_namespace").value;await req("/settings/control-plane/"+encodeURIComponent(ns)+"/"+encodeURIComponent(name),{method:"DELETE"});await loadControlRecordsGUI();setText("cp_out","رکورد حذف شد.")}catch(e){setText("cp_out","خطا: "+e.message)}}
+async function startControlActionGUI(){try{var ns=byId("cp_namespace").value,action=byId("cp_action").value.trim(),target=byId("cp_target").value.trim();if(!action)throw Error("نام عملیات الزامی است");var j=await req("/settings/control-plane/actions",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:action,namespace:ns,target_id:target||null})});byId("cp_action_id").value=j.id;setText("cp_action_out","عملیات شروع شد: "+j.id);await loadControlActionGUI(j.id)}catch(e){setText("cp_action_out","خطا: "+e.message)}}
+async function loadControlActionGUI(id){if(!id)return;try{var j=await req("/settings/control-plane/actions/"+encodeURIComponent(id));setText("cp_action_out","status="+j.status+" · progress="+j.progress+"%"+(j.error?" · "+j.error:""))}catch(e){setText("cp_action_out","خطا: "+e.message)}}
+async function updateControlActionGUI(){try{var id=byId("cp_action_id").value.trim();if(!id)throw Error("شناسه عملیات الزامی است");var result=JSON.parse(byId("cp_action_result").value||"{}");var j=await req("/settings/control-plane/actions/"+encodeURIComponent(id),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:byId("cp_action_status").value,progress:Number(byId("cp_action_progress").value||0),result:result,error:byId("cp_action_error").value||""})});setText("cp_action_out","عملیات به‌روزرسانی شد: "+j.status+" · "+j.progress+"%")}catch(e){setText("cp_action_out","خطا: "+e.message)}}
 async function saveControlRecordGUI(){
   try{var ns=byId("cp_namespace").value,name=byId("cp_name").value.trim(),payload=JSON.parse(byId("cp_payload").value||"{}");var x=await req("/settings/control-plane/"+encodeURIComponent(ns),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name,payload:payload,enabled:byId("cp_enabled").checked})});setText("cp_out","ذخیره شد: "+x.name+" v"+x.version);await loadControlRecordsGUI()}
   catch(e){setText("cp_out","خطا: "+e.message)}
@@ -328,4 +333,4 @@ async function loadCourses(){var box=byId("courses");if(!box)return;try{var j=aw
 
 loadSettings();loadRegistry();loadUsers();loadPermissions();loadCourses();loadUIActions();loadProviderCatalog();setInterval(loadCourses,10000);setInterval(loadResourceStatus,5000);
 
-loadLearningSourcesCatalog();loadProfilesGUI();
+loadLearningSourcesCatalog();loadControlNamespacesGUI();loadProfilesGUI();
