@@ -78,11 +78,14 @@ def _verification_state(skill: dict[str, Any], rows: list[dict[str, Any]], curre
         try: observed = datetime.fromisoformat(observed_at.replace("Z", "+00:00"))
         except ValueError: return False, "invalid_observed_at"
         if observed.tzinfo is None: observed = observed.replace(tzinfo=timezone.utc)
-        policy = _verification_policy()\n        if observed < datetime.now(timezone.utc) - timedelta(days=int(policy.get("evidence_ttl_days", 30))): return False, "evidence_expired"
+        policy = _verification_policy()
+        if observed < datetime.now(timezone.utc) - timedelta(days=int(policy.get("evidence_ttl_days", 30))): return False, "evidence_expired"
         if not _evidence_hash_valid(details): return False, "evidence_integrity_failed"
     scores = _evidence_scores(rows)
     if not all(int(row.get("passed") or 0) == 1 for row in rows if str(row.get("kind") or "") in _EXECUTED_KINDS): return False, "failed_execution_evidence"
-    policy = _verification_policy().get("thresholds", {})\n    if scores["knowledge_coverage_score"] < float(policy.get("knowledge_coverage_score", 70.0)): return False, "insufficient_knowledge_coverage"\n    if scores["verified_skill_score"] < float(policy.get("verified_skill_score", 80.0)): return False, "insufficient_verified_skill_score"
+    policy = _verification_policy().get("thresholds", {})
+    if scores["knowledge_coverage_score"] < float(policy.get("knowledge_coverage_score", 70.0)): return False, "insufficient_knowledge_coverage"
+    if scores["verified_skill_score"] < float(policy.get("verified_skill_score", 80.0)): return False, "insufficient_verified_skill_score"
     return True, "verified"
 
 
