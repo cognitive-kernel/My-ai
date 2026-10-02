@@ -11,6 +11,7 @@ from .resource_guard import limits, wait_until_available
 from .provider import ProviderCapabilities
 from .generic_provider import GenericHTTPProviderAdapter
 from ..model_manager import ModelManager
+from ..provider_catalog import get_provider_runtime_config
 from ..settings_store import get_setting
 
 def _settings():
@@ -258,14 +259,23 @@ def _provider_registry() -> ProviderRegistry:
                 health_check=bool(capabilities.get("health_check", True)),
             )
             name = str(provider["name"])
+            runtime = get_provider_runtime_config(int(provider['id']))
             registry.register(
                 name,
-                lambda p=provider, m=model, c=caps: GenericHTTPProviderAdapter(
-                    name=str(p["name"]),
-                    endpoint=str(p["endpoint"]),
-                    model=str(m["model_id"]),
-                    timeout=float(p.get("timeout_seconds") or 30),
-                    capabilities=c,
+                lambda p=provider, m=model, c=caps, rt=runtime: GenericHTTPProviderAdapter(
+                    name=str(p['name']), endpoint=str(p['endpoint']), model=str(m['model_id']),
+                    api_key=str(rt.get('api_key', '')),
+                    auth_header=str(rt.get('capabilities', {}).get('auth_header', 'Authorization')),
+                    auth_scheme=str(rt.get('capabilities', {}).get('auth_scheme', 'Bearer')),
+                    timeout=float(p.get('timeout_seconds') or 30), capabilities=c,
+                    request_template=dict(rt.get('capabilities', {}).get('request_template') or {}),
+                    response_path=str(rt.get('capabilities', {}).get('response_path', 'text')),
+                    usage_paths=dict(rt.get('capabilities', {}).get('usage_paths') or {}),
+                    health_endpoint=rt.get('capabilities', {}).get('health_endpoint'),
+                    stream_response_path=str(rt.get('capabilities', {}).get('stream_response_path', 'delta')),
+                    stream_format=str(rt.get('capabilities', {}).get('stream_format', 'ndjson')),
+                    stream_prefix=str(rt.get('capabilities', {}).get('stream_prefix', 'data:')),
+                    stream_done_value=str(rt.get('capabilities', {}).get('stream_done_value', '[DONE]')),
                 ),
             )
     except Exception:
