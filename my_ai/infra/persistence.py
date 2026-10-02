@@ -73,6 +73,9 @@ CREATE TABLE IF NOT EXISTS audit_log (
  action TEXT NOT NULL,
  status TEXT NOT NULL,
  details TEXT,
+ request_id TEXT,
+ actor_role TEXT,
+ occurred_at TEXT,
  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_audit_created_at ON audit_log(created_at);\nCREATE INDEX IF NOT EXISTS idx_audit_request_id ON audit_log(request_id);
