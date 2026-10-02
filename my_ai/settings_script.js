@@ -229,7 +229,7 @@ async function loadLearningSourcesCatalog(){
   var box=byId("learning-sources-catalog");if(!box)return;
   try{var j=await req("/settings/learning-sources");box.innerHTML=(j.items||[]).map(function(x){
     return "<div class='topic'><b>"+esc(x.title||x.url)+"</b> · "+esc(x.source_type)+" · v"+esc(x.version)+" · "+esc(x.status)+
-      " <button type='button' onclick='reviewLearningSource("+x.id+",\'approved\')'>تأیید</button>"+
+      " <button type='button' onclick='editLearningSource("+x.id+")'>ویرایش</button>"+ " <button type='button' onclick='reviewLearningSource("+x.id+",\'approved\')'>تأیید</button>"+
       " <button type='button' onclick='reviewLearningSource("+x.id+",\'rejected\')'>رد</button>"+
       " <button type='button' onclick='deleteLearningSource("+x.id+")'>حذف</button></div>";
   }).join("")||"منبع ثبت نشده است"}catch(e){box.textContent="خطا: "+e.message}
@@ -239,6 +239,31 @@ async function addLearningSourceCatalog(){
     url:byId("ls_url").value.trim(),source_type:byId("ls_type").value.trim()||"custom",product:byId("ls_product").value.trim(),
     version:byId("ls_version").value.trim(),priority:Number(byId("ls_priority").value||100),weight:Number(byId("ls_weight").value||1),provenance:{ui:true}
   })});await loadLearningSourcesCatalog()}catch(e){setText("catalogout","خطا: "+e.message)}
+}
+async function uploadLearningSourceCatalog(){
+  try{
+    var file=byId("ls_file").files[0];
+    if(!file){setText("catalogout","یک فایل انتخاب کنید.");return;}
+    var form=new FormData();
+    form.append("file",file);
+    form.append("source_type",byId("ls_type").value.trim()||"file");
+    form.append("priority",String(Number(byId("ls_priority").value||100)));
+    form.append("weight",String(Number(byId("ls_weight").value||1)));
+    var j=await req("/settings/learning-sources/upload",{method:"POST",body:form});
+    setText("catalogout","منبع آپلود شد: "+j.id);
+    byId("ls_file").value="";
+    await loadLearningSourcesCatalog();
+  }catch(e){setText("catalogout","خطا: "+e.message)}
+}
+async function editLearningSource(id){
+  try{
+    var j=await req("/settings/learning-sources"),x=(j.items||[]).find(function(v){return Number(v.id)===Number(id)});
+    if(!x)throw Error("منبع پیدا نشد");
+    var url=prompt("URL / مسیر منبع:",x.url||""); if(url===null)return;
+    var title=prompt("عنوان:",x.title||""); if(title===null)return;
+    await req("/settings/learning-sources/"+id,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:url,source_type:x.source_type,title:title,priority:Number(x.priority||100),weight:Number(x.weight||1),product:x.product||"",version:x.version||"",compatibility:x.compatibility||""})});
+    await loadLearningSourcesCatalog();
+  }catch(e){setText("catalogout","خطا: "+e.message)}
 }
 async function deleteLearningSource(id){if(!confirm("این منبع حذف شود؟"))return;try{await req("/settings/learning-sources/"+id,{method:"DELETE"});await loadLearningSourcesCatalog()}catch(e){setText("catalogout","خطا: "+e.message)}}
 async function reviewLearningSource(id,status){try{await req("/settings/learning-sources/"+id+"/"+status,{method:"POST"});await loadLearningSourcesCatalog()}catch(e){setText("catalogout","خطا: "+e.message)}}
