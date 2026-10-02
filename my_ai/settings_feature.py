@@ -388,6 +388,23 @@ def import_settings_registry(payload: SettingsImportRequest, request: Request):
     audit(user, "settings", "import", "200", f"settings-import:{len(payload.values)}")
     return {"version": 1, "settings": values, "imported": len(payload.values)}
 
+class SettingsRegistryValueRequest(BaseModel):
+    value: Any
+
+@router.put("/settings/registry/{key:path}")
+def update_registered_setting(key: str, payload: SettingsRegistryValueRequest, request: Request):
+    user = require_admin(request)
+    registry = get_setting_registry()
+    if key not in registry:
+        raise HTTPException(404, "Unknown registered setting.")
+    try:
+        set_setting(key, payload.value)
+        value = get_setting(key, registry[key]["default"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+    audit(user, "settings", "update", "200", f"setting-update:{key}")
+    return {"key": key, "value": value}
+
 @router.post("/settings/registry/{key:path}/reset")
 def reset_registered_setting(key: str, request: Request):
     user = require_admin(request)
