@@ -12,6 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # PR verification: every test file is bounded to 30s.
   test:
     runs-on: ubuntu-latest
     steps:
