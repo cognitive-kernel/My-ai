@@ -2,7 +2,8 @@
 from __future__ import annotations
 import os, shutil, time
 from pathlib import Path
-from .db import DB_PATH
+from .config import settings
+DB_PATH = settings.db_path
 
 
 def backup(destination: str, *, overwrite=False) -> dict:
