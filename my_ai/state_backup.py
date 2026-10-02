@@ -3,6 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import logging
+
+logger = logging.getLogger(__name__)
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -52,8 +55,10 @@ def import_state(source: str | Path, *, allow_migration: bool = False) -> dict[s
     with connect() as conn:
         conn.execute("PRAGMA foreign_keys=OFF")
         for table in reversed(TABLES):
-            try: conn.execute(f"DELETE FROM {table}")
-            except sqlite3.OperationalError: pass
+            try:
+                conn.execute(f"DELETE FROM {table}")
+            except sqlite3.OperationalError as exc:
+                logger.info("STATE_RESTORE_TABLE_ABSENT table=%s error=%s", table, exc)
         for table in TABLES:
             rows=payload["data"]["tables"].get(table,[])
             if not rows: continue
