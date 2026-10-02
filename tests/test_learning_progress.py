@@ -108,6 +108,7 @@ def test_scheduler_worker_uses_its_own_stop_event(monkeypatch):
     monkeypatch.setattr("my_ai.scheduler.LearningEngine", FakeEngine)
     monkeypatch.setattr("my_ai.scheduler.StudyScheduler._wait_for_resources", staticmethod(lambda stop_event: {}))
     scheduler = StudyScheduler(interval_seconds=60)
+    monkeypatch.setattr(scheduler, "_renew_lease", lambda language: True)
     old_stop = threading.Event()
     old_thread = threading.Thread(target=scheduler._loop, args=("Python", old_stop), daemon=True)
     old_thread.start()
@@ -376,6 +377,7 @@ def test_scheduler_logs_full_worker_exception(monkeypatch, caplog):
     monkeypatch.setattr("my_ai.scheduler.LearningEngine", FakeEngine)
     monkeypatch.setattr("my_ai.scheduler.StudyScheduler._wait_for_resources", staticmethod(lambda stop_event: {}))
     scheduler = StudyScheduler(interval_seconds=1)
+    monkeypatch.setattr(scheduler, "_renew_lease", lambda language: True)
     class StopOnce:
         def __init__(self):
             self.stopped = False
@@ -528,4 +530,3 @@ def test_scheduler_prevents_duplicate_live_worker(monkeypatch):
     scheduler._workers["python"] = (LiveThread(), threading.Event())
     scheduler._acquire_lease = lambda language: (_ for _ in ()).throw(AssertionError("duplicate worker must be rejected before lease acquisition"))
     scheduler.start("Python")
-\n

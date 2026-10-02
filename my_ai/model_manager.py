@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import time
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 import httpx
 
@@ -31,37 +34,46 @@ class ModelManager:
             {"provider": "openai-compatible", "role": "general", "model": settings.openai_model},
         ]
 
-    def health(self, model: str, *, timeout: float = 5.0) -> ModelStatus:
+    def health(self, model: str, *, timeout: float | None = None, attempts: int = 1, backoff_seconds: float = 0.25) -> ModelStatus:
+        timeout = max(0.1, float(timeout if timeout is not None else getattr(settings, "llm_health_timeout_seconds", 5.0)))
+        attempts = max(1, min(3, int(attempts)))
         started = time.perf_counter()
-        try:
-            response = httpx.get(f"{settings.ollama_base_url.rstrip('/')}/api/tags", timeout=timeout)
-            response.raise_for_status()
-            models = {str(item.get("name")) for item in response.json().get("models", []) if item.get("name")}
-            return ModelStatus("ollama", model, model in models, (time.perf_counter() - started) * 1000)
-        except Exception as exc:
-            return ModelStatus("ollama", model, False, (time.perf_counter() - started) * 1000, str(exc))
+        last_error = None
+        for attempt in range(1, attempts + 1):
+            try:
+                response = httpx.get(f"{settings.ollama_base_url.rstrip('/')}/api/tags", timeout=timeout)
+                response.raise_for_status()
+                models = {str(item.get("name")) for item in response.json().get("models", []) if item.get("name")}
+                return ModelStatus("ollama", model, model in models, (time.perf_counter() - started) * 1000)
+            except (httpx.HTTPError, ValueError, TypeError) as exc:
+                last_error = str(exc)
+                if attempt < attempts:
+                    time.sleep(min(2.0, max(0.0, backoff_seconds) * (2 ** (attempt - 1))))
+        logger.warning("MODEL_HEALTH_FAILED model=%s attempts=%s error=%s", model, attempts, last_error)
+        return ModelStatus("ollama", model, False, (time.perf_counter() - started) * 1000, last_error)
 
-    def health_all(self, *, timeout: float = 5.0) -> list[ModelStatus]:
+    def health_all(self, *, timeout: float | None = None) -> list[ModelStatus]:
         unique = list(dict.fromkeys(item["model"] for item in self.inventory() if item["provider"] == "ollama"))
         return [self.health(model, timeout=timeout) for model in unique]
 
-    def available_models(self, *, timeout: float = 5.0) -> set[str]:
+    def available_models(self, *, timeout: float | None = None) -> set[str]:
         return {status.model for status in self.health_all(timeout=timeout) if status.available}
 
-    def fallback_chain(self, requested: str, *, timeout: float = 5.0) -> list[str]:
+    def fallback_chain(self, requested: str, *, timeout: float | None = None) -> list[str]:
         available = self.available_models(timeout=timeout)
         candidates = [settings.fallback_model, settings.ollama_model, settings.coding_model, settings.routing_model]
         return list(dict.fromkeys(model for model in candidates if model and model != requested and model in available))
 
-    def choose_fallback(self, requested: str, *, timeout: float = 5.0) -> str | None:
+    def choose_fallback(self, requested: str, *, timeout: float | None = None) -> str | None:
         chain = self.fallback_chain(requested, timeout=timeout)
         return chain[0] if chain else None
 
-    def route_snapshot(self, requested: str, *, timeout: float = 5.0) -> dict[str, Any]:
-        status = self.health(requested, timeout=timeout)
-        return {"requested": requested, "requested_available": status.available, "requested_error": status.error, "fallback_chain": self.fallback_chain(requested, timeout=timeout)}
+    def route_snapshot(self, requested: str, *, timeout: float | None = None) -> dict[str, Any]:
+        status = self.health(requested, timeout=timeout, attempts=2)
+        chain = self.fallback_chain(requested, timeout=timeout)
+        return {"requested": requested, "requested_available": status.available, "requested_error": status.error, "fallback_chain": chain, "checked_at": time.time()}
 
-    def snapshot(self, *, timeout: float = 5.0) -> dict[str, Any]:
+    def snapshot(self, *, timeout: float | None = None) -> dict[str, Any]:
         statuses = self.health_all(timeout=timeout)
         return {
             "inventory": self.inventory(),

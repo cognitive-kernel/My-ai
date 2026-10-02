@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+logger = logging.getLogger(__name__)
+
 import json
 import os
 import platform
@@ -49,13 +52,13 @@ def _hardware() -> dict[str, object]:
     try:
         import os
         info["cpu_count"] = os.cpu_count()
-    except Exception:
-        pass
+    except Exception as exc:
+        info["cpu_count_error"] = str(exc)
     try:
         import psutil
         info["ram_bytes"] = psutil.virtual_memory().total
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("SELF_DIAGNOSTICS_PSUTIL_UNAVAILABLE: %s", exc)
     return info
 
 
@@ -228,10 +231,10 @@ class SelfDiagnosticsMonitor:
     def _loop(self) -> None:
         try:
             run_diagnostics()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.exception("SELF_DIAGNOSTICS_INITIAL_RUN_FAILED: %s", exc)
         while not self._stop.wait(self.interval_seconds):
             try:
                 run_diagnostics()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.exception("SELF_DIAGNOSTICS_PERIODIC_RUN_FAILED: %s", exc)

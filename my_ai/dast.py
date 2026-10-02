@@ -1,10 +1,12 @@
 from __future__ import annotations
-import json, os, re, socket, tempfile, time
+import json, logging, os, re, socket, tempfile, time
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 import httpx
 from .db import execute
 from .network import pinned_client, resolve_public_ip
+
+logger = logging.getLogger(__name__)
 
 class LocalDAST:
     """Local-only, non-destructive dynamic web testing for owned/generated projects."""
@@ -117,7 +119,8 @@ class LocalDAST:
                     tr=client.request("TRACE",url)
                     if tr.status_code<400:
                         findings.append({"severity":"medium","title":"TRACE method enabled","endpoint":ep,"evidence":f"TRACE returned HTTP {tr.status_code}.","impact":"An unnecessary HTTP method increases attack surface.","remediation":"Disable TRACE at the web server or application gateway."})
-                except Exception: pass
+                except Exception as exc:
+                    logger.debug("DAST_TRACE_CHECK_FAILED: %s", exc)
                 if "set-cookie" in h:
                     cookie=h["set-cookie"].lower()
                     if url.startswith("https://") and "secure" not in cookie:
@@ -142,10 +145,10 @@ class LocalDAST:
                         if r.status_code==200 and "json" in r.headers.get("content-type","").lower():
                             data=r.json(); paths=data.get("paths",{}) if isinstance(data,dict) else {}
                             return sorted(str(x) for x in paths.keys())[:100]
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+                    except Exception as exc:
+                        logger.debug("DAST_OPENAPI_PATH_FAILED path=%s error=%s", path, exc)
+        except Exception as exc:
+            logger.debug("DAST_OPENAPI_DISCOVERY_FAILED error=%s", exc)
         return []
 
     def _crawl_public(self,base,limit=30):

@@ -25,7 +25,7 @@ def test_scheduler_resource_wait_respects_stop_event(monkeypatch):
     scheduler = StudyScheduler(interval_seconds=1)
     stop = threading.Event()
     monkeypatch.setattr("my_ai.scheduler.resource_status", lambda: {"cpu_percent": 99.0, "ram_percent": 99.0})
-    monkeypatch.setattr("my_ai.scheduler.get_setting", lambda key, default: "1")
+    monkeypatch.setattr("my_ai.scheduler.resource_limits", lambda: {"cpu_percent": 1.0, "ram_percent": 1.0, "cpu_threads": 1, "gpu_layers": 0})
     stop.set()
     try:
         scheduler._wait_for_resources(stop)

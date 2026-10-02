@@ -7,6 +7,8 @@ import sys
 import tempfile
 import shutil
 import uuid
+import time
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -17,6 +19,7 @@ from .self_update import recent_lessons
 from .decision_log import record as record_decision
 from .access_policy import assert_mutation_allowed
 from .notifications import notify
+from .state_backup import database_snapshot, restore_database_snapshot
 
 ROOT = Path(__file__).resolve().parent.parent
 PROPOSALS = ROOT / "self-repair" / "proposals"
@@ -49,6 +52,9 @@ def _normalize_patch(raw: str):
 
 def _test_patch(patch: str, base: str):
     parent=Path(tempfile.mkdtemp(prefix="myai-repair-")); candidate=parent/"worktree"
+    production_before=_git("rev-parse","HEAD").stdout.strip()
+    if production_before != base:
+        return False,"Production HEAD changed before candidate validation; proposal must be regenerated."
     try:
         add=_git("worktree","add","--detach",str(candidate),base,timeout=120)
         if add.returncode: return False,"worktree creation failed:\n"+(add.stdout+add.stderr).strip()
@@ -57,7 +63,11 @@ def _test_patch(patch: str, base: str):
         if check.returncode: return False,"git apply --check failed:\n"+(check.stdout+check.stderr).strip()
         apply=_git("apply","--index",str(patch_file),cwd=candidate)
         if apply.returncode: return False,"git apply failed:\n"+(apply.stdout+apply.stderr).strip()
-        return _tests(candidate)
+        result=_tests(candidate)
+        production_after=_git("rev-parse","HEAD").stdout.strip()
+        if production_after != production_before:
+            return False,"Production repository changed during isolated candidate validation."
+        return result
     finally:
         _git("worktree","remove","--force",str(candidate),timeout=120); shutil.rmtree(parent,ignore_errors=True)
 
@@ -76,10 +86,10 @@ def propose_repair(issue: str):
     proposal_id=uuid.uuid4().hex; PROPOSALS.mkdir(parents=True,exist_ok=True); proposal={"id":proposal_id,"created_at":datetime.now(timezone.utc).isoformat(),"base":base,"issue":issue,"patch":patch,"isolated_tests_passed":passed,"test_result":test_result,"approved":False,"applied":False}
     (PROPOSALS/f"{proposal_id}.json").write_text(json.dumps(proposal,ensure_ascii=False,indent=2),encoding="utf-8"); execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_proposal",patch,test_result,0)); record_decision("self_repair_proposal","propose",{"proposal_id":proposal_id,"isolated_tests_passed":passed}); return proposal
 
-def apply_repair(proposal_id: str, approved: bool):
+def apply_repair(proposal_id: str, approved: bool, health_url: str | None = None, health_timeout: float = 20.0, approver_id: int | None = None):
     assert_mutation_allowed("self-repair apply")
     if not get_bool("self_repair.enabled",True): raise ValueError("Self-repair is disabled in Settings.")
-    if get_bool("self_repair.require_approval",True) and not approved: raise ValueError("Explicit approval is required before applying a repair.")
+    if get_bool("self_repair.require_approval",True) and (not approved or approver_id is None): raise ValueError("Explicit approval by an authenticated administrator is required before applying a repair.")
     path=PROPOSALS/f"{proposal_id}.json"
     if not path.is_file(): raise ValueError("Repair proposal not found.")
     proposal=json.loads(path.read_text(encoding="utf-8"))
@@ -87,12 +97,49 @@ def apply_repair(proposal_id: str, approved: bool):
     current=_git("rev-parse","HEAD").stdout.strip()
     if current!=proposal["base"]: raise ValueError("Repository HEAD changed since the proposal was generated; regenerate the repair.")
     if not _clean_git(): raise ValueError("Working tree must be clean before applying a repair.")
+    snapshot_path=PROPOSALS/f"{proposal_id}.db.sqlite"
+    db_snapshot=database_snapshot(snapshot_path)
+    proposal["snapshot"]=str(db_snapshot)
+    path.write_text(json.dumps(proposal,ensure_ascii=False,indent=2),encoding="utf-8")
     patch_file=PROPOSALS/f"{proposal_id}.patch"; patch_file.write_text(str(proposal["patch"]),encoding="utf-8"); applied=_git("apply",str(patch_file))
     if applied.returncode: execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_apply_failed",proposal["patch"],applied.stderr or applied.stdout,0)); raise RuntimeError("Repair patch could not be applied:\n"+(applied.stderr or applied.stdout))
     ok,tests=_tests(ROOT)
     if not ok:
-        _git("reset","--hard",proposal["base"]); execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_rolled_back",proposal["patch"],tests,0)); raise RuntimeError("Applied repair failed post-apply tests and was rolled back:\n"+tests)
-    proposal["approved"]=True; proposal["applied"]=True; proposal["applied_at"]=datetime.now(timezone.utc).isoformat(); path.write_text(json.dumps(proposal,ensure_ascii=False,indent=2),encoding="utf-8"); execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_applied",proposal["patch"],tests,1)); record_decision("self_repair","apply",{"proposal_id":proposal_id}); notify("self_repair_applied",{"proposal_id":proposal_id,"base":proposal["base"]}); return {"status":"applied","proposal_id":proposal_id,"base":proposal["base"],"tests":tests,"working_tree":"modified"}
+        _git("reset","--hard",proposal["base"])
+        try: restore_database_snapshot(Path(db_snapshot))
+        except Exception as restore_exc: _record_failure_lesson("self_repair_restore_failed",proposal_id,str(restore_exc))
+        execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_rolled_back",proposal["patch"],tests,0)); raise RuntimeError("Applied repair failed post-apply tests and was rolled back:\n"+tests)
+    if health_url:
+        deadline=time.time()+max(1.0,float(health_timeout))
+        healthy=False
+        last_error=""
+        while time.time()<deadline:
+            try:
+                with urllib.request.urlopen(health_url,timeout=3) as response:
+                    healthy=int(response.status)==200
+                    if healthy: break
+            except Exception as exc:
+                last_error=str(exc)
+            time.sleep(0.5)
+        if not healthy:
+            _git("reset","--hard",proposal["base"])
+            try: restore_database_snapshot(Path(db_snapshot))
+            except Exception as restore_exc: _record_failure_lesson("self_repair_restore_failed",proposal_id,str(restore_exc))
+            _record_failure_lesson("self_repair_health_failed",proposal_id,last_error)
+            raise RuntimeError("Post-activation health check failed and repair was rolled back: "+last_error)
+    proposal["approved"]=True; proposal["approved_by"]=approver_id; proposal["approved_at"]=datetime.now(timezone.utc).isoformat(); proposal["applied"]=True; proposal["applied_at"]=datetime.now(timezone.utc).isoformat(); path.write_text(json.dumps(proposal,ensure_ascii=False,indent=2),encoding="utf-8"); execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_applied",proposal["patch"],tests,1)); record_decision("self_repair","apply",{"proposal_id":proposal_id}); notify("self_repair_applied",{"proposal_id":proposal_id,"base":proposal["base"]}); return {"status":"applied","proposal_id":proposal_id,"base":proposal["base"],"tests":tests,"working_tree":"modified"}
+
+
+def _record_failure_lesson(event: str, proposal_id: str, error: str) -> None:
+    lesson = ROOT / "self-repair" / "lessons.jsonl"
+    lesson.parent.mkdir(parents=True, exist_ok=True)
+    item = {"timestamp": datetime.now(timezone.utc).isoformat(), "event": event, "proposal_id": proposal_id, "error": str(error)[:4000]}
+    with lesson.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(item, ensure_ascii=False) + "\n")
+    try:
+        execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)", (event, proposal_id, str(error)[:4000], 0))
+    except Exception as exc:
+        logger.warning("SELF_REPAIR_LESSON_PERSIST_FAILED: %s", exc)
 
 def list_proposals():
     PROPOSALS.mkdir(parents=True,exist_ok=True); items=[]

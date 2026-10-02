@@ -198,7 +198,12 @@ def audit_event(
     }
     if extra:
         payload["extra"] = extra
-    audit(user, tool_name, action, status, json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+    details = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    execute(
+        "INSERT INTO audit_log(user_id,username,tool_name,action,status,details,request_id,actor_role,occurred_at) VALUES(?,?,?,?,?,?,?,?,?)",
+        (user["id"] if user else None, user["username"] if user else "anonymous", tool_name, action, status, details[:4000],
+         request_id, user.get("role") if user else None, datetime.now(timezone.utc).isoformat()),
+    )
 
 
 

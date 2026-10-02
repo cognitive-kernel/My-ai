@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import time
+import os
 from typing import Any
 
-from .settings_store import get_int, get_setting
+from .settings_store import get_setting
 
 DEFAULT_CPU_PERCENT = 70.0
 DEFAULT_CPU_THREADS = 8
@@ -11,9 +12,13 @@ DEFAULT_RAM_PERCENT = 80.0
 DEFAULT_GPU_LAYERS = 0
 
 
-def _number(key: str, default: float, low: float, high: float) -> float:
+def _setting(key: str, env_name: str, default: str) -> str:
+    return str(get_setting(key, os.getenv(env_name, default)))
+
+
+def _number(key: str, env_name: str, default: float, low: float, high: float) -> float:
     try:
-        value = float(get_setting(key, str(default)))
+        value = float(_setting(key, env_name, str(default)))
     except (TypeError, ValueError):
         value = default
     return max(low, min(high, value))
@@ -21,10 +26,10 @@ def _number(key: str, default: float, low: float, high: float) -> float:
 
 def limits() -> dict[str, float | int]:
     return {
-        "cpu_percent": _number("resources.cpu_percent", DEFAULT_CPU_PERCENT, 1.0, 100.0),
-        "cpu_threads": max(1, min(128, get_int("resources.cpu_threads", DEFAULT_CPU_THREADS))),
-        "ram_percent": _number("resources.ram_percent", DEFAULT_RAM_PERCENT, 1.0, 100.0),
-        "gpu_layers": max(0, min(128, get_int("resources.gpu_layers", DEFAULT_GPU_LAYERS))),
+        "cpu_percent": _number("resources.cpu_percent", "RESOURCES_CPU_PERCENT", DEFAULT_CPU_PERCENT, 1.0, 100.0),
+        "cpu_threads": max(1, min(128, int(float(_setting("resources.cpu_threads", "RESOURCES_CPU_THREADS", str(DEFAULT_CPU_THREADS)))))),
+        "ram_percent": _number("resources.ram_percent", "RESOURCES_RAM_PERCENT", DEFAULT_RAM_PERCENT, 1.0, 100.0),
+        "gpu_layers": max(0, min(128, int(float(_setting("resources.gpu_layers", "RESOURCES_GPU_LAYERS", str(DEFAULT_GPU_LAYERS)))))),
     }
 
 

@@ -1,0 +1,67 @@
+{
+  "version": "regression-v1",
+  "retrieval_dataset": "retrieval-v1",
+  "skills_dataset": "skills-v1",
+  "thresholds": {
+    "retrieval_mrr": 0.7,
+    "persian_response_mean": 0.7,
+    "citation_coverage": 1,
+    "confidence_calibration": 0.7,
+    "router_accuracy": 0.9,
+    "skill_verification": 0.8
+  },
+  "citation_cases": [
+    {
+      "id": "local-provenance",
+      "requires": [
+        "citation_id",
+        "source_url"
+      ]
+    },
+    {
+      "id": "external-provenance",
+      "requires": [
+        "citation_id",
+        "source_url"
+      ]
+    }
+  ],
+  "confidence_cases": [
+    {
+      "id": "calibrated-high",
+      "expected_min": 0.7
+    },
+    {
+      "id": "calibrated-low",
+      "expected_max": 0.3
+    }
+  ],
+  "router_cases": [
+    {
+      "input": "کد پایتون",
+      "expected": "coding"
+    },
+    {
+      "input": "یادگیری پایتون",
+      "expected": "learning"
+    },
+    {
+      "input": "امنیت API",
+      "expected": "security"
+    },
+    {
+      "input": "جستجوی وب",
+      "expected": "web"
+    }
+  ],
+  "skill_cases": [
+    {
+      "id": "verified-skill",
+      "expected_verified": true
+    },
+    {
+      "id": "unverified-skill",
+      "expected_verified": false
+    }
+  ]
+}

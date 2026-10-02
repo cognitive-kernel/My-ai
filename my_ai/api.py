@@ -36,7 +36,7 @@ from .git_connector import GitHubConnector
 from .auth import authenticate, audit, audit_event, create_account, create_session, current_user, require_admin, revoke_session, require_user, tool_allowed
 from .platform import backup_database, choose_model, eval_retrieval, export_database, hybrid_search, import_database, model_health, resource_status, voice_status, web_fetch_policy
 from .self_update import status as self_update_status, apply_confirmed_update as self_update_apply, preview_update
-from .self_repair import diagnose_local, propose_repair, apply_repair, proposal_status
+from .self_repair import propose_repair, apply_repair, proposal_status
 from .skill_engine import ensure_skill, record_evidence, revalidate, snapshot, record_review, review_snapshot
 from .voice import status as voice_engine_status, transcribe, synthesize
 from .metrics import snapshot as metrics_snapshot, record_http_request, record_http_error
@@ -611,7 +611,12 @@ def self_update_status_api(request:Request):
 @app.get("/self-repair/status")
 def self_repair_status_api(request:Request):
     require_admin(request)
-    return diagnose_local()
+    # Status must remain cheap and non-blocking; full diagnosis runs compileall/pytest.
+    return {
+        "enabled": bool(get_bool("self_repair.enabled", True)),
+        "require_approval": bool(get_bool("self_repair.require_approval", True)),
+        "proposals": list_proposals(),
+    }
 
 @app.post("/self-repair/propose")
 def self_repair_propose_api(r:RepairRequest, request:Request):
@@ -640,7 +645,10 @@ def self_repair_apply_api(r:RepairRequest, request:Request):
     user=require_admin(request)
     if not r.proposal_id:
         raise HTTPException(400,"proposal_id is required.")
-    result=apply_repair(r.proposal_id,r.approved)
+    health_url = str(r.health_url).strip() if r.health_url else None
+    if health_url and urlparse(health_url).hostname not in {"127.0.0.1","localhost","::1"}:
+        raise HTTPException(400,"Self-repair health URL must target the local host.")
+    result=apply_repair(r.proposal_id,r.approved,health_url=health_url,health_timeout=max(1.0,min(float(r.health_timeout),120.0)),approver_id=int(user["id"]))
     audit(user,"self-repair","write","200",f"applied:{r.proposal_id}")
     return result
 
@@ -1435,3 +1443,88 @@ def scheduler_stop(request:Request):
 
 from .settings_feature import install as _install_settings_features
 _install_settings_features(app)
+
+
+# Stateful session/stream lifecycle endpoints.
+from .session_lifecycle import create_session as create_stateful_session, recover_session, open_stream, stream_chunk, close_stream, reconnect_stream, verify_integrity, expire_sessions
+from .state_backup import export_state, import_state, verify_export
+from .skill_sandbox import run as run_skill_sandbox
+
+@app.post("/sessions")
+def create_session_endpoint(request: Request, title: str = "گفتگوی جدید", language: str | None = None):
+    user = require_user(request)
+    return {"session_id": create_stateful_session(user["id"], title, language)}
+
+@app.get("/sessions/{session_id}")
+def recover_session_endpoint(session_id: int, request: Request):
+    user = require_user(request)
+    return recover_session(session_id, user["id"])
+
+@app.post("/sessions/{session_id}/events")
+async def session_event_endpoint(session_id: int, request: Request):
+    user = require_user(request)
+    recover_session(session_id, user["id"])
+    body = await request.json()
+    from .session_lifecycle import append_event
+    return append_event(session_id, str(body.get("event_type") or "custom"), dict(body.get("payload") or {}), user["id"])
+
+@app.get("/sessions/{session_id}/integrity")
+def session_integrity_endpoint(session_id: int, request: Request):
+    user = require_user(request)
+    recover_session(session_id, user["id"])
+    return verify_integrity(session_id, user["id"])
+
+@app.post("/sessions/{session_id}/stream")
+async def stream_open_endpoint(session_id: int, request: Request):
+    user = require_user(request)
+    recover_session(session_id, user["id"])
+    body = await request.json()
+    return open_stream(session_id, str(body.get("context") or ""), user["id"])
+
+@app.post("/streams/{stream_id}/chunk")
+async def stream_chunk_endpoint(stream_id: str, request: Request):
+    user = require_user(request)
+    body = await request.json()
+    return stream_chunk(stream_id, str(body.get("chunk") or ""), body.get("sequence"), user["id"])
+
+@app.post("/streams/{stream_id}/reconnect")
+def stream_reconnect_endpoint(stream_id: str, request: Request):
+    user = require_user(request)
+    return reconnect_stream(stream_id, user["id"])
+
+@app.post("/streams/{stream_id}/close")
+async def stream_close_endpoint(stream_id: str, request: Request):
+    user = require_user(request)
+    body = await request.json()
+    return close_stream(stream_id, str(body.get("status") or "completed"), user["id"])
+
+@app.post("/state/export")
+def state_export_endpoint(request: Request, path: str):
+    require_admin(request)
+    return export_state(path)
+
+@app.post("/state/import")
+def state_import_endpoint(request: Request, path: str, allow_migration: bool = False):
+    require_admin(request)
+    return import_state(path, allow_migration=allow_migration)
+
+@app.get("/state/verify")
+def state_verify_endpoint(request: Request, path: str):
+    require_admin(request)
+    return verify_export(path)
+
+@app.post("/skills/{skill_id}/sandbox-test")
+async def skill_sandbox_endpoint(skill_id: int, request: Request):
+    user = require_user(request)
+    if user["role"] != "admin":
+        raise HTTPException(403, "Administrator access required for sandbox execution.")
+    body = await request.json()
+    command = body.get("command")
+    if not isinstance(command, list):
+        raise HTTPException(400, "command must be a list.")
+    return run_skill_sandbox(skill_id, command, cwd=body.get("cwd"), timeout=int(body.get("timeout", 30)))
+
+@app.post("/sessions/expire")
+def session_expire_endpoint(request: Request):
+    require_admin(request)
+    return {"expired": expire_sessions()}

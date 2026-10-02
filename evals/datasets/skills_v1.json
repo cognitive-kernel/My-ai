@@ -1,0 +1,14 @@
+{
+  "version": "skills-v1",
+  "thresholds": {
+    "knowledge_coverage_score": 70,
+    "verified_skill_score": 80
+  },
+  "evidence_ttl_days": 30,
+  "required_evidence": [
+    "test",
+    "benchmark",
+    "official_source"
+  ],
+  "notes": "Versioned verification policy; changing thresholds requires a new dataset version."
+}

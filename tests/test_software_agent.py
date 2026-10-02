@@ -7,7 +7,7 @@ def test_plan_is_semantic_and_contains_acceptance_criteria(monkeypatch):
 
     class FakeLLM:
         def structured_chat_json(self, message, schema, system=None):
-            assert "trigger words" in message
+            assert "acceptance criteria" in message.lower()
             return {
                 "goal": "A small playable point-eating game",
                 "language": "Python",

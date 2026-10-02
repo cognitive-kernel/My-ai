@@ -11,8 +11,8 @@ from .curriculum import LANGUAGE_CURRICULA, canonical_language
 from .db import connect, execute, fetch_all
 from .dynamic_learning import due_domains
 from .config import settings
-from .settings_store import get_setting
 from .resource_guard import limits as resource_limits
+from .scheduler_resilience import mark_stale, record as record_scheduler_event
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +27,12 @@ class StudyScheduler:
     def _supervisor_loop(self):
         while not self._supervisor_stop.is_set():
             try:
+                mark_stale()
                 for row in fetch_all("SELECT language,session_id,status FROM learning_workers WHERE status IN ('running','retrying')"):
                     language=str(row["language"] or "").strip(); key=language.casefold()
-                    if language and not (self._workers.get(key) and self._workers[key][0].is_alive()): self.start(language,row["session_id"])
+                    if language and not (self._workers.get(key) and self._workers[key][0].is_alive()):
+                        record_scheduler_event(language,"worker_recovery",session_id=row["session_id"])
+                        self.start(language,row["session_id"])
             except Exception: logger.exception("LEARNING_SUPERVISOR_FAILURE")
             self._supervisor_stop.wait(2)
     def start_review_monitor(self):
@@ -72,6 +75,7 @@ class StudyScheduler:
             if target and key!=target: continue
             event.set(); self._release_lease(key); execute("UPDATE learning_workers SET status='stopping',stage='stopping',updated_at=CURRENT_TIMESTAMP WHERE lower(language)=?",(key,))
         self.stage="stopping"
+        record_scheduler_event(language or "all","stop_requested")
     def stop(self): self.stop_learning(); self.stop_review_monitor(); self.stop_learning_supervisor()
     def stop_review_monitor(self): self._review_stop.set()
     def running(self): return any(t.is_alive() for t,_ in self._workers.values())
@@ -80,11 +84,26 @@ class StudyScheduler:
         for row in rows:
             item=dict(row); item["running"]=bool(self._workers.get(str(item["language"]).casefold()) and self._workers[str(item["language"]).casefold()][0].is_alive()); workers.append(item)
         active=[x for x in workers if x["running"]]; primary=active[0] if active else (workers[-1] if workers else None)
-        return {"running":bool(active),"language":primary["language"] if primary else self.language,"stage":primary["stage"] if primary else self.stage,"current_topic":primary["current_topic"] if primary else self.current_topic,"workers":workers,"active_workers":active,"resources":{**resource_status(),**resource_limits()}}
+        runtime = fetch_all("SELECT status,updated_at FROM learning_runtime WHERE id=1")
+        return {
+            "running": bool(active),
+            "language": primary["language"] if primary else self.language,
+            "stage": primary["stage"] if primary else self.stage,
+            "current_topic": primary["current_topic"] if primary else self.current_topic,
+            "last_result": primary.get("last_result") if primary else self.last_result,
+            "error": primary.get("error") if primary else self.error,
+            "interval_seconds": self.interval_seconds,
+            "session_id": primary.get("session_id") if primary else None,
+            "runtime_status": runtime[0]["status"] if runtime else "idle",
+            "runtime_updated_at": runtime[0]["updated_at"] if runtime else None,
+            "workers": workers,
+            "active_workers": active,
+            "resources": {**resource_status(), **resource_limits()},
+        }
     @staticmethod
     def _wait_for_resources(stop_event):
         while not stop_event.is_set():
-            cpu=float(get_setting("resources.cpu_percent",str(settings.scheduler_max_cpu_percent))); ram=float(get_setting("resources.ram_percent",str(settings.scheduler_max_ram_percent))); r=resource_status()
+            limits = resource_limits(); cpu=float(limits["cpu_percent"]); ram=float(limits["ram_percent"]); r=resource_status()
             if r.get("cpu_percent") is None or r.get("ram_percent") is None or (r.get("cpu_percent")<=cpu and r.get("ram_percent")<=ram): return r
             stop_event.wait(1)
         raise InterruptedError("learning stopped")
@@ -105,6 +124,18 @@ class StudyScheduler:
                     self.last_result={"status":"weekly_review","language":name}
             except Exception as exc: logger.exception("LEARNING_REVIEW_FAILURE: %s",exc)
             self._review_stop.wait(min(self.interval_seconds,3600))
+    def _schedule_worker_recovery(self, language, stop_event):
+        if stop_event.is_set():
+            return
+        rows = fetch_all("SELECT session_id FROM learning_workers WHERE lower(language)=? LIMIT 1", (str(language).casefold(),))
+        session_id = rows[0]["session_id"] if rows else None
+        def recover():
+            if not stop_event.is_set():
+                self.start(language, session_id)
+        timer = threading.Timer(1.0, recover)
+        timer.daemon = True
+        timer.start()
+
     def _loop(self,language,stop_event):
         if not self._renew_lease(language): return
         engine=LearningEngine(); errors=0
@@ -125,7 +156,19 @@ class StudyScheduler:
                     if stop_event.wait(min(self.interval_seconds,60)): break
                 except InterruptedError: break
                 except Exception as exc:
-                    errors+=1; logger.exception("LEARNING_FAILURE: %s",exc); self._update_worker(language,"retrying",result={"status":"error","error":str(exc),"consecutive_errors":errors},error=str(exc),status="retrying")
-                    if stop_event.wait(min(60,2**min(errors,5))): break
+                    errors += 1
+                    logger.exception("LEARNING_FAILURE: %s", exc)
+                    max_retries = max(1, int(getattr(settings, "learning_max_retries", 5)))
+                    terminal = errors >= max_retries
+                    status = "failed" if terminal else "retrying"
+                    self._update_worker(
+                        language,
+                        status,
+                        result={"status": "error", "error": str(exc), "consecutive_errors": errors, "max_retries": max_retries},
+                        error=str(exc),
+                        status=status,
+                    )
+                    record_scheduler_event(language, "worker_failure", error=str(exc), consecutive_errors=errors, max_retries=max_retries, terminal=terminal)
+                    if terminal or stop_event.wait(min(60, 2 ** min(errors, 5))): break
         finally:
             self._release_lease(language); self._workers.pop(language.casefold(),None)

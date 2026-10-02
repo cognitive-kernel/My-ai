@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+logger = logging.getLogger(__name__)
+
 import json
 import re
 from datetime import datetime, timedelta, timezone
@@ -191,8 +194,8 @@ def _ensure_custom_review_schedule(course_id: int) -> None:
     )""")
     try:
         execute("ALTER TABLE learning_domains ADD COLUMN auto_learn INTEGER NOT NULL DEFAULT 1")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("SETTINGS_SCHEMA_MIGRATION_FAILED: %s", exc)
     topics = [
         {"order": int(x["topic_order"]), "topic": str(x["title"]), "goal": str(x["goal"] or "")}
         for x in _progress(course_id)
@@ -246,8 +249,8 @@ def _review_custom_course(course_id: int, web, llm) -> dict[str, Any]:
             if url.startswith(("http://", "https://")) and url not in seen_urls:
                 seen_urls.add(url)
                 candidates.append(url)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("SETTINGS_RESEARCH_CANDIDATE_EXTRACTION_FAILED: %s", exc)
     for url in candidates[:16]:
         try:
             title, source = web.fetch(url)
@@ -742,8 +745,8 @@ def shutdown_course_workers() -> None:
         _workers.shutdown(wait=False, cancel_futures=True)
     except TypeError:
         _workers.shutdown(wait=False)
-    except RuntimeError:
-        pass
+    except RuntimeError as exc:
+        logger.warning("SETTINGS_WORKER_SHUTDOWN_FAILED: %s", exc)
 
 def start_named_course(name: str) -> int | None:
     """Start a named custom course and return its course id."""

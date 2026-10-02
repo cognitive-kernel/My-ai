@@ -23,6 +23,8 @@ class RepairRequest(BaseModel):
     issue: str = ""
     proposal_id: str | None = None
     approved: bool = False
+    health_url: str | None = None
+    health_timeout: float = 20.0
 
 
 class AuthRegisterRequest(BaseModel):

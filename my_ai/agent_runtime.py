@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 from dataclasses import dataclass
 from typing import Any
 
@@ -147,8 +150,8 @@ class Agent(LegacyAgent):
                     intent.args["language"] = state["language"]
                 if self._is_action_request(message):
                     intent.args["actionable"] = True
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("AGENT_INTENT_ACTIONABILITY_CHECK_FAILED: %s", exc)
         task = "coding" if getattr(intent, "name", "") in {"coding", "code_execution", "git_write"} or "coding" in getattr(intent, "intents", ()) else "general"
         llm = self.llm if task == "general" else create_llm(task)
         attachment_context = self._attachment_context(normalized_attachments)

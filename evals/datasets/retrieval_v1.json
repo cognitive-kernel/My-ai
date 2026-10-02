@@ -1,0 +1,108 @@
+{
+  "version": "retrieval-v1",
+  "cases": [
+    {
+      "query": "Python list tuple",
+      "expected_topics": [
+        "Python"
+      ],
+      "language": "en"
+    },
+    {
+      "query": "SQL Server index execution plan",
+      "expected_topics": [
+        "SQL Server"
+      ],
+      "language": "en"
+    },
+    {
+      "query": "امنیت پن تست",
+      "expected_topics": [
+        "Pentest"
+      ],
+      "language": "fa"
+    },
+    {
+      "query": "چطور در پایتون تست واحد بنویسم؟",
+      "expected_topics": [
+        "Python"
+      ],
+      "language": "fa"
+    },
+    {
+      "query": "مدیریت حافظه در Rust",
+      "expected_topics": [
+        "Rust"
+      ],
+      "language": "fa"
+    },
+    {
+      "query": "جستجوی ایندکس در SQL Server",
+      "expected_topics": [
+        "SQL Server"
+      ],
+      "language": "fa"
+    },
+    {
+      "query": "تحلیل امنیت API",
+      "expected_topics": [
+        "Pentest"
+      ],
+      "language": "fa"
+    },
+    {
+      "query": "JavaScript async await",
+      "expected_topics": [
+        "JavaScript"
+      ],
+      "language": "en"
+    },
+    {
+      "query": "C pointer memory",
+      "expected_topics": [
+        "C"
+      ],
+      "language": "en"
+    },
+    {
+      "query": "Kotlin Android activity",
+      "expected_topics": [
+        "Android"
+      ],
+      "language": "en"
+    }
+  ],
+  "response_cases": [
+    {
+      "prompt": "تفاوت list و tuple در پایتون چیست؟",
+      "required_markers": [
+        "list",
+        "tuple"
+      ],
+      "language": "fa"
+    },
+    {
+      "prompt": "چطور در پایتون تست واحد بنویسم؟",
+      "required_markers": [
+        "تست",
+        "pytest"
+      ],
+      "language": "fa"
+    },
+    {
+      "prompt": "ایندکس در SQL Server چه کاربردی دارد؟",
+      "required_markers": [
+        "ایندکس"
+      ],
+      "language": "fa"
+    },
+    {
+      "prompt": "امنیت API را چگونه بررسی کنم؟",
+      "required_markers": [
+        "امنیت",
+        "API"
+      ],
+      "language": "fa"
+    }
+  ]
+}
