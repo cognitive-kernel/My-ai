@@ -269,3 +269,12 @@ inspect → diagnose → proposal → explicit user approval → snapshot → is
 - Added persistent SQLite-backed stores for version-aware knowledge evolution and experience evolution while retaining compatibility with existing in-memory APIs.
 - Added version comparison, invalidation and compatibility-aware experience handling to the persistent evolution layer.
 - No tests, CI, regression, integration or runtime verification were executed, as requested.
+
+
+### Implementation completion pass — 2026-10-02 — no tests executed
+- Generic non-OpenAI provider streaming now supports configurable NDJSON/SSE transport and response-path mapping.
+- Dynamic provider catalog runtime registration now uses the provider's encrypted active API key and protocol/request/response/stream mappings.
+- Provider catalog now exposes runtime-only decrypted configuration at the adapter boundary and supports metadata import alongside existing export.
+- Model routing now prefers enabled catalog models declared for the requested task capability, with configured-model fallback when no capable catalog model is available.
+- Reinspection confirmed that semantic memory similarity, learning source catalog/manual sources, topic pause controls, research manual sources, hybrid retrieval, temporal knowledge-graph relations, context budgeting, confidence primitives, event/task/cache/budget primitives, meta-agent proposal flow and Agent OS primitives already exist in the current codebase; they were not duplicated.
+- No tests, CI, regression, integration or runtime verification were executed.
