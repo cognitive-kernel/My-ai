@@ -8,7 +8,7 @@ def test_watchdog_rolls_back_unhealthy_activation(monkeypatch, tmp_path):
     monkeypatch.setattr(watchdog, "_pid_alive", lambda pid: False)
 
     class Child:
-        def poll(self): return None
+        def poll(self): return 1
         def terminate(self): calls.append(("terminate",))
         def wait(self, timeout=0): calls.append(("wait", timeout))
         def kill(self): calls.append(("kill",))
