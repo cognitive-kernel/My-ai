@@ -16,7 +16,7 @@ def _runtime_setting(key: str, fallback=None):
         return fallback
 
 
-def create_llm():
+def create_llm(task: str | None = None):
     provider = str(_runtime_setting("llm.provider", getattr(settings, "llm_provider", "auto")) or "auto")
     if provider == "custom-openai-compatible":
         base_url = str(_runtime_setting("llm.custom.base_url", "") or "").strip()
@@ -28,7 +28,7 @@ def create_llm():
             api_key=str(_runtime_setting("llm.custom.api_key", "") or ""),
             provider_name="custom-openai-compatible",
         )
-    return _infra_create_llm()
+    return _infra_create_llm(task)
 
 
 __all__ = ["LLMError", "HistoryMessage", "OllamaClient", "OpenAICompatibleClient", "create_llm", "httpx", "settings", "_settings", "_runtime_setting"]
