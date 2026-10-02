@@ -4,7 +4,7 @@ import httpx
 from dataclasses import dataclass
 from pathlib import Path
 from .config import settings
-from .settings_store import get_int
+from .settings_store import get_int, get_setting
 @dataclass(frozen=True)
 class ExecutionResult:
     output:str; error:str; timed_out:bool; return_code:int; sandbox_mode:str="container"
