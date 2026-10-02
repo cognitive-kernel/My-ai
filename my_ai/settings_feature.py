@@ -776,6 +776,16 @@ def settings_database_backup(payload: BackupRequest, request: Request):
     except (OSError,FileNotFoundError,FileExistsError) as exc: raise HTTPException(400,str(exc))
     audit(user,"database","backup","200",result["path"]); return result
 
+@router.get("/settings/database/health")
+def settings_database_health(request: Request):
+    require_admin(request)
+    with connect() as conn:
+        integrity = str(conn.execute("PRAGMA integrity_check").fetchone()[0])
+        foreign_keys = int(conn.execute("PRAGMA foreign_key_check").fetchone()[0]) if conn.execute("PRAGMA foreign_key_check").fetchone() else 0
+        tables = int(conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'").fetchone()[0])
+    return {"ok": integrity == "ok" and foreign_keys == 0, "integrity": integrity, "foreign_key_errors": foreign_keys, "table_count": tables}
+
+
 @router.post("/settings/database/restore")
 def settings_database_restore(payload: BackupRequest, request: Request):
     user=require_admin(request)
