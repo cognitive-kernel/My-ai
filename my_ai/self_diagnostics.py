@@ -234,5 +234,5 @@ class SelfDiagnosticsMonitor:
         while not self._stop.wait(self.interval_seconds):
             try:
                 run_diagnostics()
-            except Exception:
-                pass
+            except Exception as exc:
+                logging.getLogger(__name__).debug("Diagnostic cycle failed: %s", exc)
