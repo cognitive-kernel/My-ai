@@ -94,3 +94,15 @@ def test_same_knowledge_can_coexist_across_versions(tmp_path, monkeypatch):
     assert second != first
     rows = persistence.fetch_all("SELECT version FROM knowledge WHERE id IN (?,?) ORDER BY version", (first, second))
     assert [row["version"] for row in rows] == ["3.12", "3.13"]
+
+def test_learning_experience_records_context_outcome_recovery_and_evidence(monkeypatch):
+    monkeypatch.setattr(learner, "get_bool", lambda *args, **kwargs: True, raising=False)
+    captured = []
+    monkeypatch.setattr(learner, "execute", lambda sql, params=(): captured.append((sql, params)) or 1)
+    monkeypatch.setattr(learner, "fetch_all", lambda *args, **kwargs: [])
+    learner.LearningEngine.record_experience(
+        "Python", "API", "success", "tool", "worked",
+        context={"provider": "local"}, outcome="passed", recovery="none", evidence=[{"kind": "test", "passed": True}],
+    )
+    insert = next(item for item in captured if "INSERT INTO learning_experiences" in item[0])
+    assert insert[1][-4:] == ('{"provider": "local"}', "passed", "none", '[{"kind": "test", "passed": true}]')
