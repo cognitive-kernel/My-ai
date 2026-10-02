@@ -72,3 +72,11 @@ def test_custom_course_progress_tracks_last_attempt_column():
     sf.execute("UPDATE custom_course_progress SET last_attempt_at=CURRENT_TIMESTAMP WHERE topic_id=?", (int(topic["id"]),))
     updated = sf._progress(course_id)[0]
     assert updated["last_attempt_at"]
+
+
+def test_settings_registry_update_route_exists():
+    routes = {getattr(route, "path", ""): getattr(route, "methods", set()) for route in sf.router.routes}
+    assert "/settings/registry/{key:path}" in routes
+    assert "PUT" in routes["/settings/registry/{key:path}"]
+    assert "/settings/registry/export" in routes
+    assert "/settings/registry/import" in routes
