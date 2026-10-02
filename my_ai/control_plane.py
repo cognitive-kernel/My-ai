@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS control_plane_records (
     updated_at REAL NOT NULL,
     UNIQUE(namespace, name)
 );
+CREATE TABLE IF NOT EXISTS control_plane_history (id INTEGER PRIMARY KEY AUTOINCREMENT,namespace TEXT NOT NULL,name TEXT NOT NULL,version INTEGER NOT NULL,payload_json TEXT NOT NULL,enabled INTEGER NOT NULL,created_at REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS control_plane_audit (id INTEGER PRIMARY KEY AUTOINCREMENT,namespace TEXT NOT NULL,name TEXT NOT NULL,action TEXT NOT NULL,version INTEGER NOT NULL,details TEXT NOT NULL DEFAULT '',created_at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS control_plane_actions (
     id TEXT PRIMARY KEY,
     action TEXT NOT NULL,
@@ -100,6 +102,16 @@ def get_record(namespace: str, name: str) -> dict[str, Any] | None:
     return _decode(row).__dict__ if row else None
 
 
+def _validate_payload(namespace: str, name: str, payload: dict[str, Any]) -> None:
+    if not isinstance(payload, dict): raise ValueError("payload must be an object")
+    if not namespace.strip() or not name.strip(): raise ValueError("namespace and name are required")
+    if len(json.dumps(payload, ensure_ascii=False).encode("utf-8")) > 512_000: raise ValueError("payload exceeds 512 KiB")
+    if "version" in payload:
+        try:
+            if int(payload["version"]) < 1: raise ValueError("version must be positive")
+        except (TypeError, ValueError) as exc: raise ValueError("version must be a positive integer") from exc
+
+
 def put_record(
     namespace: str,
     name: str,
@@ -110,10 +122,7 @@ def put_record(
 ) -> dict[str, Any]:
     ensure_schema()
     namespace, name = namespace.strip(), name.strip()
-    if not namespace or not name:
-        raise ValueError("namespace and name are required")
-    if not isinstance(payload or {}, dict):
-        raise ValueError("payload must be an object")
+    _validate_payload(namespace, name, payload or {})
     now = time.time()
     with connect() as conn:
         existing = conn.execute(
@@ -135,6 +144,11 @@ def put_record(
             (rid, namespace, name, json.dumps(payload or {}, ensure_ascii=False),
              version, int(enabled), created, now),
         )
+        payload_json = json.dumps(payload or {}, ensure_ascii=False)
+        conn.execute("INSERT INTO control_plane_history(namespace,name,version,payload_json,enabled,created_at) VALUES(?,?,?,?,?,?)",
+                     (namespace, name, version, payload_json, int(enabled), now))
+        conn.execute("INSERT INTO control_plane_audit(namespace,name,action,version,details,created_at) VALUES(?,?,?,?,?,?)",
+                     (namespace, name, "upsert", version, "control-plane mutation", now))
         conn.commit()
     return get_record(namespace, name) or {}
 
@@ -236,3 +250,31 @@ DEFAULT_NAMESPACES = (
 
 def namespace_catalog() -> list[str]:
     return list(DEFAULT_NAMESPACES)
+
+
+def list_history(namespace: str, name: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
+    ensure_schema()
+    sql = "SELECT id,namespace,name,version,payload_json,enabled,created_at FROM control_plane_history WHERE namespace=?"
+    params = [namespace]
+    if name:
+        sql += " AND name=?"
+        params.append(name)
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(max(1, min(1000, int(limit))))
+    with connect() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(r) | {"payload": json.loads(r["payload_json"] or "{}"), "enabled": bool(r["enabled"])} for r in rows]
+
+
+def export_namespace(namespace: str) -> dict[str, Any]:
+    return {"namespace": namespace, "version": 1, "records": list_records(namespace, include_disabled=True)}
+
+
+def import_namespace(namespace: str, records: list[dict[str, Any]]) -> int:
+    if not isinstance(records, list): raise ValueError("records must be a list")
+    count = 0
+    for record in records:
+        if not isinstance(record, dict) or not str(record.get("name", "")).strip(): raise ValueError("each record requires a name")
+        put_record(namespace, str(record["name"]), dict(record.get("payload") or {}), enabled=bool(record.get("enabled", True)))
+        count += 1
+    return count
