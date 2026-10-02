@@ -9,9 +9,7 @@ import argparse, json
 from my_ai.control_plane import list_records, list_actions
 from my_ai.provider_catalog import list_providers, list_models
 from my_ai.settings_store import get_setting_registry, export_registered_settings
-from my_ai.scheduler import scheduler_status
-from my_ai.readiness import readiness
-from my_ai.observability import get_metrics_snapshot
+from my_ai.readiness import build_readiness
 
 
 def out(v): print(json.dumps(v, ensure_ascii=False, indent=2, default=str))
@@ -26,7 +24,7 @@ def main():
     s.add_parser("actions")
     a=p.parse_args()
     if a.cmd=="status": out({"providers":list_providers(),"models":list_models(),"actions":list_actions(20)})
-    elif a.cmd=="health": out(readiness())
+    elif a.cmd=="health": out(build_readiness())
     elif a.cmd=="config": out({"registry":get_setting_registry(),"values":export_registered_settings()})
     elif a.cmd=="actions": out(list_actions(100))
     elif a.cmd=="sessions": out(list_records("agent.session"))
