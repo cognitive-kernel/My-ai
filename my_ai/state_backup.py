@@ -37,7 +37,8 @@ def verify_export(source: str | Path) -> dict[str, Any]:
     data=payload["data"]
     raw=json.dumps(data,ensure_ascii=False,sort_keys=True,separators=(",",":")).encode()
     actual=hashlib.sha256(raw).hexdigest()
-    return {"valid":actual==payload.get("sha256") and data.get("format")==EXPORT_VERSION,"expected":payload.get("sha256"),"actual":actual,"format":data.get("format")}
+    fmt=str(data.get("format") or "")
+    return {"valid":actual==payload.get("sha256") and fmt.startswith("state-export-v"),"expected":payload.get("sha256"),"actual":actual,"format":fmt,"compatible":fmt==EXPORT_VERSION or fmt=="state-export-v0"}
 
 
 def import_state(source: str | Path, *, allow_migration: bool = False) -> dict[str, Any]:
@@ -46,8 +47,9 @@ def import_state(source: str | Path, *, allow_migration: bool = False) -> dict[s
         raise ValueError("State export integrity verification failed.")
     payload=json.loads(Path(source).read_text(encoding="utf-8"))
     if payload["data"]["format"] != EXPORT_VERSION:
-        if not allow_migration:
+        if not allow_migration or payload["data"]["format"] != "state-export-v0":
             raise ValueError("Unsupported state export version.")
+        payload["data"] = _migrate_v0(payload["data"])
     with connect() as conn:
         conn.execute("PRAGMA foreign_keys=OFF")
         for table in reversed(TABLES):
@@ -73,3 +75,4 @@ def database_snapshot(destination: str | Path) -> str:
     finally:
         dest.close(); source.close()
     return str(target)
+\n\ndef _migrate_v0(data: dict[str, Any]) -> dict[str, Any]:\n    tables = dict(data.get("tables") or {})\n    tables.setdefault("session_state", [])\n    tables.setdefault("session_events", [])\n    tables.setdefault("stream_state", [])\n    tables.setdefault("conversation_state", [])\n    data = dict(data)\n    data["format"] = EXPORT_VERSION\n    data["migrated_from"] = "state-export-v0"\n    data["tables"] = tables\n    return data\n
