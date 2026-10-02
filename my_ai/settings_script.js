@@ -120,6 +120,32 @@ async function logoutGit(){try{var j=await req("/git/logout",{method:"POST"});se
 async function createCourse(){try{var lines=byId("ct").value.split(/\n+/).map(function(x){return x.trim()}).filter(Boolean);var topics=lines.map(function(x){var p=x.split("|").map(function(v){return v.trim()});return{title:p[0],goal:p[1]||"",source_url:p[2]||""}});var j=await req("/settings/courses",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:byId("cn").value,description:byId("cd").value,topics:topics})});setText("courseout","آموزش ساخته شد: "+j.id);await loadCourses()}catch(e){setText("courseout",e.message)}}
 async function startCourse(id){try{await req("/settings/courses/"+id+"/start",{method:"POST"});await loadCourses()}catch(e){setText("courseout",e.message)}}
 
+
+async function loadProviderCatalog(){
+  var p=byId("providers"),m=byId("models");if(!p&&!m)return;
+  try{
+    var j=await req("/settings/providers");
+    if(p)p.innerHTML=(j.providers||[]).map(function(x){return "<div><b>#"+esc(x.id)+" "+esc(x.name)+"</b> — "+esc(x.protocol)+" — "+(x.enabled?"فعال":"غیرفعال")+" <button type='button' onclick='deleteProviderCatalog("+x.id+")'>حذف</button></div>"}).join("")||"Provider ثبت نشده است";
+    if(m)m.innerHTML=(j.models||[]).map(function(x){return "<div><b>Provider #"+esc(x.provider_id)+" / "+esc(x.model_id)+"</b> — priority "+esc(x.priority)+" — "+(x.enabled?"فعال":"غیرفعال")+"</div>"}).join("")||"Model ثبت نشده است";
+  }catch(e){if(p)p.textContent="خطا: "+e.message}
+}
+async function saveProviderCatalog(){
+  try{
+    var payload={name:byId("pc_name").value,protocol:byId("pc_protocol").value,endpoint:byId("pc_endpoint").value,auth_type:byId("pc_auth").value,secret:byId("pc_secret").value,version:byId("pc_version").value,capabilities:{},timeout_seconds:30,enabled:true};
+    await req("/settings/providers",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    byId("pc_secret").value="";setText("catalogout","Provider ذخیره شد.");await loadProviderCatalog();
+  }catch(e){setText("catalogout","خطا: "+e.message)}
+}
+async function deleteProviderCatalog(id){try{await req("/settings/providers/"+id,{method:"DELETE"});await loadProviderCatalog()}catch(e){setText("catalogout","خطا: "+e.message)}}
+async function saveModelCatalog(){
+  try{
+    var tasks=byId("mc_tasks").value.split(",").map(function(x){return x.trim()}).filter(Boolean);
+    var payload={provider_id:Number(byId("mc_provider").value),model_id:byId("mc_model").value,tasks:tasks,context_length:byId("mc_context").value?Number(byId("mc_context").value):null,limits:{},priority:Number(byId("mc_priority").value||100),version:"",enabled:true};
+    await req("/settings/models",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    setText("catalogout","Model ذخیره شد.");await loadProviderCatalog();
+  }catch(e){setText("catalogout","خطا: "+e.message)}
+}
+
 async function loadUIActions(){
   var box=byId("ui-actions");if(!box)return;
   try{
@@ -141,4 +167,4 @@ async function pauseCourse(id){try{await req("/settings/courses/"+id+"/pause",{m
 
 async function loadCourses(){var box=byId("courses");if(!box)return;try{var j=await req("/settings/courses");box.innerHTML=(j.items||[]).map(function(c){return "<div class=\"card\"><h3>"+esc(c.name)+"</h3><p>"+esc(c.description)+"</p><div class=\"bar\"><div class=\"fill\" style=\"width:"+c.progress_percent+"%\">"+c.progress_percent+"%</div></div><p class=\"muted\">"+c.completed_topics+" از "+c.total_topics+" سرفصل کامل شده"+(c.current?" · اکنون: "+esc(c.current.title)+" · مرحله: "+esc(c.current.phase):"")+"</p><button type=\"button\" onclick=\"startCourse("+c.id+")\">شروع / ادامه یادگیری</button> <button type=\"button\" onclick=\"pauseCourse("+c.id+")\">توقف</button></div>"}).join("")||"آموزشی نیست"}catch(e){box.textContent="خطا در بارگذاری آموزش‌ها: "+e.message}}
 
-loadSettings();loadRegistry();loadUsers();loadPermissions();loadCourses();loadUIActions();setInterval(loadCourses,10000);setInterval(loadResourceStatus,5000);
+loadSettings();loadRegistry();loadUsers();loadPermissions();loadCourses();loadUIActions();loadProviderCatalog();setInterval(loadCourses,10000);setInterval(loadResourceStatus,5000);
