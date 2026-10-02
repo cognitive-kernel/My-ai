@@ -34,6 +34,16 @@ def _tests(cwd: Path):
 
 def _clean_git(): return not bool(_git("status","--porcelain").stdout.strip())
 
+def _snapshot_tag(base: str, proposal_id: str) -> str:
+    tag = f"myai-repair-pre-{proposal_id[:12]}"
+    existing = _git("tag", "--list", tag)
+    if existing.stdout.strip():
+        return tag
+    result = _git("tag", "-a", tag, base, "-m", "My-AI self-repair pre-mutation snapshot")
+    if result.returncode:
+        raise RuntimeError("Failed to create self-repair snapshot: " + (result.stderr or result.stdout).strip())
+    return tag
+
 def diagnose_local():
     head=_git("rev-parse","HEAD"); status=_git("status","--short"); tests_ok,tests=_tests(ROOT); lessons=recent_lessons(20)
     result={"timestamp":datetime.now(timezone.utc).isoformat(),"head":head.stdout.strip(),"clean":not bool(status.stdout.strip()),"status":status.stdout,"tests_passed":tests_ok,"tests":tests,"lessons":lessons}
@@ -87,11 +97,18 @@ def apply_repair(proposal_id: str, approved: bool):
     current=_git("rev-parse","HEAD").stdout.strip()
     if current!=proposal["base"]: raise ValueError("Repository HEAD changed since the proposal was generated; regenerate the repair.")
     if not _clean_git(): raise ValueError("Working tree must be clean before applying a repair.")
+    snapshot_tag = _snapshot_tag(proposal["base"], proposal_id)
+    proposal["snapshot_tag"] = snapshot_tag
+    path.write_text(json.dumps(proposal,ensure_ascii=False,indent=2),encoding="utf-8")
     patch_file=PROPOSALS/f"{proposal_id}.patch"; patch_file.write_text(str(proposal["patch"]),encoding="utf-8"); applied=_git("apply",str(patch_file))
     if applied.returncode: execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_apply_failed",proposal["patch"],applied.stderr or applied.stdout,0)); raise RuntimeError("Repair patch could not be applied:\n"+(applied.stderr or applied.stdout))
     ok,tests=_tests(ROOT)
     if not ok:
-        _git("reset","--hard",proposal["base"]); execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_rolled_back",proposal["patch"],tests,0)); raise RuntimeError("Applied repair failed post-apply tests and was rolled back:\n"+tests)
+        rollback=_git("reset","--hard",snapshot_tag)
+        if rollback.returncode:
+            execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_rollback_failed",proposal["patch"],rollback.stderr or rollback.stdout,0))
+            raise RuntimeError("Applied repair failed tests and rollback also failed: " + (rollback.stderr or rollback.stdout))
+        execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_rolled_back",proposal["patch"],tests,0)); raise RuntimeError("Applied repair failed post-apply tests and was rolled back:\n"+tests)
     proposal["approved"]=True; proposal["applied"]=True; proposal["applied_at"]=datetime.now(timezone.utc).isoformat(); path.write_text(json.dumps(proposal,ensure_ascii=False,indent=2),encoding="utf-8"); execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_applied",proposal["patch"],tests,1)); record_decision("self_repair","apply",{"proposal_id":proposal_id}); notify("self_repair_applied",{"proposal_id":proposal_id,"base":proposal["base"]}); return {"status":"applied","proposal_id":proposal_id,"base":proposal["base"],"tests":tests,"working_tree":"modified"}
 
 def list_proposals():
