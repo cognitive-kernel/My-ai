@@ -10,6 +10,7 @@ from .db import execute, fetch_all
 
 _EVIDENCE_KINDS = {"test", "benchmark", "official_source"}
 _EXECUTED_KINDS = {"test", "benchmark"}
+VERIFICATION_POLICY_VERSION = "1"
 
 
 def _parse_evidence(raw: str | None) -> dict[str, Any]:
@@ -66,6 +67,7 @@ def _verification_state(skill: dict[str, Any], rows: list[dict[str, Any]], curre
     for row in rows:
         details = _parse_evidence(row.get("evidence"))
         if str(details.get("skill_version") or "") != version: return False, "stale_evidence"
+        if str(details.get("verification_policy_version") or "") != VERIFICATION_POLICY_VERSION: return False, "verification_policy_changed"
         observed_at = str(details.get("observed_at") or "").strip()
         if not observed_at: return False, "missing_observed_at"
         try: observed = datetime.fromisoformat(observed_at.replace("Z", "+00:00"))
@@ -103,7 +105,7 @@ def record_evidence(skill_id: int, kind: str, passed: bool, details: dict[str, A
         raise ValueError("Executed evidence requires a command and artifact.")
     skill_rows = fetch_all("SELECT id,version FROM skills WHERE id=?", (skill_id,))
     if not skill_rows: raise ValueError("Skill not found.")
-    evidence_details = dict(details); evidence_details.setdefault("skill_version", str(skill_rows[0]["version"])); evidence_details.setdefault("observed_at", datetime.now(timezone.utc).isoformat()); evidence_details["passed"] = bool(passed)
+    evidence_details = dict(details); evidence_details.setdefault("skill_version", str(skill_rows[0]["version"])); evidence_details.setdefault("verification_policy_version", VERIFICATION_POLICY_VERSION); evidence_details.setdefault("observed_at", datetime.now(timezone.utc).isoformat()); evidence_details["passed"] = bool(passed)
     canonical = json.dumps(evidence_details, ensure_ascii=False, sort_keys=True, separators=(",", ":")); evidence_details["evidence_hash"] = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     evidence_id = execute("INSERT INTO skill_evidence(skill_id,kind,passed,evidence) VALUES(?,?,?,?)", (skill_id, kind, 1 if passed else 0, json.dumps(evidence_details, ensure_ascii=False, sort_keys=True)))
     skill = fetch_all("SELECT * FROM skills WHERE id=?", (skill_id,))[0]; rows = fetch_all("SELECT kind,passed,evidence FROM skill_evidence WHERE skill_id=? ORDER BY id", (skill_id,)); _persist_scores(skill_id, skill, rows)
@@ -128,7 +130,7 @@ def evidence_snapshot(skill_id: int) -> list[dict[str, Any]]:
 def snapshot() -> list[dict[str, Any]]:
     skills = fetch_all("""SELECT s.*, COUNT(e.id) AS evidence_count, CASE WHEN s.last_verified IS NULL OR s.last_verified < datetime('now','-30 days') THEN 1 ELSE 0 END AS review_due FROM skills s LEFT JOIN skill_evidence e ON e.skill_id=s.id GROUP BY s.id ORDER BY s.id DESC""")
     for skill in skills:
-        skill["evidence"] = evidence_snapshot(int(skill["id"])); skill["verified"] = bool(int(skill.get("verified") or 0)); skill["verification_state"] = "verified" if skill["verified"] else "unverified"; skill["knowledge_coverage_score"] = float(skill.get("knowledge_coverage_score") or 0.0); skill["verified_skill_score"] = float(skill.get("verified_skill_score") or skill.get("score") or 0.0)
+        skill["evidence"] = evidence_snapshot(int(skill["id"])); skill["verified"] = bool(int(skill.get("verified") or 0)); skill["verification_state"] = "verified" if skill["verified"] else "unverified"; skill["knowledge_coverage_score"] = float(skill.get("knowledge_coverage_score") or 0.0); skill["verified_skill_score"] = float(skill.get("verified_skill_score") or skill.get("score") or 0.0); skill["verification_policy_version"] = VERIFICATION_POLICY_VERSION
     return skills
 
 
