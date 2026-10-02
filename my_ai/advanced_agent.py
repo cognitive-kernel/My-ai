@@ -205,3 +205,72 @@ class AgentOS:
     def create_task(self, session_id, kind, payload):
         tid=str(uuid.uuid4()); self.tasks[tid]={"id":tid,"session_id":session_id,"kind":kind,"payload":payload,"status":"queued"}; return self.tasks[tid]
     def transition(self, task_id, status): self.tasks[task_id]["status"]=status; return self.tasks[task_id]
+
+@dataclass(frozen=True)
+class ReasoningStep:
+    phase: str
+    value: Any
+    verified: bool = False
+
+class ReasoningCycle:
+    """Adaptive Understand→Plan→Execute→Observe→Critique→Re-plan→Verify cycle."""
+    def __init__(self, *, verifier=None, max_steps: int = 8, early_exit: bool = True):
+        self.verifier = verifier
+        self.max_steps = max(1, int(max_steps))
+        self.early_exit = bool(early_exit)
+
+    def run(self, task: Any, *, understand, plan, execute, observe=lambda x: x,
+             critique=lambda x: None, replan=None) -> dict[str, Any]:
+        steps: list[ReasoningStep] = [ReasoningStep("understand", understand(task))]
+        current_plan = plan(steps[-1].value)
+        steps.append(ReasoningStep("plan", current_plan))
+        result = None
+        for _ in range(self.max_steps):
+            result = execute(current_plan)
+            steps.append(ReasoningStep("execute", result))
+            observed = observe(result)
+            steps.append(ReasoningStep("observe", observed))
+            criticism = critique(observed)
+            steps.append(ReasoningStep("critique", criticism))
+            verified = bool(self.verifier(observed)) if self.verifier else False
+            steps.append(ReasoningStep("verify", observed, verified))
+            if verified and self.early_exit:
+                break
+            if replan is None:
+                break
+            current_plan = replan(current_plan, criticism, observed)
+            steps.append(ReasoningStep("re-plan", current_plan))
+        return {"task": task, "result": result, "verified": bool(steps[-1].verified), "steps": [s.__dict__ for s in steps]}
+
+class VerificationPipeline:
+    """Task-aware independent verification with escalation hooks."""
+    def __init__(self, verifiers: dict[str, Callable[[Any], bool]] | None = None, escalator=None):
+        self.verifiers = verifiers or {}
+        self.escalator = escalator
+
+    def verify(self, task_type: str, value: Any, *, evidence=None) -> dict[str, Any]:
+        verifier = self.verifiers.get(task_type) or self.verifiers.get("default")
+        passed = bool(verifier(value)) if verifier else bool(evidence)
+        escalated = False
+        if not passed and self.escalator:
+            escalated = True
+            passed = bool(self.escalator(task_type, value, evidence))
+        return {"task_type": task_type, "passed": passed, "escalated": escalated}
+
+class AdaptiveEnsemble:
+    """Use multiple agents only when complexity/risk justifies the extra work."""
+    def __init__(self, coordinator, complexity_threshold: float = 0.7):
+        self.coordinator = coordinator
+        self.complexity_threshold = float(complexity_threshold)
+
+    def should_escalate(self, *, complexity: float, risk: float = 0.0, importance: float = 0.0, budget: float = 1.0) -> bool:
+        score = max(float(complexity), float(risk), float(importance))
+        return score >= self.complexity_threshold and float(budget) > 0
+
+    def run(self, task: Any, *, complexity: float, risk: float = 0.0, importance: float = 0.0,
+            budget: float = 1.0, workers=None, required=None, verifier=None) -> dict[str, Any]:
+        if not self.should_escalate(complexity=complexity, risk=risk, importance=importance, budget=budget):
+            return {"mode": "single", "result": None, "outputs": {}}
+        outputs = self.coordinator.run_parallel(task, workers or {}, required)
+        return {"mode": "multi-agent", "result": self.coordinator.synthesize(outputs, verifier), "outputs": outputs}
+
