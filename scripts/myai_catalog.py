@@ -18,7 +18,7 @@ import time
 import httpx
 
 from my_ai.provider_catalog import (
-    add_provider_key, list_provider_keys, rotate_provider_key, delete_model, delete_provider, list_models, list_providers, upsert_model, upsert_provider,
+    add_provider_key, list_provider_keys, rotate_provider_key, activate_provider_key, get_provider_runtime_config, delete_model, delete_provider, list_models, list_providers, upsert_model, upsert_provider,
 )
 
 
@@ -30,10 +30,17 @@ def provider_health(provider_id: int) -> dict:
     provider = next((x for x in list_providers() if int(x["id"]) == provider_id), None)
     if not provider:
         raise SystemExit(f"provider {provider_id} not found")
+    runtime = get_provider_runtime_config(provider_id)
     started = time.perf_counter()
+    headers = {}
+    secret = str(runtime.get("api_key") or "")
+    if secret and str(runtime.get("auth_type") or "none").lower() != "none":
+        scheme = str(runtime.get("auth_scheme") or "Bearer")
+        headers[str(runtime.get("auth_header") or "Authorization")] = f"{scheme} {secret}" if scheme else secret
     try:
         response = httpx.get(
             str(provider["endpoint"]).rstrip("/") + "/models",
+            headers=headers,
             timeout=float(provider.get("timeout_seconds") or 30),
         )
         response.raise_for_status()
@@ -59,12 +66,13 @@ def main() -> int:
     add.add_argument("--secret", default="")
     add.add_argument("--version", default="")
     add.add_argument("--timeout", type=float, default=30)
-    for name in ("enable", "disable", "delete", "health", "keys", "add-key", "rotate-key"):
+    for name in ("enable", "disable", "delete", "health", "keys", "add-key", "rotate-key", "activate-key"):
         cmd = psub.add_parser(name)
         cmd.add_argument("--id", type=int, required=True)
     psub.choices["add-key"].add_argument("--key-name", required=True)
     psub.choices["add-key"].add_argument("--secret", required=True)
     psub.choices["add-key"].add_argument("--priority", type=int, default=100)
+    psub.choices["activate-key"].add_argument("--key-name", required=True)
 
     models = sub.add_parser("models")
     msub = models.add_subparsers(dest="action", required=True)
@@ -107,6 +115,8 @@ def main() -> int:
             emit(add_provider_key(args.id,args.key_name,args.secret,priority=args.priority))
         elif args.action == "rotate-key":
             emit(rotate_provider_key(args.id))
+        elif args.action == "activate-key":
+            emit(activate_provider_key(args.id,args.key_name))
         else:
             emit(provider_health(args.id))
     else:
