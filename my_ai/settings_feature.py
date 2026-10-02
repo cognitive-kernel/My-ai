@@ -1182,6 +1182,17 @@ def settings_tool_register(payload: ToolRegistryRequest, request: Request):
     audit(user,"tools","write","200",payload.name)
     return item
 
+@router.put("/settings/tools/{name}")
+def settings_tool_update(name: str, payload: ToolRegistryRequest, request: Request):
+    user=require_admin(request)
+    if payload.name != name:
+        raise HTTPException(400, "tool name mismatch")
+    item=register_tool(name, payload.description, payload.input_schema, payload.output_schema,
+                       permissions=payload.permissions, timeout=payload.timeout, retries=payload.retries,
+                       tasks=payload.tasks, version=payload.version, enabled=payload.enabled)
+    audit(user, "tools", "update", "200", name)
+    return item
+
 @router.get("/settings/plugins")
 def settings_plugins(request: Request):
     require_admin(request); return {"items": list_records("plugins.registry")}
