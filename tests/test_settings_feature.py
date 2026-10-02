@@ -107,3 +107,8 @@ def test_learning_source_ui_supports_file_upload_edit_and_review():
     assert "uploadLearningSourceCatalog" in script
     assert "editLearningSource" in script
     assert "/settings/learning-sources/upload" in script
+
+def test_course_form_exposes_auto_manual_sources_and_learning_policy_controls():
+    html = sf.SETTINGS_HTML
+    for token in ("course_mode", "Auto Discover", "Manual Sources", "course_source_policy", "manual-first", "course_llm", "course_schedule", "course_mastery"):
+        assert token in html
