@@ -640,7 +640,10 @@ def self_repair_apply_api(r:RepairRequest, request:Request):
     user=require_admin(request)
     if not r.proposal_id:
         raise HTTPException(400,"proposal_id is required.")
-    result=apply_repair(r.proposal_id,r.approved)
+    health_url = str(r.health_url).strip() if r.health_url else None
+    if health_url and urlparse(health_url).hostname not in {"127.0.0.1","localhost","::1"}:
+        raise HTTPException(400,"Self-repair health URL must target the local host.")
+    result=apply_repair(r.proposal_id,r.approved,health_url=health_url,health_timeout=max(1.0,min(float(r.health_timeout),120.0)))
     audit(user,"self-repair","write","200",f"applied:{r.proposal_id}")
     return result
 
