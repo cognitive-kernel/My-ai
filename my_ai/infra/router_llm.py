@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 from ..config import settings
+from ..settings_store import get_setting
 from ..metrics import record_error, record_inference
 from .llm import LLMError, OllamaClient, OpenAICompatibleClient
 
@@ -42,7 +43,7 @@ class OpenAIStructuredRouterClient(OpenAICompatibleClient):
             data = response.json()
             usage = data.get("usage") if isinstance(data, dict) else {}
             record_inference(
-                "openai", self.model, time.perf_counter() - started,
+                self.provider_name, self.model, time.perf_counter() - started,
                 prompt_tokens=(usage or {}).get("input_tokens"), output_tokens=(usage or {}).get("output_tokens"),
             )
             raw = data.get("output_text") if isinstance(data, dict) else None
@@ -60,13 +61,20 @@ class OpenAIStructuredRouterClient(OpenAICompatibleClient):
                 raise LLMError("Structured OpenAI response is not an object.")
             return parsed
         except (httpx.HTTPError, json.JSONDecodeError, LLMError) as exc:
-            record_error("openai", self.model)
+            record_error(self.provider_name, self.model)
             raise LLMError(f"Structured OpenAI request failed: {exc}") from exc
 
 
 def create_structured_router() -> Any:
     """Return the provider adapter used exclusively by the semantic router."""
-    provider = settings.llm_provider
+    provider = str(get_setting("llm.provider", settings.llm_provider))
+    if provider == "custom-openai-compatible":
+        return OpenAIStructuredRouterClient(
+            base_url=str(get_setting("llm.custom.base_url", "")),
+            model=str(get_setting("llm.custom.model", "")),
+            api_key=str(get_setting("llm.custom.api_key", "")),
+            provider_name="custom-openai-compatible",
+        )
     if provider in {"openai", "openai-compatible", "openai_compatible"}:
         return OpenAIStructuredRouterClient()
     if provider == "auto" and settings.openai_api_key and not getattr(settings, "offline_strict", False):
