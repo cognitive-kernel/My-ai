@@ -112,7 +112,7 @@ def install_ui_extensions(app) -> None:
         response=await call_next(request)
         if not hasattr(response,'body') or not response.body:return response
         content_type=response.headers.get('content-type','')
-        if 'text/html' not in content_type or path in {'/login','/register'}:return response
+        if 'text/html' not in content_type:return response
         if path=='/learning':
             body=_learning_page()
         else:
