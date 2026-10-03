@@ -12,6 +12,7 @@ from .settings_store import get_int, get_float
 from .infra.llm import create_llm
 from .web_learner import WebLearner
 from .project_builder import build_project
+from .research_verifier import verify_research
 
 
 PLAN_SCHEMA: dict[str, Any] = {
@@ -102,6 +103,10 @@ def _research(plan: dict[str, Any]) -> ResearchBundle:
         if len(bundle.sources) >= 24:
             break
 
+    verification = verify_research(bundle.sources)
+    bundle.notes.append('Research verification: ' + json.dumps(verification, ensure_ascii=False)[:6000])
+    if not verification['verified']:
+        bundle.notes.append('Research is not promoted to authoritative knowledge until contradictions and provenance are resolved.')
     # Keep the research auditable without making it a new source of executable instructions.
     try:
         execute(
