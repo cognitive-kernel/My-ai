@@ -1789,23 +1789,35 @@ _DOMAIN_KEYS = (
 )
 
 
+def _domain_setting(primary: str, *legacy: str, default: Any = None) -> Any:
+    value = get_setting(primary, None)
+    if value not in (None, ""):
+        return value
+    for key in legacy:
+        value = get_setting(key, None)
+        if value not in (None, ""):
+            return value
+    return default
+
+
 def _domain_settings() -> dict[str, Any]:
-    values = {key: get_setting(key, None) for key in _DOMAIN_KEYS}
+    # Read the current domain namespace first, but transparently migrate the
+    # older MT4 settings namespace so previously saved settings are not lost.
     return {
-        "enabled": str(values["domain.mt4mt5.enabled"] or "true").lower() == "true",
-        "version": str(values["domain.mt4mt5.version"] or "MT4"),
-        "install_path": str(values["domain.mt4mt5.install_path"] or ""),
-        "library_name": str(values["domain.mt4mt5.library_name"] or "mt4.dll"),
-        "library_path": str(values["domain.mt4mt5.library_path"] or ""),
-        "api_version": str(values["domain.mt4mt5.api_version"] or "v1"),
-        "account": str(values["domain.mt4mt5.account"] or ""),
-        "password": str(values["domain.mt4mt5.password"] or ""),
-        "server": str(values["domain.mt4mt5.server"] or "MetaQuotes-Demo"),
-        "timeframe": str(values["domain.mt4mt5.timeframe"] or "M15"),
-        "tick_data": str(values["domain.mt4mt5.tick_data"] or "true").lower() == "true",
-        "indicators": str(values["domain.mt4mt5.indicators"] or "true").lower() == "true",
-        "market_analysis": str(values["domain.mt4mt5.market_analysis"] or "true").lower() == "true",
-        "trading": str(values["domain.mt4mt5.trading"] or "true").lower() == "true",
+        "enabled": str(_domain_setting("domain.mt4mt5.enabled", "mt4.enabled", default="true")).lower() == "true",
+        "version": str(_domain_setting("domain.mt4mt5.version", "mt4.version", default="MT4")),
+        "install_path": str(_domain_setting("domain.mt4mt5.install_path", "mt4.install_path", default="")),
+        "library_name": str(_domain_setting("domain.mt4mt5.library_name", "mt4.library_name", default="mt4.dll")),
+        "library_path": str(_domain_setting("domain.mt4mt5.library_path", "mt4.library_path", default="")),
+        "api_version": str(_domain_setting("domain.mt4mt5.api_version", "mt4.api_version", default="v1")),
+        "account": str(_domain_setting("domain.mt4mt5.account", "mt4.account", default="")),
+        "password": str(_domain_setting("domain.mt4mt5.password", "mt4.password", default="")),
+        "server": str(_domain_setting("domain.mt4mt5.server", "mt4.server", default="MetaQuotes-Demo")),
+        "timeframe": str(_domain_setting("domain.mt4mt5.timeframe", "mt4.timeframe", default="M15")),
+        "tick_data": str(_domain_setting("domain.mt4mt5.tick_data", "mt4.tick_data", default="true")).lower() == "true",
+        "indicators": str(_domain_setting("domain.mt4mt5.indicators", "mt4.indicators", default="true")).lower() == "true",
+        "market_analysis": str(_domain_setting("domain.mt4mt5.market_analysis", "mt4.market_analysis", default="true")).lower() == "true",
+        "trading": str(_domain_setting("domain.mt4mt5.trading", "mt4.trading", default="true")).lower() == "true",
     }
 
 
