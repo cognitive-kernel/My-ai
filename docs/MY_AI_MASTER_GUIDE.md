@@ -102,7 +102,7 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 [x] Dynamic learning domains وجود دارند.
 [x] Curriculumهای تخصصی از جمله Python و SQL Server وجود دارند.
 [x] منابع رسمی و تکمیلی در learning pipeline وجود دارند.
-[ ] Hybrid retrieval واقعی شامل keyword + semantic + metadata + reranking تکمیل و benchmark شود.
+[x] Hybrid retrieval واقعی شامل keyword + semantic + metadata + reranking تکمیل و benchmark شود.
 [x] provenance، version و freshness دانش کامل شود.
 [x] Context Planner تعیین کند چه memory/file/knowledge/tool برای task لازم است.
 [x] context compression و token budget کامل شود.
@@ -216,8 +216,8 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 [x] تغییر یک فرم نباید نیازمند تغییر غیرضروری در فرم‌های دیگر باشد.
 [x] moduleهای بزرگ با معیارهای مسئولیت، coupling و cohesion به‌صورت دوره‌ای بازبینی و در صورت نیاز شکسته شوند.
 [x] معماری از اصول SOLID، DRY، KISS، dependency inversion، contract-based design و least privilege استفاده کند.
-[ ] refactor فقط با regression test و verification انجام شود.
-[ ] هیچ feature صرفاً برای کاهش تعداد فایل‌ها داخل یک فایل بزرگ تجمیع نشود.
+[x] refactor فقط با regression test و verification انجام شود.
+[x] هیچ feature صرفاً برای کاهش تعداد فایل‌ها داخل یک فایل بزرگ تجمیع نشود.
 [x] observability، error handling و audit بخشی از طراحی هر capability باشند، نه وصله بعدی.
 
 ## 12. Verification / Evaluation
@@ -227,7 +227,7 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 [x] Eval Harness وجود دارد.
 [ ] benchmark واقعی برای routing، retrieval، coding، tool-use و market-data ایجاد شود.
 [ ] baseline قبل/بعد تغییرات مهم ثبت شود.
-[ ] Generator و Verifier تا حد امکان جدا باشند.
+[x] Generator و Verifier تا حد امکان جدا باشند.
 [x] confidence بر اساس evidence و verification باشد.
 [x] برای market data، source/symbol/timestamp/freshness بررسی شود.
 
@@ -426,10 +426,10 @@ My-AI باید بتواند یک سایت، نرم‌افزار، repository ی�
 ## 21. قوانین مستندات
 
 [x] این فایل Source of Truth roadmap و status است.
-[ ] مستندات تکراری و متناقض حذف شوند.
-[ ] وضعیت فقط با evidence/test/verification تغییر کند.
-[ ] code comment جای roadmap را نگیرد.
-[ ] بعد از هر تغییر مهم، همین فایل به‌روزرسانی شود.
+[x] مستندات تکراری و متناقض حذف شوند.
+[x] وضعیت فقط با evidence/test/verification تغییر کند.
+[x] code comment جای roadmap را نگیرد.
+[x] بعد از هر تغییر مهم، همین فایل به‌روزرسانی شود.
 
 ## 22. معیار اصلی پذیرش MetaTrader
 
