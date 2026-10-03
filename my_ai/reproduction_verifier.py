@@ -4,6 +4,7 @@ import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable
+import io
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,26 @@ def compare_files(reference_root: str | Path, candidate_root: str | Path) -> Com
     differences += [f"extra:{x}" for x in sorted(cand_files - ref_files)]
     score = len(ref_files & cand_files) / max(1, len(ref_files | cand_files))
     return ComparisonResult("files", not (ref_files - cand_files), score, differences)
+
+
+def compare_screenshot_images(reference: bytes, candidate: bytes) -> ComparisonResult:
+    """Compare image dimensions and normalized pixel distance when Pillow is available."""
+    try:
+        from PIL import Image, ImageChops
+        ref = Image.open(io.BytesIO(reference)).convert("RGBA")
+        cand = Image.open(io.BytesIO(candidate)).convert("RGBA")
+        if ref.size != cand.size:
+            return ComparisonResult("visual", False, 0.0, [f"size:{ref.size}!={cand.size}"])
+        diff = ImageChops.difference(ref, cand)
+        bbox = diff.getbbox()
+        if bbox is None:
+            return ComparisonResult("visual", True, 1.0, [])
+        extrema = diff.getextrema()
+        max_delta = max(high for _, high in extrema)
+        score = max(0.0, 1.0 - (max_delta / 255.0))
+        return ComparisonResult("visual", False, score, ["pixel_difference"])
+    except ImportError:
+        return compare_screenshot_bytes(reference, candidate)
 
 
 def compare_screenshot_bytes(reference: bytes, candidate: bytes) -> ComparisonResult:
