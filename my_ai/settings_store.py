@@ -28,6 +28,13 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
     "scheduler.auto_resume": {"version": 1, "type": "enum", "default": "false", "choices": ["true", "false"], "description": "Automatically resume learning workers."},
     "execution.timeout_seconds": {"version": 1, "type": "int", "default": 10, "min": 1, "max": 3600, "description": "Execution timeout."},
     "learning.personal_experience": {"version": 1, "type": "enum", "default": "true", "choices": ["true", "false"], "description": "Store personal learning experiences."},
+    "security.metatrader_read": {"version": 1, "type": "enum", "default": "false", "choices": ["true","false"], "description": "Allow read-only MetaTrader market and indicator capabilities."},
+    "security.metatrader_install": {"version": 1, "type": "enum", "default": "false", "choices": ["true","false"], "description": "Allow MetaTrader indicator installation and write operations."},
+    "security.metatrader_trade": {"version": 1, "type": "enum", "default": "false", "choices": ["true","false"], "description": "Allow trading operations with separate confirmation."},
+    "agent.resource_budget.chat_seconds": {"version": 1, "type": "float", "default": 30.0, "min": 1, "max": 300, "description": "Budget for lightweight chat tasks."},
+    "agent.resource_budget.coding_seconds": {"version": 1, "type": "float", "default": 300.0, "min": 10, "max": 3600, "description": "Budget for coding tasks."},
+    "agent.resource_budget.reasoning_seconds": {"version": 1, "type": "float", "default": 180.0, "min": 5, "max": 1800, "description": "Budget for reasoning tasks."},
+    "agent.resource_budget.market_seconds": {"version": 1, "type": "float", "default": 60.0, "min": 5, "max": 600, "description": "Budget for market analysis tasks."},
 }
 
 SETTING_REGISTRY.update({
