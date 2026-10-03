@@ -384,3 +384,41 @@ async function loadCourses(){var box=byId("courses");if(!box)return;try{var j=aw
 loadSettings();loadRegistry();loadUsers();loadPermissions();loadCourses();loadUIActions();loadProviderCatalog();setInterval(loadCourses,10000);setInterval(loadResourceStatus,5000);
 
 loadLearningSourcesCatalog();loadRoutingGUI();loadControlNamespacesGUI();loadProfilesGUI();
+
+
+function moduleGuiEsc(v){return esc(v)}
+async function loadModuleGui(){
+  var box=byId("module-gui-list"); if(!box)return;
+  try{
+    var j=await req("/control-plane/namespaces");
+    var items=j.items||j.namespaces||[];
+    if(!items.length){box.textContent="ماژول قابل تنظیمی ثبت نشده است";return;}
+    box.innerHTML=items.map(function(ns){
+      var name=typeof ns==="string"?ns:(ns.name||ns.namespace||"");
+      var safe=moduleGuiEsc(name);
+      return "<details class='topic'><summary><b>"+safe+"</b></summary><div style='margin-top:8px'>"+
+        "<input id='mg-name-"+safe+"' placeholder='نام رکورد' style='max-width:260px'>"+
+        "<textarea id='mg-payload-"+safe+"' rows='5' placeholder='JSON payload'></textarea>"+
+        "<button type='button' onclick='saveModuleGui("+JSON.stringify(name)+")'>ذخیره</button>"+
+        "<button type='button' onclick='loadModuleRecordsGui("+JSON.stringify(name)+")'>نمایش رکوردها</button>"+
+        "<div id='mg-records-"+safe+"' class='muted'></div></div></details>";
+    }).join("");
+  }catch(e){box.textContent="خطا در بارگذاری ماژول‌ها: "+e.message}
+}
+async function saveModuleGui(namespace){
+  try{
+    var key=moduleGuiEsc(namespace), name=byId("mg-name-"+key).value.trim(), raw=byId("mg-payload-"+key).value.trim();
+    if(!name)throw Error("نام رکورد الزامی است");
+    var payload=raw?JSON.parse(raw):{};
+    await req("/control-plane/"+encodeURIComponent(namespace)+"/"+encodeURIComponent(name),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    setText("module-gui-out","ماژول "+namespace+" / "+name+" ذخیره شد."); await loadModuleRecordsGui(namespace);
+  }catch(e){setText("module-gui-out","خطا: "+e.message)}
+}
+async function loadModuleRecordsGui(namespace){
+  try{
+    var j=await req("/control-plane/"+encodeURIComponent(namespace));
+    var box=byId("mg-records-"+moduleGuiEsc(namespace)); if(!box)return;
+    box.innerHTML=(j.items||j.records||[]).map(function(x){return "<pre style='white-space:pre-wrap'>"+moduleGuiEsc(JSON.stringify(x,null,2))+"</pre>"}).join("")||"رکوردی ثبت نشده است";
+  }catch(e){setText("module-gui-out","خطا: "+e.message)}
+}
+loadModuleGui();
