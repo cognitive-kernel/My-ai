@@ -790,6 +790,7 @@ class BackupRequest(BaseModel):
     path: str = Field(default="", max_length=2000)
     confirm: bool = False
     overwrite: bool = False
+    password: str | None = Field(default=None, min_length=12, max_length=10000)
 
 @router.post("/settings/database/backup")
 def settings_database_backup(payload: BackupRequest, request: Request):
