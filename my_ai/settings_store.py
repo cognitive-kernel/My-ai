@@ -139,7 +139,8 @@ SETTING_REGISTRY.update({
     "database.backup.destination": {"version": 1, "type": "string", "default": "data/backups", "max_length": 2000, "description": "Backup destination directory."},
     "database.backup.schedule": {"version": 1, "type": "string", "default": "manual", "max_length": 120, "description": "Backup schedule expression."},
     "database.backup.retention": {"version": 1, "type": "int", "default": "7", "min": 1, "max": 3650, "description": "Number of backups to retain."},
-    "database.backup.encryption": {"version": 1, "type": "enum", "default": "none", "choices": ["none"], "description": "Backup encryption policy."},
+    "database.backup.encryption": {"version": 2, "type": "enum", "default": "none", "choices": ["none", "aes-gcm"], "description": "Backup encryption policy."},
+    "database.backup.encryption_password": {"version": 1, "type": "text", "default": "", "max_length": 10000, "secret": True, "description": "Password used for AES-GCM backup encryption."},
 
     "multimodal.image_provider": {"version": 3, "type": "text", "default": "automatic1111", "max_length": 100, "description": "Image provider."},
     "multimodal.voice_provider": {"version": 3, "type": "text", "default": "local", "max_length": 100, "description": "Voice provider."},
