@@ -57,7 +57,8 @@ def run(intent: Any, message: str) -> CapabilityResult | None:
     primary = str(getattr(intent, "name", "") or "")
     if primary and primary not in names:
         names = (primary, *names)
-    for name in names:\n        if name == "software_reproduction":\n            urls = list((getattr(intent, "args", {}) or {}).get("urls") or [])\n            return _software_reproduction(message, urls)\n        handler = _CAPABILITIES.get(name)\n        if handler:\n            return handler(message)\n    return None
+    for name in names:\n        if name == "software_reproduction":\n            urls = list((getattr(intent, "args", {}) or {}).get("urls") or [])\n            validate_input(name, {'message': message})
+            return _software_reproduction(message, urls)\n        handler = _CAPABILITIES.get(name)\n        if handler:\n            return handler(message)\n    return None
 register(CapabilitySpec(name='metatrader', description='Read authorized MT4/MT5 market and indicator data.', input_schema={'type':'object','required':['message']}, output_schema={'type':'object'}, permission='metatrader.read', timeout_seconds=30, resource_budget={'cpu_percent':20,'ram_mb':512,'tool_calls':5}))
 register(CapabilitySpec(name='software_reproduction', description='Analyze an authorized software/site source and produce a reconstruction specification.', input_schema={'type':'object','required':['message']}, output_schema={'type':'object'}, permission='software.reproduction', timeout_seconds=60, resource_budget={'cpu_percent':50,'ram_mb':1024,'tool_calls':10}))
 
