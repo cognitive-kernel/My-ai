@@ -240,6 +240,7 @@ for _field, (_kind, _minimum, _secret) in _RUNTIME_CONFIG_FIELDS.items():
     else:
         _spec = {"version": 3, "type": "text", "default": "", "max_length": _minimum or 10000, "description": "Runtime setting bridge for " + _field}
     _spec["default"] = _RUNTIME_CONFIG_DEFAULTS[_field]
+    _spec.setdefault("description", "Runtime setting bridge for " + _field)
     if _secret:
         _spec["secret"] = True
     SETTING_REGISTRY[_key_name] = _spec
