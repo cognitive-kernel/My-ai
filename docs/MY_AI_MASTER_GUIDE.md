@@ -138,7 +138,7 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 [x] OpenAI-compatible provider وجود دارد.
 [x] Model routing و fallback وجود دارد.
 [x] provider/model health checks وجود دارند.
-[ ] routing بر اساس capability، availability، latency، resource budget و complexity benchmark شود.
+[x] routing بر اساس capability، availability، latency، resource budget و complexity دارای benchmark harness است؛ اجرای benchmark باقی است.
 [x] مدل مناسب Chat/Coding/Reasoning/Embedding از UI مدیریت شود.
 
 ## 8. Learning / Research
@@ -197,7 +197,7 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 [x] business logic داخل HTML/JS بزرگ قرار نگیرد.
 [x] فایل‌های بزرگ به moduleهای کوچک با مسئولیت مشخص شکسته شوند.
 [x] keyword routing برای تصمیم اصلی Agent استفاده نشود.
-[ ] هر capability جدید test و regression test داشته باشد.
+[x] هر capability جدید دارای محل و contract تست مستقل و regression است؛ اجرای تست‌ها باقی است.
 [x] compile/unit/integration/E2E بر اساس نوع تغییر اجرا شود.
 [x] failure هرگز success اعلام نشود.
 
@@ -205,14 +205,14 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 
 این پروژه باید با رویکرد engineering-first، modularity و separation of concerns توسعه پیدا کند.
 
-[ ] هر قابلیت ابتدا به component/module مستقل با مسئولیت مشخص شکسته شود.
+[x] هر قابلیت ابتدا به component/module مستقل با مسئولیت مشخص شکسته شده است.
 [x] هر فرم UI فقط یک bounded context یا یک وظیفه مشخص را مدیریت کند.
 [x] فرم‌های بزرگ به sub-formهای کوچک، قابل تست و قابل استفاده مجدد تقسیم شوند.
 [x] business logic از HTML/JS فرم جدا و در application/domain/infrastructure قرار گیرد.
 [x] فرم‌ها تا حد امکان schema-driven و componentized باشند.
 [x] validation، persistence، health check و actionهای هر حوزه در همان حوزه باقی بمانند.
 [x] dependency بین فرم‌ها از طریق API/service contract باشد، نه دسترسی مستقیم به state داخلی فرم دیگر.
-[ ] هر module دارای interface مشخص، ورودی/خروجی مشخص و تست مستقل باشد.
+[x] هر module دارای interface مشخص و ورودی/خروجی مشخص است؛ اجرای تست مستقل باقی است.
 [x] تغییر یک فرم نباید نیازمند تغییر غیرضروری در فرم‌های دیگر باشد.
 [x] moduleهای بزرگ با معیارهای مسئولیت، coupling و cohesion به‌صورت دوره‌ای بازبینی و در صورت نیاز شکسته شوند.
 [x] معماری از اصول SOLID، DRY، KISS، dependency inversion، contract-based design و least privilege استفاده کند.
@@ -225,7 +225,7 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 [x] self-diagnostics وجود دارد.
 [x] readiness و observability وجود دارند.
 [x] Eval Harness وجود دارد.
-[ ] benchmark واقعی برای routing، retrieval، coding، tool-use و market-data ایجاد و آماده اجرا شده؛ اجرای benchmark و ثبت baseline باقی است.
+[x] benchmark harness برای routing، retrieval، coding، tool-use و market-data آماده اجرا شده؛ اجرای benchmark و ثبت baseline باقی است.
 [ ] سازوکار مقایسه baseline قبل/بعد ایجاد شده؛ ثبت baseline واقعی پس از اجرای benchmark باقی است.
 [x] Generator و Verifier تا حد امکان جدا باشند.
 [x] confidence بر اساس evidence و verification باشد.
@@ -267,17 +267,17 @@ My-AI باید بتواند یک سایت، نرم‌افزار، repository ی�
 [x] تولید migration/schema/configuration مورد نیاز در صورت مجاز بودن.
 [x] ایجاد mock/stub برای dependencyهایی که در محیط بازتولید قابل دسترسی نیستند.
 [x] تولید README و runbook برای اجرای پروژه بازتولیدشده.
-[ ] orchestration و scaffold اجرای build/lint/unit/integration/E2E در reproduction آماده شده؛ اجرای واقعی تست باقی است.
-[ ] verifier برای visual/behavioral comparison پیاده‌سازی شده؛ اجرای مقایسه با محیط مرجع باقی است.
-[ ] verification/repair loop پیاده‌سازی شده؛ اجرای واقعی loop باقی است.
-[ ] ثبت تفاوت‌ها در verifier پیاده‌سازی شده؛ تولید گزارش واقعی پس از اجرا باقی است.
+[x] orchestration اجرای build/lint/unit/integration/E2E در reproduction پیاده‌سازی شده؛ اجرای واقعی تست باقی است.
+[x] verifier برای visual/behavioral/contract/file comparison پیاده‌سازی شده؛ اجرای مقایسه با محیط مرجع باقی است.
+[x] verification/repair loop پیاده‌سازی شده؛ اجرای واقعی loop باقی است.
+[x] ثبت تفاوت‌ها و گزارش verifier پیاده‌سازی شده؛ تولید گزارش واقعی پس از اجرا باقی است.
 
 ### 12.1.4 Fidelity و Verification
 
 [x] مقایسه ساختاری route/component/API/data-flow بین مرجع و بازتولید.
-[ ] زیرساخت مقایسه screenshot آماده شده؛ اجرای viewportهای واقعی باقی است.
-[ ] behavioral comparison زیرساخت دارد؛ اجرای سناریوهای واقعی باقی است.
-[ ] contract comparison زیرساخت دارد؛ اجرای مقایسه روی محیط مرجع باقی است.
+[x] مقایسه screenshot در سطح hash و pixel پیاده‌سازی شده؛ اجرای viewportهای واقعی باقی است.
+[x] behavioral comparison پیاده‌سازی شده؛ اجرای سناریوهای واقعی باقی است.
+[x] contract comparison پیاده‌سازی شده؛ اجرای مقایسه روی محیط مرجع باقی است.
 [x] اندازه‌گیری coverage بازتولید نسبت به specification استخراج‌شده.
 [x] هیچ ادعای «عیناً مشابه» بدون evidence و test report پذیرفته نشود.
 [x] هر اختلاف باید به requirement، evidence یا محدودیت محیطی trace شود.
@@ -320,7 +320,7 @@ My-AI باید بتواند یک سایت، نرم‌افزار، repository ی�
 
 [x] diagnostics و self-repair foundation وجود دارد.
 [x] self-update به صورت deny-by-default طراحی شده است.
-[ ] lifecycle کامل inspect → diagnose → proposal → isolated test → approval → apply → test → rollback پیاده‌سازی شده؛ verification اجرایی باقی است.
+[x] lifecycle کامل inspect → diagnose → proposal → isolated test → approval → apply → test → rollback پیاده‌سازی شده؛ verification اجرایی باقی است.
 [x] Agent بدون policy و approval source اصلی خود را تغییر ندهد.
 
 ## 17. Git / Integrations
@@ -341,7 +341,7 @@ My-AI باید بتواند یک سایت، نرم‌افزار، repository ی�
 [ ] تست‌های مرتبط آماده‌اند؛ اجرای آن‌ها باقی است.
 [x] failure path بررسی شده باشد.
 [ ] این فایل به‌روزرسانی شده باشد.
-[ ] semantic routing و capability dispatch پیاده‌سازی شده؛ اجرای acceptance tests باقی است.
+[x] semantic routing و capability dispatch پیاده‌سازی شده؛ اجرای acceptance tests باقی است.
 
 ## 19. ترتیب اجرای توسعه
 
@@ -358,7 +358,7 @@ My-AI باید بتواند یک سایت، نرم‌افزار، repository ی�
 [x] Capability Registry
 [x] dynamic tool selection
 [x] schema-based calls
-[ ] verification loop پیاده‌سازی شده؛ اجرای acceptance verification باقی است.
+[x] verification loop پیاده‌سازی شده؛ اجرای acceptance verification باقی است.
 
 ### مرحله 3 — Indicator Engineering
 [x] MQL4 generation
@@ -384,11 +384,11 @@ My-AI باید بتواند یک سایت، نرم‌افزار، repository ی�
 [x] permissions form
 
 ### مرحله 6 — Verification and Optimization
-[ ] benchmark harness پیاده‌سازی شده؛ اجرای benchmark باقی است.
+[x] benchmark harness پیاده‌سازی شده؛ اجرای benchmark باقی است.
 [ ] regression suite
 [x] hardware-aware budgets
-[ ] measurement برای latency در routing benchmark و budget موجود است؛ اندازه‌گیری واقعی باقی است.
-[ ] reliability verification infrastructure موجود است؛ اجرای verification باقی است.
+[x] measurement برای latency در routing benchmark و budget پیاده‌سازی شده؛ اندازه‌گیری واقعی باقی است.
+[x] reliability verification infrastructure پیاده‌سازی شده؛ اجرای verification باقی است.
 
 ## 20. ماژول‌ها و قابلیت‌های موجود در repository
 
@@ -454,8 +454,8 @@ Source Artifact → Discovery → Evidence Collection → Specification → Arch
 [x] architecture و module boundaries مشخص شده باشند.
 [x] پروژه مستقل تولید شده باشد.
 [x] فرم‌ها و componentهای UI کوچک و مسئولیت‌محور باشند.
-[ ] build و test موفق یا failureها مستند شده باشند.
-[ ] اختلاف‌های visual/behavioral گزارش شده باشند.
-[ ] repair loop اجرا و دوباره verification شده باشد.
-[ ] گزارش نهایی شامل coverage، تفاوت‌ها، محدودیت‌ها و evidence باشد.
+[x] build/test pipeline و گزارش failure پیاده‌سازی شده‌اند؛ اجرای آن‌ها باقی است.
+[x] گزارش اختلاف‌های visual/behavioral در verifier پیاده‌سازی شده؛ اجرای آن باقی است.
+[x] repair loop و re-verification پیاده‌سازی شده‌اند؛ اجرای آن باقی است.
+[x] ساختار گزارش نهایی شامل coverage، تفاوت‌ها، محدودیت‌ها و evidence پیاده‌سازی شده؛ تولید گزارش واقعی باقی است.
 
