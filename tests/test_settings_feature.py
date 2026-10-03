@@ -140,8 +140,9 @@ def test_backup_uses_configured_destination_when_path_omitted(monkeypatch):
     captured = {}
     monkeypatch.setattr(settings_feature, "backup_database", lambda path, overwrite=False: captured.update(path=path, overwrite=overwrite) or {"path": path})
     result = settings_feature.settings_database_backup(settings_feature.BackupRequest(), object())
-    assert captured["path"] == "data/configured-backups"
-    assert result["path"] == "data/configured-backups"
+    assert captured["path"].startswith("data/configured-backups/my_ai-")
+    assert captured["path"].endswith(".db")
+    assert result["path"] == captured["path"]
 
 
 def test_backup_retention_prunes_old_files(tmp_path):
