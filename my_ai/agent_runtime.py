@@ -211,7 +211,7 @@ class Agent(LegacyAgent):
 
     @staticmethod
     def _runtime_project_build_requested(intent: Any) -> bool:
-        return getattr(intent, "name", "") == "coding" and str((getattr(intent, "args", {}) or {}).get("action") or "") in {"create_artifact", "modify_artifact", "continue_task"}
+        return getattr(intent, "name", "") in {"coding", "software_reproduction"} and str((getattr(intent, "args", {}) or {}).get("action") or "") in {"create_artifact", "modify_artifact", "continue_task"}
 
     def _build_project_from_intent(self, message: str, intent: Any, context: str = "") -> str:
         args = getattr(intent, "args", {}) or {}
@@ -223,6 +223,13 @@ class Agent(LegacyAgent):
             if result.get("status") == "built":
                 return f"پروژه ساخته و تست شد.\n- زبان: {result.get('language', language or 'Python')}\n- مسیر پروژه: {result.get('project_path') or result.get('project_name') or ''}\n- تعداد فایل‌ها: {len(result.get('files') or [])}\n- Build: موفق\n- Tests: موفق\n- Lint: موفق"
             return "ساخت پروژه کامل نشد."
+        if getattr(intent, "name", "") == "software_reproduction":
+            try:
+                capability = run_capability(intent, message)
+                if capability and capability.evidence:
+                    context = (context + "\n\n" + capability.evidence)[:50000]
+            except Exception as exc:
+                logging.getLogger(__name__).debug("reproduction analysis unavailable during build: %s", exc)
         try:
             result = run_software_task(message, language=language, project_path=project_path, context=context, timeout=300, repair_attempts=3)
         except Exception as exc:
