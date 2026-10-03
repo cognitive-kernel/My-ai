@@ -42,3 +42,19 @@ def test_domain_settings_loads_legacy_mt4_namespace(monkeypatch):
     assert data["timeframe"] == "H1"
     assert data["indicators"] is False
     assert data["trading"] is False
+
+
+def test_domain_settings_reads_domain_mt4_legacy_namespace(monkeypatch):
+    from my_ai import settings_feature
+    values = {
+        "domain.mt4.enabled": "true",
+        "domain.mt4.install_path": "/opt/mt4",
+        "domain.mt4.account": "9876",
+        "domain.mt4.server": "Broker-Live",
+    }
+    monkeypatch.setattr(settings_feature, "get_setting", lambda key, default=None: values.get(key, default))
+    data = settings_feature._domain_settings()
+    assert data["enabled"] is True
+    assert data["install_path"] == "/opt/mt4"
+    assert data["account"] == "9876"
+    assert data["server"] == "Broker-Live"
