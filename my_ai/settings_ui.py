@@ -75,6 +75,31 @@ load()
     return _shell("MetaTrader 4/5", html, script)
 
 
+def github() -> str:
+    body = """<h1>GitHub</h1><p class='muted'>این فرم فقط اتصال GitHub را مدیریت می‌کند.</p>
+<section class='card'><label>API URL<input id='api'></label>
+<label>Repository<input id='repo' placeholder='owner/repository'></label>
+<label>Username<input id='user'></label>
+<button onclick='save()'>ذخیره</button><pre id='out'></pre></section>"""
+    script = r"""
+async function req(u,o){let r=await fetch(u,o);let t=await r.text();let j={};try{j=JSON.parse(t)}catch(_){j={detail:t}}if(!r.ok)throw Error(j.detail||j.message||t);return j}
+async function load(){let j=await req("/settings/config");api.value=j.github?.api_url||"";repo.value=j.github?.repository||"";user.value=j.github?.username||""}
+async function save(){try{await req("/settings/github",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({api_url:api.value.trim(),repository:repo.value.trim(),username:user.value.trim()})});out.textContent="تنظیمات GitHub ذخیره شد."}catch(e){out.textContent=e.message}}
+load()
+"""
+    return _shell("GitHub", body, script)
+
+
+def advanced() -> str:
+    body = """<h1>تنظیمات پیشرفته</h1><p class='muted'>عملیات مدیریتی در صفحات مستقل انجام می‌شوند.</p>
+<div class='grid'>
+<section class='card'><h2>Registry</h2><p>مشاهده و تغییر تنظیمات ثبت‌شده.</p><a class='button' href='/settings/registry'>باز کردن Registry</a></section>
+<section class='card'><h2>History</h2><p>تاریخچه تغییرات تنظیمات.</p><a class='button' href='/settings/registry/history'>باز کردن History</a></section>
+<section class='card'><h2>Import / Export</h2><p>انتقال تنظیمات با کنترل دسترسی administrator.</p><a class='button' href='/settings/registry/export'>Export</a></section>
+</div>"""
+    return _shell("تنظیمات پیشرفته", body)
+
+
 def simple(title: str, description: str, endpoint: str, keys: list[tuple[str, str]]) -> str:
     fields = "".join(
         f"<label>{escape(label)}<input id='f-{escape(key)}'></label>" for key, label in keys
