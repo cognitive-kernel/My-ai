@@ -130,10 +130,119 @@ def build_reproduction_spec(analysis: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _crawl_site(url: str, *, max_pages: int = 8, timeout: float = 15.0) -> list[dict[str, Any]]:
+    root = _validate_url(url)
+    parsed_root = urlparse(root)
+    queue = [root]
+    seen: set[str] = set()
+    pages: list[dict[str, Any]] = []
+    while queue and len(pages) < max_pages:
+        current = queue.pop(0)
+        try:
+            parsed = urlparse(current)
+            if parsed.netloc != parsed_root.netloc or current in seen:
+                continue
+            seen.add(current)
+            page = analyze_url(current, timeout=timeout)
+            pages.append(page)
+            for link in page.get("links", []):
+                candidate = str(link).split("#", 1)[0]
+                if urlparse(candidate).netloc == parsed_root.netloc and candidate not in seen:
+                    queue.append(candidate)
+        except Exception:
+            continue
+    return pages
+
+
+def _analyze_local(path: str) -> dict[str, Any]:
+    root = Path(path).expanduser().resolve()
+    if not root.exists():
+        raise ValueError("Local source does not exist.")
+    files = [p for p in root.rglob("*") if p.is_file()][:1000] if root.is_dir() else [root]
+    manifests = [str(p.relative_to(root)) for p in files if p.name.lower() in {
+        "pyproject.toml", "package.json", "requirements.txt", "dockerfile",
+        "docker-compose.yml", "docker-compose.yaml", "go.mod", "cargo.toml",
+    }]
+    return {
+        "source": {"path": str(root), "kind": "local", "provenance": "authorized_local_source"},
+        "files": [str(p.relative_to(root)) if p.is_relative_to(root) else p.name for p in files[:500]],
+        "manifests": manifests,
+        "file_count": len(files),
+        "requirements": {"routes": [], "forms": [], "navigation_links": []},
+        "architecture": {"frontend": "unknown", "backend": "unknown", "unknowns": ["Runtime behavior requires authorized execution."]},
+        "verification": {"exact_match_claim": False},
+    }
+
+
+def _analyze_archive(path: str) -> dict[str, Any]:
+    import tempfile
+    import zipfile
+    import tarfile
+    archive = Path(path).expanduser().resolve()
+    if not archive.is_file():
+        raise ValueError("Archive does not exist.")
+    with tempfile.TemporaryDirectory(prefix="myai-reproduction-") as tmp:
+        target = Path(tmp)
+        if zipfile.is_zipfile(archive):
+            with zipfile.ZipFile(archive) as zf:
+                zf.extractall(target)
+        elif tarfile.is_tarfile(archive):
+            with tarfile.open(archive) as tf:
+                tf.extractall(target, filter="data")
+        else:
+            raise ValueError("Only ZIP and TAR archives are supported.")
+        result = _analyze_local(str(target))
+        result["source"]["archive"] = str(archive)
+        result["source"]["kind"] = "archive"
+        return result
+
+
+def _analyze_repository(url: str) -> dict[str, Any]:
+    parsed = urlparse(url)
+    if parsed.netloc.lower() not in {"github.com", "www.github.com"}:
+        raise ValueError("Repository adapter currently supports public GitHub repositories.")
+    parts = [x for x in parsed.path.split("/") if x]
+    if len(parts) < 2:
+        raise ValueError("GitHub repository URL must include owner and repository.")
+    owner, repo = parts[0], parts[1].removesuffix(".git")
+    import httpx
+    api = f"https://api.github.com/repos/{owner}/{repo}"
+    with httpx.Client(timeout=20.0, headers={"Accept": "application/vnd.github+json", "User-Agent": "My-AI-authorized-analysis"}) as client:
+        meta = client.get(api)
+        meta.raise_for_status()
+        tree = client.get(f"{api}/git/trees/{meta.json().get('default_branch', 'main')}?recursive=1")
+        tree.raise_for_status()
+    items = tree.json().get("tree", [])
+    files = [str(x.get("path")) for x in items if x.get("type") == "blob"]
+    manifests = [x for x in files if Path(x).name.lower() in {
+        "pyproject.toml", "package.json", "requirements.txt", "dockerfile",
+        "docker-compose.yml", "docker-compose.yaml", "go.mod", "cargo.toml",
+    }]
+    return {
+        "source": {"url": url, "kind": "repository", "provenance": "authorized_public_repository"},
+        "repository": {"owner": owner, "name": repo, "default_branch": meta.json().get("default_branch")},
+        "files": files[:2000],
+        "manifests": manifests,
+        "file_count": len(files),
+        "requirements": {"routes": [], "forms": [], "navigation_links": []},
+        "architecture": {"frontend": "to be inferred from repository files", "backend": "to be inferred from repository files"},
+        "verification": {"exact_match_claim": False},
+    }
+
+
 def analyze_source(source: str) -> dict[str, Any]:
     text = str(source or "").strip()
     if not text:
         raise ValueError("A URL, repository, archive, or local project path is required.")
     if urlparse(text).scheme in {"http", "https"}:
-        return build_reproduction_spec(analyze_url(text))
-    raise ValueError("This analyzer currently accepts authorized public HTTP/HTTPS sources; repository/archive/local adapters are added as separate capabilities.")
+        parsed = urlparse(text)
+        if parsed.netloc.lower() in {"github.com", "www.github.com"} and len([x for x in parsed.path.split("/") if x]) >= 2:
+            return _analyze_repository(text)
+        pages = _crawl_site(text)
+        primary = build_reproduction_spec(pages[0]) if pages else build_reproduction_spec(analyze_url(text))
+        primary["discovery"] = {"pages_analyzed": len(pages), "pages": pages}
+        return primary
+    path = Path(text).expanduser()
+    if path.suffix.lower() in {".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz"}:
+        return _analyze_archive(text)
+    return _analyze_local(text)
