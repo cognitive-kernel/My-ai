@@ -74,7 +74,10 @@ def restore(source: str, *, target: str | None = None, password: str | None = No
     tmp = dst.with_suffix(dst.suffix + ".restore.tmp")
     try:
         if is_encrypted:
-            decrypt_file(src, tmp, encryption_password)
+            try:
+                decrypt_file(src, tmp, encryption_password)
+            except Exception as exc:
+                raise ValueError("Unable to decrypt encrypted backup.") from exc
         else:
             shutil.copy2(src, tmp)
         os.replace(tmp, dst)
