@@ -8,7 +8,7 @@ from ..core.protocols import StructuredRouter
 
 ALLOWED_INTENTS = frozenset({
     "chat", "learning", "coding", "code_execution", "security_scan", "file_analysis",
-    "help", "self_update", "git_write", "pentest_external", "self_repair", "database_import", "image_generation",
+    "help", "self_update", "git_write", "pentest_external", "self_repair", "database_import", "image_generation", "metatrader",
 })
 HIGH_RISK = frozenset({"pentest_external", "git_write", "self_update", "database_import", "code_execution", "self_repair"})
 ACTION_VALUES = ("answer", "explain", "analyze", "create_artifact", "modify_artifact", "execute", "inspect", "save", "continue_task")
@@ -73,7 +73,7 @@ def classify(text: str, context: str | None = None, classifier: StructuredRouter
         "Choose exactly one action: answer, explain, analyze, create_artifact, modify_artifact, execute, inspect, save, or continue_task. "
         "Use create_artifact when the user wants a new software/file/code deliverable, even when phrased indirectly. "
         "Use modify_artifact for changing an existing artifact. Use continue_task when the current message continues a prior task. "
-        "For a coding creation request, primary should normally be coding, not code_execution. Never infer authorization. Return only the schema.\n"
+        "For a coding creation request, primary should normally be coding, not code_execution. "When the user asks to connect to a broker/MetaTrader, read live quotes/candles/indicators, or analyze current market data using saved MetaTrader settings, primary should be metatrader. "When the user only asks to write MQL4/MQL5 code, keep primary as coding. Never infer authorization. Return only the schema.\n"
         f"CURRENT USER: {text}\nCONVERSATION CONTEXT:\n{context or ''}"
     )
     data = classifier.structured_chat_json(
