@@ -397,7 +397,37 @@ async function pauseCourse(id){try{await req("/settings/courses/"+id+"/pause",{m
 
 async function loadCourses(){var box=byId("courses");if(!box)return;try{var j=await req("/settings/courses");box.innerHTML=(j.items||[]).map(function(c){return "<div class=\"card\"><h3>"+esc(c.name)+"</h3><p>"+esc(c.description)+"</p><div class=\"bar\"><div class=\"fill\" style=\"width:"+c.progress_percent+"%\">"+c.progress_percent+"%</div></div><p class=\"muted\">"+c.completed_topics+" از "+c.total_topics+" سرفصل کامل شده"+(c.current?" · اکنون: "+esc(c.current.title)+" · مرحله: "+esc(c.current.phase):"")+"</p><button type=\"button\" onclick=\"startCourse("+c.id+")\">شروع / ادامه یادگیری</button> <button type=\"button\" onclick=\"pauseCourse("+c.id+")\">توقف</button></div>"}).join("")||"آموزشی نیست"}catch(e){box.textContent="خطا در بارگذاری آموزش‌ها: "+e.message}}
 
-loadSettings();loadRoadmapOptions();loadRegistry();loadUsers();loadPermissions();loadCourses();loadUIActions();loadProviderCatalog();setInterval(loadCourses,10000);setInterval(loadResourceStatus,5000);
+async function hydratePersistedSettings(){
+  try{
+    var state=await req("/settings/persisted"), v=state.values||{};
+    var aliases={
+      su_enabled:"self_update.enabled",su_approved:"self_update.approved",su_health:"self_update.health_url",
+      sr_enabled:"self_repair.enabled",sr_approval:"self_repair.require_approval",
+      lf_enabled:"learning.fast_enabled",lf_interval:"learning.interval_seconds",lf_retries:"learning.max_retries",
+      cpu_percent:"resources.cpu_percent",cpu_threads:"resources.cpu_threads",ram_percent:"resources.ram_percent",gpu_layers:"resources.gpu_layers",
+      log_level:"logging.level"
+    };
+    Object.keys(v).forEach(function(key){
+      var id=key.replace(new RegExp("\\.","g"),"_").replace(/[^A-Za-z0-9_-]/g,"_");
+      if(!aliases[id])aliases[id]=key;
+    });
+    Object.keys(aliases).forEach(function(id){
+      var el=byId(id),key=aliases[id],value=v[key];
+      if(!el||value===undefined||value===null)return;
+      if(el.type==="checkbox")el.checked=String(value).toLowerCase()==="true"||value===true;
+      else if(el.type!=="password"||value!=="********")el.value=value;
+    });
+  }catch(e){console.warn("settings hydration failed",e)}
+}
+
+async function refreshDomainSettingsAfterBootstrap(){
+  if(typeof loadDomainSettings!=="function")return;
+  try{await loadDomainSettings()}catch(e){console.warn("domain settings hydration failed",e)}
+}
+
+loadSettings().then(function(){return hydratePersistedSettings()}).catch(function(){});
+setTimeout(refreshDomainSettingsAfterBootstrap,0);
+loadRoadmapOptions();loadRegistry();loadUsers();loadPermissions();loadCourses();loadUIActions();loadProviderCatalog();setInterval(loadCourses,10000);setInterval(loadResourceStatus,5000);
 
 loadLearningSourcesCatalog();loadRoutingGUI();loadControlNamespacesGUI();loadProfilesGUI();
 
