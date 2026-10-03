@@ -1086,6 +1086,20 @@ def reset_registered_setting(key: str, request: Request):
     audit(user, "settings", "reset", "200", f"setting-reset:{key}")
     return {"key": key, "value": value, "reset": True}
 
+@router.get("/settings/persisted")
+def settings_persisted(request: Request):
+    require_admin(request)
+    # Single read model for every settings form. Values are persisted in SQLite;
+    # secrets are deliberately returned only as a mask.
+    with connect() as conn:
+        rows = conn.execute("SELECT key,value,secret FROM app_settings ORDER BY key").fetchall()
+    values = {}
+    for row in rows:
+        key = str(row["key"])
+        values[key] = "********" if int(row["secret"]) else str(row["value"])
+    return {"values": values}
+
+
 @router.get("/settings/config")
 def settings_config(request: Request):
     require_admin(request)
