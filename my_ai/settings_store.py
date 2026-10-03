@@ -283,6 +283,9 @@ _RUNTIME_SETTING_ATTRS = {
     "agent.cache_ttl_seconds": "cache_ttl_seconds",
 }
 
+for _field in _RUNTIME_CONFIG_FIELDS:
+    _RUNTIME_SETTING_ATTRS["runtime." + _field] = _field
+
 def _coerce_runtime_value(current: Any, value: Any) -> Any:
     if isinstance(current, bool):
         return str(value).strip().lower() in {"1", "true", "yes", "on"}
