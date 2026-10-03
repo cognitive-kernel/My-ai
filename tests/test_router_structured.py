@@ -56,3 +56,7 @@ def test_domain_router_has_no_keyword_tables_or_regex_fallback():
     assert "_INTENT_PATTERNS" not in source
     assert "import re" not in source
     assert "_normalize(" not in source
+
+
+def test_router_schema_supports_metatrader_intent():
+    assert "metatrader" in ROUTER_SCHEMA["properties"]["primary"]["enum"]
