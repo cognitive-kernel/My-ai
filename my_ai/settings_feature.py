@@ -66,6 +66,8 @@ CREATE TABLE IF NOT EXISTS custom_course_progress (
  score REAL,
  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
  last_attempt_at TEXT,
+ evidence_json TEXT NOT NULL DEFAULT '[]',
+ provenance_json TEXT NOT NULL DEFAULT '{}',
  UNIQUE(course_id,topic_id),
  FOREIGN KEY(course_id) REFERENCES custom_courses(id) ON DELETE CASCADE,
  FOREIGN KEY(topic_id) REFERENCES custom_course_topics(id) ON DELETE CASCADE
@@ -206,6 +208,13 @@ def _setup() -> None:
         }.items():
             if column not in course_columns:
                 conn.execute(f"ALTER TABLE custom_courses ADD COLUMN {column} {ddl}")
+        progress_columns = {str(r["name"]) for r in conn.execute("PRAGMA table_info(custom_course_progress)").fetchall()}
+        for column, ddl in {
+            "evidence_json": "TEXT NOT NULL DEFAULT '[]'",
+            "provenance_json": "TEXT NOT NULL DEFAULT '{}'",
+        }.items():
+            if column not in progress_columns:
+                conn.execute(f"ALTER TABLE custom_course_progress ADD COLUMN {column} {ddl}")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS learning_domains (
                 name TEXT PRIMARY KEY,
@@ -251,7 +260,7 @@ def _course(course_id: int) -> dict[str, Any] | None:
 def _progress(course_id: int) -> list[dict[str, Any]]:
     return fetch_all("""SELECT t.id,t.topic_order,t.title,t.goal,t.source_url,
         COALESCE(p.status,'planned') status,COALESCE(p.progress_percent,0) progress_percent,
-        COALESCE(p.phase,'planned') phase,p.lesson,p.score,p.updated_at,p.last_attempt_at
+        COALESCE(p.phase,'planned') phase,p.lesson,p.score,p.updated_at,p.last_attempt_at,COALESCE(p.evidence_json,'[]') evidence_json,COALESCE(p.provenance_json,'{}') provenance_json
         FROM custom_course_topics t LEFT JOIN custom_course_progress p ON p.topic_id=t.id
         WHERE t.course_id=? ORDER BY t.topic_order""", (course_id,))
 
@@ -390,8 +399,8 @@ def _review_custom_course(course_id: int, web, llm) -> dict[str, Any]:
     return {"status": "reviewed", "added": added, "updated": updated}
 
 
-def _set_topic(topic_id: int, status: str, progress: float, phase: str, lesson: str | None = None, score: float | None = None) -> None:
-    execute("UPDATE custom_course_progress SET status=?,progress_percent=?,phase=?,lesson=COALESCE(?,lesson),score=COALESCE(?,score),updated_at=CURRENT_TIMESTAMP WHERE topic_id=?", (status, max(0,min(100,float(progress))), phase, lesson, score, topic_id))
+def _set_topic(topic_id: int, status: str, progress: float, phase: str, lesson: str | None = None, score: float | None = None, evidence: list[dict[str, Any]] | None = None, provenance: dict[str, Any] | None = None) -> None:
+    execute("UPDATE custom_course_progress SET status=?,progress_percent=?,phase=?,lesson=COALESCE(?,lesson),score=COALESCE(?,score),evidence_json=COALESCE(?,evidence_json),provenance_json=COALESCE(?,provenance_json),updated_at=CURRENT_TIMESTAMP WHERE topic_id=?", (status, max(0,min(100,float(progress))), phase, lesson, score, json.dumps(evidence, ensure_ascii=False) if evidence is not None else None, json.dumps(provenance, ensure_ascii=False) if provenance is not None else None, topic_id))
 
 
 def _learn_topic(course_id: int, topic: dict[str, Any]) -> None:
@@ -404,7 +413,9 @@ def _learn_topic(course_id: int, topic: dict[str, Any]) -> None:
               f"COURSE: {(_course(course_id) or {}).get('name', 'Custom Course')}\nTOPIC: {topic['title']}\nGOAL: {topic['goal']}\nOFFICIAL SOURCE: {topic.get('source_url') or 'none'}")
     _set_topic(topic_id, "started", 25, "lesson")
     lesson = llm.chat(prompt, system="You are a rigorous technical instructor. Return a concise but technically precise lesson.")
-    _set_topic(topic_id, "started", 70, "assessment", lesson=lesson)
+    evidence = [{"type": "source", "url": topic.get("source_url"), "scope": topic.get("goal", "")}] if topic.get("source_url") else []
+    provenance = {"course_id": course_id, "topic_id": topic_id, "source_url": topic.get("source_url"), "recorded_at": datetime.now(timezone.utc).isoformat()}
+    _set_topic(topic_id, "started", 70, "assessment", lesson=lesson, evidence=evidence, provenance=provenance)
     raw = llm.chat("Return only a numeric score from 0 to 100 for whether this lesson adequately covers the stated goal. GOAL:" + topic["goal"] + "\nLESSON:" + lesson)
     match = re.search(r"(?<!\d)(100|\d{1,2})(?!\d)", raw)
     score = float(match.group(1)) if match else 0.0
@@ -1386,6 +1397,21 @@ def settings_script(request: Request):
 def learning_page(request: Request):
     require_user(request)
     return HTMLResponse(LEARNING_HTML, headers={"Cache-Control":"no-store", "Pragma":"no-cache"})
+
+@router.get("/settings/courses/{course_id}/lessons/{topic_id}/evidence")
+def course_lesson_evidence(course_id: int, topic_id: int, request: Request):
+    require_admin(request); _setup()
+    rows = fetch_all("""SELECT t.id,t.title,t.source_url,p.lesson,p.evidence_json,p.provenance_json
+        FROM custom_course_topics t JOIN custom_course_progress p ON p.topic_id=t.id
+        WHERE t.course_id=? AND t.id=?""", (course_id, topic_id))
+    if not rows:
+        raise HTTPException(404, "Lesson not found.")
+    row = dict(rows[0])
+    try: row["evidence"] = json.loads(row.pop("evidence_json") or "[]")
+    except (TypeError, ValueError, json.JSONDecodeError): row["evidence"] = []
+    try: row["provenance"] = json.loads(row.pop("provenance_json") or "{}")
+    except (TypeError, ValueError, json.JSONDecodeError): row["provenance"] = {}
+    return row
 
 @router.get("/settings/courses")
 def courses(request: Request):
