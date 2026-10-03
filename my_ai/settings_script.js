@@ -444,11 +444,11 @@ async function loadModuleGui(){
         "<div class='moduleActions'><button type='button' onclick='saveModuleGui("+JSON.stringify(ns)+")'>ذخیره فرم</button>"+
         "<button type='button' onclick='loadModuleRecordsGui("+JSON.stringify(ns)+")'>نمایش رکوردها</button>"+
         "<button type='button' onclick='loadModuleRecordsGui("+JSON.stringify(ns)+")'>ویرایش رکورد</button></div>"+
-        "<div class='moduleActions'><button type='button' onclick='moduleActionGUI("+JSON.stringify(ns)+","start")'>Start</button>"+
-        "<button type='button' onclick='moduleActionGUI("+JSON.stringify(ns)+","pause")'>Pause</button>"+
-        "<button type='button' onclick='moduleActionGUI("+JSON.stringify(ns)+","resume")'>Resume</button>"+
-        "<button type='button' onclick='moduleActionGUI("+JSON.stringify(ns)+","stop")'>Stop</button>"+
-        "<button type='button' onclick='moduleActionGUI("+JSON.stringify(ns)+","retry")'>Retry</button></div>"+
+        "<div class='moduleActions'><button type='button' onclick='moduleActionGUI("+JSON.stringify(ns)+",\"start\")'>Start</button>"+
+        "<button type='button' onclick='moduleActionGUI("+JSON.stringify(ns)+",\"pause\")'>Pause</button>"+
+        "<button type='button' onclick='moduleActionGUI("+JSON.stringify(ns)+",\"resume\")'>Resume</button>"+
+        "<button type='button' onclick='moduleActionGUI("+JSON.stringify(ns)+",\"stop\")'>Stop</button>"+
+        "<button type='button' onclick='moduleActionGUI("+JSON.stringify(ns)+",\"retry\")'>Retry</button></div>"+
         "<div id='mg-action-"+key+"' class='muted'>آخرین عملیات: —</div>"+
         "<div id='mg-records-"+key+"' class='muted moduleRecords'></div></details>";
     }).join("");
