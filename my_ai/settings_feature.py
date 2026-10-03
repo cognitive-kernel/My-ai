@@ -33,6 +33,7 @@ from .integration_catalog import register_integration, list_integrations, regist
 from .security_catalog import define_role, define_capability, set_permission, set_network_policy, set_filesystem_policy, set_subprocess_policy, set_self_modification_policy, list_security_policies
 from .registries import publish_workflow, update_workflow, list_workflows
 from .metatrader_adapter import test_connection as mt_test_connection, quote as mt_quote, bars as mt_bars, indicator as mt_indicator
+from . import settings_ui
 
 router = APIRouter(tags=["settings"])  # roadmap curriculum extraction integration
 _workers = ThreadPoolExecutor(max_workers=1, thread_name_prefix="myai-learning")
@@ -1487,7 +1488,57 @@ def settings_plugin_reject(name: str, request: Request, reason: str = ""):
 @router.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request):
     require_admin(request)
-    return HTMLResponse(SETTINGS_HTML)
+    return HTMLResponse(settings_ui.index(), headers={"Cache-Control": "no-store"})
+
+@router.get("/settings/ui/metatrader", response_class=HTMLResponse)
+def settings_metatrader_ui(request: Request):
+    require_admin(request)
+    return HTMLResponse(settings_ui.metatrader(), headers={"Cache-Control": "no-store"})
+
+@router.get("/settings/ui/github", response_class=HTMLResponse)
+def settings_github_ui(request: Request):
+    require_admin(request)
+    return HTMLResponse(settings_ui.simple(
+        "GitHub",
+        "اتصال GitHub و repository.",
+        "/settings/github",
+        [("github.api_url", "API URL"), ("github.repository", "Repository"), ("github.username", "Username")],
+    ), headers={"Cache-Control": "no-store"})
+
+@router.get("/settings/ui/resources", response_class=HTMLResponse)
+def settings_resources_ui(request: Request):
+    require_admin(request)
+    return HTMLResponse(settings_ui.simple(
+        "منابع سیستم",
+        "سقف منابع برای اجرای مدل و وظایف محلی.",
+        "/settings/registry",
+        [
+            ("resources.cpu_percent", "CPU %"),
+            ("resources.cpu_threads", "CPU Threads"),
+            ("resources.ram_percent", "RAM %"),
+            ("resources.gpu_layers", "GPU Layers"),
+        ],
+    ), headers={"Cache-Control": "no-store"})
+
+@router.get("/settings/ui/observability", response_class=HTMLResponse)
+def settings_observability_ui(request: Request):
+    require_admin(request)
+    return HTMLResponse(settings_ui.simple(
+        "مشاهده‌پذیری",
+        "تنظیمات پایه مشاهده‌پذیری و لاگ.",
+        "/settings/registry",
+        [("logging.level", "Log Level"), ("observability.alerts_enabled", "Alerts Enabled")],
+    ), headers={"Cache-Control": "no-store"})
+
+@router.get("/settings/ui/advanced", response_class=HTMLResponse)
+def settings_advanced_ui(request: Request):
+    require_admin(request)
+    return HTMLResponse(settings_ui.simple(
+        "تنظیمات پیشرفته",
+        "Registry و تنظیمات مدیریتی پیشرفته.",
+        "/settings/registry",
+        [("configuration.schema_version", "Schema Version")],
+    ), headers={"Cache-Control": "no-store"})
 
 @router.get("/settings/script.js")
 def settings_script(request: Request):
