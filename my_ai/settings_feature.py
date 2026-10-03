@@ -1498,12 +1498,7 @@ def settings_metatrader_ui(request: Request):
 @router.get("/settings/ui/github", response_class=HTMLResponse)
 def settings_github_ui(request: Request):
     require_admin(request)
-    return HTMLResponse(settings_ui.simple(
-        "GitHub",
-        "اتصال GitHub و repository.",
-        "/settings/github",
-        [("github.api_url", "API URL"), ("github.repository", "Repository"), ("github.username", "Username")],
-    ), headers={"Cache-Control": "no-store"})
+    return HTMLResponse(settings_ui.github(), headers={"Cache-Control": "no-store"})
 
 @router.get("/settings/ui/resources", response_class=HTMLResponse)
 def settings_resources_ui(request: Request):
@@ -1533,12 +1528,7 @@ def settings_observability_ui(request: Request):
 @router.get("/settings/ui/advanced", response_class=HTMLResponse)
 def settings_advanced_ui(request: Request):
     require_admin(request)
-    return HTMLResponse(settings_ui.simple(
-        "تنظیمات پیشرفته",
-        "Registry و تنظیمات مدیریتی پیشرفته.",
-        "/settings/registry",
-        [("configuration.schema_version", "Schema Version")],
-    ), headers={"Cache-Control": "no-store"})
+    return HTMLResponse(settings_ui.advanced(), headers={"Cache-Control": "no-store"})
 
 @router.get("/settings/script.js")
 def settings_script(request: Request):
