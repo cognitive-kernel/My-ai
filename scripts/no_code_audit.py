@@ -11,7 +11,7 @@ _ENV_NAME = re.compile(r"^(?:[A-Z][A-Z0-9_]+)$")
 _CATEGORIES = {
     "provider_model": re.compile(r"(provider|model)", re.I),
     "url": re.compile(r"(url|uri|endpoint|host)", re.I),
-    "timeout_retry_limit": re.compile(r"(timeout|retry|retries|limit|max|min|interval|delay|backoff)", re.I),
+    "timeout_retry_limit": re.compile(r"(timeout|retry|retries|limit|max|min|delay|backoff)", re.I),
     "feature_flag": re.compile(r"(feature|flag|enabled|enable|disabled)", re.I),
     "policy": re.compile(r"policy", re.I),
     "filesystem_path": re.compile(r"(path|file|dir|directory|workspace|root)", re.I),
