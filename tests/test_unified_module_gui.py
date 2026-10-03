@@ -5,7 +5,7 @@ from my_ai import settings_feature as sf
 
 def test_settings_page_contains_unified_module_gui():
     source = Path(sf.__file__).read_text(encoding="utf-8")
-    assert "داشبورد گرافیکی ماژول‌ها" in source
+    assert "داشبورد ماژول‌ها" in source
     assert 'id=\'module-gui-list\'' in source
 
 
