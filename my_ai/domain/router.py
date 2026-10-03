@@ -15,7 +15,7 @@ ACTION_VALUES = ("answer", "explain", "analyze", "create_artifact", "modify_arti
 
 ROUTER_SCHEMA: dict[str, Any] = {
     "type": "object", "additionalProperties": False,
-    "required": ["primary", "intents", "action", "confidence", "language", "topic", "goal", "project_path", "urls", "capability", "operation", "symbol"],
+    "required": ["primary", "intents", "action", "confidence", "language", "topic", "goal", "project_path", "urls"],
     "properties": {
         "primary": {"type": "string", "enum": sorted(ALLOWED_INTENTS)},
         "intents": {"type": "array", "items": {"type": "string", "enum": sorted(ALLOWED_INTENTS)}, "minItems": 1, "maxItems": 5},
@@ -57,14 +57,14 @@ def _parse_router_payload(raw: str) -> dict[str, Any]:
     data["confidence"] = max(0.0, min(1.0, float(confidence)))
     if not isinstance(data["urls"], list) or len(data["urls"]) > 10 or any(not isinstance(x, str) for x in data["urls"]): raise ValueError("Router URLs must be a list of strings.")
     for key in ("language", "topic", "goal", "project_path", "capability", "operation", "symbol"):
-        if data[key] is not None and not isinstance(data[key], str): raise ValueError(f"Router field {key} must be a string or null.")
+        if key in data and data[key] is not None and not isinstance(data[key], str): raise ValueError(f"Router field {key} must be a string or null.")
     return data
 
 def _intent_from_payload(data: dict[str, Any]) -> Intent:
     payload = _parse_router_payload(json.dumps(data, ensure_ascii=False))
     primary = payload["primary"]
     intents = tuple(dict.fromkeys(payload["intents"]))
-    args = {key: payload[key] for key in ("action", "language", "topic", "goal", "project_path", "capability", "operation", "symbol") if payload[key]}
+    args = {key: payload.get(key) for key in ("action", "language", "topic", "goal", "project_path", "capability", "operation", "symbol") if payload.get(key)}
     if payload["urls"]: args["urls"] = list(payload["urls"])
     return Intent(name=primary, confidence=round(float(payload["confidence"]), 3), requires_confirmation=primary in HIGH_RISK, args=args, intents=intents or (primary,))
 
