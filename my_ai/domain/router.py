@@ -68,7 +68,7 @@ def _intent_from_payload(data: dict[str, Any]) -> Intent:
 def _is_read_only_market_query(text: str) -> bool:
     """Detect a live-price lookup so it can never be mistaken for code execution."""
     low = str(text or "").casefold()
-    pair = __import__("re").search(r"\\b[a-z]{3}\\s*[/_-]\\s*[a-z]{3}\\b", low)
+    pair = __import__("re").search(r"\b[a-z]{3}\s*[/_-]\s*[a-z]{3}\b", low)
     pair_like = bool(pair) or any(x in low for x in ("audusd", "aud/usd", "یورو دلار", "دلار استرالیا"))
     quote_like = any(x in low for x in ("قیمت", "نرخ", "نرخ فعلی", "قیمت فعلی", "قیمت الان", "live price", "current price", "quote", "bid", "ask"))
     execution_like = any(x in low for x in ("اجرا", "معامله", "سفارش", "خرید", "فروش", "trade", "order", "execute", "code", "کد", "اندیکاتور", "mql4", "mql5", "اکسپرت"))
