@@ -1,7 +1,7 @@
 #property strict
 #property version "1.0"
 
-// Attach this EA to the symbol/timeframe you want My-AI to read.
+// Attach this EA to the symbol/timeframe you want My-AI to read.\n// The bridge uses MT4 FILE_COMMON so My-AI can read it without guessing the terminal data folder.
 // It publishes the latest Bid/Ask to MQL4/Files/my_ai_tick.json.
 // My-AI never uses a hard-coded market price.
 
@@ -31,7 +31,7 @@ void OnTimer()
 
 void PublishTick()
 {
-   int handle = FileOpen(BridgeFile, FILE_WRITE|FILE_TXT|FILE_ANSI);
+   int handle = FileOpen(BridgeFile, FILE_WRITE|FILE_TXT|FILE_ANSI|FILE_COMMON);
    if(handle == INVALID_HANDLE)
       return;
 
