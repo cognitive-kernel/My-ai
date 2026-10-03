@@ -178,3 +178,39 @@ def indicator(symbol: str, name: str, timeframe: str | None = None, params: list
     # Custom indicators are terminal-side objects. Both MT4 and MT5 therefore
     # use the same local bridge contract for iCustom-style buffer reads.
     return _bridge_request("/indicator", payload)
+
+def market_context(message: str) -> str:
+    """Return compact live MT context for the chat agent when a symbol is present."""
+    text = str(message or "")
+    if not config()["enabled"]:
+        return ""
+    import re
+    symbols = re.findall(r"(?<![A-Za-z])[A-Z]{6,10}(?:\.[A-Z0-9]+)?(?![A-Za-z])", text.upper())
+    symbol = symbols[0] if symbols else ""
+    if not symbol:
+        return ""
+    wants_indicator = any(x in text.casefold() for x in ("rsi", "macd", "ema", "sma", "moving average", "atr", "اندیکاتور", "شاخص"))
+    wants_market = any(x in text.casefold() for x in ("price", "quote", "bid", "ask", "قیمت", "بازار", "نرخ", "تیک", "tick"))
+    if not (wants_indicator or wants_market):
+        return ""
+    q = quote(symbol)
+    tick = q.get("tick") or {}
+    parts = [
+        f"LIVE METATRADER DATA (do not treat as historical knowledge): symbol={symbol}",
+        f"bid={tick.get('bid')} ask={tick.get('ask')} last={tick.get('last')} time={tick.get('time')}",
+    ]
+    if wants_indicator:
+        b = bars(symbol, config()["timeframe"], 200).get("bars") or []
+        closes = [float(x[4]) for x in b if len(x) >= 5]
+        if closes:
+            def sma(n):
+                return sum(closes[-n:]) / n if len(closes) >= n else None
+            parts.append(f"SMA20={sma(20)} SMA50={sma(50)}")
+            if len(closes) >= 15:
+                gains=[]; losses=[]
+                for a,z in zip(closes[-15:-1], closes[-14:]):
+                    d=z-a; gains.append(max(d,0)); losses.append(max(-d,0))
+                ag=sum(gains)/14; al=sum(losses)/14
+                rsi=100.0 if al == 0 else 100-(100/(1+(ag/al)))
+                parts.append(f"RSI14={rsi}")
+    return "\n".join(parts)
