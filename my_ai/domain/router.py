@@ -65,6 +65,16 @@ def _intent_from_payload(data: dict[str, Any]) -> Intent:
     if payload["urls"]: args["urls"] = list(payload["urls"])
     return Intent(name=primary, confidence=round(float(payload["confidence"]), 3), requires_confirmation=primary in HIGH_RISK, args=args, intents=intents or (primary,))
 
+def _is_read_only_market_query(text: str) -> bool:
+    """Detect a live-price lookup so it can never be mistaken for code execution."""
+    low = str(text or "").casefold()
+    pair = __import__("re").search(r"\\b[a-z]{3}\\s*[/_-]\\s*[a-z]{3}\\b", low)
+    pair_like = bool(pair) or any(x in low for x in ("audusd", "aud/usd", "یورو دلار", "دلار استرالیا"))
+    quote_like = any(x in low for x in ("قیمت", "نرخ", "نرخ فعلی", "قیمت فعلی", "قیمت الان", "live price", "current price", "quote", "bid", "ask"))
+    execution_like = any(x in low for x in ("اجرا", "معامله", "سفارش", "خرید", "فروش", "trade", "order", "execute", "code", "کد", "اندیکاتور", "mql4", "mql5", "اکسپرت"))
+    return pair_like and quote_like and not execution_like
+
+
 def classify(text: str, context: str | None = None, classifier: StructuredRouter | None = None) -> Intent:
     if classifier is None:
         return Intent("chat", 0.0, False, args={"action": "answer"}, intents=("chat",))
@@ -85,6 +95,9 @@ def classify(text: str, context: str | None = None, classifier: StructuredRouter
         system="You are My-AI's context-aware semantic router. Understand intent from meaning, not trigger words. Output only schema-constrained routing data.",
     )
     action = data.get("action")
+    if _is_read_only_market_query(text):
+        data = {**data, "primary": "chat", "intents": ["chat"], "action": "answer", "confidence": max(float(data.get("confidence", 0.0)), 0.95)}
+        action = "answer"
     if data.get("primary") in HIGH_RISK and action not in {"execute", "modify_artifact", "save"}:
         data = {**data, "primary": "chat", "intents": ["chat"], "action": action}
     if data.get("action") in {"create_artifact", "modify_artifact"} and data.get("primary") == "code_execution":
