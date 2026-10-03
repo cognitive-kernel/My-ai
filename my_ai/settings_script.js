@@ -387,6 +387,8 @@ loadLearningSourcesCatalog();loadRoutingGUI();loadControlNamespacesGUI();loadPro
 
 
 function moduleGuiEsc(v){return esc(v)}
+function moduleGuiKey(v){return encodeURIComponent(String(v)).replace(/%/g,"_")}
+function moduleGuiId(prefix,namespace){return prefix+moduleGuiKey(namespace)}
 async function loadModuleGui(){
   var box=byId("module-gui-list"); if(!box)return;
   try{
@@ -395,30 +397,39 @@ async function loadModuleGui(){
     if(!items.length){box.textContent="ماژول قابل تنظیمی ثبت نشده است";return;}
     box.innerHTML=items.map(function(ns){
       var name=typeof ns==="string"?ns:(ns.name||ns.namespace||"");
-      var safe=moduleGuiEsc(name);
-      return "<details class='topic'><summary><b>"+safe+"</b></summary><div style='margin-top:8px'>"+
-        "<input id='mg-name-"+safe+"' placeholder='نام رکورد' style='max-width:260px'>"+
-        "<textarea id='mg-payload-"+safe+"' rows='5' placeholder='JSON payload'></textarea>"+
-        "<button type='button' onclick='saveModuleGui("+JSON.stringify(name)+")'>ذخیره</button>"+
-        "<button type='button' onclick='loadModuleRecordsGui("+JSON.stringify(name)+")'>نمایش رکوردها</button>"+
-        "<div id='mg-records-"+safe+"' class='muted'></div></div></details>";
+      var key=moduleGuiKey(name);
+      return "<details class='moduleCard'>"+
+        "<summary>"+moduleGuiEsc(name)+"</summary>"+
+        "<div class='moduleFields'>"+
+        "<label>نام رکورد<input id='mg-name-"+key+"' placeholder='مثلاً default'></label>"+
+        "<label>تنظیمات ماژول<textarea id='mg-payload-"+key+"' rows='7' placeholder='{&quot;enabled&quot;:true}'></textarea></label>"+
+        "<label><input id='mg-enabled-"+key+"' type='checkbox' checked> فعال</label>"+
+        "</div>"+
+        "<div class='moduleActions'><button type='button' onclick='saveModuleGui("+JSON.stringify(name)+")'>ذخیره</button>"+
+        "<button type='button' onclick='loadModuleRecordsGui("+JSON.stringify(name)+")'>نمایش رکوردها</button></div>"+
+        "<div id='mg-records-"+key+"' class='muted moduleRecords'></div></details>";
     }).join("");
   }catch(e){box.textContent="خطا در بارگذاری ماژول‌ها: "+e.message}
 }
 async function saveModuleGui(namespace){
   try{
-    var key=moduleGuiEsc(namespace), name=byId("mg-name-"+key).value.trim(), raw=byId("mg-payload-"+key).value.trim();
+    var key=moduleGuiKey(namespace), name=byId("mg-name-"+key).value.trim(), raw=byId("mg-payload-"+key).value.trim();
     if(!name)throw Error("نام رکورد الزامی است");
     var payload=raw?JSON.parse(raw):{};
-    await req("/settings/control-plane/"+encodeURIComponent(namespace),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name,payload:payload,enabled:true})});
+    if(!payload || typeof payload!=="object" || Array.isArray(payload))throw Error("تنظیمات باید JSON object باشد");
+    await req("/settings/control-plane/"+encodeURIComponent(namespace),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name,payload:payload,enabled:byId("mg-enabled-"+key).checked})});
     setText("module-gui-out","ماژول "+namespace+" / "+name+" ذخیره شد."); await loadModuleRecordsGui(namespace);
   }catch(e){setText("module-gui-out","خطا: "+e.message)}
 }
 async function loadModuleRecordsGui(namespace){
   try{
     var j=await req("/settings/control-plane?namespace="+encodeURIComponent(namespace)+"&include_disabled=true");
-    var box=byId("mg-records-"+moduleGuiEsc(namespace)); if(!box)return;
-    box.innerHTML=(j.items||j.records||[]).map(function(x){return "<pre style='white-space:pre-wrap'>"+moduleGuiEsc(JSON.stringify(x,null,2))+"</pre>"}).join("")||"رکوردی ثبت نشده است";
+    var box=byId("mg-records-"+moduleGuiKey(namespace)); if(!box)return;
+    box.innerHTML=(j.items||j.records||[]).map(function(x){
+      return "<div class='topic'><b>"+moduleGuiEsc(x.name||"رکورد")+"</b> · v"+moduleGuiEsc(x.version||"")+
+        " · "+(x.enabled?"فعال":"غیرفعال")+
+        "<details><summary>جزئیات</summary><pre style='white-space:pre-wrap'>"+moduleGuiEsc(JSON.stringify(x.payload||{},null,2))+"</pre></details></div>";
+    }).join("")||"رکوردی ثبت نشده است";
   }catch(e){setText("module-gui-out","خطا: "+e.message)}
 }
 loadModuleGui();
