@@ -802,7 +802,7 @@ def settings_database_backup(payload: BackupRequest, request: Request):
         destination_path.mkdir(parents=True, exist_ok=True)
         destination = str(destination_path / f"my_ai-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.db")
     try:
-        result=backup_database(destination,overwrite=payload.overwrite)
+        result=backup_database(destination,overwrite=payload.overwrite,password=payload.password)
         retention=get_int("database.backup.retention", 7)
         result["removed"]=prune_backups(str(Path(destination).parent), retention)
     except (OSError,FileNotFoundError,FileExistsError) as exc: raise HTTPException(400,str(exc))
@@ -823,7 +823,7 @@ def settings_database_restore(payload: BackupRequest, request: Request):
     user=require_admin(request)
     if not payload.confirm:
         raise HTTPException(400, "Restore requires explicit confirmation.")
-    try: result=restore_database(payload.path)
+    try: result=restore_database(payload.path,password=payload.password)
     except (OSError,FileNotFoundError) as exc: raise HTTPException(400,str(exc))
     audit(user,"database","restore","200",result["path"]); return result
 
