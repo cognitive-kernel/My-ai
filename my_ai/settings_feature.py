@@ -803,6 +803,11 @@ def settings_database_backup(payload: BackupRequest, request: Request):
         destination_path.mkdir(parents=True, exist_ok=True)
         destination = str(destination_path / f"my_ai-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.db")
     try:
+        encryption = str(get_setting("database.backup.encryption", "none")).strip().lower()
+        if encryption == "password" and not payload.password:
+            raise HTTPException(400, "Backup encryption requires a password.")
+        if encryption == "none":
+            payload.password = None
         result=backup_database(destination,overwrite=payload.overwrite,password=payload.password)
         retention=get_int("database.backup.retention", 7)
         result["removed"]=prune_backups(str(Path(destination).parent), retention)
@@ -824,7 +829,11 @@ def settings_database_restore(payload: BackupRequest, request: Request):
     user=require_admin(request)
     if not payload.confirm:
         raise HTTPException(400, "Restore requires explicit confirmation.")
-    try: result=restore_database(payload.path,password=payload.password)
+    try:
+        encryption = str(get_setting("database.backup.encryption", "none")).strip().lower()
+        if encryption == "password" and not payload.password:
+            raise HTTPException(400, "Encrypted backup restore requires a password.")
+        result=restore_database(payload.path,password=payload.password if encryption == "password" else None)
     except (OSError,FileNotFoundError) as exc: raise HTTPException(400,str(exc))
     audit(user,"database","restore","200",result["path"]); return result
 
