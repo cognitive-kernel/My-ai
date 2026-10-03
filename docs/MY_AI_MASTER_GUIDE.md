@@ -212,7 +212,7 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 [x] فرم‌ها تا حد امکان schema-driven و componentized باشند.
 [x] validation، persistence، health check و actionهای هر حوزه در همان حوزه باقی بمانند.
 [x] dependency بین فرم‌ها از طریق API/service contract باشد، نه دسترسی مستقیم به state داخلی فرم دیگر.
-[x] هر module دارای interface مشخص، ورودی/خروجی مشخص و تست مستقل باشد.
+[ ] هر module دارای interface مشخص، ورودی/خروجی مشخص و تست مستقل باشد.
 [x] تغییر یک فرم نباید نیازمند تغییر غیرضروری در فرم‌های دیگر باشد.
 [x] moduleهای بزرگ با معیارهای مسئولیت، coupling و cohesion به‌صورت دوره‌ای بازبینی و در صورت نیاز شکسته شوند.
 [x] معماری از اصول SOLID، DRY، KISS، dependency inversion، contract-based design و least privilege استفاده کند.
@@ -237,36 +237,36 @@ My-AI باید بتواند یک سایت، نرم‌افزار، repository ی�
 
 ### 12.1.1 Discovery و Reverse Engineering
 
-[ ] دریافت ورودی از URL، فایل، repository، archive، screenshot، document یا اجرای محلی در صورت امکان.
-[ ] تشخیص نوع artifact و انتخاب ابزار تحلیل مناسب به‌صورت dynamic.
-[ ] استخراج ساختار صفحات، routeها، componentها، فرم‌ها، navigation و stateهای قابل مشاهده.
-[ ] استخراج APIها، request/response contractها و وابستگی‌های قابل مشاهده در محیط مجاز.
-[ ] تحلیل database/schema/configuration در صورت دسترسی مجاز.
-[ ] تحلیل رفتار UI شامل validation، loading، error، empty state و transitionها.
-[ ] تحلیل responsive behavior و breakpointهای قابل مشاهده.
-[ ] استخراج assetها، typography، spacing، layout و design tokens در صورت مجاز بودن.
-[ ] ساخت Software/System Specification از یافته‌ها همراه با provenance و confidence.
-[ ] ثبت موارد ناشناخته و فرضیات به‌جای حدس زدن.
+[x] دریافت ورودی از URL، فایل، repository، archive، screenshot، document یا اجرای محلی در صورت امکان.
+[x] تشخیص نوع artifact و انتخاب ابزار تحلیل مناسب به‌صورت dynamic.
+[x] استخراج ساختار صفحات، routeها، componentها، فرم‌ها، navigation و stateهای قابل مشاهده.
+[x] استخراج APIها، request/response contractها و وابستگی‌های قابل مشاهده در محیط مجاز.
+[x] تحلیل database/schema/configuration در صورت دسترسی مجاز.
+[x] تحلیل رفتار UI شامل validation، loading، error، empty state و transitionها.
+[x] تحلیل responsive behavior و breakpointهای قابل مشاهده.
+[x] استخراج assetها، typography، spacing، layout و design tokens در صورت مجاز بودن.
+[x] ساخت Software/System Specification از یافته‌ها همراه با provenance و confidence.
+[x] ثبت موارد ناشناخته و فرضیات به‌جای حدس زدن.
 
 ### 12.1.2 Architecture Reconstruction
 
-[ ] تبدیل یافته‌ها به requirements و acceptance criteria.
-[ ] تولید architecture map شامل frontend، backend، API، database، integrations و deployment.
-[ ] تشخیص boundaryها و moduleهای مستقل.
-[ ] تولید dependency graph و data-flow map.
-[ ] تولید test plan برای رفتارهای مشاهده‌شده.
-[ ] حفظ traceability بین requirement، evidence، implementation و test.
+[x] تبدیل یافته‌ها به requirements و acceptance criteria.
+[x] تولید architecture map شامل frontend، backend، API، database، integrations و deployment.
+[x] تشخیص boundaryها و moduleهای مستقل.
+[x] تولید dependency graph و data-flow map.
+[x] تولید test plan برای رفتارهای مشاهده‌شده.
+[x] حفظ traceability بین requirement، evidence، implementation و test.
 
 ### 12.1.3 Reproduction / Reimplementation
 
-[ ] تولید workspace مستقل برای بازتولید پروژه.
-[ ] تولید frontend و backend متناسب با architecture استخراج‌شده.
-[ ] بازتولید رفتارها و contractهای مشاهده‌شده تا حد امکان.
-[ ] بازتولید UI با componentهای کوچک و قابل نگهداری، نه یک صفحه یا فایل monolithic.
-[ ] بازتولید responsive layout و stateهای UI.
-[ ] تولید migration/schema/configuration مورد نیاز در صورت مجاز بودن.
-[ ] ایجاد mock/stub برای dependencyهایی که در محیط بازتولید قابل دسترسی نیستند.
-[ ] تولید README و runbook برای اجرای پروژه بازتولیدشده.
+[x] تولید workspace مستقل برای بازتولید پروژه.
+[x] تولید frontend و backend متناسب با architecture استخراج‌شده.
+[x] بازتولید رفتارها و contractهای مشاهده‌شده تا حد امکان.
+[x] بازتولید UI با componentهای کوچک و قابل نگهداری، نه یک صفحه یا فایل monolithic.
+[x] بازتولید responsive layout و stateهای UI.
+[x] تولید migration/schema/configuration مورد نیاز در صورت مجاز بودن.
+[x] ایجاد mock/stub برای dependencyهایی که در محیط بازتولید قابل دسترسی نیستند.
+[x] تولید README و runbook برای اجرای پروژه بازتولیدشده.
 [ ] اجرای build، lint، unit، integration و E2E test متناسب با پروژه.
 [ ] اجرای visual regression و behavioral comparison در صورت وجود محیط مرجع.
 [ ] اجرای verification loop و اصلاح اختلاف‌ها به‌صورت مرحله‌ای.
@@ -274,14 +274,14 @@ My-AI باید بتواند یک سایت، نرم‌افزار، repository ی�
 
 ### 12.1.4 Fidelity و Verification
 
-[ ] مقایسه ساختاری route/component/API/data-flow بین مرجع و بازتولید.
+[x] مقایسه ساختاری route/component/API/data-flow بین مرجع و بازتولید.
 [ ] مقایسه screenshot و visual layout در viewportهای مختلف.
 [ ] مقایسه interaction و state transitionها.
 [ ] مقایسه response schema و error behavior در محیط مجاز.
-[ ] اندازه‌گیری coverage بازتولید نسبت به specification استخراج‌شده.
-[ ] هیچ ادعای «عیناً مشابه» بدون evidence و test report پذیرفته نشود.
-[ ] هر اختلاف باید به requirement، evidence یا محدودیت محیطی trace شود.
-[ ] Generator و Verifier مستقل باشند تا تولیدکننده نتیجه خودش را بدون بررسی تأیید نکند.
+[x] اندازه‌گیری coverage بازتولید نسبت به specification استخراج‌شده.
+[x] هیچ ادعای «عیناً مشابه» بدون evidence و test report پذیرفته نشود.
+[x] هر اختلاف باید به requirement، evidence یا محدودیت محیطی trace شود.
+[x] Generator و Verifier مستقل باشند تا تولیدکننده نتیجه خودش را بدون بررسی تأیید نکند.
 
 ### 12.1.5 مرزهای امنیتی و حقوقی
 
