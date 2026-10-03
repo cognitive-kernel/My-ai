@@ -145,6 +145,92 @@ SETTING_REGISTRY.update({
     "multimodal.voice_provider": {"version": 3, "type": "text", "default": "local", "max_length": 100, "description": "Voice provider."},
 })
 
+
+# Runtime configuration bridge for legacy environment-backed Settings fields.
+# Environment variables remain bootstrap-compatible, but persisted Registry values
+# are the authoritative runtime override after application startup.
+_RUNTIME_CONFIG_FIELDS = {
+    "ollama_base_url": ("text", 1000, False),
+    "ollama_model": ("text", 300, False),
+    "ollama_num_ctx": ("int", 256, False),
+    "ollama_num_thread": ("int", 1, False),
+    "ollama_num_gpu": ("int", 0, False),
+    "ollama_keep_alive": ("text", 200, False),
+    "routing_model": ("text", 300, False),
+    "router_llm_enabled": ("enum", None, False),
+    "coding_model": ("text", 300, False),
+    "fallback_model": ("text", 300, False),
+    "embedding_model": ("text", 300, False),
+    "research_source_timeout": ("float", 1, False),
+    "max_web_chars": ("int", 1000, False),
+    "research_search_provider": ("text", 200, False),
+    "research_domain_allowlist": ("text", 20000, False),
+    "research_domain_denylist": ("text", 20000, False),
+    "research_source_rank": ("text", 1000, False),
+    "exec_memory_mb": ("int", 64, False),
+    "exec_pids": ("int", 1, False),
+    "exec_cpu_cores": ("float", 0.1, False),
+    "memory_backend": ("enum", None, False),
+    "memory_retention_days": ("int", 1, False),
+    "memory_chunk_size": ("int", 100, False),
+    "memory_chunk_overlap": ("int", 0, False),
+    "knowledge_duplicate_threshold": ("float", 0, False),
+    "cache_ttl_seconds": ("int", 0, False),
+    "llm_provider": ("enum", None, False),
+    "llm_retry_attempts": ("int", 1, False),
+    "llm_retry_backoff_seconds": ("float", 0, False),
+    "llm_timeout_seconds": ("float", 1, False),
+    "llm_model_retry_attempts": ("int", 1, False),
+    "llm_model_retry_backoff_seconds": ("float", 0, False),
+    "llm_model_timeout_seconds": ("float", 1, False),
+    "openai_base_url": ("text", 1000, False),
+    "openai_api_key": ("text", 10000, True),
+    "openai_model": ("text", 300, False),
+    "db_path": ("text", 1000, False),
+    "exec_timeout": ("int", 1, False),
+    "exec_mode": ("enum", None, False),
+    "exec_memory": ("text", 100, False),
+    "exec_cpus": ("text", 100, False),
+    "exec_output_chars": ("int", 1000, False),
+    "exec_image": ("text", 300, False),
+    "host": ("text", 255, False),
+    "port": ("int", 1, False),
+    "offline_strict": ("enum", None, False),
+    "read_only": ("enum", None, False),
+    "decision_log": ("enum", None, False),
+    "scheduler_interval_seconds": ("int", 60, False),
+    "scheduler_max_cpu_percent": ("float", 1, False),
+    "scheduler_max_ram_percent": ("float", 1, False),
+    "scheduler_auto_resume": ("enum", None, False),
+    "learning_max_retries": ("int", 1, False),
+    "learning_max_concurrent_workers": ("int", 1, False),
+    "learning_source_timeout_seconds": ("float", 1, False),
+    "learning_source_max_chars": ("int", 1000, False),
+    "resource_wait_seconds": ("float", 1, False),
+}
+for _field, (_kind, _minimum, _secret) in _RUNTIME_CONFIG_FIELDS.items():
+    _key_name = "runtime." + _field
+    if _kind == "enum":
+        _spec = {"version": 3, "type": "enum", "default": "true" if _field in {"router_llm_enabled", "offline_strict", "read_only", "decision_log", "scheduler_auto_resume"} else "auto"}
+        if _field == "memory_backend":
+            _spec["default"], _spec["choices"] = "sqlite", ["sqlite", "file", "hybrid"]
+        elif _field == "llm_provider":
+            _spec["default"], _spec["choices"] = "auto", ["auto", "ollama", "openai-compatible", "custom-openai-compatible"]
+        elif _field == "exec_mode":
+            _spec["default"], _spec["choices"] = "container", ["local", "sandbox", "container"]
+        else:
+            _spec["choices"] = ["true", "false"]
+    elif _kind == "int":
+        _spec = {"version": 3, "type": "int", "default": 0, "min": _minimum, "description": "Runtime setting bridge for " + _field}
+    elif _kind == "float":
+        _spec = {"version": 3, "type": "float", "default": 0.0, "min": _minimum, "description": "Runtime setting bridge for " + _field}
+    else:
+        _spec = {"version": 3, "type": "text", "default": "", "max_length": _minimum or 10000, "description": "Runtime setting bridge for " + _field}
+    if _secret:
+        _spec["secret"] = True
+    SETTING_REGISTRY[_key_name] = _spec
+
+
 CONFIG_SCHEMA_VERSION = 3
 
 _RUNTIME_SETTING_ATTRS = {
