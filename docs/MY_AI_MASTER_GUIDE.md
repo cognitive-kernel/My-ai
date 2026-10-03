@@ -1,0 +1,364 @@
+# My-AI — Master Guide / Single Source of Truth
+
+این فایل تنها مرجع اصلی طراحی، وضعیت، اولویت‌ها و برنامه توسعه My-AI است. مستندات پراکنده قبلی پس از ایجاد این فایل حذف می‌شوند. وضعیت‌ها فقط با evidence، تست و verification تغییر می‌کنند.
+
+## 0. سخت‌افزار هدف
+
+سخت‌افزاری که قرار است این هوش مصنوعی روی آن اجرا شود:
+
+- RAM: 32.0 GB (31.8 GB usable)
+- CPU: 12th Gen Intel(R) Core(TM) i5-12400 (2.50 GHz)
+- GPU: Intel Integrated Graphics — 128 MB
+
+[ ] Runtime باید سخت‌افزار واقعی را تشخیص دهد و model/context/thread/concurrency را بر اساس منابع تنظیم کند.
+[ ] اجرای local-first باید با اولویت CPU و استفاده از GPU فقط در صورت پشتیبانی واقعی backend انجام شود.
+[ ] workloadهای سنگین باید resource budget داشته باشند.
+
+## 1. هدف نهایی
+
+My-AI باید یک Agent داینامیک و local-first باشد، نه مجموعه‌ای از پاسخ‌های ثابت یا triggerهای keyword-based.
+
+کاربر باید در همان Chat بتواند:
+- گفتگو و سؤال عمومی انجام دهد.
+- برنامه‌نویسی و تولید پروژه بخواهد.
+- از فایل و دانش ذخیره‌شده استفاده کند.
+- تحقیق و یادگیری انجام دهد.
+- به ابزارهای مجاز وصل شود.
+- به MetaTrader 4 یا MetaTrader 5 وصل شود.
+- داده زنده بازار، کندل، indicator و account را در صورت نیاز بخواند.
+- indicator برای MT4/MT5 تولید و نصب کند.
+- نتیجه indicator نصب‌شده را دوباره بخواند.
+- تحلیل بازار را بر اساس داده واقعی و دانش ذخیره‌شده انجام دهد.
+
+[ ] Agent باید بر اساس معنی درخواست capability و tool مناسب را انتخاب کند؛ نه بر اساس فهرست ثابت جمله‌ها یا کلمات.
+
+## 2. اولویت اول — MetaTrader 4 / 5
+
+### 2.1 اتصال Broker / Terminal
+
+[ ] پشتیبانی واقعی و مستقل از MT4 و MT5.
+[ ] انتخاب Platform: MT4 یا MT5.
+[ ] Broker Server به صورت متن آزاد و دستی قابل وارد کردن باشد.
+[ ] Account، Password، Server، Terminal path و تنظیمات لازم امن و پایدار ذخیره شوند.
+[ ] بعد از refresh/restart تنظیمات ذخیره‌شده دوباره در فرم نمایش داده شوند.
+[ ] Test Connection اتصال واقعی Terminal/Account را آزمایش کند.
+[ ] وضعیت connection، terminal، account و server نمایش داده شود و secret هرگز افشا نشود.
+
+### 2.2 Market Data
+
+[ ] خواندن live Tick / Bid / Ask / Last.
+[ ] خواندن OHLC و candle history.
+[ ] خواندن symbol info، digits، point و spread در صورت دسترسی.
+[ ] داده واقعی قبل از پاسخ وارد context همان task شود.
+[ ] بدون داده زنده، Agent نباید قیمت یا indicator ساختگی ارائه کند.
+
+### 2.3 Indicators
+
+[ ] خواندن indicatorهای استاندارد MetaTrader.
+[ ] خواندن indicatorهای نصب‌شده توسط کاربر.
+[ ] خواندن bufferهای indicator.
+[ ] پشتیبانی جداگانه MT4 و MT5 با adapter مناسب.
+[ ] Agent بتواند بر اساس معنی سؤال تشخیص دهد indicator data لازم است.
+
+### 2.4 تولید و نصب Indicator
+
+[ ] تولید MQL4.
+[ ] تولید MQL5.
+[ ] نصب indicator در مسیر صحیح Terminal.
+[ ] compilation واقعی با MetaEditor/toolchain موجود.
+[ ] ورود خطای compilation به repair loop.
+[ ] تشخیص indicator نصب‌شده در Terminal.
+[ ] خواندن data/buffer indicator تولیدشده.
+[ ] ثبت source، version، compile result و وضعیت نصب.
+[ ] permission و audit برای نصب/تغییر indicator.
+
+## 3. معماری Agent داینامیک
+
+[ ] مسیر اصلی: User → Semantic Understanding → Context/Memory → Planning → Capability Selection → Tool Execution → Verification → Reasoning → Response.
+[ ] منطق ثابت market_context و keyword routing نباید هسته Agent را تشکیل دهد.
+[ ] Chat ساده به مسیر سبک و کم‌هزینه برود.
+[ ] Coding به مسیر تخصصی coding/implementation برود.
+[ ] Reasoning و taskهای پیچیده به مدل/مسیر قوی‌تر بروند.
+[ ] Market/MetaTrader فقط هنگام نیاز capability مربوطه را فعال کند.
+[ ] Research از retrieval/research capability استفاده کند.
+[ ] Tool selection بر اساس schema و capability باشد.
+[ ] model کوچک‌تر برای routing و model قوی‌تر برای taskهای پیچیده قابل انتخاب باشد.
+[ ] fallback بین model/providerها وجود داشته باشد.
+
+### سناریوهای پذیرش
+
+[ ] «سلام» بدون اجرای MetaTrader پاسخ داده شود.
+[ ] «یک برنامه Python بنویس» وارد coding workflow شود.
+[ ] «قیمت EURUSD الان چنده؟» داده زنده MT4/MT5 بگیرد.
+[ ] «RSI EURUSD الان چند است؟» indicator واقعی بگیرد.
+[ ] «برای MT4 یک indicator بنویس» وارد MQL4 workflow شود.
+[ ] «indicator را نصب کن و مقدارش را بخوان» تولید → compile → install → readback را انجام دهد.
+[ ] «بازار را با EURUSD و RSI و MACD تحلیل کن» ابزارهای لازم را انتخاب و داده‌ها را وارد reasoning کند.
+
+## 4. حافظه و دانش
+
+[x] SQLite و persistence محلی وجود دارد.
+[x] Memory deduplication و content hashing وجود دارد.
+[x] Dynamic learning domains وجود دارند.
+[x] Curriculumهای تخصصی از جمله Python و SQL Server وجود دارند.
+[x] منابع رسمی و تکمیلی در learning pipeline وجود دارند.
+[ ] Hybrid retrieval واقعی شامل keyword + semantic + metadata + reranking تکمیل و benchmark شود.
+[ ] provenance، version و freshness دانش کامل شود.
+[ ] Context Planner تعیین کند چه memory/file/knowledge/tool برای task لازم است.
+[ ] context compression و token budget کامل شود.
+[ ] دانش وابسته به نسخه و provider دوباره verification شود.
+
+## 5. Software / Coding Agent
+
+[x] Semantic understanding و context continuation وجود دارد.
+[x] Requirements و acceptance criteria برای software task وجود دارد.
+[x] Planning و architecture برای پروژه‌های نرم‌افزاری وجود دارد.
+[x] Workspace و تولید مرحله‌ای پروژه وجود دارد.
+[x] Build/test/validation/repair loop وجود دارد.
+[x] Git lifecycle برای workspace تولیدشده وجود دارد.
+[x] تشخیص MQL4/MQ4 در curriculum موجود است.
+[ ] Coding Agent به Dynamic Capability Routing متصل شود.
+[ ] coding model بر اساس resource budget انتخاب شود.
+[ ] MQL4/MQL5 و Python و سایر زبان‌ها از workflow عمومی Agent استفاده کنند.
+
+## 6. Capability / Tool Registry
+
+[x] Configuration Registry مرکزی وجود دارد.
+[x] UI Action Registry وجود دارد.
+[x] Provider/Model catalog وجود دارد.
+[x] permission و authorization برای عملیات حساس وجود دارد.
+[x] audit logging وجود دارد.
+[ ] Capability Registry نهایی شود تا Agent capabilityها را discover/validate/invoke کند.
+[ ] هر capability دارای name، description، input/output schema، permission، timeout، resource budget، health check و verification contract باشد.
+[ ] قابلیت‌ها بدون تغییر هسته Agent قابل اضافه/غیرفعال شدن باشند.
+
+## 7. Model / Provider
+
+[x] Ollama backend محلی وجود دارد.
+[x] OpenAI-compatible provider وجود دارد.
+[x] Model routing و fallback وجود دارد.
+[x] provider/model health checks وجود دارند.
+[ ] routing بر اساس capability، availability، latency، resource budget و complexity benchmark شود.
+[ ] مدل مناسب Chat/Coding/Reasoning/Embedding از UI مدیریت شود.
+
+## 8. Learning / Research
+
+[x] Curriculum و dynamic learning وجود دارد.
+[x] منابع topic و منابع رسمی وجود دارند.
+[x] review دوره‌ای learning وجود دارد.
+[x] pause/resume مسیرهای learning وجود دارد.
+[ ] Research Agent چندمنبعی با provenance و contradiction check تکمیل شود.
+[ ] دانش جدید قبل از تبدیل شدن به knowledge عمومی verification شود.
+[ ] source/version/date/validity برای knowledge ذخیره شود.
+
+## 9. Security
+
+[x] Authentication و authorization وجود دارد.
+[x] Tool permissions وجود دارند.
+[x] Audit logging وجود دارد.
+[x] self-update و self-repair deny-by-default هستند.
+[ ] MetaTrader read capability permission مستقل داشته باشد.
+[ ] MetaTrader install/write capability permission مستقل داشته باشد.
+[ ] Trading capability در صورت فعال شدن permission و confirmation جداگانه داشته باشد.
+[ ] secretهای Broker/Provider هرگز در log یا knowledge عمومی ذخیره نشوند.
+
+## 10. UI / Settings
+
+اصل UI: Settings باید از یک صفحه شلوغ به فرم‌های مستقل، کوچک، مدرن و قابل مدیریت تبدیل شود.
+
+[ ] General / System
+[ ] LLM Providers
+[ ] Models & Routing
+[ ] Agent / Behavior
+[ ] Memory & Knowledge
+[ ] Learning
+[ ] Tools & Permissions
+[ ] MetaTrader Connections
+[ ] Indicators
+[ ] Coding / Development
+[ ] Git / GitHub
+[ ] Voice / Multimodal
+[ ] Scheduler / Resources
+[ ] Security / Audit
+[ ] Backup / Recovery
+[ ] Diagnostics
+
+[ ] هر فرم فقط یک حوزه را مدیریت کند.
+[ ] Save/Reset/Test/Health Check در فرم مرتبط باشد.
+[ ] مقدار فعلی، default، validation، خطا و persistence مشخص باشد.
+[ ] secretها کنترل مناسب داشته باشند.
+[ ] فرم‌ها responsive و componentized باشند.
+[ ] افزودن setting جدید تا حد امکان schema-driven باشد.
+
+## 11. Coding Standards
+
+[ ] Python مدرن، type hints، schema validation و dependency injection رعایت شود.
+[ ] UI، Application، Domain، Core و Infrastructure جدا باشند.
+[ ] business logic داخل HTML/JS بزرگ قرار نگیرد.
+[ ] فایل‌های بزرگ به moduleهای کوچک با مسئولیت مشخص شکسته شوند.
+[ ] keyword routing برای تصمیم اصلی Agent استفاده نشود.
+[ ] هر capability جدید test و regression test داشته باشد.
+[ ] compile/unit/integration/E2E بر اساس نوع تغییر اجرا شود.
+[ ] failure هرگز success اعلام نشود.
+
+## 12. Verification / Evaluation
+
+[x] self-diagnostics وجود دارد.
+[x] readiness و observability وجود دارند.
+[x] Eval Harness وجود دارد.
+[ ] benchmark واقعی برای routing، retrieval، coding، tool-use و market-data ایجاد شود.
+[ ] baseline قبل/بعد تغییرات مهم ثبت شود.
+[ ] Generator و Verifier تا حد امکان جدا باشند.
+[ ] confidence بر اساس evidence و verification باشد.
+[ ] برای market data، source/symbol/timestamp/freshness بررسی شود.
+
+## 13. منابع سیستم
+
+[x] Scheduler وجود دارد.
+[x] Resource Guard وجود دارد.
+[x] background learning/resource controls وجود دارند.
+[ ] resource budget به model routing متصل شود.
+[ ] taskهای سبک و سنگین queue و budget مستقل داشته باشند.
+[ ] coding/reasoning/market-analysis budget مستقل داشته باشند.
+
+## 14. Voice / Files / Multimodal
+
+[x] Voice وجود دارد.
+[x] Local Files و File Processing وجود دارند.
+[x] Multimodal/Image components وجود دارند.
+[ ] این قابلیت‌ها نیز به Dynamic Capability Routing متصل شوند.
+
+## 15. Scheduler / Events
+
+[x] Scheduler وجود دارد.
+[x] learning review دوره‌ای وجود دارد.
+[x] event/runtime components وجود دارند.
+[ ] event-driven Agent با retry/idempotency/dead-letter/audit تکمیل شود.
+[ ] automation از Settings قابل فعال/غیرفعال شدن باشد.
+
+## 16. Self-Repair / Self-Development
+
+[x] diagnostics و self-repair foundation وجود دارد.
+[x] self-update به صورت deny-by-default طراحی شده است.
+[ ] inspect → diagnose → proposal → isolated test → approval → apply → test → rollback به طور کامل verified شود.
+[ ] Agent بدون policy و approval source اصلی خود را تغییر ندهد.
+
+## 17. Git / Integrations
+
+[x] Git/GitHub integration وجود دارد.
+[x] GitHub write permission در معماری وجود دارد.
+[ ] integrationهای جدید از Capability Registry استفاده کنند.
+[ ] credentialها فقط به صورت secret ذخیره شوند.
+
+## 18. Definition of Done
+
+هر capability فقط وقتی [x] می‌شود که:
+[ ] implementation کامل باشد.
+[ ] UI/API کامل باشد.
+[ ] persistence کامل باشد.
+[ ] permission/audit کامل باشد.
+[ ] validation واقعی انجام شده باشد.
+[ ] تست مرتبط موفق باشد.
+[ ] failure path بررسی شده باشد.
+[ ] این فایل به‌روزرسانی شده باشد.
+[ ] در صورت task-based بودن، قابلیت با semantic routing و بدون trigger ثابت کار کند.
+
+## 19. ترتیب اجرای توسعه
+
+### مرحله 1 — MetaTrader Foundation
+[ ] MT4/MT5 connection
+[ ] Broker server آزاد
+[ ] secure persistence
+[ ] connection test
+[ ] live tick
+[ ] candles
+[ ] standard indicators
+
+### مرحله 2 — Dynamic Agent Tools
+[ ] Capability Registry
+[ ] dynamic tool selection
+[ ] schema-based calls
+[ ] verification loop
+
+### مرحله 3 — Indicator Engineering
+[ ] MQL4 generation
+[ ] MQL5 generation
+[ ] compile
+[ ] install
+[ ] readback
+[ ] repair loop
+
+### مرحله 4 — Dynamic Chat/Coding/Market Routing
+[ ] lightweight chat
+[ ] coding path
+[ ] reasoning path
+[ ] market path
+[ ] automatic model selection
+
+### مرحله 5 — Modern Settings UI
+[ ] separate forms
+[ ] componentized UI
+[ ] provider/model forms
+[ ] MetaTrader form
+[ ] indicators form
+[ ] permissions form
+
+### مرحله 6 — Verification and Optimization
+[ ] benchmarks
+[ ] regression suite
+[ ] hardware-aware budgets
+[ ] latency/token measurement
+[ ] reliability verification
+
+## 20. ماژول‌ها و قابلیت‌های موجود در repository
+
+[x] Agent / Agent Runtime
+[x] Semantic Router / Domain Router
+[x] Software Agent
+[x] Project Builder / Workspace
+[x] Memory / SQLite persistence
+[x] Dynamic Learning / Curriculum
+[x] Web Learning / Research
+[x] Model Manager / Model Router
+[x] Provider Registry / Provider adapters
+[x] Tooling / Executor
+[x] Policy / Access Control
+[x] Authentication
+[x] Scheduler
+[x] Resource Guard
+[x] Observability / Diagnostics
+[x] Eval Harness
+[x] Git / GitHub integration
+[x] File Processing / Local Files
+[x] Voice
+[x] Multimodal / Image capability
+[x] Backup / Recovery components
+[x] Self Repair
+[x] Self Update foundation
+[x] UI Action Registry
+[x] Configuration Registry
+[x] Settings UI
+[ ] MetaTrader capability — code exists but end-to-end complete/verified نیست.
+[ ] Indicator install/readback — کامل نیست.
+[ ] Fully dynamic capability-driven routing — کامل و verified نیست.
+[ ] Modern separated Settings UI — کامل نیست.
+
+## 21. قوانین مستندات
+
+[x] این فایل Source of Truth roadmap و status است.
+[ ] مستندات تکراری و متناقض حذف شوند.
+[ ] وضعیت فقط با evidence/test/verification تغییر کند.
+[ ] code comment جای roadmap را نگیرد.
+[ ] بعد از هر تغییر مهم، همین فایل به‌روزرسانی شود.
+
+## 22. معیار اصلی پذیرش MetaTrader
+
+اولویت فعلی این زنجیره است:
+
+Settings → Secure Connection → MT4/MT5 Terminal → Broker → Live Data → Agent Tool → Verification → LLM Reasoning → User Answer
+
+و سپس:
+
+Agent → MQL4/MQL5 Generation → Compile → Install → Terminal → Indicator Data → Agent → Answer
+
+تا زمانی که این دو زنجیره end-to-end تست و verification نشده باشند، قابلیت MetaTrader تکمیل محسوب نمی‌شود.
