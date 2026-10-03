@@ -59,6 +59,13 @@ def _candidate_paths(cfg: dict[str, Any]) -> list[Path]:
     # A configured bridge_file may itself be absolute.
     if bridge.is_absolute():
         candidates.insert(0, bridge.resolve())
+
+    # MT4 FILE_COMMON lives in MetaTrader's shared Terminal\Common\Files
+    # directory. This avoids confusing the program-install directory with the
+    # terminal data directory (which is where MQL4\Files actually lives).
+    appdata = str(__import__("os").environ.get("APPDATA", "") or "").strip()
+    if appdata:
+        candidates.append((Path(appdata) / "MetaQuotes" / "Terminal" / "Common" / "Files" / bridge.name).resolve())
     seen: set[str] = set()
     return [p for p in candidates if not (str(p) in seen or seen.add(str(p)))]
 
