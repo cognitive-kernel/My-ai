@@ -42,3 +42,9 @@ def test_encrypted_backup_rejects_wrong_password(tmp_path):
             )
     finally:
         backup_manager.DB_PATH = original
+
+
+def test_encryption_policy_rejects_short_configured_password(monkeypatch):
+    monkeypatch.setattr(backup_manager, "get_setting", lambda key, default=None: "aes-gcm" if key == "database.backup.encryption" else "short")
+    with pytest.raises(ValueError, match="at least 12"):
+        backup_manager._encryption_password()
