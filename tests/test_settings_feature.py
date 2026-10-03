@@ -183,3 +183,15 @@ def test_migration_management_is_exposed_in_settings_ui():
     assert "id=\'migration\'" in source
     assert "loadMigrationGUI" in script
     assert "runMigrationGUI" in script
+
+
+def test_provider_delete_requires_confirmation(monkeypatch):
+    from my_ai import settings_feature
+    monkeypatch.setattr(settings_feature, "require_admin", lambda request: {"id": 1})
+    try:
+        settings_feature.settings_provider_delete(1, object())
+    except settings_feature.HTTPException as exc:
+        assert exc.status_code == 400
+        assert "confirmation" in str(exc.detail).lower()
+    else:
+        raise AssertionError("provider deletion must require explicit confirmation")
