@@ -183,7 +183,15 @@ def list_history(namespace: str, name: str | None = None, limit: int = 200) -> l
     with connect() as conn: rows = conn.execute(sql, params).fetchall()
     return [dict(r) | {"payload": json.loads(r["payload_json"] or "{}"), "enabled": bool(r["enabled"])} for r in rows]
 
-def export_namespace(namespace: str) -> dict[str, Any]: return {"namespace": namespace, "version": 1, "records": list_records(namespace, include_disabled=True)}
+def export_namespace(namespace: str, *, approved: bool = False) -> dict[str, Any]:
+    policy = get_record("security.export", namespace) or get_record("security.export", "default")
+    if policy and policy.get("enabled"):
+        payload = dict(policy.get("payload") or {})
+        if not bool(payload.get("allow", True)):
+            raise PermissionError("Export is denied by security.export policy.")
+        if bool(payload.get("require_approval", True)) and not approved:
+            raise PermissionError("Export requires explicit approval.")
+    return {"namespace": namespace, "version": 1, "records": list_records(namespace, include_disabled=True)}
 
 def import_namespace(namespace: str, records: list[dict[str, Any]]) -> int:
     if not isinstance(records, list): raise ValueError("records must be a list")
