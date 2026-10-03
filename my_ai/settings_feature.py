@@ -32,6 +32,7 @@ from .evaluation_registry import upsert_suite, list_suites, create_baseline, pro
 from .integration_catalog import register_integration, list_integrations, register_webhook, list_webhooks, map_event_action, list_event_actions
 from .security_catalog import define_role, define_capability, set_permission, set_network_policy, set_filesystem_policy, set_subprocess_policy, set_self_modification_policy, list_security_policies
 from .registries import publish_workflow, update_workflow, list_workflows
+from .metatrader_adapter import test_connection as mt_test_connection, quote as mt_quote, bars as mt_bars, indicator as mt_indicator
 
 router = APIRouter(tags=["settings"])  # roadmap curriculum extraction integration
 _workers = ThreadPoolExecutor(max_workers=1, thread_name_prefix="myai-learning")
@@ -1119,6 +1120,60 @@ def settings_config(request: Request):
             "negative_prompt": str(get_setting("image.negative_prompt", "")),
         },
     }
+
+
+@router.get("/settings/mt4mt5")
+def settings_mt4mt5(request: Request):
+    require_admin(request)
+    from .metatrader_adapter import config as mt_config
+    c = mt_config()
+    c["password_configured"] = bool(c.pop("password", ""))
+    return c
+
+
+@router.post("/settings/mt4mt5/test")
+def settings_mt4mt5_test(request: Request):
+    user = require_admin(request)
+    try:
+        result = mt_test_connection()
+    except Exception as exc:
+        result = {"connected": False, "error": str(exc)}
+    audit(user, "mt4mt5", "test", "200" if result.get("connected") else "502", "connection-test")
+    return result
+
+
+@router.get("/settings/mt4mt5/quote")
+def settings_mt4mt5_quote(symbol: str, request: Request):
+    require_admin(request)
+    try:
+        return mt_quote(symbol.strip())
+    except Exception as exc:
+        raise HTTPException(502, str(exc)) from exc
+
+
+@router.get("/settings/mt4mt5/bars")
+def settings_mt4mt5_bars(symbol: str, timeframe: str | None = None, count: int = 100, request: Request = None):
+    require_admin(request)
+    try:
+        return mt_bars(symbol.strip(), timeframe, count)
+    except Exception as exc:
+        raise HTTPException(502, str(exc)) from exc
+
+
+@router.post("/settings/mt4mt5/indicator")
+def settings_mt4mt5_indicator(payload: dict[str, Any], request: Request):
+    require_admin(request)
+    try:
+        return mt_indicator(
+            str(payload.get("symbol") or "").strip(),
+            str(payload.get("name") or "").strip(),
+            str(payload.get("timeframe") or "") or None,
+            payload.get("params") or [],
+            int(payload.get("buffer", 0)),
+            int(payload.get("shift", 0)),
+        )
+    except Exception as exc:
+        raise HTTPException(502, str(exc)) from exc
 
 @router.put("/settings/github")
 def save_github_config(r: GithubConfigRequest, request: Request):
