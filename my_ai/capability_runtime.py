@@ -53,7 +53,7 @@ def list_capabilities() -> list[dict[str, Any]]:
     ]
 
 
-def execute_capability(
+def run(
     name: str,
     payload: dict[str, Any],
     *,
