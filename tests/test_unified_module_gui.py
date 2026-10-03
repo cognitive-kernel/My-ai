@@ -16,3 +16,6 @@ def test_module_gui_script_uses_control_plane_routes():
     assert "payload:payload" in source
     assert "moduleGuiKey" in source
     assert "moduleCard" in source
+    assert "moduleActionGUI" in source
+    assert "pollModuleActionGUI" in source
+    assert "Start" in source and "Pause" in source and "Resume" in source and "Stop" in source and "Retry" in source
