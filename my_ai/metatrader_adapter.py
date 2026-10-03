@@ -151,6 +151,7 @@ def test_connection() -> dict[str, Any]:
 
 
 def quote(symbol: str) -> dict[str, Any]:
+    _require_permission("security.metatrader_read")
     c = config()
     if not c["enabled"]:
         raise RuntimeError("MT4/MT5 adapter is disabled")
@@ -160,6 +161,7 @@ def quote(symbol: str) -> dict[str, Any]:
 
 
 def bars(symbol: str, timeframe: str | None = None, count: int = 100) -> dict[str, Any]:
+    _require_permission("security.metatrader_read")
     c = config()
     timeframe = (timeframe or c["timeframe"]).upper()
     count = max(1, min(int(count), 5000))
@@ -169,6 +171,7 @@ def bars(symbol: str, timeframe: str | None = None, count: int = 100) -> dict[st
 
 
 def indicator(symbol: str, name: str, timeframe: str | None = None, params: list[Any] | None = None, buffer: int = 0, shift: int = 0) -> dict[str, Any]:
+    _require_permission("security.metatrader_read")
     c = config()
     if not c["indicators"]:
         raise RuntimeError("Indicator access is disabled")
