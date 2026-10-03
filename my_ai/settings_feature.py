@@ -632,8 +632,10 @@ def settings_provider_create(payload: ProviderCatalogRequest, request: Request):
         raise HTTPException(status_code=422, detail=str(exc))
 
 @router.delete("/settings/providers/{provider_id}")
-def settings_provider_delete(provider_id: int, request: Request):
+def settings_provider_delete(provider_id: int, request: Request, confirm: bool = False):
     require_admin(request)
+    if not confirm:
+        raise HTTPException(400, "Provider deletion requires explicit confirmation.")
     delete_provider(provider_id)
     return {"deleted": provider_id}
 

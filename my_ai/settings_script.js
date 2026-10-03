@@ -234,6 +234,7 @@ async function loadRoutingGUI(){
     box.innerHTML=rules+fb||"Routing/Fallback ثبت نشده است";
   }catch(e){box.textContent="خطا: "+e.message}
 }
+async function deleteProviderCatalog(id){if(!confirm("این Provider حذف شود؟"))return;try{await req("/settings/providers/"+encodeURIComponent(id)+"?confirm=true",{method:"DELETE"});await loadProviderCatalog()}catch(e){setText("catalogout","خطا: "+e.message)}}
 async function saveRoutingRuleGUI(){
   try{await req("/settings/routing/rule",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({task:byId("route_task").value.trim(),model_id:byId("route_model").value.trim(),provider_id:byId("route_provider").value?Number(byId("route_provider").value):null,priority:Number(byId("route_priority").value||100),enabled:true})});setText("routingout","Routing Rule ذخیره شد.");await loadRoutingGUI()}catch(e){setText("routingout","خطا: "+e.message)}
 }
