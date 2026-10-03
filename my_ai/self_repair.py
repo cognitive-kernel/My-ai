@@ -120,6 +120,26 @@ def apply_repair(proposal_id: str, approved: bool):
         execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_rolled_back",proposal["patch"],tests,0)); raise RuntimeError("Applied repair failed post-apply tests and was rolled back:\n"+tests)
     proposal["approved"]=True; proposal["applied"]=True; proposal["applied_at"]=datetime.now(timezone.utc).isoformat(); path.write_text(json.dumps(proposal,ensure_ascii=False,indent=2),encoding="utf-8"); execute("INSERT INTO fix_attempts(event,patch,test_result,activated) VALUES(?,?,?,?)",("repair_applied",proposal["patch"],tests,1)); record_decision("self_repair","apply",{"proposal_id":proposal_id}); notify("self_repair_applied",{"proposal_id":proposal_id,"base":proposal["base"]}); return {"status":"applied","proposal_id":proposal_id,"base":proposal["base"],"tests":tests,"working_tree":"modified"}
 
+def run_repair_lifecycle(issue: str, *, approval=None) -> dict:
+    """Execute inspect → diagnose → proposal → isolated verification → approval → apply → post-check → rollback."""
+    diagnosis = diagnose_local()
+    proposal = propose_repair(issue)
+    if not proposal.get("isolated_tests_passed"):
+        return {"stage": "isolated_test", "diagnosis": diagnosis, "proposal": proposal, "applied": False}
+    approved = bool(approval(proposal)) if callable(approval) else False
+    if not approved:
+        return {"stage": "approval", "diagnosis": diagnosis, "proposal": proposal, "approved": False, "applied": False}
+    result = apply_repair(str(proposal["id"]), approved=True)
+    return {
+        "stage": "post_verification",
+        "diagnosis": diagnosis,
+        "proposal": proposal,
+        "result": result,
+        "applied": True,
+        "rollback_on_failure": True,
+    }
+
+
 def list_proposals():
     PROPOSALS.mkdir(parents=True,exist_ok=True); items=[]
     for path in sorted(PROPOSALS.glob("*.json"),key=lambda p:p.stat().st_mtime,reverse=True):
