@@ -1,5 +1,3 @@
-from types import SimpleNamespace
-
 from my_ai import settings_feature
 
 
