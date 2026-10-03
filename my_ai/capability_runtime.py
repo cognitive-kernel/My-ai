@@ -5,7 +5,7 @@ from typing import Any, Callable
 import json
 import re
 
-from .capability_registry import CapabilitySpec, register, validate_input
+from .capability_registry import CapabilitySpec, register, discover
 from .metatrader_adapter import market_context, test_connection
 from .software_reproduction import analyze_source
 from .reproduction_builder import generate_workspace
@@ -46,7 +46,17 @@ def _metatrader(message: str) -> CapabilityResult:
         return CapabilityResult("metatrader", False, error=str(exc))
 
 
-_CAPABILITIES: dict[str, Callable[[str], CapabilityResult]] = {"metatrader": _metatrader}
+def _delegated(name: str, message: str) -> CapabilityResult:
+    return CapabilityResult(name, True, f"CAPABILITY DELEGATION: {name} is handled by the specialized Agent workflow.", {"request": str(message)[:20000]})
+
+
+_CAPABILITIES: dict[str, Callable[[str], CapabilityResult]] = {
+    "metatrader": _metatrader,
+    "coding": lambda message: _delegated("coding", message),
+    "research": lambda message: _delegated("research", message),
+    "files": lambda message: _delegated("files", message),
+    "multimodal": lambda message: _delegated("multimodal", message),
+}
 
 
 def run(intent: Any, message: str) -> CapabilityResult | None:
@@ -56,7 +66,6 @@ def run(intent: Any, message: str) -> CapabilityResult | None:
         names = (primary, *names)
     for name in names:
         if name == "software_reproduction":
-            validate_input(name, {"message": message})
             args = getattr(intent, "args", {}) or {}
             return _software_reproduction(message, list(args.get("urls") or []), str(args.get("project_path") or ""))
         handler = _CAPABILITIES.get(name)
@@ -65,21 +74,21 @@ def run(intent: Any, message: str) -> CapabilityResult | None:
     return None
 
 
-register(CapabilitySpec(
-    name="metatrader",
-    description="Read authorized MT4/MT5 market and indicator data.",
-    input_schema={"type": "object", "required": ["message"]},
-    output_schema={"type": "object"},
-    permission="metatrader.read",
-    timeout_seconds=30,
-    resource_budget={"cpu_percent": 20, "ram_mb": 512, "tool_calls": 5},
-))
-register(CapabilitySpec(
-    name="software_reproduction",
-    description="Analyze an authorized software/site source and produce an independent reconstruction workspace.",
-    input_schema={"type": "object", "required": ["message"]},
-    output_schema={"type": "object"},
-    permission="software.reproduction",
-    timeout_seconds=60,
-    resource_budget={"cpu_percent": 50, "ram_mb": 1024, "tool_calls": 10},
-))
+def _register(name: str, description: str, permission: str, timeout: float, budget: dict[str, Any]) -> None:
+    register(CapabilitySpec(
+        name=name,
+        description=description,
+        input_schema={"type": "object", "required": ["message"]},
+        output_schema={"type": "object"},
+        permission=permission,
+        timeout_seconds=timeout,
+        resource_budget=budget,
+    ))
+
+
+_register("metatrader", "Read authorized MT4/MT5 market and indicator data.", "metatrader.read", 30, {"cpu_percent": 20, "ram_mb": 512, "tool_calls": 5})
+_register("software_reproduction", "Analyze an authorized software/site source and produce an independent reconstruction workspace.", "software.reproduction", 60, {"cpu_percent": 50, "ram_mb": 1024, "tool_calls": 10})
+_register("coding", "Specialized software implementation and project generation.", "coding.execute", 300, {"cpu_percent": 70, "ram_mb": 4096, "tool_calls": 30})
+_register("research", "Multi-source research with provenance and verification.", "research.read", 120, {"cpu_percent": 40, "ram_mb": 2048, "tool_calls": 20})
+_register("files", "Authorized local file inspection and processing.", "files.read", 60, {"cpu_percent": 30, "ram_mb": 1024, "tool_calls": 10})
+_register("multimodal", "Authorized image/audio/multimodal analysis.", "multimodal.read", 120, {"cpu_percent": 50, "ram_mb": 2048, "tool_calls": 10})
