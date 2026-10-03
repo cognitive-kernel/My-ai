@@ -201,6 +201,25 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 [ ] compile/unit/integration/E2E بر اساس نوع تغییر اجرا شود.
 [ ] failure هرگز success اعلام نشود.
 
+## 11.1 اصول مهندسی نرم‌افزار و شکستن فرم‌ها
+
+این پروژه باید با رویکرد engineering-first، modularity و separation of concerns توسعه پیدا کند.
+
+[ ] هر قابلیت ابتدا به component/module مستقل با مسئولیت مشخص شکسته شود.
+[ ] هر فرم UI فقط یک bounded context یا یک وظیفه مشخص را مدیریت کند.
+[ ] فرم‌های بزرگ به sub-formهای کوچک، قابل تست و قابل استفاده مجدد تقسیم شوند.
+[ ] business logic از HTML/JS فرم جدا و در application/domain/infrastructure قرار گیرد.
+[ ] فرم‌ها تا حد امکان schema-driven و componentized باشند.
+[ ] validation، persistence، health check و actionهای هر حوزه در همان حوزه باقی بمانند.
+[ ] dependency بین فرم‌ها از طریق API/service contract باشد، نه دسترسی مستقیم به state داخلی فرم دیگر.
+[ ] هر module دارای interface مشخص، ورودی/خروجی مشخص و تست مستقل باشد.
+[ ] تغییر یک فرم نباید نیازمند تغییر غیرضروری در فرم‌های دیگر باشد.
+[ ] moduleهای بزرگ با معیارهای مسئولیت، coupling و cohesion به‌صورت دوره‌ای بازبینی و در صورت نیاز شکسته شوند.
+[ ] معماری از اصول SOLID، DRY، KISS، dependency inversion، contract-based design و least privilege استفاده کند.
+[ ] refactor فقط با regression test و verification انجام شود.
+[ ] هیچ feature صرفاً برای کاهش تعداد فایل‌ها داخل یک فایل بزرگ تجمیع نشود.
+[ ] observability، error handling و audit بخشی از طراحی هر capability باشند، نه وصله بعدی.
+
 ## 12. Verification / Evaluation
 
 [x] self-diagnostics وجود دارد.
@@ -211,6 +230,67 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 [ ] Generator و Verifier تا حد امکان جدا باشند.
 [ ] confidence بر اساس evidence و verification باشد.
 [ ] برای market data، source/symbol/timestamp/freshness بررسی شود.
+
+## 12.1 تحلیل و بازتولید سایت یا نرم‌افزار
+
+My-AI باید بتواند یک سایت، نرم‌افزار، repository یا artifact مجاز را به‌عنوان ورودی دریافت کند، آن را مهندسی و تحلیل کند و سپس یک پیاده‌سازی مستقل و قابل اجرا بر اساس رفتار و مشخصات استخراج‌شده تولید کند. این قابلیت فقط برای پروژه‌ها و دارایی‌هایی استفاده می‌شود که کاربر مجوز تحلیل و بازتولید آن‌ها را دارد.
+
+### 12.1.1 Discovery و Reverse Engineering
+
+[ ] دریافت ورودی از URL، فایل، repository، archive، screenshot، document یا اجرای محلی در صورت امکان.
+[ ] تشخیص نوع artifact و انتخاب ابزار تحلیل مناسب به‌صورت dynamic.
+[ ] استخراج ساختار صفحات، routeها، componentها، فرم‌ها، navigation و stateهای قابل مشاهده.
+[ ] استخراج APIها، request/response contractها و وابستگی‌های قابل مشاهده در محیط مجاز.
+[ ] تحلیل database/schema/configuration در صورت دسترسی مجاز.
+[ ] تحلیل رفتار UI شامل validation، loading، error، empty state و transitionها.
+[ ] تحلیل responsive behavior و breakpointهای قابل مشاهده.
+[ ] استخراج assetها، typography، spacing، layout و design tokens در صورت مجاز بودن.
+[ ] ساخت Software/System Specification از یافته‌ها همراه با provenance و confidence.
+[ ] ثبت موارد ناشناخته و فرضیات به‌جای حدس زدن.
+
+### 12.1.2 Architecture Reconstruction
+
+[ ] تبدیل یافته‌ها به requirements و acceptance criteria.
+[ ] تولید architecture map شامل frontend، backend، API، database، integrations و deployment.
+[ ] تشخیص boundaryها و moduleهای مستقل.
+[ ] تولید dependency graph و data-flow map.
+[ ] تولید test plan برای رفتارهای مشاهده‌شده.
+[ ] حفظ traceability بین requirement، evidence، implementation و test.
+
+### 12.1.3 Reproduction / Reimplementation
+
+[ ] تولید workspace مستقل برای بازتولید پروژه.
+[ ] تولید frontend و backend متناسب با architecture استخراج‌شده.
+[ ] بازتولید رفتارها و contractهای مشاهده‌شده تا حد امکان.
+[ ] بازتولید UI با componentهای کوچک و قابل نگهداری، نه یک صفحه یا فایل monolithic.
+[ ] بازتولید responsive layout و stateهای UI.
+[ ] تولید migration/schema/configuration مورد نیاز در صورت مجاز بودن.
+[ ] ایجاد mock/stub برای dependencyهایی که در محیط بازتولید قابل دسترسی نیستند.
+[ ] تولید README و runbook برای اجرای پروژه بازتولیدشده.
+[ ] اجرای build، lint، unit، integration و E2E test متناسب با پروژه.
+[ ] اجرای visual regression و behavioral comparison در صورت وجود محیط مرجع.
+[ ] اجرای verification loop و اصلاح اختلاف‌ها به‌صورت مرحله‌ای.
+[ ] ثبت تفاوت‌های باقی‌مانده بین مرجع و بازتولیدشده.
+
+### 12.1.4 Fidelity و Verification
+
+[ ] مقایسه ساختاری route/component/API/data-flow بین مرجع و بازتولید.
+[ ] مقایسه screenshot و visual layout در viewportهای مختلف.
+[ ] مقایسه interaction و state transitionها.
+[ ] مقایسه response schema و error behavior در محیط مجاز.
+[ ] اندازه‌گیری coverage بازتولید نسبت به specification استخراج‌شده.
+[ ] هیچ ادعای «عیناً مشابه» بدون evidence و test report پذیرفته نشود.
+[ ] هر اختلاف باید به requirement، evidence یا محدودیت محیطی trace شود.
+[ ] Generator و Verifier مستقل باشند تا تولیدکننده نتیجه خودش را بدون بررسی تأیید نکند.
+
+### 12.1.5 مرزهای امنیتی و حقوقی
+
+[ ] تحلیل و بازتولید فقط روی دارایی‌هایی انجام شود که کاربر مجوز لازم برای آن‌ها دارد.
+[ ] secret، token، cookie، private key و credential از artifact استخراج‌شده وارد پروژه جدید نشود.
+[ ] credentialهای محیط مرجع هرگز در source code، log یا knowledge عمومی ذخیره نشوند.
+[ ] قابلیت‌های حساس، private APIها و داده‌های خصوصی بدون permission صریح استفاده نشوند.
+[ ] provenance هر artifact و منبع آن ثبت شود.
+[ ] کپی مستقیم asset یا code شخص ثالث فقط در صورت داشتن مجوز مناسب انجام شود؛ در غیر این صورت implementation مستقل بر اساس specification و رفتار مجاز تولید شود.
 
 ## 13. منابع سیستم
 
@@ -362,3 +442,20 @@ Settings → Secure Connection → MT4/MT5 Terminal → Broker → Live Data →
 Agent → MQL4/MQL5 Generation → Compile → Install → Terminal → Indicator Data → Agent → Answer
 
 تا زمانی که این دو زنجیره end-to-end تست و verification نشده باشند، قابلیت MetaTrader تکمیل محسوب نمی‌شود.
+
+## 24. معیار پذیرش قابلیت بازتولید پروژه
+
+زنجیره اصلی این قابلیت:
+
+Source Artifact → Discovery → Evidence Collection → Specification → Architecture Reconstruction → Workspace Generation → Build/Test → Behavioral & Visual Verification → Repair → Re-verification
+
+[ ] ورودی واقعی دریافت و provenance ثبت شده باشد.
+[ ] specification قابل بازبینی تولید شده باشد.
+[ ] architecture و module boundaries مشخص شده باشند.
+[ ] پروژه مستقل تولید شده باشد.
+[ ] فرم‌ها و componentهای UI کوچک و مسئولیت‌محور باشند.
+[ ] build و test موفق یا failureها مستند شده باشند.
+[ ] اختلاف‌های visual/behavioral گزارش شده باشند.
+[ ] repair loop اجرا و دوباره verification شده باشد.
+[ ] گزارش نهایی شامل coverage، تفاوت‌ها، محدودیت‌ها و evidence باشد.
+
