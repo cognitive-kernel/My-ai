@@ -39,6 +39,7 @@ TOOL_RULES = (
     ("/tools/", "tools"),
     ("/files/", "files"),
     ("/image/", "image-generation"),
+    ("/settings/mt4mt5", "metatrader"),
 )
 
 PATH_ACTIONS = {
@@ -76,6 +77,12 @@ PATH_ACTIONS = {
     ("POST", "/skills/{skill_id}/sandbox-test"): "execute",
     ("POST", "/skills/reviews"): "write",
     ("POST", "/image/generate"): "execute",
+    ("POST", "/settings/mt4mt5/test"): "read",
+    ("GET", "/settings/mt4mt5/quote"): "read",
+    ("GET", "/settings/mt4mt5/bars"): "read",
+    ("POST", "/settings/mt4mt5/indicator"): "read",
+    ("POST", "/settings/mt4mt5/indicator/compile"): "write",
+    ("POST", "/settings/mt4mt5/indicator/install"): "write",
     ("POST", "/chat"): "execute",
     ("POST", "/chat/stream"): "execute",
     ("POST", "/learning/start"): "execute",
