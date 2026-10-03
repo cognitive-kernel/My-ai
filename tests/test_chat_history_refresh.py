@@ -60,3 +60,10 @@ def test_chat_api_persists_failures_instead_of_losing_the_turn():
     api = Path("my_ai/api.py").read_text(encoding="utf-8")
     assert "try:\n            answer=agent.chat(msg,sid,attachments=attachments)" in api
     assert "_persist_api_chat_turn(sid,msg,\"خطا در پاسخ‌گویی: \"+error_text)" in api
+
+
+def test_chat_history_empty_response_does_not_clear_active_view():
+    html = Path("my_ai/static/index.html").read_text(encoding="utf-8")
+    assert "var hasServerMessages=Array.isArray(j.messages)&&j.messages.length>0;" in html
+    assert "if(hasServerMessages||activeLocal!==String(currentSessionId)){renderHistory" in html
+    assert "پیام‌های فعلی حفظ شدند" in html
