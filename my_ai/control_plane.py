@@ -112,11 +112,23 @@ def _validate_payload(namespace: str, name: str, payload: dict[str, Any]) -> Non
 
 
 def put_record(namespace: str, name: str, payload: dict[str, Any] | None = None, *, enabled: bool = True, record_id: str | None = None) -> dict[str, Any]:
-    ensure_schema(); namespace, name = namespace.strip(), name.strip(); _validate_payload(namespace, name, payload or {})
+    ensure_schema(); namespace, name = namespace.strip(), name.strip(); payload = dict(payload or {}); _validate_payload(namespace, name, payload)
     now = time.time()
     with connect() as conn:
         existing = conn.execute("SELECT id,version,created_at FROM control_plane_records WHERE namespace=? AND name=?", (namespace, name)).fetchone()
-        rid = str(existing["id"]) if existing else (record_id or str(uuid.uuid4())); version = int(existing["version"]) + 1 if existing else 1; created = float(existing["created_at"]) if existing else now
+        current_version = int(existing["version"]) if existing else 0
+        policy_row = None if namespace == "security.versioning" else conn.execute("SELECT payload_json,enabled,name FROM control_plane_records WHERE namespace=? AND name IN (?,?) ORDER BY CASE WHEN name=? THEN 0 ELSE 1 END LIMIT 1", ("security.versioning", namespace, "default", namespace)).fetchone()
+        if policy_row and bool(policy_row["enabled"]):
+            policy = json.loads(policy_row["payload_json"] or "{}")
+            if bool(policy.get("required", True)):
+                requested_version = payload.get("version")
+                if requested_version is None or int(requested_version) != current_version + 1:
+                    raise ValueError(f"security.versioning requires payload.version={current_version + 1}")
+            if bool(policy.get("compatibility_check", True)) and "compatible_versions" in payload:
+                versions = payload["compatible_versions"]
+                if not isinstance(versions, list) or not all(isinstance(v, str) and v.strip() for v in versions):
+                    raise ValueError("compatible_versions must be a list of non-empty strings")
+        rid = str(existing["id"]) if existing else (record_id or str(uuid.uuid4())); version = int(payload.get("version") or (current_version + 1)); created = float(existing["created_at"]) if existing else now
         conn.execute("INSERT INTO control_plane_records(id,namespace,name,payload_json,version,enabled,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(namespace,name) DO UPDATE SET payload_json=excluded.payload_json,version=excluded.version,enabled=excluded.enabled,updated_at=excluded.updated_at", (rid, namespace, name, json.dumps(payload or {}, ensure_ascii=False), version, int(enabled), created, now))
         payload_json = json.dumps(payload or {}, ensure_ascii=False)
         conn.execute("INSERT INTO control_plane_history(namespace,name,version,payload_json,enabled,created_at) VALUES(?,?,?,?,?,?)", (namespace, name, version, payload_json, int(enabled), now))
