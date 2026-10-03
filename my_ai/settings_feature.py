@@ -32,7 +32,7 @@ from .evaluation_registry import upsert_suite, list_suites, create_baseline, pro
 from .integration_catalog import register_integration, list_integrations, register_webhook, list_webhooks, map_event_action, list_event_actions
 from .security_catalog import define_role, define_capability, set_permission, set_network_policy, set_filesystem_policy, set_subprocess_policy, set_self_modification_policy, list_security_policies
 from .registries import publish_workflow, update_workflow, list_workflows
-from .metatrader_adapter import test_connection as mt_test_connection, quote as mt_quote, bars as mt_bars, indicator as mt_indicator
+from .metatrader_adapter import test_connection as mt_test_connection, quote as mt_quote, bars as mt_bars, indicator as mt_indicator, compile_indicator as mt_compile_indicator, install_indicator as mt_install_indicator
 from . import settings_ui
 
 router = APIRouter(tags=["settings"])  # roadmap curriculum extraction integration
@@ -1161,6 +1161,30 @@ def settings_mt4mt5_bars(request: Request, symbol: str, timeframe: str | None = 
         raise HTTPException(502, str(exc)) from exc
 
 
+
+@router.post("/settings/mt4mt5/indicator/compile")
+def settings_mt4mt5_indicator_compile(payload: dict[str, Any], request: Request):
+    user = require_admin(request)
+    try:
+        result = mt_compile_indicator(str(payload.get("source_path") or ""), str(payload.get("platform") or ""))
+        audit(user, "metatrader", "indicator-compile", "200", str(payload.get("platform") or ""))
+        return result
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(502, str(exc)) from exc
+
+@router.post("/settings/mt4mt5/indicator/install")
+def settings_mt4mt5_indicator_install(payload: dict[str, Any], request: Request):
+    user = require_admin(request)
+    try:
+        result = mt_install_indicator(str(payload.get("source_path") or ""), str(payload.get("platform") or ""))
+        audit(user, "metatrader", "indicator-install", "200", str(payload.get("platform") or ""))
+        return result
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(502, str(exc)) from exc
 @router.post("/settings/mt4mt5/indicator")
 def settings_mt4mt5_indicator(payload: dict[str, Any], request: Request):
     require_admin(request)
