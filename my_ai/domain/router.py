@@ -126,9 +126,6 @@ def classify(text: str, context: str | None = None, classifier: StructuredRouter
         system="You are My-AI's context-aware semantic router. Understand intent from meaning, not trigger words. Output only schema-constrained routing data.",
     )
     action = data.get("action")
-    if _is_read_only_market_query(text):
-        data = {**data, "primary": "chat", "intents": ["chat"], "action": "answer", "confidence": max(float(data.get("confidence", 0.0)), 0.95)}
-        action = "answer"
     if data.get("primary") in HIGH_RISK and action not in {"execute", "modify_artifact", "save"}:
         data = {**data, "primary": "chat", "intents": ["chat"], "action": action}
     if data.get("action") in {"create_artifact", "modify_artifact"} and data.get("primary") == "code_execution":
