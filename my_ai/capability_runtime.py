@@ -93,13 +93,25 @@ def run(intent: Any, message: str) -> CapabilityResult | None:
     return None
 
 
+def _health_metatrader() -> dict[str, Any]:
+    try:
+        status = test_connection()
+        return {"healthy": bool(status.get("connected")), "version": status.get("version"), "connected": bool(status.get("connected"))}
+    except Exception as exc:
+        return {"healthy": False, "error": str(exc)}
+
+
+def _health_local() -> dict[str, Any]:
+    return {"healthy": True, "runtime": "available"}
+
+
 def _verify_result(value: Any) -> bool:
     return isinstance(value, dict) and bool(
         value.get("source") or value.get("specifications") or value.get("request") is not None
     )
 
 
-def _register(name: str, description: str, permission: str, timeout: float, budget: dict[str, Any]) -> None:
+def _register(name: str, description: str, permission: str, timeout: float, budget: dict[str, Any], health_check=None) -> None:
     register(CapabilitySpec(
         name=name,
         description=description,
@@ -109,10 +121,11 @@ def _register(name: str, description: str, permission: str, timeout: float, budg
         timeout_seconds=timeout,
         resource_budget=budget,
         verifier=_verify_result,
+        health_check=health_check or _health_local,
     ))
 
 
-_register("metatrader", "Read authorized MT4/MT5 market and indicator data.", "metatrader.read", 30, {"cpu_percent": 20, "ram_mb": 512, "tool_calls": 5})
+_register("metatrader", "Read authorized MT4/MT5 market and indicator data.", "metatrader.read", 30, {"cpu_percent": 20, "ram_mb": 512, "tool_calls": 5}, _health_metatrader)
 _register("software_reproduction", "Analyze an authorized software/site source and produce an independent reconstruction workspace.", "software.reproduction", 60, {"cpu_percent": 50, "ram_mb": 1024, "tool_calls": 10})
 _register("coding", "Specialized software implementation and project generation.", "coding.execute", 300, {"cpu_percent": 70, "ram_mb": 4096, "tool_calls": 30})
 _register("research", "Multi-source research with provenance and verification.", "research.read", 120, {"cpu_percent": 40, "ram_mb": 2048, "tool_calls": 20})
