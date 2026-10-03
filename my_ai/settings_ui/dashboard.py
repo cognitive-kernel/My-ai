@@ -2,19 +2,8 @@ from html import escape
 from .shell import shell
 
 def index() -> str:
-    cards = [
-        ("MetaTrader 4/5", "اتصال، حساب، سرور، ترمینال، تست اتصال و داده بازار.", "/settings/ui/metatrader"),
-        ("Indicators", "تولید، compile، نصب و readback اندیکاتورها.", "/settings/ui/indicators"),
-        ("Tools & Permissions", "مجوزهای مستقل read، install/write و trade.", "/settings/ui/permissions"),
-        ("مدل و Provider", "Providerها، مدل‌ها و مسیر انتخاب مدل.", "/settings/providers"),
-        ("یادگیری", "دوره‌ها، منابع و زمان‌بندی یادگیری.", "/learning"),
-        ("امنیت", "Policy، نقش‌ها و مجوزهای ابزار.", "/settings/security-policies"),
-        ("GitHub", "اتصال GitHub و تنظیمات repository.", "/settings/ui/github"),
-        ("منابع سیستم", "CPU، RAM و تنظیمات اجرای مدل.", "/settings/ui/resources"),
-        ("لاگ و مشاهده‌پذیری", "سطح لاگ و وضعیت مشاهده‌پذیری.", "/settings/ui/observability"),
-        ("تنظیمات پیشرفته", "Registry، تاریخچه، import/export و کنترل‌های مدیریتی.", "/settings/ui/advanced"),
-    ]
-    body = "<h1>تنظیمات</h1><p class='muted'>هر حوزه یک فرم مستقل دارد؛ هر فرم فقط مسئول همان bounded context است.</p><div class='grid'>"
+    cards = [["LLM Providers","Providerها و credentialهای مدل.","/settings/providers"],["Models & Routing","مدل‌ها، taskها، routing و fallback.","/settings/models"],["Agent / Behavior","رفتار، planning و workflow Agent.","/settings/control-plane?namespace=agent.behavior"],["Memory & Knowledge","حافظه، knowledge و retrieval.","/settings/control-plane?namespace=knowledge.registry"],["Learning","دوره‌ها، منابع و زمان‌بندی یادگیری.","/learning"],["Tools & Permissions","مجوز ابزارها و capabilityهای حساس.","/settings/ui/permissions"],["MetaTrader 4/5","اتصال، حساب، سرور، ترمینال و داده بازار.","/settings/ui/metatrader"],["Indicators","تولید، compile، نصب و readback اندیکاتورها.","/settings/ui/indicators"],["Coding / Development","Project builder و workflow توسعه.","/settings/control-plane?namespace=execution.projects"],["Git / GitHub","اتصال GitHub و تنظیمات repository.","/settings/ui/github"],["Voice / Multimodal","تنظیمات image، voice و multimodal.","/settings/control-plane?namespace=multimodal.routing"],["Scheduler / Resources","زمان‌بندی، CPU، RAM و budgetها.","/settings/ui/resources"],["Security / Audit","Policy، role، approval و audit.","/settings/security-policies"],["Backup / Recovery","Backup، restore و migration.","/settings/backup"],["Diagnostics","Metrics، health و capability registry.","/settings/ui/observability"],["Advanced","Registry، history و کنترل‌های مدیریتی.","/settings/ui/advanced"]]
+    body = "<h1>تنظیمات</h1><p class='muted'>هر حوزه یک bounded context مستقل دارد و فرم‌ها کوچک و مسئولیت‌محور هستند.</p><div class='grid'>"
     body += "".join(f"<section class='card'><h2>{escape(t)}</h2><p>{escape(d)}</p><a class='button' href='{h}'>باز کردن</a></section>" for t,d,h in cards)
     body += "</div>"
     return shell("تنظیمات", body)
