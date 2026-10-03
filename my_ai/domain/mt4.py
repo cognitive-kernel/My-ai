@@ -35,13 +35,13 @@ class MT4Quote:
 
 def _config() -> dict[str, Any]:
     return {
-        "enabled": get_bool("mt4.enabled", False),
-        "install_path": str(get_setting("mt4.install_path", "") or "").strip(),
-        "library_path": str(get_setting("mt4.library_path", "") or "").strip(),
-        "account": str(get_setting("mt4.account", "") or "").strip(),
-        "server": str(get_setting("mt4.server", "") or "").strip(),
-        "bridge_file": str(get_setting("mt4.bridge_file", "MQL4/Files/my_ai_tick.json") or "").strip(),
-        "max_age_seconds": max(1.0, float(get_setting("mt4.max_tick_age_seconds", 10))),
+        "enabled": get_bool("domain.mt4mt5.enabled", False),
+        "install_path": str(get_setting("domain.mt4mt5.install_path", "") or "").strip(),
+        "library_path": str(get_setting("domain.mt4mt5.library_path", "") or "").strip(),
+        "account": str(get_setting("domain.mt4mt5.account", "") or "").strip(),
+        "server": str(get_setting("domain.mt4mt5.server", "") or "").strip(),
+        "bridge_file": str(get_setting("domain.mt4mt5.bridge_file", "MQL4/Files/my_ai_tick.json") or "").strip(),
+        "max_age_seconds": max(1.0, float(get_setting("domain.mt4mt5.max_tick_age_seconds", 10))),
     }
 
 
