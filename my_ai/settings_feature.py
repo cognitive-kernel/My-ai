@@ -1514,6 +1514,16 @@ def settings_page(request: Request):
     require_admin(request)
     return HTMLResponse(settings_ui.index(), headers={"Cache-Control": "no-store"})
 
+
+@router.get("/settings/ui/indicators", response_class=HTMLResponse)
+def settings_indicators_ui(request: Request):
+    require_admin(request)
+    return HTMLResponse(settings_ui.indicators(), headers={"Cache-Control": "no-store"})
+
+@router.get("/settings/ui/permissions", response_class=HTMLResponse)
+def settings_permissions_ui(request: Request):
+    require_admin(request)
+    return HTMLResponse(settings_ui.permissions(), headers={"Cache-Control": "no-store"})
 @router.get("/settings/ui/metatrader", response_class=HTMLResponse)
 def settings_metatrader_ui(request: Request):
     require_admin(request)
