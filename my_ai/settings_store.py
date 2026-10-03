@@ -208,6 +208,19 @@ _RUNTIME_CONFIG_FIELDS = {
     "learning_source_max_chars": ("int", 1000, False),
     "resource_wait_seconds": ("float", 1, False),
 }
+_RUNTIME_CONFIG_DEFAULTS = {
+    "ollama_base_url": "http://127.0.0.1:11434", "ollama_model": "qwen2.5:7b", "ollama_num_ctx": 2048, "ollama_num_thread": 8, "ollama_num_gpu": 0, "ollama_keep_alive": "10m",
+    "routing_model": "qwen2.5:7b", "router_llm_enabled": "true", "coding_model": "qwen2.5:7b", "fallback_model": "qwen2.5:7b", "embedding_model": "nomic-embed-text",
+    "research_source_timeout": 15.0, "max_web_chars": 30000, "research_search_provider": "duckduckgo-html", "research_domain_allowlist": "", "research_domain_denylist": "", "research_source_rank": "official,docs,academic,other",
+    "exec_memory_mb": 2048, "exec_pids": 32, "exec_cpu_cores": 1.0, "memory_backend": "sqlite", "memory_retention_days": 365, "memory_chunk_size": 1000, "memory_chunk_overlap": 100,
+    "knowledge_duplicate_threshold": 0.92, "cache_ttl_seconds": 60, "llm_provider": "auto", "llm_retry_attempts": 2, "llm_retry_backoff_seconds": 0.5, "llm_timeout_seconds": 300.0,
+    "llm_model_retry_attempts": 2, "llm_model_retry_backoff_seconds": 0.5, "llm_model_timeout_seconds": 300.0, "openai_base_url": "https://api.openai.com/v1", "openai_api_key": "", "openai_model": "gpt-5.6-luna",
+    "db_path": "data/myai.db", "exec_timeout": 10, "exec_mode": "container", "exec_memory": "256m", "exec_cpus": "1.0", "exec_output_chars": 12000, "exec_image": "python:3.11-slim",
+    "host": "127.0.0.1", "port": 8000, "offline_strict": "false", "read_only": "false", "decision_log": "false", "scheduler_interval_seconds": 3600,
+    "scheduler_max_cpu_percent": 70.0, "scheduler_max_ram_percent": 80.0, "scheduler_auto_resume": "false", "learning_max_retries": 5, "learning_max_concurrent_workers": 2,
+    "learning_source_timeout_seconds": 8.0, "learning_source_max_chars": 12000, "resource_wait_seconds": 30.0,
+}
+
 for _field, (_kind, _minimum, _secret) in _RUNTIME_CONFIG_FIELDS.items():
     _key_name = "runtime." + _field
     if _kind == "enum":
@@ -226,6 +239,7 @@ for _field, (_kind, _minimum, _secret) in _RUNTIME_CONFIG_FIELDS.items():
         _spec = {"version": 3, "type": "float", "default": 0.0, "min": _minimum, "description": "Runtime setting bridge for " + _field}
     else:
         _spec = {"version": 3, "type": "text", "default": "", "max_length": _minimum or 10000, "description": "Runtime setting bridge for " + _field}
+    _spec["default"] = _RUNTIME_CONFIG_DEFAULTS[_field]
     if _secret:
         _spec["secret"] = True
     SETTING_REGISTRY[_key_name] = _spec
