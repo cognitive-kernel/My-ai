@@ -28,3 +28,5 @@ def test_registry_runtime_setting_changes_live_config(monkeypatch, tmp_path):
 
 def test_runtime_secret_is_marked_secret():
     assert settings_store.SETTING_REGISTRY["runtime.openai_api_key"]["secret"] is True
+
+# Registry bridge regression coverage.
