@@ -5,6 +5,7 @@ import threading
 import logging
 import time
 import uuid
+from pathlib import Path
 from .learner import LearningEngine
 from .platform import resource_status
 from .curriculum import LANGUAGE_CURRICULA, canonical_language
@@ -14,13 +15,54 @@ from .dynamic_learning import due_domains
 from .config import settings
 from .settings_store import get_setting
 from .resource_guard import limits as resource_limits
+from .backup_manager import backup as backup_database, prune_backups
 
 logger = logging.getLogger(__name__)
 
 class StudyScheduler:
     def __init__(self, interval_seconds=None):
         self.interval_seconds=int(interval_seconds or settings.scheduler_interval_seconds); self._workers={}; self._review_stop=threading.Event(); self._monitor_thread=None
-        self.language="Python"; self.last_result=None; self.current_topic=None; self.stage="idle"; self.error=None; self._lock=threading.RLock(); self._worker_slots=threading.BoundedSemaphore(max(1,int(get_setting("scheduler.concurrency",settings.learning_max_concurrent_workers)))) ; self._supervisor_stop=threading.Event(); self._supervisor_thread=None; self._lease_owner=uuid.uuid4().hex; self._lease_seconds=30.0
+        self.language="Python"; self.last_result=None; self.current_topic=None; self.stage="idle"; self.error=None; self._lock=threading.RLock(); self._worker_slots=threading.BoundedSemaphore(max(1,int(get_setting("scheduler.concurrency",settings.learning_max_concurrent_workers)))) ; self._supervisor_stop=threading.Event(); self._supervisor_thread=None; self._lease_owner=uuid.uuid4().hex; self._lease_seconds=30.0; self._backup_stop=threading.Event(); self._backup_thread=None; self._backup_last_run=0.0
+    def start_backup_scheduler(self):
+        if self._backup_thread and self._backup_thread.is_alive(): return
+        self._backup_stop.clear(); self._backup_thread=threading.Thread(target=self._backup_loop,daemon=True,name="myai-backup-scheduler"); self._backup_thread.start()
+    def stop_backup_scheduler(self):
+        self._backup_stop.set()
+        if self._backup_thread and self._backup_thread is not threading.current_thread(): self._backup_thread.join(timeout=2.0)
+    @staticmethod
+    def _backup_interval_seconds(schedule):
+        value=str(schedule or "manual").strip().lower()
+        if value in {"manual","off","disabled","none"}: return None
+        if value in {"hourly","1h"}: return 3600.0
+        if value in {"daily","1d"}: return 86400.0
+        if value in {"weekly","1w"}: return 604800.0
+        if value.startswith("every:"):
+            try: return max(60.0, float(value.split(":",1)[1]))
+            except ValueError: return None
+        return None
+    def run_scheduled_backup_once(self):
+        destination=str(get_setting("database.backup_destination","") or "").strip() or "data/backups"
+        retention=max(1,int(get_setting("database.backup_retention",14)))
+        Path(destination).mkdir(parents=True,exist_ok=True)
+        stamp=time.strftime("%Y%m%dT%H%M%SZ",time.gmtime())
+        target=Path(destination)/f"my_ai-{stamp}.db"
+        result=backup_database(str(target))
+        prune_backups(destination,retention)
+        self._backup_last_run=time.time()
+        return result
+    def _backup_loop(self):
+        while not self._backup_stop.is_set():
+            interval=self._backup_interval_seconds(get_setting("database.backup_schedule","daily"))
+            if interval is None:
+                self._backup_stop.wait(60); continue
+            elapsed=time.time()-self._backup_last_run
+            if elapsed >= interval:
+                try: self.run_scheduled_backup_once()
+                except Exception: logger.exception("DATABASE_BACKUP_FAILURE")
+                self._backup_stop.wait(1)
+            else:
+                self._backup_stop.wait(min(60.0,max(1.0,interval-elapsed)))
+
     def start_learning_supervisor(self):
         if self._supervisor_thread and self._supervisor_thread.is_alive(): return
         self._supervisor_stop.clear(); self._supervisor_thread=threading.Thread(target=self._supervisor_loop,daemon=True); self._supervisor_thread.start()
@@ -111,6 +153,7 @@ class StudyScheduler:
         self.stop_learning()
         self.stop_review_monitor()
         self.stop_learning_supervisor()
+        self.stop_backup_scheduler()
         if self._monitor_thread and self._monitor_thread is not threading.current_thread():
             self._monitor_thread.join(timeout=2.0)
         if self._supervisor_thread and self._supervisor_thread is not threading.current_thread():
