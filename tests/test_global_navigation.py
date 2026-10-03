@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from my_ai.settings_feature import _settings_document
 from my_ai.ui_extensions import _image_page, _learning_page, _settings_section, _settings_sections
 
@@ -32,3 +34,9 @@ def test_global_navigation_is_injected_into_auth_pages_too():
         html = _inject_global("<html><body><h1>page</h1></body></html>", path)
         assert html.count(NAV_ID) == 1
         assert html.index(NAV_ID) < html.index("<h1>page</h1>")
+
+
+def test_main_page_uses_dashboard_settings_target():
+    index = Path("my_ai/static/index.html").read_text(encoding="utf-8")
+    assert "href='/settings'" in index
+    assert "href='/settings/sections'" not in index
