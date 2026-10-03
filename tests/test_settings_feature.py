@@ -180,6 +180,6 @@ def test_migration_management_is_exposed_in_settings_ui():
     script = Path(settings_feature.__file__).with_name("settings_script.js").read_text(encoding="utf-8")
     assert '"/settings/database/migration"' in source
     assert "migrate_configuration" in source
-    assert 'id="migration"' in source
+    assert "id=\'migration\'" in source
     assert "loadMigrationGUI" in script
     assert "runMigrationGUI" in script
