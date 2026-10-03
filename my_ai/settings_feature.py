@@ -1873,7 +1873,7 @@ def _domain_settings() -> dict[str, Any]:
         "api_version": str(_domain_setting("domain.mt4mt5.api_version", "domain.mt4.api_version", "mt4.api_version", default="v1")),
         "account": str(_domain_setting("domain.mt4mt5.account", "domain.mt4.account", "mt4.account", default="")),
         "password": str(_domain_setting("domain.mt4mt5.password", "domain.mt4.password", "mt4.password", default="")),
-        "server": str(_domain_setting("domain.mt4mt5.server", "domain.mt4.server", "mt4.server", default="MetaQuotes-Demo")),
+        "server": str(_domain_setting("domain.mt4mt5.server", "domain.mt4.server", "mt4.server", default="")),
         "timeframe": str(_domain_setting("domain.mt4mt5.timeframe", "domain.mt4.timeframe", "mt4.timeframe", default="M15")),
         "tick_data": str(_domain_setting("domain.mt4mt5.tick_data", "domain.mt4.tick_data", "mt4.tick_data", default="true")).lower() == "true",
         "indicators": str(_domain_setting("domain.mt4mt5.indicators", "domain.mt4.indicators", "mt4.indicators", default="true")).lower() == "true",
