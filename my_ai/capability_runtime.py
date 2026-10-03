@@ -5,9 +5,10 @@ from typing import Any, Callable
 import json
 import re
 
-from .capability_registry import CapabilitySpec, register, get, validate_input
+from .capability_registry import CapabilitySpec, register, validate_input
 from .metatrader_adapter import market_context, test_connection
 from .software_reproduction import analyze_source
+from .reproduction_builder import generate_workspace
 
 
 @dataclass(frozen=True)
@@ -19,14 +20,15 @@ class CapabilityResult:
     error: str | None = None
 
 
-def _software_reproduction(message: str, urls: list[str] | None = None) -> CapabilityResult:
+def _software_reproduction(message: str, urls: list[str] | None = None, project_path: str = "") -> CapabilityResult:
     try:
         targets = list(urls or []) or re.findall(r"https?://[^\s<>]+", str(message))[:5]
         if not targets:
             return CapabilityResult("software_reproduction", False, error="No authorized HTTP/HTTPS source was provided.")
         specs = [analyze_source(url) for url in targets]
+        generated = [generate_workspace(spec, project_path) for spec in specs] if project_path else []
         evidence = "SOFTWARE REPRODUCTION SPECIFICATION (source-derived):\n" + json.dumps(specs, ensure_ascii=False, indent=2)[:50000]
-        return CapabilityResult("software_reproduction", True, evidence, {"specifications": specs})
+        return CapabilityResult("software_reproduction", True, evidence, {"specifications": specs, "generated_workspaces": generated})
     except Exception as exc:
         return CapabilityResult("software_reproduction", False, error=str(exc))
 
@@ -55,8 +57,8 @@ def run(intent: Any, message: str) -> CapabilityResult | None:
     for name in names:
         if name == "software_reproduction":
             validate_input(name, {"message": message})
-            urls = list((getattr(intent, "args", {}) or {}).get("urls") or [])
-            return _software_reproduction(message, urls)
+            args = getattr(intent, "args", {}) or {}
+            return _software_reproduction(message, list(args.get("urls") or []), str(args.get("project_path") or ""))
         handler = _CAPABILITIES.get(name)
         if handler:
             return handler(message)
@@ -74,7 +76,7 @@ register(CapabilitySpec(
 ))
 register(CapabilitySpec(
     name="software_reproduction",
-    description="Analyze an authorized software/site source and produce a reconstruction specification.",
+    description="Analyze an authorized software/site source and produce an independent reconstruction workspace.",
     input_schema={"type": "object", "required": ["message"]},
     output_schema={"type": "object"},
     permission="software.reproduction",
