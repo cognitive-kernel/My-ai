@@ -4,7 +4,7 @@ import json
 import logging
 import re
 from html import escape
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 NAV_STYLE = """
 <style id="myAiGlobalNavStyle">
@@ -86,7 +86,7 @@ def install_ui_extensions(app) -> None:
 
     @app.get('/settings/sections', response_class=HTMLResponse)
     async def settings_sections_page():
-        return HTMLResponse(_settings_sections(), headers={'Cache-Control':'no-store'})
+        return RedirectResponse(url='/settings', status_code=307)
 
     @app.get('/settings/section/{slug}', response_class=HTMLResponse)
     async def settings_section_page(slug: str):
