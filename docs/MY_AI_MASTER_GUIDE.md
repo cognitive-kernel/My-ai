@@ -102,7 +102,7 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 [x] Dynamic learning domains وجود دارند.
 [x] Curriculumهای تخصصی از جمله Python و SQL Server وجود دارند.
 [x] منابع رسمی و تکمیلی در learning pipeline وجود دارند.
-[x] Hybrid retrieval واقعی شامل keyword + semantic + metadata + reranking تکمیل و benchmark شود.
+[ ] Hybrid retrieval واقعی شامل keyword + semantic + metadata + reranking تکمیل و benchmark شود.
 [x] provenance، version و freshness دانش کامل شود.
 [x] Context Planner تعیین کند چه memory/file/knowledge/tool برای task لازم است.
 [x] context compression و token budget کامل شود.
@@ -138,7 +138,7 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 [x] OpenAI-compatible provider وجود دارد.
 [x] Model routing و fallback وجود دارد.
 [x] provider/model health checks وجود دارند.
-[x] routing بر اساس capability، availability، latency، resource budget و complexity benchmark شود.
+[ ] routing بر اساس capability، availability، latency، resource budget و complexity benchmark شود.
 [x] مدل مناسب Chat/Coding/Reasoning/Embedding از UI مدیریت شود.
 
 ## 8. Learning / Research
@@ -320,7 +320,7 @@ My-AI باید بتواند یک سایت، نرم‌افزار، repository ی�
 
 [x] diagnostics و self-repair foundation وجود دارد.
 [x] self-update به صورت deny-by-default طراحی شده است.
-[x] inspect → diagnose → proposal → isolated test → approval → apply → test → rollback به طور کامل verified شود.
+[ ] inspect → diagnose → proposal → isolated test → approval → apply → test → rollback به طور کامل verified شود.
 [x] Agent بدون policy و approval source اصلی خود را تغییر ندهد.
 
 ## 17. Git / Integrations
@@ -454,8 +454,8 @@ Source Artifact → Discovery → Evidence Collection → Specification → Arch
 [x] architecture و module boundaries مشخص شده باشند.
 [x] پروژه مستقل تولید شده باشد.
 [x] فرم‌ها و componentهای UI کوچک و مسئولیت‌محور باشند.
-[x] build و test موفق یا failureها مستند شده باشند.
-[x] اختلاف‌های visual/behavioral گزارش شده باشند.
-[x] repair loop اجرا و دوباره verification شده باشد.
-[x] گزارش نهایی شامل coverage، تفاوت‌ها، محدودیت‌ها و evidence باشد.
+[ ] build و test موفق یا failureها مستند شده باشند.
+[ ] اختلاف‌های visual/behavioral گزارش شده باشند.
+[ ] repair loop اجرا و دوباره verification شده باشد.
+[ ] گزارش نهایی شامل coverage، تفاوت‌ها، محدودیت‌ها و evidence باشد.
 
