@@ -1,4 +1,11 @@
-from scripts.hardcoded_env_inventory import inventory
+import importlib.util
+
+
+_spec = importlib.util.spec_from_file_location("hardcoded_env_inventory", "scripts/hardcoded_env_inventory.py")
+assert _spec and _spec.loader
+_module = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_module)
+inventory = _module.inventory
 
 
 def test_inventory_finds_literal_os_getenv(tmp_path):
