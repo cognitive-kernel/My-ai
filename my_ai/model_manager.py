@@ -107,6 +107,34 @@ class ModelManager:
             return ranked[0][2]
         return None
 
+    def route_score(self, task: str, model: dict[str, Any], health: ModelStatus, *, complexity: float = 0.5) -> float:
+        """Deterministic routing score combining capability, availability, latency, resources and complexity."""
+        if not health.available:
+            return float("inf")
+        limits = model.get("limits") or {}
+        context = int(model.get("context_length") or 0)
+        required = 12000 if str(task).lower() in {"coding", "reasoning"} else 4096
+        if context and context < required:
+            return float("inf")
+        priority = float(model.get("priority", 100) or 100)
+        latency = float(health.latency_ms or 0)
+        cost = float(limits.get("cost_per_1k_tokens", limits.get("cost", 0)) or 0)
+        quality = float(limits.get("quality_score", limits.get("quality", 0)) or 0)
+        capability_bonus = float(limits.get("capability_score", 1.0) or 1.0)
+        complexity = max(0.0, min(1.0, float(complexity)))
+        latency_weight = float(get_setting("llm.routing.latency_weight", "1") or 1)
+        cost_weight = float(get_setting("llm.routing.cost_weight", "0") or 0)
+        quality_weight = float(get_setting("llm.routing.quality_weight", "1") or 1)
+        complexity_weight = float(get_setting("llm.routing.complexity_weight", "20") or 20)
+        return (
+            priority
+            + latency * latency_weight
+            + cost * cost_weight
+            - quality * quality_weight
+            - capability_bonus * complexity * complexity_weight
+        )
+
+
     def _provider_for_model(self, model: str) -> str:
         for item in self.inventory():
             if item["model"] == model:
