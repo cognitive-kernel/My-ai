@@ -390,7 +390,7 @@ function moduleGuiEsc(v){return esc(v)}
 async function loadModuleGui(){
   var box=byId("module-gui-list"); if(!box)return;
   try{
-    var j=await req("/control-plane/namespaces");
+    var j=await req("/settings/control-plane/namespaces");
     var items=j.items||j.namespaces||[];
     if(!items.length){box.textContent="ماژول قابل تنظیمی ثبت نشده است";return;}
     box.innerHTML=items.map(function(ns){
@@ -410,13 +410,13 @@ async function saveModuleGui(namespace){
     var key=moduleGuiEsc(namespace), name=byId("mg-name-"+key).value.trim(), raw=byId("mg-payload-"+key).value.trim();
     if(!name)throw Error("نام رکورد الزامی است");
     var payload=raw?JSON.parse(raw):{};
-    await req("/control-plane/"+encodeURIComponent(namespace)+"/"+encodeURIComponent(name),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    await req("/settings/control-plane/"+encodeURIComponent(namespace),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name,payload:payload,enabled:true})});
     setText("module-gui-out","ماژول "+namespace+" / "+name+" ذخیره شد."); await loadModuleRecordsGui(namespace);
   }catch(e){setText("module-gui-out","خطا: "+e.message)}
 }
 async function loadModuleRecordsGui(namespace){
   try{
-    var j=await req("/control-plane/"+encodeURIComponent(namespace));
+    var j=await req("/settings/control-plane?namespace="+encodeURIComponent(namespace)+"&include_disabled=true");
     var box=byId("mg-records-"+moduleGuiEsc(namespace)); if(!box)return;
     box.innerHTML=(j.items||j.records||[]).map(function(x){return "<pre style='white-space:pre-wrap'>"+moduleGuiEsc(JSON.stringify(x,null,2))+"</pre>"}).join("")||"رکوردی ثبت نشده است";
   }catch(e){setText("module-gui-out","خطا: "+e.message)}
