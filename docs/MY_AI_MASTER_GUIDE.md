@@ -198,7 +198,7 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 [x] فایل‌های بزرگ به moduleهای کوچک با مسئولیت مشخص شکسته شوند.
 [x] keyword routing برای تصمیم اصلی Agent استفاده نشود.
 [ ] هر capability جدید test و regression test داشته باشد.
-[ ] compile/unit/integration/E2E بر اساس نوع تغییر اجرا شود.
+[x] compile/unit/integration/E2E بر اساس نوع تغییر اجرا شود.
 [x] failure هرگز success اعلام نشود.
 
 ## 11.1 اصول مهندسی نرم‌افزار و شکستن فرم‌ها
@@ -346,49 +346,49 @@ My-AI باید بتواند یک سایت، نرم‌افزار، repository ی�
 ## 19. ترتیب اجرای توسعه
 
 ### مرحله 1 — MetaTrader Foundation
-[ ] MT4/MT5 connection
-[ ] Broker server آزاد
-[ ] secure persistence
-[ ] connection test
-[ ] live tick
-[ ] candles
-[ ] standard indicators
+[x] MT4/MT5 connection
+[x] Broker server آزاد
+[x] secure persistence
+[x] connection test
+[x] live tick
+[x] candles
+[x] standard indicators
 
 ### مرحله 2 — Dynamic Agent Tools
-[ ] Capability Registry
-[ ] dynamic tool selection
-[ ] schema-based calls
+[x] Capability Registry
+[x] dynamic tool selection
+[x] schema-based calls
 [ ] verification loop
 
 ### مرحله 3 — Indicator Engineering
-[ ] MQL4 generation
-[ ] MQL5 generation
+[x] MQL4 generation
+[x] MQL5 generation
 [ ] compile
-[ ] install
-[ ] readback
-[ ] repair loop
+[x] install
+[x] readback
+[x] repair loop
 
 ### مرحله 4 — Dynamic Chat/Coding/Market Routing
-[ ] lightweight chat
-[ ] coding path
-[ ] reasoning path
-[ ] market path
-[ ] automatic model selection
+[x] lightweight chat
+[x] coding path
+[x] reasoning path
+[x] market path
+[x] automatic model selection
 
 ### مرحله 5 — Modern Settings UI
-[ ] separate forms
-[ ] componentized UI
-[ ] provider/model forms
-[ ] MetaTrader form
-[ ] indicators form
-[ ] permissions form
+[x] separate forms
+[x] componentized UI
+[x] provider/model forms
+[x] MetaTrader form
+[x] indicators form
+[x] permissions form
 
 ### مرحله 6 — Verification and Optimization
-[ ] benchmarks
-[ ] regression suite
-[ ] hardware-aware budgets
-[ ] latency/token measurement
-[ ] reliability verification
+[x] benchmarks
+[x] regression suite
+[x] hardware-aware budgets
+[x] latency/token measurement
+[x] reliability verification
 
 ## 20. ماژول‌ها و قابلیت‌های موجود در repository
 
