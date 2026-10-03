@@ -23,9 +23,16 @@ logger = logging.getLogger(__name__)
 class LearningEngine:
     @staticmethod
     def record_experience(language, topic, kind, action, content, error=None, session_id=None, *, model_version=None, provider=None, tool_version=None, skill_version=None, environment_version=None, compatibility="unknown", context=None, outcome=None, recovery=None, evidence=None):
-        from .settings_store import get_bool
+        from .settings_store import get_bool, get_setting
         if not get_bool("learning.personal_experience", True):
             return None
+        policy = str(get_setting("memory.experiential_policy", "allow") or "allow").strip().lower()
+        if policy == "deny":
+            raise PermissionError("Experiential memory writes are denied by policy.")
+        if policy == "approval":
+            raise PermissionError("Experiential memory writes require explicit approval.")
+        if policy != "allow":
+            raise PermissionError("Unknown experiential memory policy.")
         execute("CREATE TABLE IF NOT EXISTS learning_experiences (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, language TEXT NOT NULL, topic TEXT NOT NULL, kind TEXT NOT NULL, action TEXT NOT NULL DEFAULT '', content TEXT NOT NULL, error TEXT, model_version TEXT, provider TEXT, tool_version TEXT, skill_version TEXT, environment_version TEXT, compatibility TEXT NOT NULL DEFAULT 'unknown', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
         cols = {row["name"] for row in fetch_all("PRAGMA table_info(learning_experiences)")}
         for column, ddl in (("model_version","TEXT"),("provider","TEXT"),("tool_version","TEXT"),("skill_version","TEXT"),("environment_version","TEXT"),("compatibility","TEXT NOT NULL DEFAULT 'unknown'"),("context_json","TEXT"),("outcome","TEXT"),("recovery","TEXT"),("evidence_json","TEXT")):
