@@ -1,7 +1,6 @@
 import pytest
 
 from my_ai import memory
-from my_ai.settings_store import set_setting
 
 
 def test_memory_tier_policies_are_registered():
@@ -10,7 +9,7 @@ def test_memory_tier_policies_are_registered():
 
 
 def test_long_term_memory_policy_denies_writes():
-    set_setting("memory.long_term_policy", "deny")
+    monkeypatch.setattr("my_ai.settings_store.get_setting", lambda key, default=None: "deny" if key == "memory.long_term_policy" else default)
     with pytest.raises(PermissionError):
         memory.remember("topic", "title", "content")
 
@@ -25,6 +24,6 @@ def test_experiential_memory_policy_denies_writes(monkeypatch):
     from my_ai.learner import LearningEngine
     monkeypatch.setattr("my_ai.settings_store.get_bool", lambda *args, **kwargs: True)
     monkeypatch.setattr("my_ai.settings_store.get_setting", lambda key, default=None: "deny" if key == "memory.experiential_policy" else default)
-    engine = LearningEngine(llm=object())
+    engine = object.__new__(LearningEngine)
     with pytest.raises(PermissionError):
         engine.record_experience("Python", "topic", "test", "action", "content")
