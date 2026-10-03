@@ -111,7 +111,9 @@ def test_scheduler_worker_uses_its_own_stop_event(monkeypatch):
     old_stop = threading.Event()
     old_thread = threading.Thread(target=scheduler._loop, args=("Python", old_stop), daemon=True)
     old_thread.start()
-    time.sleep(0.05)
+    deadline = time.time() + 1.0
+    while not started and time.time() < deadline:
+        time.sleep(0.01)
     old_stop.set()
     release.set()
     old_thread.join(timeout=1)
