@@ -14,3 +14,5 @@ def test_module_gui_script_uses_control_plane_routes():
     assert "/settings/control-plane/namespaces" in source
     assert "/settings/control-plane?namespace=" in source
     assert "payload:payload" in source
+    assert "moduleGuiKey" in source
+    assert "moduleCard" in source
