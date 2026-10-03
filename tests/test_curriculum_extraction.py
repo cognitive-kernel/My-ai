@@ -43,7 +43,7 @@ def test_extract_curriculum_rejects_model_urls_outside_supplied_sources(monkeypa
         def chat(self, prompt, system=None):
             return '{"topics":[{"title":"Topic","goal":"Goal","source_url":"https://evil.example"}]}'
 
-    monkeypatch.setattr(sf, "WebLearner", FakeWeb, raising=False)
+    monkeypatch.setattr(__import__("my_ai.web_learner", fromlist=["WebLearner"]), "WebLearner", FakeWeb)
     monkeypatch.setattr(sf, "create_llm", lambda model: FakeLLM())
     request = sf.CurriculumExtractRequest(
         name="Source Validation Curriculum",
