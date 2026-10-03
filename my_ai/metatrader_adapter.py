@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .settings_store import get_bool, get_setting
+from .settings_store import set_setting
 
 log = logging.getLogger(__name__)
 
@@ -214,3 +215,32 @@ def market_context(message: str) -> str:
                 rsi=100.0 if al == 0 else 100-(100/(1+(ag/al)))
                 parts.append(f"RSI14={rsi}")
     return "\n".join(parts)
+
+def _require_permission(name: str) -> None:
+    if not get_bool(name, False):
+        raise PermissionError(f"MetaTrader capability permission denied: {name}")
+
+def generate_indicator(source: str, platform: str) -> dict[str, Any]:
+    platform = platform.upper().strip()
+    if platform not in {"MT4", "MT5"}:
+        raise ValueError("platform must be MT4 or MT5")
+    language = "MQL4" if platform == "MT4" else "MQL5"
+    return {"platform": platform, "language": language, "source": str(source), "status": "generated"}
+
+def compile_indicator(source_path: str, platform: str) -> dict[str, Any]:
+    _require_permission("security.metatrader_install")
+    return _bridge_request("/indicator/compile", {"source_path": source_path, "platform": platform.upper()})
+
+def install_indicator(source_path: str, platform: str) -> dict[str, Any]:
+    _require_permission("security.metatrader_install")
+    return _bridge_request("/indicator/install", {"source_path": source_path, "platform": platform.upper()})
+
+def indicator_readback(symbol: str, name: str, platform: str, timeframe: str | None = None, buffer: int = 0, shift: int = 0, params: list[Any] | None = None) -> dict[str, Any]:
+    _require_permission("security.metatrader_read")
+    return indicator(symbol, name, timeframe=timeframe, params=params, buffer=buffer, shift=shift)
+
+def terminal_status() -> dict[str, Any]:
+    result = test_connection()
+    if isinstance(result, dict):
+        result.pop("password", None)
+    return result
