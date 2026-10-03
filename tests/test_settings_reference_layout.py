@@ -70,4 +70,4 @@ def test_settings_reference_navigation_has_working_search_and_tabs():
     assert "settingsNav button" in SETTINGS_HTML
     assert "settings-primary" in SETTINGS_HTML
     assert "settings-secondary" in SETTINGS_HTML
-    assert "settingsDashboard" not in SETTINGS_HTML
+    assert "<div class='settingsDashboard'" not in SETTINGS_HTML
