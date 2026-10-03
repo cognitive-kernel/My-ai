@@ -148,3 +148,20 @@ def test_observability_configuration_settings_are_registered():
     from my_ai.settings_store import SETTING_REGISTRY
     for key in ("observability.alert_rules", "observability.notification_destinations", "observability.dashboard_config", "observability.diagnostics_export"):
         assert key in SETTING_REGISTRY
+
+def test_database_path_setting_updates_runtime_configuration(tmp_path, monkeypatch):
+    import sqlite3
+    from my_ai import config
+
+    def connect():
+        conn = sqlite3.connect(tmp_path / "settings.db")
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    monkeypatch.setattr(ss, "connect", connect)
+    original = config.settings.db_path
+    ss.ensure_schema()
+    configured = str(tmp_path / "configured.db")
+    ss.set_setting("database.path", configured)
+    assert config.settings.db_path == configured
+    config.settings.db_path = original
