@@ -94,6 +94,20 @@ SETTING_REGISTRY.update({
     "evaluation.baseline": {"version": 2, "type": "text", "default": "", "max_length": 200, "description": "Evaluation baseline."},
     "experience.revalidation_on_version_change": {"version": 2, "type": "enum", "default": "true", "choices": ["true","false"], "description": "Revalidate experiences on version change."},
     "experience.current_version_priority": {"version": 2, "type": "float", "default": 2.0, "min": 0, "max": 100, "description": "Current-version experience retrieval weight."},
+    "domain.mt4mt5.enabled": {"version": 1, "type": "enum", "default": "true", "choices": ["true","false"], "description": "Enable MT4/MT5 domain capabilities."},
+    "domain.mt4mt5.version": {"version": 1, "type": "enum", "default": "MT4", "choices": ["MT4","MT5"], "description": "Selected MetaTrader version."},
+    "domain.mt4mt5.install_path": {"version": 1, "type": "text", "default": "", "max_length": 1000, "description": "MetaTrader installation path."},
+    "domain.mt4mt5.library_name": {"version": 1, "type": "text", "default": "mt4.dll", "max_length": 255, "description": "Primary adapter library name."},
+    "domain.mt4mt5.library_path": {"version": 1, "type": "text", "default": "", "max_length": 1000, "description": "Adapter/library directory path."},
+    "domain.mt4mt5.api_version": {"version": 1, "type": "text", "default": "v1", "max_length": 80, "description": "Adapter API version."},
+    "domain.mt4mt5.account": {"version": 1, "type": "text", "default": "", "max_length": 120, "description": "Broker account number."},
+    "domain.mt4mt5.password": {"version": 1, "type": "text", "default": "", "max_length": 1000, "secret": true, "description": "Broker account password."},
+    "domain.mt4mt5.server": {"version": 1, "type": "text", "default": "MetaQuotes-Demo", "max_length": 200, "description": "Broker server name."},
+    "domain.mt4mt5.timeframe": {"version": 1, "type": "enum", "default": "M15", "choices": ["M1","M5","M15","M30","H1","H4","D1"], "description": "Default chart timeframe."},
+    "domain.mt4mt5.tick_data": {"version": 1, "type": "enum", "default": "true", "choices": ["true","false"], "description": "Receive live tick data."},
+    "domain.mt4mt5.indicators": {"version": 1, "type": "enum", "default": "true", "choices": ["true","false"], "description": "Enable indicator execution."},
+    "domain.mt4mt5.market_analysis": {"version": 1, "type": "enum", "default": "true", "choices": ["true","false"], "description": "Enable market analysis."},
+    "domain.mt4mt5.trading": {"version": 1, "type": "enum", "default": "true", "choices": ["true","false"], "description": "Enable transaction management."},
 })
 
 
