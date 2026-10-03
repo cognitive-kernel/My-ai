@@ -14,6 +14,7 @@ import httpx
 from .config import settings
 from .settings_store import get_setting
 from .provider_catalog import list_providers, list_models, list_routing_rules, list_fallback_chain
+from .task_budget import choose_task_budget
 
 
 @dataclass(frozen=True)
@@ -71,6 +72,9 @@ class ModelManager:
             "routing": {"routing", "classification", "classify"},
         }
         wanted = aliases.get(requested, {requested, "general"})
+        task_budget = choose_task_budget(requested)
+        if not task_budget["admission"]["allowed"]:
+            return None
         catalog = list_models(include_disabled=False)
         providers = {int(p["id"]): p for p in list_providers(include_disabled=False)}
         explicit = [r for r in list_routing_rules(task=requested, include_disabled=False)]
@@ -93,7 +97,10 @@ class ModelManager:
                 latency_weight = float(get_setting("llm.routing.latency_weight", "1") or 1)
                 quality_weight = float(get_setting("llm.routing.quality_weight", "1") or 1)
                 quality = float(limits.get("quality_score", limits.get("quality", 0)) or 0)
-                score = priority + latency * latency_weight + cost * cost_weight - quality * quality_weight
+                context_length = int(item.get("context_length") or 0)
+                required_context = 12000 if requested in {"coding", "reasoning"} else 4096
+                resource_penalty = 0 if context_length == 0 or context_length >= required_context else 10000
+                score = priority + latency * latency_weight + cost * cost_weight - quality * quality_weight + resource_penalty
                 ranked.append((score, str(provider["name"]), str(item["model_id"]), latency))
         if ranked:
             ranked.sort(key=lambda x: (x[0], x[1], x[2]))
