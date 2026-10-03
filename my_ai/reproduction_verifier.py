@@ -75,15 +75,15 @@ def verify_reproduction(
     specification: dict[str, Any],
     workspace: str | Path,
     *,
+    reference_workspace: str | Path | None = None,
     reference_routes: Iterable[str] = (),
     candidate_routes: Iterable[str] = (),
     reference_contracts: dict[str, Any] | None = None,
     candidate_contracts: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    checks = [
-        compare_files(workspace, workspace),
-        compare_routes(reference_routes, candidate_routes),
-    ]
+    checks = [compare_routes(reference_routes, candidate_routes)]
+    if reference_workspace is not None:
+        checks.insert(0, compare_files(reference_workspace, workspace))
     if reference_contracts is not None and candidate_contracts is not None:
         checks.append(compare_contracts(reference_contracts, candidate_contracts))
     coverage = float(specification.get("coverage", 0.0) or 0.0)
