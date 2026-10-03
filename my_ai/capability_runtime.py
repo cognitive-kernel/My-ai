@@ -75,7 +75,7 @@ def run(intent: Any, message: str) -> CapabilityResult | None:
                     list(args.get("urls") or []),
                     str(args.get("project_path") or ""),
                 )
-                if result.available and spec and spec.verifier and not verify(name, result.data or {}):
+                if result.available and spec and spec.verifier and not verify(name, result.data or {"evidence": result.evidence}):
                     return CapabilityResult(result.name, False, error="Capability verification failed.")
                 return result
             except Exception as exc:
@@ -107,7 +107,7 @@ def _health_local() -> dict[str, Any]:
 
 def _verify_result(value: Any) -> bool:
     return isinstance(value, dict) and bool(
-        value.get("source") or value.get("specifications") or value.get("request") is not None
+        value.get("source") or value.get("specifications") or value.get("request") is not None or bool(value.get("evidence"))
     )
 
 
