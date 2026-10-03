@@ -12,4 +12,4 @@ def test_all_local_help_mappings_resolve_to_existing_files():
 def test_relocated_security_guide_is_served():
     path = (DOCS_DIR / DOC_FILES["security"]).resolve()
     assert path == (DOCS_DIR.parent / "SECURITY.md").resolve()
-    assert "امنیت" in local_help("security")
+    assert "# Security Policy" in local_help("security")
