@@ -5,6 +5,7 @@ import threading
 import logging
 import time
 import uuid
+from pathlib import Path
 from .learner import LearningEngine
 from .platform import resource_status
 from .curriculum import LANGUAGE_CURRICULA, canonical_language
