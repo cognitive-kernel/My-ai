@@ -1152,7 +1152,7 @@ def settings_mt4mt5_quote(symbol: str, request: Request):
 
 
 @router.get("/settings/mt4mt5/bars")
-def settings_mt4mt5_bars(symbol: str, timeframe: str | None = None, count: int = 100, request: Request = None):
+def settings_mt4mt5_bars(request: Request, symbol: str, timeframe: str | None = None, count: int = 100):
     require_admin(request)
     try:
         return mt_bars(symbol.strip(), timeframe, count)
