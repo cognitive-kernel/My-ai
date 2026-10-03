@@ -476,3 +476,72 @@ async function loadModuleRecordsGui(namespace){
   }catch(e){setText("module-gui-out","خطا: "+e.message)}
 }
 loadModuleGui();
+
+
+async function loadMetaTraderSettings(){
+  try{
+    var j=await req("/settings/mt4mt5");
+    var map={
+      "domain.mt4mt5.install_path":"dom_install_path",
+      "domain.mt4mt5.account":"dom_account",
+      "domain.mt4mt5.server":"dom_server",
+      "domain.mt4mt5.timeframe":"dom_timeframe",
+      "domain.mt4mt5.library_name":"dom_library_name",
+      "domain.mt4mt5.library_path":"dom_library_path"
+    };
+    Object.keys(map).forEach(function(k){
+      var el=byId(map[k]); if(el && j[k]!=null) el.value=j[k];
+    });
+    var pass=byId("dom_password");
+    if(pass) pass.value="";
+    if(pass && j.password_configured) pass.placeholder="رمز ذخیره شده است؛ برای تغییر وارد کنید";
+    var versionButtons=Array.from(document.querySelectorAll("button")).filter(function(b){return /^(MT4|MT5)$/.test((b.innerText||"").trim())});
+    versionButtons.forEach(function(b){
+      b.onclick=function(){ saveMetaTraderField("domain.mt4mt5.version",(b.innerText||"").trim()) };
+    });
+    var anchor=byId("dom_library_path")||byId("dom_install_path");
+    if(anchor && !byId("dom_mt4mt5_save")){
+      var wrap=anchor.parentElement||anchor;
+      var actions=document.createElement("div");
+      actions.style.cssText="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px";
+      actions.innerHTML="<button type='button' id='dom_mt4mt5_save'>ذخیره اتصال MT4/MT5</button><button type='button' id='dom_mt4mt5_test'>تست اتصال</button><span id='dom_mt4mt5_out' class='muted'></span>";
+      wrap.appendChild(actions);
+      byId("dom_mt4mt5_save").onclick=saveMetaTraderSettings;
+      byId("dom_mt4mt5_test").onclick=testMetaTraderSettings;
+    }
+  }catch(e){setText("dom_mt4mt5_out","خطا در بارگذاری MT4/MT5: "+e.message)}
+}
+async function saveMetaTraderField(key,value){
+  try{
+    await req("/settings/registry/"+encodeURIComponent(key),{
+      method:"PUT",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({value:value})
+    });
+    await loadMetaTraderSettings();
+  }catch(e){setText("dom_mt4mt5_out","خطا: "+e.message)}
+}
+async function saveMetaTraderSettings(){
+  try{
+    var values={
+      "domain.mt4mt5.install_path":byId("dom_install_path")?.value.trim()||"",
+      "domain.mt4mt5.account":byId("dom_account")?.value.trim()||"",
+      "domain.mt4mt5.server":byId("dom_server")?.value.trim()||"",
+      "domain.mt4mt5.timeframe":byId("dom_timeframe")?.value||"M15",
+      "domain.mt4mt5.library_name":byId("dom_library_name")?.value.trim()||"",
+      "domain.mt4mt5.library_path":byId("dom_library_path")?.value.trim()||""
+    };
+    for(var key of Object.keys(values)) await saveMetaTraderField(key,values[key]);
+    var pass=byId("dom_password");
+    if(pass && pass.value) await saveMetaTraderField("domain.mt4mt5.password",pass.value);
+    setText("dom_mt4mt5_out","تنظیمات اتصال ذخیره شد.");
+    await loadMetaTraderSettings();
+  }catch(e){setText("dom_mt4mt5_out","خطا در ذخیره: "+e.message)}
+}
+async function testMetaTraderSettings(){
+  try{
+    setText("dom_mt4mt5_out","در حال تست اتصال...");
+    var j=await req("/settings/mt4mt5/test",{method:"POST"});
+    setText("dom_mt4mt5_out",j.connected?"اتصال برقرار است · "+(j.version||"MT")+"":"اتصال برقرار نشد: "+(j.error||"خطای نامشخص"));
+  }catch(e){setText("dom_mt4mt5_out","خطا در تست اتصال: "+e.message)}
+}
+loadMetaTraderSettings();
