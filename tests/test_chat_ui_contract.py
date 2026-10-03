@@ -23,6 +23,7 @@ def test_chat_ui_has_global_navigation():
     assert 'id=' + chr(39) + 'myAiGlobalNav' + chr(39) in text
     assert "href='/learning'" in text
     assert "href='/image'" in text
-    assert "href='/settings/sections'" in text
+    assert "href='/settings'" in text
+    assert "href='/settings/sections'" not in text
     assert "href='/self-diagnostics'" in text
     assert "href='/help#chat'" in text
