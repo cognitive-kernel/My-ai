@@ -1,4 +1,11 @@
-from scripts.no_code_audit import scan
+import importlib.util
+
+
+_spec = importlib.util.spec_from_file_location("no_code_audit", "scripts/no_code_audit.py")
+assert _spec and _spec.loader
+_module = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_module)
+scan = _module.scan
 
 
 def test_inventory_classifies_configuration_categories(tmp_path):
