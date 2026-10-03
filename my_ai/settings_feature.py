@@ -172,6 +172,22 @@ class ToolPermissionRequest(BaseModel):
     action: str = Field(min_length=1, max_length=40)
     allowed: bool
 
+class DomainCapabilityRequest(BaseModel):
+    enabled: bool = True
+    version: str = Field(default="MT4/MT5", max_length=80)
+    install_path: str = Field(default="", max_length=2000)
+    library_name: str = Field(default="", max_length=300)
+    library_path: str = Field(default="", max_length=2000)
+    api_version: str = Field(default="", max_length=120)
+    account: str = Field(default="", max_length=200)
+    password: str | None = Field(default=None, max_length=10000)
+    server: str = Field(default="", max_length=300)
+    timeframe: str = Field(default="M1", max_length=30)
+    tick_data: bool = True
+    indicators: bool = True
+    market_analysis: bool = True
+    trading: bool = False
+
 class ResourceSettingsRequest(BaseModel):
     cpu_percent: float = 70.0
     cpu_threads: int = 8
@@ -1085,6 +1101,60 @@ def reset_registered_setting(key: str, request: Request):
     value = reset_setting(key)
     audit(user, "settings", "reset", "200", f"setting-reset:{key}")
     return {"key": key, "value": value, "reset": True}
+
+@router.get("/settings/domain-capabilities")
+def domain_capabilities(request: Request):
+    require_admin(request)
+    password = str(get_setting("mt4.password", "") or "")
+    return {
+        "enabled": get_bool("mt4.enabled", False),
+        "version": str(get_setting("mt4.version", "MT4/MT5")),
+        "install_path": str(get_setting("mt4.install_path", "")),
+        "library_name": str(get_setting("mt4.library_name", "")),
+        "library_path": str(get_setting("mt4.library_path", "")),
+        "api_version": str(get_setting("mt4.api_version", "")),
+        "account": str(get_setting("mt4.account", "")),
+        "password_configured": bool(password),
+        "server": str(get_setting("mt4.server", "")),
+        "timeframe": str(get_setting("mt4.timeframe", "M1")),
+        "tick_data": get_bool("mt4.tick_data", True),
+        "indicators": get_bool("mt4.indicators", True),
+        "market_analysis": get_bool("mt4.market_analysis", True),
+        "trading": get_bool("mt4.trading", False),
+        "status": __import__("my_ai.domain.mt4", fromlist=["status"]).status(),
+    }
+
+@router.put("/settings/domain-capabilities")
+def save_domain_capabilities(payload: DomainCapabilityRequest, request: Request):
+    user = require_admin(request)
+    values = {
+        "mt4.enabled": bool(payload.enabled),
+        "mt4.version": payload.version.strip() or "MT4/MT5",
+        "mt4.install_path": payload.install_path.strip(),
+        "mt4.library_name": payload.library_name.strip(),
+        "mt4.library_path": payload.library_path.strip(),
+        "mt4.api_version": payload.api_version.strip(),
+        "mt4.account": payload.account.strip(),
+        "mt4.server": payload.server.strip(),
+        "mt4.timeframe": payload.timeframe.strip() or "M1",
+        "mt4.tick_data": bool(payload.tick_data),
+        "mt4.indicators": bool(payload.indicators),
+        "mt4.market_analysis": bool(payload.market_analysis),
+        "mt4.trading": bool(payload.trading),
+    }
+    for key, value in values.items():
+        set_setting(key, value)
+    if payload.password is not None:
+        set_setting("mt4.password", payload.password, secret=True)
+    audit(user, "domain-capabilities", "write", "200", "mt4")
+    return {"saved": True, "settings": values, "status": __import__("my_ai.domain.mt4", fromlist=["status"]).status()}
+
+@router.post("/settings/domain-capabilities/test")
+def test_domain_capabilities(request: Request):
+    require_admin(request)
+    from .domain.mt4 import status
+    result = status()
+    return {"ready": bool(result.get("connected")), "status": result}
 
 @router.get("/settings/config")
 def settings_config(request: Request):
