@@ -1040,7 +1040,7 @@ def chat(r:ChatRequest, request:Request):
             raise HTTPException(409, "یادگیری فقط در صفحه «پیشرفت و یادگیری» انجام می‌شود.")
         if intent.name == "image_generation":
             raise HTTPException(409, "ساخت تصویر فقط در صفحه «ساخت تصویر» انجام می‌شود.")
-        required_by_intent={"pentest_external":("security","execute"),"git_write":("github","write"),"self_update":("self-update","write"),"database_import":("database","write"),"code_execution":("code-execution","execute"),"self_repair":("self-repair","execute"),"coding":("code-generation","execute")}
+        required_by_intent={"pentest_external":("security","execute"),"git_write":("github","write"),"self_update":("self-update","write"),"database_import":("database","write"),"code_execution":("code-execution","execute"),"self_repair":("self-repair","execute"),"coding":("code-generation","execute"),"metatrader":("metatrader","read"),"software_reproduction":("software-reproduction","read")}
         if intent.name in required_by_intent:
             tool,action=required_by_intent[intent.name]
             if not tool_allowed(user,tool,action):
