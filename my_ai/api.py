@@ -79,6 +79,7 @@ async def lifespan(_):
         self_diagnostics.start()
         scheduler.start_learning_supervisor()
         scheduler.start_review_monitor()
+        scheduler.start_backup_scheduler()
         workers=fetch_all("SELECT language,session_id,status FROM learning_workers WHERE status IN ('running','retrying','paused','stopping')")
         if workers:
             for worker in workers:
