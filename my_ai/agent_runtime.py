@@ -174,7 +174,7 @@ class Agent(LegacyAgent):
                     intent.args["actionable"] = True
             except Exception as exc:
                 logging.getLogger(__name__).debug("optional intent enrichment failed: %s", exc)
-        task = "coding" if getattr(intent, "name", "") in {"coding", "code_execution", "git_write"} or "coding" in getattr(intent, "intents", ()) else "general"
+        task = "coding" if getattr(intent, "name", "") in {"coding", "code_execution", "git_write", "software_reproduction"} or "coding" in getattr(intent, "intents", ()) or "software_reproduction" in getattr(intent, "intents", ()) else "general"
         llm = self.llm if task == "general" else create_llm(task)
         attachment_context = self._attachment_context(normalized_attachments)
         resolved_message = self._resolved_message(message, history, state)
