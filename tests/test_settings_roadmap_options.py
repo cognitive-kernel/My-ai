@@ -20,7 +20,7 @@ def test_roadmap_catalog_contains_every_checked_item():
     for line in source.splitlines():
         heading = re.match(r"^#{2,3}\s+(.+?)\s*$", line)
         if heading:
-            section = heading.group(1).replace("*", "").strip()
+            section = heading.group(1).replace("*", "").replace(chr(96), "").strip()
         match = re.match(r"^\*\*\[x\]\s+(.+?)\*\*", line)
         if match:
             expected.append((section, match.group(1).strip()))
