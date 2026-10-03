@@ -5,7 +5,7 @@ from typing import Any, Callable
 import json
 import re
 
-from .capability_registry import CapabilitySpec, register, discover
+from .capability_registry import CapabilitySpec, register, discover, get, validate_input, verify
 from .metatrader_adapter import market_context, test_connection
 from .software_reproduction import analyze_source
 from .reproduction_builder import generate_workspace
@@ -65,13 +65,38 @@ def run(intent: Any, message: str) -> CapabilityResult | None:
     if primary and primary not in names:
         names = (primary, *names)
     for name in names:
+        spec = get(name)
         if name == "software_reproduction":
             args = getattr(intent, "args", {}) or {}
-            return _software_reproduction(message, list(args.get("urls") or []), str(args.get("project_path") or ""))
+            try:
+                validate_input(name, {"message": message})
+                result = _software_reproduction(
+                    message,
+                    list(args.get("urls") or []),
+                    str(args.get("project_path") or ""),
+                )
+                if result.available and spec and spec.verifier and not verify(name, result.data or {}):
+                    return CapabilityResult(result.name, False, error="Capability verification failed.")
+                return result
+            except Exception as exc:
+                return CapabilityResult(name, False, error=str(exc))
         handler = _CAPABILITIES.get(name)
-        if handler:
-            return handler(message)
+        if handler and spec:
+            try:
+                validate_input(name, {"message": message})
+                result = handler(message)
+                if result.available and spec.verifier and not verify(name, result.data or {}):
+                    return CapabilityResult(result.name, False, error="Capability verification failed.")
+                return result
+            except Exception as exc:
+                return CapabilityResult(name, False, error=str(exc))
     return None
+
+
+def _verify_result(value: Any) -> bool:
+    return isinstance(value, dict) and bool(
+        value.get("source") or value.get("specifications") or value.get("request") is not None
+    )
 
 
 def _register(name: str, description: str, permission: str, timeout: float, budget: dict[str, Any]) -> None:
@@ -83,6 +108,7 @@ def _register(name: str, description: str, permission: str, timeout: float, budg
         permission=permission,
         timeout_seconds=timeout,
         resource_budget=budget,
+        verifier=_verify_result,
     ))
 
 
