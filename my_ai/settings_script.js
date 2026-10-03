@@ -397,10 +397,25 @@ async function pauseCourse(id){try{await req("/settings/courses/"+id+"/pause",{m
 
 async function loadCourses(){var box=byId("courses");if(!box)return;try{var j=await req("/settings/courses");box.innerHTML=(j.items||[]).map(function(c){return "<div class=\"card\"><h3>"+esc(c.name)+"</h3><p>"+esc(c.description)+"</p><div class=\"bar\"><div class=\"fill\" style=\"width:"+c.progress_percent+"%\">"+c.progress_percent+"%</div></div><p class=\"muted\">"+c.completed_topics+" از "+c.total_topics+" سرفصل کامل شده"+(c.current?" · اکنون: "+esc(c.current.title)+" · مرحله: "+esc(c.current.phase):"")+"</p><button type=\"button\" onclick=\"startCourse("+c.id+")\">شروع / ادامه یادگیری</button> <button type=\"button\" onclick=\"pauseCourse("+c.id+")\">توقف</button></div>"}).join("")||"آموزشی نیست"}catch(e){box.textContent="خطا در بارگذاری آموزش‌ها: "+e.message}}
 
-loadSettings();loadRegistry();loadUsers();loadPermissions();loadCourses();loadUIActions();loadProviderCatalog();setInterval(loadCourses,10000);setInterval(loadResourceStatus,5000);
+loadSettings();loadRoadmapOptions();loadRegistry();loadUsers();loadPermissions();loadCourses();loadUIActions();loadProviderCatalog();setInterval(loadCourses,10000);setInterval(loadResourceStatus,5000);
 
 loadLearningSourcesCatalog();loadRoutingGUI();loadControlNamespacesGUI();loadProfilesGUI();
 
+
+function loadRoadmapOptions(){
+  var box=byId("roadmap-options-list"), filter=byId("roadmap-filter"); if(!box)return;
+  function render(items){
+    var q=(filter&&filter.value||"").trim().toLocaleLowerCase();
+    box.innerHTML=(items||[]).map(function(section){
+      var matches=(section.items||[]).filter(function(item){return !q || (String(item.title)+" "+String(section.section)).toLocaleLowerCase().indexOf(q)>=0;});
+      if(!matches.length)return "";
+      return "<details class='topic' open><summary><b>"+esc(section.section)+"</b> <span class='muted'>("+matches.length+")</span></summary>"+
+        matches.map(function(item){return "<label style='display:block;margin:6px 0'><input type='checkbox' checked disabled> "+esc(item.title)+"</label>"}).join("")+"</details>";
+    }).join("")||"گزینه‌ای مطابق جست‌وجو پیدا نشد.";
+  }
+  if(filter)filter.addEventListener("input",function(){if(window.__myaiRoadmapOptions)render(window.__myaiRoadmapOptions)});
+  req("/settings/roadmap-options").then(function(j){window.__myaiRoadmapOptions=j.items||[];render(window.__myaiRoadmapOptions);}).catch(function(e){box.textContent="خطا در بارگذاری گزینه‌های نقشه توسعه: "+e.message});
+}
 
 function moduleGuiEsc(v){return esc(v)}
 function moduleGuiKey(v){return encodeURIComponent(String(v)).replace(/%/g,"_")}
