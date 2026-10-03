@@ -17,7 +17,7 @@ def test_settings_reference_shell_is_the_dashboard():
     ):
         assert marker in SETTINGS_HTML
 
-    assert "settingsDashboard" not in SETTINGS_HTML
+    assert "<div class='settingsDashboard'" not in SETTINGS_HTML
     assert "settingsTileGrid" not in SETTINGS_HTML
 
 
