@@ -15,7 +15,7 @@ def test_extract_curriculum_persists_source_backed_topics(monkeypatch):
         def chat(self, prompt, system=None):
             return '{"topics":[{"title":"Fundamentals","goal":"Learn basics","source_url":"https://example.com/course"},{"title":"Advanced","goal":"Apply concepts","source_url":"https://example.com/course"}]}'
 
-    monkeypatch.setattr(sf, "WebLearner", FakeWeb, raising=False)
+    monkeypatch.setattr(__import__("my_ai.web_learner", fromlist=["WebLearner"]), "WebLearner", FakeWeb)
     monkeypatch.setattr(sf, "create_llm", lambda model: FakeLLM())
     request = sf.CurriculumExtractRequest(
         name="Extracted Curriculum",
