@@ -171,3 +171,15 @@ def test_database_restore_requires_confirmation(monkeypatch):
         raise AssertionError("restore without confirmation must fail")
 
 # CI verification marker 264.
+
+
+def test_migration_management_is_exposed_in_settings_ui():
+    from pathlib import Path
+    from my_ai import settings_feature
+    source = Path(settings_feature.__file__).read_text(encoding="utf-8")
+    script = Path(settings_feature.__file__).with_name("settings_script.js").read_text(encoding="utf-8")
+    assert '"/settings/database/migration"' in source
+    assert "migrate_configuration" in source
+    assert "id=\'migration\'" in source
+    assert "loadMigrationGUI" in script
+    assert "runMigrationGUI" in script
