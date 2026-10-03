@@ -37,6 +37,7 @@ dev = [
 
 sqlserver = ["mssql-python>=1.14,<2"]
 mysql = ["mysql-connector-python>=9,<27"]
+metatrader = ["MetaTrader5>=5.0.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
