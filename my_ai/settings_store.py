@@ -247,6 +247,25 @@ for _field, (_kind, _minimum, _secret) in _RUNTIME_CONFIG_FIELDS.items():
     SETTING_REGISTRY[_key_name] = _spec
 
 
+SETTING_REGISTRY.update({
+    "domain.mt4mt5.enabled": {"version": 1, "type": "enum", "default": "false", "choices": ["true", "false"], "description": "Enable the MetaTrader adapter."},
+    "domain.mt4mt5.version": {"version": 1, "type": "enum", "default": "MT5", "choices": ["MT4", "MT5"], "description": "MetaTrader terminal version."},
+    "domain.mt4mt5.install_path": {"version": 1, "type": "text", "default": "", "max_length": 1000, "description": "Path to the MetaTrader terminal executable."},
+    "domain.mt4mt5.library_name": {"version": 1, "type": "text", "default": "", "max_length": 300, "description": "Adapter library name."},
+    "domain.mt4mt5.library_path": {"version": 1, "type": "text", "default": "", "max_length": 1000, "description": "Adapter library path."},
+    "domain.mt4mt5.api_version": {"version": 1, "type": "text", "default": "v1", "max_length": 40, "description": "Adapter API version."},
+    "domain.mt4mt5.account": {"version": 1, "type": "text", "default": "", "max_length": 100, "description": "MetaTrader account number."},
+    "domain.mt4mt5.password": {"version": 1, "type": "text", "default": "", "max_length": 1000, "secret": True, "description": "MetaTrader account password."},
+    "domain.mt4mt5.server": {"version": 1, "type": "text", "default": "", "max_length": 300, "description": "MetaTrader trade server."},
+    "domain.mt4mt5.timeframe": {"version": 1, "type": "enum", "default": "M15", "choices": ["M1", "M5", "M15", "M30", "H1", "H4", "D1"], "description": "Default market timeframe."},
+    "domain.mt4mt5.tick_data": {"version": 1, "type": "enum", "default": "true", "choices": ["true", "false"], "description": "Enable live tick data."},
+    "domain.mt4mt5.indicators": {"version": 1, "type": "enum", "default": "true", "choices": ["true", "false"], "description": "Enable indicator data access."},
+    "domain.mt4mt5.market_analysis": {"version": 1, "type": "enum", "default": "true", "choices": ["true", "false"], "description": "Enable market analysis data."},
+    "domain.mt4mt5.trading": {"version": 1, "type": "enum", "default": "false", "choices": ["true", "false"], "description": "Enable trading operations. Disabled by default."},
+    "domain.mt4mt5.bridge_url": {"version": 1, "type": "text", "default": "http://127.0.0.1:8765", "max_length": 500, "description": "Local MT4/MT5 terminal bridge URL."},
+})
+
+
 CONFIG_SCHEMA_VERSION = 3
 
 _RUNTIME_SETTING_ATTRS = {
