@@ -8,7 +8,7 @@ def test_memory_tier_policies_are_registered():
     assert {"memory.short_term_policy", "memory.long_term_policy", "memory.experiential_policy"} <= SETTING_REGISTRY.keys()
 
 
-def test_long_term_memory_policy_denies_writes():
+def test_long_term_memory_policy_denies_writes(monkeypatch):
     monkeypatch.setattr("my_ai.settings_store.get_setting", lambda key, default=None: "deny" if key == "memory.long_term_policy" else default)
     with pytest.raises(PermissionError):
         memory.remember("topic", "title", "content")
