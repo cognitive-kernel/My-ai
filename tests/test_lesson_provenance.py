@@ -30,7 +30,7 @@ def test_progress_exposes_serialized_lesson_provenance_fields():
     course_id = sf.execute("INSERT INTO custom_courses(name,description) VALUES(?,?)", ("Evidence Fields", "test"))
     topic_id = sf.execute(
         "INSERT INTO custom_course_topics(course_id,topic_order,title,goal) VALUES(?,?,?,?)",
-        (course_id, 1, "Topic", "Goal", None),
+        (course_id, 1, "Topic", "Goal"),
     )
     sf.execute("INSERT INTO custom_course_progress(course_id,topic_id) VALUES(?,?)", (course_id, topic_id))
     row = sf._progress(course_id)[0]
