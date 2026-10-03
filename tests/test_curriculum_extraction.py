@@ -33,7 +33,7 @@ def test_extract_curriculum_persists_source_backed_topics(monkeypatch):
 
 def test_extract_curriculum_rejects_model_urls_outside_supplied_sources(monkeypatch):
     sf._setup()
-    monkeypatch.setattr(sf, "require_admin", lambda request: {"id": 1})
+    monkeypatch.setattr(sf, "require_admin", lambda request: {"id": 1, "username": "test-admin"})
 
     class FakeWeb:
         def fetch(self, url):
