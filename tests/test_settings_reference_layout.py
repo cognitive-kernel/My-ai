@@ -71,3 +71,37 @@ def test_settings_reference_navigation_has_working_search_and_tabs():
     assert "settings-primary" in SETTINGS_HTML
     assert "settings-secondary" in SETTINGS_HTML
     assert "<div class='settingsDashboard'" not in SETTINGS_HTML
+
+
+def test_settings_all_current_sections_are_named_in_reference_ui():
+    from my_ai.settings_feature import SETTINGS_HTML
+
+    for heading in (
+        "مدیریت Provider و Model",
+        "Routing و Fallback مدل",
+        "منابع یادگیری و Evidence",
+        "پشتیبان‌گیری و بازیابی",
+        "مدیریت Migration",
+        "مرکز مدیریت بدون کدنویسی",
+        "اتصال GitHub",
+        "Self-Update",
+        "Self-Repair",
+        "یادگیری سریع",
+        "تولید تصویر کاملاً آفلاین",
+        "لاگ‌های کنسول",
+        "منابع سخت‌افزاری",
+        "Configuration Registry",
+        "مرکز عملیات گرافیکی",
+        "پنل عملیات مدیریتی",
+        "پروفایل‌های پیکربندی",
+        "گزینه‌های تکمیل‌شده نقشه توسعه",
+        "داشبورد ماژول‌ها · فرم‌های گرافیکی ماژول‌ها",
+        "مدیریت یکپارچه No-Code",
+        "Registryهای Agent و Plugin",
+        "مدیریت کاربران",
+        "مجوز ابزار کاربران",
+        "افزودن Topic به آموزش موجود",
+        "ساخت آموزش جدید",
+        "درباره My-AI",
+    ):
+        assert heading in SETTINGS_HTML
