@@ -62,7 +62,7 @@ def _tokens(text: str) -> set[str]:
     return {x for x in re.findall(r"[\w+#.-]{2,}", str(text or "").casefold()) if x not in {"the", "and", "for", "with", "that", "this", "from", "user", "assistant"}}
 
 
-from .metatrader_adapter import market_context as metatrader_market_context
+from .capability_runtime import run as run_capability
 
 class Agent(LegacyAgent):
     """Unified inference pipeline with explicit conversation state and context-aware retrieval."""
@@ -180,11 +180,14 @@ class Agent(LegacyAgent):
         resolved_message = self._resolved_message(message, history, state)
         llm_message = resolved_message + ("\n\n" + attachment_context if attachment_context else "")
         try:
-            live_mt = metatrader_market_context(resolved_message)
-            if live_mt:
-                llm_message += "\n\n" + live_mt
+            capability = run_capability(intent, resolved_message)
+            if capability is not None:
+                if capability.available and capability.evidence:
+                    llm_message += "\n\nRUNTIME EVIDENCE (fresh tool data; not historical knowledge):\n" + capability.evidence
+                elif not capability.available and capability.error:
+                    llm_message += "\n\nRUNTIME CAPABILITY STATUS: unavailable\n" + capability.error
         except Exception as exc:
-            logging.getLogger(__name__).debug("MetaTrader live context unavailable: %s", exc)
+            logging.getLogger(__name__).debug("runtime capability unavailable: %s", exc)
         knowledge, enriched = self._relevant_knowledge(resolved_message, state, intent)
         context_note = (
             "INFERENCE PRIORITY (strict):\n1. CURRENT USER INSTRUCTION\n2. CURRENT CONVERSATION STATE AND RELEVANT RECENT HISTORY\n3. RELEVANT LOCAL KNOWLEDGE ONLY\n4. GENERAL RULES\n"
