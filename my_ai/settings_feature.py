@@ -33,7 +33,7 @@ from .integration_catalog import register_integration, list_integrations, regist
 from .security_catalog import define_role, define_capability, set_permission, set_network_policy, set_filesystem_policy, set_subprocess_policy, set_self_modification_policy, list_security_policies
 from .registries import publish_workflow, update_workflow, list_workflows
 
-router = APIRouter(tags=["settings"])
+router = APIRouter(tags=["settings"])  # roadmap curriculum extraction integration
 _workers = ThreadPoolExecutor(max_workers=1, thread_name_prefix="myai-learning")
 _running: set[int] = set()
 
@@ -112,6 +112,16 @@ class CourseRequest(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     description: str = Field(default="", max_length=2000)
     topics: list[dict[str, str]] = Field(min_length=1, max_length=100)
+    llm_model: str = Field(default="", max_length=300)
+    schedule: str = Field(default="weekly", max_length=120)
+    mastery_threshold: float = Field(default=0.8, ge=0, le=1)
+    source_policy: str = Field(default="hybrid", max_length=40)
+    mode: str = Field(default="auto", max_length=40)
+
+class CurriculumExtractRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    description: str = Field(default="", max_length=2000)
+    sources: list[str] = Field(min_length=1, max_length=10)
     llm_model: str = Field(default="", max_length=300)
     schedule: str = Field(default="weekly", max_length=120)
     mastery_threshold: float = Field(default=0.8, ge=0, le=1)
@@ -1385,6 +1395,73 @@ def courses(request: Request):
     for c in fetch_all("SELECT * FROM custom_courses ORDER BY id"):
         s=_summary(int(c["id"])); c.update({"progress_percent":s["progress_percent"],"completed_topics":s["completed_topics"],"total_topics":s["total_topics"],"current":s["current"],"topics":s["topics"]}); out.append(c)
     return {"items":out}
+
+@router.post("/settings/courses/extract-curriculum")
+def extract_curriculum(r: CurriculumExtractRequest, request: Request):
+    user = require_admin(request)
+    _setup()
+    from .web_learner import WebLearner
+    urls = [str(url).strip() for url in r.sources if str(url).strip()]
+    web = WebLearner()
+    documents = []
+    for url in urls:
+        try:
+            title, content = web.fetch(url)
+        except Exception as exc:
+            raise HTTPException(400, "Unable to read source URL.") from exc
+        documents.append({"title": str(title), "url": url, "content": str(content)[:20000]})
+    prompt = (
+        "Extract a learning curriculum from these source documents. Return JSON only with "
+        "an array named topics. Each topic needs title, goal, and source_url. Copy source_url "
+        "only from supplied URLs. Do not invent URLs, do not duplicate titles, max 100 topics.\n"
+        + json.dumps(documents, ensure_ascii=False)
+    )
+    try:
+        raw = create_llm(r.llm_model.strip() or "general").chat(
+            prompt, system="Extract curricula conservatively and return valid JSON only."
+        )
+        data = json.loads(raw)
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise HTTPException(502, "Curriculum extraction returned invalid JSON.") from exc
+    topics = data.get("topics") if isinstance(data, dict) else None
+    if not isinstance(topics, list):
+        raise HTTPException(422, "Curriculum extraction returned no topics.")
+    cleaned, seen = [], set()
+    allowed_urls = set(urls)
+    for item in topics[:100]:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "").strip()
+        if not title or title.casefold() in seen:
+            continue
+        source_url = str(item.get("source_url") or "").strip()
+        if source_url and source_url not in allowed_urls:
+            source_url = ""
+        seen.add(title.casefold())
+        cleaned.append({
+            "title": title[:300],
+            "goal": str(item.get("goal") or "").strip()[:2000],
+            "source_url": source_url[:1000],
+        })
+    if not cleaned:
+        raise HTTPException(422, "Curriculum extraction produced no valid topics.")
+    try:
+        cid = execute(
+            "INSERT INTO custom_courses(name,description,llm_model,schedule,mastery_threshold,source_policy,mode) VALUES(?,?,?,?,?,?,?)",
+            (r.name.strip(), r.description.strip(), r.llm_model.strip(), r.schedule.strip() or "weekly",
+             r.mastery_threshold, r.source_policy.strip() or "hybrid", r.mode.strip() or "auto"),
+        )
+        for order, item in enumerate(cleaned, 1):
+            tid = execute(
+                "INSERT INTO custom_course_topics(course_id,topic_order,title,goal,source_url) VALUES(?,?,?,?,?)",
+                (cid, order, item["title"], item["goal"], item["source_url"] or None),
+            )
+            execute("INSERT INTO custom_course_progress(course_id,topic_id) VALUES(?,?)", (cid, tid))
+    except Exception as exc:
+        raise HTTPException(400, "Course could not be persisted.") from exc
+    _ensure_custom_review_schedule(cid)
+    audit(user, "learning", "write", "200", f"course-curriculum-extracted:{cid}:{len(cleaned)}")
+    return {"id": cid, "status": "created", "topics": cleaned, "source_count": len(urls)}
 
 @router.post("/settings/courses")
 def create_course(r: CourseRequest, request: Request):
