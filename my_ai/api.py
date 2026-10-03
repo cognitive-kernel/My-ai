@@ -439,9 +439,21 @@ def knowledge_list(request: Request, status: str | None = None, limit: int = 200
     )}
 
 @app.get("/memory/knowledge/export")
-def knowledge_export(request: Request):
+def knowledge_export(request: Request, ids: str | None = None):
     user = require_admin(request)
-    items = [dict(row) for row in fetch_all("SELECT title,content,topic,source_url,content_hash,verification_status,confidence FROM knowledge WHERE verification_status != 'deleted' ORDER BY id")]
+    selected = []
+    if ids:
+        try:
+            selected = sorted({int(value.strip()) for value in ids.split(",") if value.strip()})
+        except ValueError as exc:
+            raise HTTPException(400, "ids must be comma-separated integers.") from exc
+        if not selected:
+            raise HTTPException(400, "At least one knowledge id is required.")
+        marks = ",".join("?" for _ in selected)
+        rows = fetch_all(f"SELECT id,title,content,topic,source_url,content_hash,verification_status,confidence FROM knowledge WHERE id IN ({marks}) AND verification_status != 'deleted' ORDER BY id", tuple(selected))
+    else:
+        rows = fetch_all("SELECT id,title,content,topic,source_url,content_hash,verification_status,confidence FROM knowledge WHERE verification_status != 'deleted' ORDER BY id")
+    items = [dict(row) for row in rows]
     audit(user, "knowledge", "export", "200", f"count:{len(items)}")
     return {"version": 1, "items": items}
 
@@ -488,6 +500,27 @@ def knowledge_update(knowledge_id:int, r:KnowledgeUpdateRequest, request:Request
 def knowledge_audit(knowledge_id:int, request:Request, limit:int=50):
     require_admin(request)
     return {"items":fetch_all("SELECT id,knowledge_id,user_id,action,details,created_at FROM knowledge_audit WHERE knowledge_id=? ORDER BY id DESC LIMIT ?",(knowledge_id,max(1,min(limit,200))))}
+@app.delete("/memory/knowledge")
+def knowledge_delete_selected(request: Request, ids: str):
+    user = require_admin(request)
+    try:
+        selected = sorted({int(value.strip()) for value in ids.split(",") if value.strip()})
+    except ValueError as exc:
+        raise HTTPException(400, "ids must be comma-separated integers.") from exc
+    if not selected:
+        raise HTTPException(400, "At least one knowledge id is required.")
+    marks = ",".join("?" for _ in selected)
+    rows = fetch_all(f"SELECT id FROM knowledge WHERE id IN ({marks})", tuple(selected))
+    found = {int(row["id"]) for row in rows}
+    missing = sorted(set(selected) - found)
+    if missing:
+        raise HTTPException(404, f"Knowledge items not found: {missing}")
+    execute(f"UPDATE knowledge SET verification_status='deleted',verified_at=NULL,verified_by=NULL,confidence=NULL WHERE id IN ({marks})", tuple(selected))
+    for knowledge_id in selected:
+        execute("INSERT INTO knowledge_audit(knowledge_id,user_id,action,details) VALUES(?,?,?,?)", (knowledge_id,user["id"],"delete","selective bulk delete"))
+    audit(user, "knowledge", "delete", "200", f"selected:{len(selected)}")
+    return {"deleted": selected, "count": len(selected)}
+
 @app.delete("/memory/knowledge/{knowledge_id}")
 def knowledge_delete(knowledge_id:int, request:Request):
     user=require_admin(request)

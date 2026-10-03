@@ -38,3 +38,24 @@ def test_memory_retention_cleanup_uses_setting(tmp_path, monkeypatch):
     db.execute("UPDATE knowledge SET created_at=datetime('now','-400 days') WHERE id=?",(item,))
     monkeypatch.setattr(ss,"get_int",lambda key,default: 365)
     assert persistence.purge_expired_knowledge() == 1
+
+
+def test_knowledge_export_supports_selected_ids(monkeypatch):
+    from my_ai import api
+    monkeypatch.setattr(api, "require_admin", lambda request: {"id": 1, "role": "admin"})
+    monkeypatch.setattr(api, "fetch_all", lambda query, params=(): [{"id": 2, "title": "two"}] if "id IN" in query else [])
+    result = api.knowledge_export(object(), ids="2")
+    assert result["items"] == [{"id": 2, "title": "two"}]
+
+
+def test_knowledge_selective_delete_updates_all_selected(monkeypatch):
+    from my_ai import api
+    calls = []
+    monkeypatch.setattr(api, "require_admin", lambda request: {"id": 7, "role": "admin"})
+    monkeypatch.setattr(api, "fetch_all", lambda query, params=(): [{"id": 2}, {"id": 4}] if "SELECT id FROM knowledge" in query else [])
+    monkeypatch.setattr(api, "execute", lambda query, params=(): calls.append((query, params)))
+    monkeypatch.setattr(api, "audit", lambda *args: None)
+    result = api.knowledge_delete_selected(object(), ids="2,4")
+    assert result == {"deleted": [2, 4], "count": 2}
+    assert any("UPDATE knowledge SET verification_status='deleted'" in query for query, _ in calls)
+    assert sum("knowledge_audit" in query for query, _ in calls) == 2
