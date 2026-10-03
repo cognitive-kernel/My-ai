@@ -4,6 +4,8 @@ from dataclasses import dataclass, asdict
 from urllib.parse import urljoin, urlparse
 from typing import Any
 import re
+import ipaddress
+import socket
 
 import httpx
 from bs4 import BeautifulSoup
@@ -19,8 +21,18 @@ class Evidence:
 
 def _validate_url(url: str) -> str:
     parsed = urlparse(str(url).strip())
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc or not parsed.hostname:
         raise ValueError("Only http/https URLs are supported.")
+    host = parsed.hostname
+    try:
+        addresses = {ipaddress.ip_address(host)}
+    except ValueError:
+        try:
+            addresses = {ipaddress.ip_address(item[4][0]) for item in socket.getaddrinfo(host, None)}
+        except OSError as exc:
+            raise ValueError("Unable to resolve source host.") from exc
+    if any(addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_multicast or addr.is_reserved for addr in addresses):
+        raise ValueError("Private, loopback, link-local, multicast, and reserved hosts are not valid public analysis targets.")
     return parsed.geturl()
 
 
