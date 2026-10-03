@@ -101,7 +101,7 @@ SETTING_REGISTRY.update({
     "domain.mt4mt5.library_path": {"version": 1, "type": "text", "default": "", "max_length": 1000, "description": "Adapter/library directory path."},
     "domain.mt4mt5.api_version": {"version": 1, "type": "text", "default": "v1", "max_length": 80, "description": "Adapter API version."},
     "domain.mt4mt5.account": {"version": 1, "type": "text", "default": "", "max_length": 120, "description": "Broker account number."},
-    "domain.mt4mt5.password": {"version": 1, "type": "text", "default": "", "max_length": 1000, "secret": true, "description": "Broker account password."},
+    "domain.mt4mt5.password": {"version": 1, "type": "text", "default": "", "max_length": 1000, "secret": True, "description": "Broker account password."},
     "domain.mt4mt5.server": {"version": 1, "type": "text", "default": "MetaQuotes-Demo", "max_length": 200, "description": "Broker server name."},
     "domain.mt4mt5.timeframe": {"version": 1, "type": "enum", "default": "M15", "choices": ["M1","M5","M15","M30","H1","H4","D1"], "description": "Default chart timeframe."},
     "domain.mt4mt5.tick_data": {"version": 1, "type": "enum", "default": "true", "choices": ["true","false"], "description": "Receive live tick data."},
