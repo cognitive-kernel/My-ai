@@ -4,6 +4,8 @@ from .shell import shell
 def index() -> str:
     cards = [
         ("MetaTrader 4/5", "اتصال، حساب، سرور، ترمینال، تست اتصال و داده بازار.", "/settings/ui/metatrader"),
+        ("Indicators", "تولید، compile، نصب و readback اندیکاتورها.", "/settings/ui/indicators"),
+        ("Tools & Permissions", "مجوزهای مستقل read، install/write و trade.", "/settings/ui/permissions"),
         ("مدل و Provider", "Providerها، مدل‌ها و مسیر انتخاب مدل.", "/settings/providers"),
         ("یادگیری", "دوره‌ها، منابع و زمان‌بندی یادگیری.", "/learning"),
         ("امنیت", "Policy، نقش‌ها و مجوزهای ابزار.", "/settings/security-policies"),
