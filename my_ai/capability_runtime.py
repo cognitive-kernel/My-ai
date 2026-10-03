@@ -85,7 +85,7 @@ def run(intent: Any, message: str) -> CapabilityResult | None:
             try:
                 validate_input(name, {"message": message})
                 result = handler(message)
-                if result.available and spec.verifier and not verify(name, result.data or {}):
+                if result.available and spec.verifier and not verify(name, result.data or {"evidence": result.evidence}):
                     return CapabilityResult(result.name, False, error="Capability verification failed.")
                 return result
             except Exception as exc:
