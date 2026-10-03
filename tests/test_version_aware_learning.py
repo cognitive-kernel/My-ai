@@ -75,6 +75,7 @@ def test_persistence_schema_contains_version_columns(tmp_path, monkeypatch):
     columns = {row["name"] for row in rows}
     assert {"model_version", "provider", "tool_version", "skill_version", "environment_version", "compatibility"} <= columns
 
+
 def test_knowledge_schema_tracks_validity_window(tmp_path, monkeypatch):
     monkeypatch.setattr(persistence, "connect", _connect_factory(tmp_path / "validity.db"))
     persistence.init_db()
@@ -86,6 +87,7 @@ def test_knowledge_schema_tracks_validity_window(tmp_path, monkeypatch):
     row = persistence.fetch_all("SELECT valid_from,valid_until FROM knowledge WHERE id=?", (kid,))[0]
     assert row == {"valid_from": "2026-01-01", "valid_until": "2027-01-01"}
 
+
 def test_same_knowledge_can_coexist_across_versions(tmp_path, monkeypatch):
     monkeypatch.setattr(persistence, "connect", _connect_factory(tmp_path / "versions.db"))
     persistence.init_db()
@@ -94,6 +96,7 @@ def test_same_knowledge_can_coexist_across_versions(tmp_path, monkeypatch):
     assert second != first
     rows = persistence.fetch_all("SELECT version FROM knowledge WHERE id IN (?,?) ORDER BY version", (first, second))
     assert [row["version"] for row in rows] == ["3.12", "3.13"]
+
 
 def test_learning_experience_records_context_outcome_recovery_and_evidence(monkeypatch):
     monkeypatch.setattr(learner, "get_bool", lambda *args, **kwargs: True, raising=False)
@@ -117,6 +120,20 @@ def test_version_aware_schema_migration_is_idempotent(tmp_path, monkeypatch):
     assert "idx_knowledge_content_hash_version" in names
 
 
-def test_search_knowledge_filters_by_product_version_and_validity():
+def test_search_knowledge_filters_by_product_version_and_validity(tmp_path, monkeypatch):
+    monkeypatch.setattr(persistence, "connect", _connect_factory(tmp_path / "search.db"))
+    persistence.init_db()
+    persistence.remember_knowledge(
+        "Python", "Current 3.12", "python 3.12 current", product="python", version="3.12", validity_status="current"
+    )
+    persistence.remember_knowledge(
+        "Python", "Old 3.11", "python 3.11 old", product="python", version="3.11", validity_status="obsolete"
+    )
     rows = persistence.search_knowledge("python", product="python", version="3.12", validity_status="current")
-    assert all(row["product"] == "python" and row["version"] == "3.12" and row["validity_status"] == "current" for row in rows)
+    assert rows
+    assert all(
+        row["product"] == "python"
+        and row["version"] == "3.12"
+        and row["validity_status"] == "current"
+        for row in rows
+    )
