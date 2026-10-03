@@ -221,8 +221,9 @@ class ExecutionBudget:
 
 
 class EventWorkflow:
-    def __init__(self, *, retry_limit: int = 3):
+    def __init__(self, *, retry_limit: int = 3, audit=None):
         self.handlers: dict[str,list[Callable]]={}
+        self.audit = audit
         self.retry_limit=max(0,int(retry_limit))
         self.dead_letters:list[dict[str,Any]]=[]
         self._seen:set[str]=set()
@@ -231,6 +232,8 @@ class EventWorkflow:
         event_id=str(event_id or uuid.uuid4())
         if event_id in self._seen: return []
         self._seen.add(event_id)
+        if self.audit:
+            self.audit("event.accepted", {"event_id": event_id, "event": event})
         outputs=[]
         for handler in self.handlers.get(event,()):
             last=None
@@ -240,7 +243,9 @@ class EventWorkflow:
                 except Exception as exc:
                     last=exc
                     if attempt>=self.retry_limit:
-                        self.dead_letters.append({"event_id":event_id,"event":event,"payload":payload,"error":str(exc)})
+                        self.dead_letters.append({"event_id":event_id,"event":event,"payload":payload,"error":str(exc),"attempts":attempt+1})
+                        if self.audit:
+                            self.audit("event.dead_letter", {"event_id": event_id, "event": event, "attempts": attempt + 1, "error": str(exc)})
             outputs.append(last)
         return outputs
 
