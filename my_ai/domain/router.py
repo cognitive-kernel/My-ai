@@ -3,12 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 import json
-import re
 
 from ..core.protocols import StructuredRouter
 
 ALLOWED_INTENTS = frozenset({
-    "chat", "learning", "coding", "code_execution", "security_scan", "file_analysis",
+    "chat", "learning", "coding", "code_execution", "market_data", "security_scan", "file_analysis",
     "help", "self_update", "git_write", "pentest_external", "self_repair", "database_import", "image_generation",
 })
 HIGH_RISK = frozenset({"pentest_external", "git_write", "self_update", "database_import", "code_execution", "self_repair"})
@@ -16,7 +15,7 @@ ACTION_VALUES = ("answer", "explain", "analyze", "create_artifact", "modify_arti
 
 ROUTER_SCHEMA: dict[str, Any] = {
     "type": "object", "additionalProperties": False,
-    "required": ["primary", "intents", "action", "confidence", "language", "topic", "goal", "project_path", "urls"],
+    "required": ["primary", "intents", "action", "confidence", "language", "topic", "goal", "project_path", "urls", "capability", "operation", "symbol"],
     "properties": {
         "primary": {"type": "string", "enum": sorted(ALLOWED_INTENTS)},
         "intents": {"type": "array", "items": {"type": "string", "enum": sorted(ALLOWED_INTENTS)}, "minItems": 1, "maxItems": 5},
@@ -25,6 +24,9 @@ ROUTER_SCHEMA: dict[str, Any] = {
         "language": {"type": ["string", "null"]}, "topic": {"type": ["string", "null"]},
         "goal": {"type": ["string", "null"]}, "project_path": {"type": ["string", "null"]},
         "urls": {"type": "array", "items": {"type": "string"}, "maxItems": 10},
+        "capability": {"type": ["string", "null"]},
+        "operation": {"type": ["string", "null"]},
+        "symbol": {"type": ["string", "null"]},
     },
 }
 ROUTER_TOOL_SCHEMA = {"name": "route_request", "description": "Return structured semantic intent and arguments. Never authorize execution.", "parameters": ROUTER_SCHEMA}
@@ -38,7 +40,7 @@ class Intent:
     intents: tuple[str, ...] = ()
 
 def router_tool_call(intent: Intent) -> dict[str, Any]:
-    return {"name": ROUTER_TOOL_SCHEMA["name"], "arguments": {"primary": intent.name, "intents": list(intent.intents or (intent.name,)), "action": intent.args.get("action", "answer"), "confidence": float(intent.confidence), "language": intent.args.get("language"), "topic": intent.args.get("topic"), "goal": intent.args.get("goal"), "project_path": intent.args.get("project_path"), "urls": list(intent.args.get("urls", []))}}
+    return {"name": ROUTER_TOOL_SCHEMA["name"], "arguments": {"primary": intent.name, "intents": list(intent.intents or (intent.name,)), "action": intent.args.get("action", "answer"), "confidence": float(intent.confidence), "language": intent.args.get("language"), "topic": intent.args.get("topic"), "goal": intent.args.get("goal"), "project_path": intent.args.get("project_path"), "urls": list(intent.args.get("urls", [])), "capability": intent.args.get("capability"), "operation": intent.args.get("operation"), "symbol": intent.args.get("symbol")}}
 
 def _parse_router_payload(raw: str) -> dict[str, Any]:
     data = json.loads(raw)
@@ -54,7 +56,7 @@ def _parse_router_payload(raw: str) -> dict[str, Any]:
     # Keep routing dynamic while normalizing the model-generated scalar at the boundary.
     data["confidence"] = max(0.0, min(1.0, float(confidence)))
     if not isinstance(data["urls"], list) or len(data["urls"]) > 10 or any(not isinstance(x, str) for x in data["urls"]): raise ValueError("Router URLs must be a list of strings.")
-    for key in ("language", "topic", "goal", "project_path"):
+    for key in ("language", "topic", "goal", "project_path", "capability", "operation", "symbol"):
         if data[key] is not None and not isinstance(data[key], str): raise ValueError(f"Router field {key} must be a string or null.")
     return data
 
@@ -62,39 +64,9 @@ def _intent_from_payload(data: dict[str, Any]) -> Intent:
     payload = _parse_router_payload(json.dumps(data, ensure_ascii=False))
     primary = payload["primary"]
     intents = tuple(dict.fromkeys(payload["intents"]))
-    args = {key: payload[key] for key in ("action", "language", "topic", "goal", "project_path") if payload[key]}
+    args = {key: payload[key] for key in ("action", "language", "topic", "goal", "project_path", "capability", "operation", "symbol") if payload[key]}
     if payload["urls"]: args["urls"] = list(payload["urls"])
     return Intent(name=primary, confidence=round(float(payload["confidence"]), 3), requires_confirmation=primary in HIGH_RISK, args=args, intents=intents or (primary,))
-
-def _read_only_market_capability(text: str) -> dict[str, str] | None:
-    """Resolve an explicit quote request without invoking the slow LLM router.
-    
-    This is a capability fast-path, not the general router: it only activates when
-    the request contains a structured currency pair and an explicit read-only quote
-    operation. All other requests still use semantic LLM routing.
-    """
-    raw = str(text or "").strip()
-    low = raw.casefold()
-    pair = re.search(r"\b([a-z]{3})\s*[/_-]\s*([a-z]{3})\b", low)
-    if not pair:
-        compact = re.search(r"\b(audusd|eurusd|gbpusd|usdjpy|usdchf|usdcad|nzdusd)\b", low)
-        if compact:
-            value = compact.group(1)
-            pair = (value[:3], value[3:])
-        else:
-            return None
-    if isinstance(pair, tuple):
-        base, quote = pair
-    else:
-        base, quote = pair.group(1), pair.group(2)
-    read_only_terms = ("قیمت", "نرخ", "quote", "bid", "ask", "price")
-    if not any(term in low for term in read_only_terms):
-        return None
-    execution_terms = ("معامله", "سفارش", "خرید", "فروش", "trade", "order", "execute", "code", "کد", "اندیکاتور", "mql4", "mql5", "اکسپرت")
-    if any(term in low for term in execution_terms):
-        return None
-    return {"symbol": f"{base}{quote}".upper(), "capability": "market.quote", "action": "answer"}
-
 
 def classify(text: str, context: str | None = None, classifier: StructuredRouter | None = None) -> Intent:
     if classifier is None:
@@ -110,6 +82,8 @@ def classify(text: str, context: str | None = None, classifier: StructuredRouter
             intents=("chat",),
         )
 
+    from ..capability_runtime import list_capabilities
+    capabilities = json.dumps(list_capabilities(), ensure_ascii=False)
     prompt = (
         "Classify the user's request semantically using the current conversation state. "
         "Do NOT use fixed trigger words or phrase lists. Infer the requested operation from meaning. "
@@ -117,8 +91,9 @@ def classify(text: str, context: str | None = None, classifier: StructuredRouter
         "Choose exactly one action: answer, explain, analyze, create_artifact, modify_artifact, execute, inspect, save, or continue_task. "
         "Use create_artifact when the user wants a new software/file/code deliverable, even when phrased indirectly. "
         "Use modify_artifact for changing an existing artifact. Use continue_task when the current message continues a prior task. "
+        "Use market_data when the user needs live market or MetaTrader information. If a capability is needed, select it from the supplied capability catalog and provide operation/symbol when known. "
         "For a coding creation request, primary should normally be coding, not code_execution. Never infer authorization. Return only the schema.\n"
-        f"CURRENT USER: {text}\nCONVERSATION CONTEXT:\n{context or ''}"
+        f"AVAILABLE CAPABILITIES:\n{capabilities}\nCURRENT USER: {text}\nCONVERSATION CONTEXT:\n{context or ''}"
     )
     data = classifier.structured_chat_json(
         prompt,
