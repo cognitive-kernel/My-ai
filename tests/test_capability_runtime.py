@@ -18,6 +18,7 @@ def test_metatrader_capability_runs_only_when_semantically_routed(monkeypatch):
         evidence="LIVE METATRADER CONNECTION",
     )
     monkeypatch.setattr(runtime, "_metatrader", lambda message: expected)
+    monkeypatch.setattr(runtime, "get", lambda name: SimpleNamespace(verifier=runtime._verify_result))
     intent = SimpleNamespace(name="metatrader", intents=("metatrader",))
     result = runtime.run(intent, "با تنظیمات ذخیره‌شده به Forex وصل شو")
     assert result == expected
