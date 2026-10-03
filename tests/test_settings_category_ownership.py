@@ -35,7 +35,8 @@ def test_each_existing_settings_section_belongs_to_one_sidebar_category():
         "ساخت آموزش جدید",
         "درباره My-AI",
     ]
-    meta = re.search(r"var meta=\{(.*?)\n  \};", SETTINGS_HTML, re.S).group(1)\n    key_blocks = re.findall(r"keys:\[(.*?)\]", meta, re.S)
+    meta = re.search(r"var meta=\{(.*?)\n  \};", SETTINGS_HTML, re.S).group(1)
+    key_blocks = re.findall(r"keys:\[(.*?)\]", meta, re.S)
     for title in titles:
         occurrences = sum(1 for block in key_blocks if re.search(re.escape(title), block))
         assert occurrences == 1, (title, occurrences)
