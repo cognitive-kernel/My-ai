@@ -171,3 +171,13 @@ def test_database_restore_requires_confirmation(monkeypatch):
         raise AssertionError("restore without confirmation must fail")
 
 # CI verification marker 264.
+
+
+def test_backup_encryption_policy_requires_password(monkeypatch):
+    from my_ai import settings_feature
+    monkeypatch.setattr(settings_feature, "require_admin", lambda request: {"id": 1})
+    monkeypatch.setattr(settings_feature, "get_setting", lambda key, default="": "password" if key == "database.backup.encryption" else default)
+    with pytest.raises(settings_feature.HTTPException) as exc:
+        settings_feature.settings_database_backup(settings_feature.BackupRequest(path="x.db"), object())
+    assert exc.value.status_code == 400
+    assert "password" in str(exc.value.detail).lower()
