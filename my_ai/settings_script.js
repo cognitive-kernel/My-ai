@@ -407,10 +407,37 @@ async function loadModuleGui(){
         "</div>"+
         "<div class='moduleActions'><button type='button' onclick='saveModuleGui("+JSON.stringify(name)+")'>ذخیره</button>"+
         "<button type='button' onclick='loadModuleRecordsGui("+JSON.stringify(name)+")'>نمایش رکوردها</button></div>"+
+        "<div class='moduleActions'><button type='button' onclick='moduleActionGUI("+JSON.stringify(name)+",\"start\")'>Start</button>"+
+        "<button type='button' onclick='moduleActionGUI("+JSON.stringify(name)+",\"pause\")'>Pause</button>"+
+        "<button type='button' onclick='moduleActionGUI("+JSON.stringify(name)+",\"resume\")'>Resume</button>"+
+        "<button type='button' onclick='moduleActionGUI("+JSON.stringify(name)+",\"stop\")'>Stop</button>"+
+        "<button type='button' onclick='moduleActionGUI("+JSON.stringify(name)+",\"retry\")'>Retry</button></div>"+
+        "<div id='mg-action-"+key+"' class='muted'>آخرین عملیات: —</div>"+
         "<div id='mg-records-"+key+"' class='muted moduleRecords'></div></details>";
     }).join("");
   }catch(e){box.textContent="خطا در بارگذاری ماژول‌ها: "+e.message}
 }
+async function moduleActionGUI(namespace,action){
+  var key=moduleGuiKey(namespace), out=byId("mg-action-"+key);
+  if(out)out.textContent="در حال اجرای "+action+"...";
+  try{
+    var j=await req("/settings/control-plane/actions",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:action,namespace:namespace,target_id:null})});
+    if(out)out.textContent="آخرین عملیات: "+action+" · id="+j.id+" · "+(j.status||"started");
+    if(j.id)await pollModuleActionGUI(namespace,j.id);
+  }catch(e){if(out)out.textContent="خطا: "+e.message}
+}
+async function pollModuleActionGUI(namespace,id){
+  var key=moduleGuiKey(namespace), out=byId("mg-action-"+key), attempts=0;
+  while(attempts++<10){
+    try{
+      var j=await req("/settings/control-plane/actions/"+encodeURIComponent(id));
+      if(out)out.textContent="آخرین عملیات: "+j.action+" · "+j.status+" · "+j.progress+"%"+(j.error?" · "+j.error:"");
+      if(["completed","failed","cancelled"].indexOf(String(j.status))>=0)return;
+      await new Promise(function(resolve){setTimeout(resolve,1000)});
+    }catch(e){if(out)out.textContent="خطا در وضعیت عملیات: "+e.message;return}
+  }
+}
+
 async function saveModuleGui(namespace){
   try{
     var key=moduleGuiKey(namespace), name=byId("mg-name-"+key).value.trim(), raw=byId("mg-payload-"+key).value.trim();
