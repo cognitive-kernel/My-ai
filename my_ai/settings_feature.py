@@ -1833,7 +1833,7 @@ class DomainCapabilityRequest(BaseModel):
     api_version: str = Field(default="v1", max_length=80)
     account: str = Field(default="", max_length=120)
     password: str = Field(default="", max_length=1000)
-    server: str = Field(default="MetaQuotes-Demo", max_length=200)
+    server: str = Field(default="", max_length=200)
     timeframe: str = Field(default="M15", pattern="^(M1|M5|M15|M30|H1|H4|D1)$")
     tick_data: bool = True
     indicators: bool = True
