@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 import json
+import re
 
 from ..core.protocols import StructuredRouter
 
@@ -65,19 +66,49 @@ def _intent_from_payload(data: dict[str, Any]) -> Intent:
     if payload["urls"]: args["urls"] = list(payload["urls"])
     return Intent(name=primary, confidence=round(float(payload["confidence"]), 3), requires_confirmation=primary in HIGH_RISK, args=args, intents=intents or (primary,))
 
-def _is_read_only_market_query(text: str) -> bool:
-    """Detect a live-price lookup so it can never be mistaken for code execution."""
-    low = str(text or "").casefold()
-    pair = __import__("re").search(r"\b[a-z]{3}\s*[/_-]\s*[a-z]{3}\b", low)
-    pair_like = bool(pair) or any(x in low for x in ("audusd", "aud/usd", "یورو دلار", "دلار استرالیا"))
-    quote_like = any(x in low for x in ("قیمت", "نرخ", "نرخ فعلی", "قیمت فعلی", "قیمت الان", "live price", "current price", "quote", "bid", "ask"))
-    execution_like = any(x in low for x in ("اجرا", "معامله", "سفارش", "خرید", "فروش", "trade", "order", "execute", "code", "کد", "اندیکاتور", "mql4", "mql5", "اکسپرت"))
-    return pair_like and quote_like and not execution_like
+def _read_only_market_capability(text: str) -> dict[str, str] | None:
+    """Resolve an explicit quote request without invoking the slow LLM router.
+    
+    This is a capability fast-path, not the general router: it only activates when
+    the request contains a structured currency pair and an explicit read-only quote
+    operation. All other requests still use semantic LLM routing.
+    """
+    raw = str(text or "").strip()
+    low = raw.casefold()
+    pair = re.search(r"\b([a-z]{3})\s*[/_-]\s*([a-z]{3})\b", low)
+    if not pair:
+        compact = re.search(r"\b(audusd|eurusd|gbpusd|usdjpy|usdchf|usdcad|nzdusd)\b", low)
+        if compact:
+            value = compact.group(1)
+            pair = (value[:3], value[3:])
+        else:
+            return None
+    if isinstance(pair, tuple):
+        base, quote = pair
+    else:
+        base, quote = pair.group(1), pair.group(2)
+    read_only_terms = ("قیمت", "نرخ", "quote", "bid", "ask", "price")
+    if not any(term in low for term in read_only_terms):
+        return None
+    execution_terms = ("معامله", "سفارش", "خرید", "فروش", "trade", "order", "execute", "code", "کد", "اندیکاتور", "mql4", "mql5", "اکسپرت")
+    if any(term in low for term in execution_terms):
+        return None
+    return {"symbol": f"{base}{quote}".upper(), "capability": "market.quote", "action": "answer"}
 
 
 def classify(text: str, context: str | None = None, classifier: StructuredRouter | None = None) -> Intent:
     if classifier is None:
         return Intent("chat", 0.0, False, args={"action": "answer"}, intents=("chat",))
+
+    fast_capability = _read_only_market_capability(text)
+    if fast_capability is not None:
+        return Intent(
+            "chat",
+            0.99,
+            False,
+            args=fast_capability,
+            intents=("chat",),
+        )
 
     prompt = (
         "Classify the user's request semantically using the current conversation state. "
