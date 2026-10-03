@@ -24,7 +24,7 @@ def _nav(path: str, help_anchor: str | None = None) -> str:
 <a class="brand" href="/">My-AI</a>
 <div class="group"><a class="{active('/')}" href="/">چت اصلی</a><a class="{active('/learning')}" href="/learning">پیشرفت و یادگیری</a><a class="{active('/image')}" href="/image">ساخت تصویر</a></div>
 <span class="sep"></span>
-<div class="group"><a class="{active('/settings')}" href="/settings/sections">تنظیمات</a><a class="{active('/self-diagnostics')}" href="/self-diagnostics">گزارش سلامت</a><a class="{active('/help')}" href="/help">راهنمای کامل</a></div>
+<div class="group"><a class="{active('/settings')}" href="/settings">تنظیمات</a><a class="{active('/self-diagnostics')}" href="/self-diagnostics">گزارش سلامت</a><a class="{active('/help')}" href="/help">راهنمای کامل</a></div>
 <a class="help" href="/help#{help_anchor}" target="_blank">راهنمای این صفحه</a>
 </nav>"""
 
