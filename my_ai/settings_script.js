@@ -202,6 +202,21 @@ async function deleteModelCatalog(providerId,modelId){
   try{await req("/settings/models/"+providerId+"/"+encodeURIComponent(modelId),{method:"DELETE"});await loadProviderCatalog()}catch(e){setText("catalogout","خطا: "+e.message)}
 }
 
+async function loadMigrationGUI(){
+  try{
+    var j=await req("/settings/database/migration");
+    setText("migrationout",JSON.stringify(j,null,2));
+  }catch(e){setText("migrationout","خطا: "+e.message)}
+}
+async function runMigrationGUI(){
+  if(!confirm("Migration پیکربندی اجرا شود؟"))return;
+  try{
+    var j=await req("/settings/database/migration",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});
+    setText("migrationout","Migration اجرا شد: schema version "+j.version);
+    await loadMigrationGUI();
+  }catch(e){setText("migrationout","خطا: "+e.message)}
+}
+
 async function backupDatabaseGUI(){
   try{var path=byId("backup_path").value.trim();var j=await req("/settings/database/backup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:path,overwrite:false})});setText("backupout","Backup انجام شد: "+j.path)}catch(e){setText("backupout","خطا: "+e.message)}
 }
