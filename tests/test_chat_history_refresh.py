@@ -34,3 +34,15 @@ def test_new_chat_does_not_auto_select_an_existing_recent_chat():
     assert "await loadSessions(false)" in html
     assert "async function selectChat(id){try{newChatPending=false;currentSessionId=Number(id);" in html
     assert "var recognition=null,voiceLocale='fa-IR',uiLang='fa',busy=false,currentSessionId=null,pendingFiles=[],newChatPending=false;" in html
+
+
+def test_chat_history_failure_never_clears_visible_messages():
+    html = Path("my_ai/static/index.html").read_text(encoding="utf-8")
+    assert "پیام‌های فعلی حفظ شدند" in html
+    assert "$('messages').innerHTML=''" not in html
+
+
+def test_user_message_is_snapshotted_before_waiting_for_ai_response():
+    html = Path("my_ai/static/index.html").read_text(encoding="utf-8")
+    assert "add(m,'user',shownFiles, null, askedAt.toISOString());saveLocalHistory();" in html
+    assert "setLang('fa');loadLocalHistory();loadSessions()" in html
