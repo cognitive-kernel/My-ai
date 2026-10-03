@@ -6,22 +6,15 @@ from .db import execute, fetch_all
 from .access_policy import assert_mutation_allowed
 
 
-DOCS_DIR = Path(__file__).resolve().parent.parent / "docs" / "help"
-DOC_FILES = {"chat":"chat.md","learning":"learning.md","coding":"coding.md","security":"security.md","git":"github.md","memory":"memory.md","scheduler":"scheduler.md","voice":"voice.md","api":"api.md","docker":"docker.md","network-policy":"network-policy.md","self-development":"self-development.md"}
+DOC_PATH = Path(__file__).resolve().parent.parent / "docs" / "MY_AI_MASTER_GUIDE.md"
+DOC_FILES = {"chat":"MY_AI_MASTER_GUIDE.md","learning":"MY_AI_MASTER_GUIDE.md","coding":"MY_AI_MASTER_GUIDE.md","security":"MY_AI_MASTER_GUIDE.md","git":"MY_AI_MASTER_GUIDE.md","memory":"MY_AI_MASTER_GUIDE.md","scheduler":"MY_AI_MASTER_GUIDE.md","voice":"MY_AI_MASTER_GUIDE.md","api":"MY_AI_MASTER_GUIDE.md","docker":"MY_AI_MASTER_GUIDE.md","network-policy":"MY_AI_MASTER_GUIDE.md","self-development":"MY_AI_MASTER_GUIDE.md"}
 DOC_TITLES = {"chat":"چت و گفتگو","learning":"یادگیری","coding":"برنامه‌نویسی","security":"امنیت و پن‌تست","git":"Git / GitHub","memory":"حافظه","scheduler":"Scheduler","voice":"صدا","api":"API","docker":"Docker","network-policy":"سیاست آفلاین و شبکه","self-development":"خودپایش و توسعه خودکار"}
-DOC_FALLBACK_FILES = {"security":"../SECURITY.md"}
 
 def _doc_path(component: str) -> Path:
-    key=(component or "chat").lower().strip()
-    primary=DOCS_DIR/DOC_FILES.get(key,"chat.md")
-    if primary.is_file():
-        return primary
-    fallback=DOCS_DIR/DOC_FALLBACK_FILES.get(key)
-    return (DOCS_DIR/fallback) if fallback else primary
+    return DOC_PATH
+
 def local_help(component):
-    key=(component or "chat").lower().strip()
-    p=_doc_path(key)
-    return p.read_text(encoding="utf-8") if p.exists() else ""
+    return DOC_PATH.read_text(encoding="utf-8") if DOC_PATH.is_file() else ""
 def local_help_html(component):
     out=[]
     for line in local_help(component).splitlines():
@@ -34,9 +27,11 @@ def apply_help_update(component, proposal):
     assert_mutation_allowed("help update")
     key=(component or "").lower().strip()
     if key not in DOC_FILES: return False
-    p=DOCS_DIR/DOC_FILES[key]
+    p=DOC_PATH
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(proposal.strip()+"\n",encoding="utf-8")
+    existing=p.read_text(encoding="utf-8") if p.is_file() else ""
+    addition="\n\n## Help Update — "+key+"\n\n"+proposal.strip()+"\n"
+    p.write_text(existing.rstrip()+addition,encoding="utf-8")
     return True
 
 HTML = """<!doctype html>
