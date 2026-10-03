@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 
 @dataclass(frozen=True)
@@ -45,17 +45,36 @@ def discover(*, permission: str | None = None) -> list[dict[str, Any]]:
     return sorted(items, key=lambda x: x["name"])
 
 
+def _validate_schema(value: Any, schema: Mapping[str, Any], path: str = "$") -> None:
+    expected = schema.get("type")
+    if expected == "object":
+        if not isinstance(value, dict):
+            raise TypeError(f"{path} must be an object")
+        for key in schema.get("required", []):
+            if key not in value:
+                raise ValueError(f"Missing required input: {path}.{key}")
+        for key, child in (schema.get("properties") or {}).items():
+            if key in value:
+                _validate_schema(value[key], child, f"{path}.{key}")
+    elif expected == "string" and not isinstance(value, str):
+        raise TypeError(f"{path} must be a string")
+    elif expected == "integer" and (not isinstance(value, int) or isinstance(value, bool)):
+        raise TypeError(f"{path} must be an integer")
+    elif expected == "number" and (not isinstance(value, (int, float)) or isinstance(value, bool)):
+        raise TypeError(f"{path} must be a number")
+    elif expected == "boolean" and not isinstance(value, bool):
+        raise TypeError(f"{path} must be a boolean")
+    elif expected == "array" and not isinstance(value, list):
+        raise TypeError(f"{path} must be an array")
+
+
 def validate_input(name: str, value: dict[str, Any]) -> None:
     spec = get(name)
     if spec is None:
         raise KeyError(f"Unknown capability: {name}")
     if not isinstance(value, dict):
         raise TypeError("Capability input must be an object")
-    required = spec.input_schema.get("required", [])
-    missing = [key for key in required if key not in value]
-    if missing:
-        raise ValueError(f"Missing capability inputs: {', '.join(missing)}")
-
+    _validate_schema(value, spec.input_schema)
 
 def health(name: str) -> dict[str, Any]:
     spec = get(name)
