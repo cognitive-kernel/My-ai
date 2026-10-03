@@ -1757,9 +1757,32 @@ function setText(id,value){var e=byId(id);if(e)e.textContent=value}
 async function loadUsers(){var box=byId('users');if(!box)return;box.textContent='در حال بارگذاری...';try{var j=await req('/settings/users');var items=j.items||[];box.innerHTML=items.map(function(u){return '<div class="topic"><b>'+esc(u.username)+'</b> — '+esc(u.display_name||'بدون نام')+' — نقش: '+esc(u.role)+' — '+(u.active?'فعال':'غیرفعال')+(u.role==='admin'?'':' <button type="button" onclick="toggleUser('+u.id+','+(!u.active)+')">'+(u.active?'غیرفعال‌کردن':'فعال‌کردن')+'</button>')+'</div>'}).join('')||'کاربری ثبت نشده است'}catch(e){box.textContent='خطا در بارگذاری کاربران: '+e.message}}
 async function toggleUser(id,active){try{await req('/admin/users/'+id+'/active?active='+active,{method:'PATCH'});await loadUsers()}catch(e){setText('userout',e.message)}}
 async function addUser(){try{var j=await req('/admin/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:byId('nu').value,password:byId('np').value,display_name:byId('nd').value,active:true})});setText('userout','کاربر ایجاد شد: '+j.user.username);byId('nu').value='';byId('np').value='';byId('nd').value='';loadUsers();loadPermissions()}catch(e){setText('userout',e.message)}}
-async function loadSettings(){try{var j=await req('/settings/config');byId('apiurl').value=j.github.api_url||'';byId('repo').value=j.github.repository||'';byId('ghuser').value=j.github.username||'';byId('su_enabled').checked=!!j.features.self_update_enabled;byId('su_approved').checked=!!j.features.self_update_approved;byId('su_health').value=j.features.self_update_health_url||'';byId('sr_enabled').checked=!!j.features.self_repair_enabled;byId('sr_approval').checked=!!j.features.self_repair_require_approval;byId('lf_enabled').checked=!!j.features.learning_fast_enabled;byId('lf_interval').value=j.features.learning_interval_seconds;byId('lf_retries').value=j.features.learning_max_retries;byId('cpu_percent').value=j.resources.cpu_percent;byId('cpu_threads').value=j.resources.cpu_threads;byId('ram_percent').value=j.resources.ram_percent;byId('gpu_layers').value=j.resources.gpu_layers;setText('gitout',j.github.token_configured?'Token تنظیم شده است':'Token تنظیم نشده است');setText('resourceout','مقادیر فعال: CPU '+j.resources.cpu_percent+'% · '+j.resources.cpu_threads+' thread · RAM '+j.resources.ram_percent+'% · GPU '+j.resources.gpu_layers+' layer')}catch(e){setText('gitout','خطا در بارگذاری تنظیمات: '+e.message)}function loadSettings(){try{var j=await req('/settings/config');byId('apiurl').value=j.github.api_url||'';byId('repo').value=j.github.repository||'';byId('ghuser').value=j.github.username||'';byId('su_enabled').checked=!!j.features.self_update_enabled;byId('su_approved').checked=!!j.features.self_update_approved;byId('su_health').value=j.features.self_update_health_url||'';byId('sr_enabled').checked=!!j.features.self_repair_enabled;byId('sr_approval').checked=!!j.features.self_repair_require_approval;byId('lf_enabled').checked=!!j.features.learning_fast_enabled;byId('lf_interval').value=j.features.learning_interval_seconds;byId('lf_retries').value=j.features.learning_max_retries;byId('cpu_percent').value=j.resources.cpu_percent;byId('cpu_threads').value=j.resources.cpu_threads;byId('ram_percent').value=j.resources.ram_percent;byId('gpu_layers').value=j.resources.gpu_layers;setText('gitout',j.github.token_configured?'Token تنظیم شده است':'Token تنظیم نشده است');setText('resourceout','مقادیر فعال: CPU '+j.resources.cpu_percent+'% · '+j.resources.cpu_threads+' thread · RAM '+j.resources.ram_percent+'% · GPU '+j.resources.gpu_layers+' layer')}catch(e){setText('gitout','خطا در بارگذاری تنظیمات: '+e.message)}async function hydratePersistedSettings(){
+async function loadSettings(){
   try{
-    var state=await req('/settings/persisted'); var v=state.values||{};
+    var j=await req('/settings/config');
+    byId('apiurl').value=j.github.api_url||'';
+    byId('repo').value=j.github.repository||'';
+    byId('ghuser').value=j.github.username||'';
+    byId('su_enabled').checked=!!j.features.self_update_enabled;
+    byId('su_approved').checked=!!j.features.self_update_approved;
+    byId('su_health').value=j.features.self_update_health_url||'';
+    byId('sr_enabled').checked=!!j.features.self_repair_enabled;
+    byId('sr_approval').checked=!!j.features.self_repair_require_approval;
+    byId('lf_enabled').checked=!!j.features.learning_fast_enabled;
+    byId('lf_interval').value=j.features.learning_interval_seconds;
+    byId('lf_retries').value=j.features.learning_max_retries;
+    byId('cpu_percent').value=j.resources.cpu_percent;
+    byId('cpu_threads').value=j.resources.cpu_threads;
+    byId('ram_percent').value=j.resources.ram_percent;
+    byId('gpu_layers').value=j.resources.gpu_layers;
+    setText('gitout',j.github.token_configured?'Token تنظیم شده است':'Token تنظیم نشده است');
+    setText('resourceout','مقادیر فعال: CPU '+j.resources.cpu_percent+'% · '+j.resources.cpu_threads+' thread · RAM '+j.resources.ram_percent+'% · GPU '+j.resources.gpu_layers+' layer');
+  }catch(e){setText('gitout','خطا در بارگذاری تنظیمات: '+e.message)}
+}
+async function hydratePersistedSettings(){
+  try{
+    var state=await req('/settings/persisted');
+    var v=state.values||{};
     var aliases={
       su_enabled:'self_update.enabled',su_approved:'self_update.approved',su_health:'self_update.health_url',
       sr_enabled:'self_repair.enabled',sr_approval:'self_repair.require_approval',
@@ -1781,7 +1804,6 @@ async function loadSettings(){try{var j=await req('/settings/config');byId('apiu
       else if(el.type!=='password' || value!=='********') el.value=value;
     });
   }catch(e){console.warn('settings hydration failed',e)}
-}
 }
 async function saveGithubConfig(){try{await req('/settings/github',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_url:byId('apiurl').value.trim(),repository:byId('repo').value.trim(),username:byId('ghuser').value.trim()})});setText('gitout','تنظیمات GitHub ذخیره شد')}catch(e){setText('gitout',e.message)}}
 async function saveToken(){try{var j=await req('/settings/github-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:byId('token').value})});setText('gitout',j.authenticated?'Token معتبر و متصل به @'+j.login:'Token حذف شد');byId('token').value='';loadSettings()}catch(e){setText('gitout',e.message)}}
