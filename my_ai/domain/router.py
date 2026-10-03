@@ -48,7 +48,10 @@ def _parse_router_payload(raw: str) -> dict[str, Any]:
     if data["primary"] not in ALLOWED_INTENTS: raise ValueError("Router output contains an unsupported primary intent.")
     if not isinstance(data["intents"], list) or not data["intents"] or len(data["intents"]) > 5 or any(x not in ALLOWED_INTENTS for x in data["intents"]): raise ValueError("Router output contains unsupported intents.")
     confidence = data["confidence"]
-    if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not 0 <= confidence <= 1: raise ValueError("Router confidence must be between 0 and 1.")
+    if isinstance(confidence, bool) or not isinstance(confidence, (int, float)): raise ValueError("Router confidence must be numeric.")
+    # Some local structured-output providers ignore numeric bounds even when the schema declares them.
+    # Keep routing dynamic while normalizing the model-generated scalar at the boundary.
+    data["confidence"] = max(0.0, min(1.0, float(confidence)))
     if not isinstance(data["urls"], list) or len(data["urls"]) > 10 or any(not isinstance(x, str) for x in data["urls"]): raise ValueError("Router URLs must be a list of strings.")
     for key in ("language", "topic", "goal", "project_path"):
         if data[key] is not None and not isinstance(data[key], str): raise ValueError(f"Router field {key} must be a string or null.")
@@ -81,6 +84,9 @@ def classify(text: str, context: str | None = None, classifier: StructuredRouter
         ROUTER_SCHEMA,
         system="You are My-AI's context-aware semantic router. Understand intent from meaning, not trigger words. Output only schema-constrained routing data.",
     )
+    action = data.get("action")
+    if data.get("primary") in HIGH_RISK and action not in {"execute", "modify_artifact", "save"}:
+        data = {**data, "primary": "chat", "intents": ["chat"], "action": action}
     if data.get("action") in {"create_artifact", "modify_artifact"} and data.get("primary") == "code_execution":
         data = {**data, "primary": "coding", "intents": ["coding" if x == "code_execution" else x for x in data.get("intents", [])]}
     return _intent_from_payload(data)
