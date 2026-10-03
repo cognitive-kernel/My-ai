@@ -1,0 +1,58 @@
+name: All tests - isolated 30s
+
+run-name: all-tests-isolated @ ${{ github.sha }}
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.tests.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          files = sorted(str(p) for p in Path("tests").rglob("test_*.py") if p.is_file())
+          print("matrix=" + json.dumps(files))
+          PY
+
+  test:
+    needs: discover
+    if: ${{ needs.discover.outputs.matrix != '[]' }}
+    strategy:
+      fail-fast: false
+      max-parallel: 100
+      matrix:
+        test_file: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --upgrade "setuptools>=83"
+      - run: pip install -r requirements.lock
+      - run: pip install -e .[dev] --no-deps
+      - name: Run exactly one test file (hard 30s timeout)
+        shell: bash
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=5s 30s pytest -q "${{ matrix.test_file }}"
+          rc=$?
+          if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+            echo "TEST_TIMEOUT file=${{ matrix.test_file }} timeout=30s"
+          fi
+          exit "$rc"
