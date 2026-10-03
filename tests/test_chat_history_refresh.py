@@ -16,9 +16,9 @@ def test_first_message_creates_a_new_server_session_and_continuation_reuses_it()
 
 def test_new_chat_clears_only_the_active_view_without_deleting_history():
     html = Path("my_ai/static/index.html").read_text(encoding="utf-8")
-    assert "async function newChat(){currentSessionId=null;newChatPending=true;renderHistory([]);await loadSessions(false)" in html
+    assert "async function newChat(){currentSessionId=null;newChatPending=true;try{localStorage.removeItem('myai_active_session');localStorage.removeItem('myai_chat_history')}catch(_){ }renderHistory([]);await loadSessions(false)" in html
     assert "if(autoSelect&&currentSessionId===null&&list.length)await selectChat(Number(list[0].id))" in html
-    assert "if(j.session_id)currentSessionId=j.session_id;newChatPending=false;await loadSessions(false);" in html
+    assert "if(j.session_id){currentSessionId=j.session_id;newChatPending=false;}" in html
 
 
 def test_server_history_is_persistent_across_page_reload():
