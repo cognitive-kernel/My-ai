@@ -5,7 +5,7 @@ from my_ai import settings_feature as sf
 
 def test_extract_curriculum_persists_source_backed_topics(monkeypatch):
     sf._setup()
-    monkeypatch.setattr(sf, "require_admin", lambda request: {"id": 1})
+    monkeypatch.setattr(sf, "require_admin", lambda request: {"id": 1, "username": "test-admin"})
     
     class FakeWeb:
         def fetch(self, url):
