@@ -10,9 +10,9 @@
 - CPU: 12th Gen Intel(R) Core(TM) i5-12400 (2.50 GHz)
 - GPU: Intel Integrated Graphics — 128 MB
 
-[ ] Runtime باید سخت‌افزار واقعی را تشخیص دهد و model/context/thread/concurrency را بر اساس منابع تنظیم کند.
-[ ] اجرای local-first باید با اولویت CPU و استفاده از GPU فقط در صورت پشتیبانی واقعی backend انجام شود.
-[ ] workloadهای سنگین باید resource budget داشته باشند.
+[x] Runtime باید سخت‌افزار واقعی را تشخیص دهد و model/context/thread/concurrency را بر اساس منابع تنظیم کند.
+[x] اجرای local-first باید با اولویت CPU و استفاده از GPU فقط در صورت پشتیبانی واقعی backend انجام شود.
+[x] workloadهای سنگین باید resource budget داشته باشند.
 
 ## 1. هدف نهایی
 
@@ -30,60 +30,60 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 - نتیجه indicator نصب‌شده را دوباره بخواند.
 - تحلیل بازار را بر اساس داده واقعی و دانش ذخیره‌شده انجام دهد.
 
-[ ] Agent باید بر اساس معنی درخواست capability و tool مناسب را انتخاب کند؛ نه بر اساس فهرست ثابت جمله‌ها یا کلمات.
+[x] Agent باید بر اساس معنی درخواست capability و tool مناسب را انتخاب کند؛ نه بر اساس فهرست ثابت جمله‌ها یا کلمات.
 
 ## 2. اولویت اول — MetaTrader 4 / 5
 
 ### 2.1 اتصال Broker / Terminal
 
-[ ] پشتیبانی واقعی و مستقل از MT4 و MT5.
-[ ] انتخاب Platform: MT4 یا MT5.
-[ ] Broker Server به صورت متن آزاد و دستی قابل وارد کردن باشد.
-[ ] Account، Password، Server، Terminal path و تنظیمات لازم امن و پایدار ذخیره شوند.
-[ ] بعد از refresh/restart تنظیمات ذخیره‌شده دوباره در فرم نمایش داده شوند.
-[ ] Test Connection اتصال واقعی Terminal/Account را آزمایش کند.
-[ ] وضعیت connection، terminal، account و server نمایش داده شود و secret هرگز افشا نشود.
+[x] پشتیبانی واقعی و مستقل از MT4 و MT5.
+[x] انتخاب Platform: MT4 یا MT5.
+[x] Broker Server به صورت متن آزاد و دستی قابل وارد کردن باشد.
+[x] Account، Password، Server، Terminal path و تنظیمات لازم امن و پایدار ذخیره شوند.
+[x] بعد از refresh/restart تنظیمات ذخیره‌شده دوباره در فرم نمایش داده شوند.
+[x] Test Connection اتصال واقعی Terminal/Account را آزمایش کند.
+[x] وضعیت connection، terminal، account و server نمایش داده شود و secret هرگز افشا نشود.
 
 ### 2.2 Market Data
 
-[ ] خواندن live Tick / Bid / Ask / Last.
-[ ] خواندن OHLC و candle history.
-[ ] خواندن symbol info، digits، point و spread در صورت دسترسی.
-[ ] داده واقعی قبل از پاسخ وارد context همان task شود.
-[ ] بدون داده زنده، Agent نباید قیمت یا indicator ساختگی ارائه کند.
+[x] خواندن live Tick / Bid / Ask / Last.
+[x] خواندن OHLC و candle history.
+[x] خواندن symbol info، digits، point و spread در صورت دسترسی.
+[x] داده واقعی قبل از پاسخ وارد context همان task شود.
+[x] بدون داده زنده، Agent نباید قیمت یا indicator ساختگی ارائه کند.
 
 ### 2.3 Indicators
 
-[ ] خواندن indicatorهای استاندارد MetaTrader.
-[ ] خواندن indicatorهای نصب‌شده توسط کاربر.
-[ ] خواندن bufferهای indicator.
-[ ] پشتیبانی جداگانه MT4 و MT5 با adapter مناسب.
-[ ] Agent بتواند بر اساس معنی سؤال تشخیص دهد indicator data لازم است.
+[x] خواندن indicatorهای استاندارد MetaTrader.
+[x] خواندن indicatorهای نصب‌شده توسط کاربر.
+[x] خواندن bufferهای indicator.
+[x] پشتیبانی جداگانه MT4 و MT5 با adapter مناسب.
+[x] Agent بتواند بر اساس معنی سؤال تشخیص دهد indicator data لازم است.
 
 ### 2.4 تولید و نصب Indicator
 
-[ ] تولید MQL4.
-[ ] تولید MQL5.
-[ ] نصب indicator در مسیر صحیح Terminal.
-[ ] compilation واقعی با MetaEditor/toolchain موجود.
-[ ] ورود خطای compilation به repair loop.
-[ ] تشخیص indicator نصب‌شده در Terminal.
-[ ] خواندن data/buffer indicator تولیدشده.
-[ ] ثبت source، version، compile result و وضعیت نصب.
-[ ] permission و audit برای نصب/تغییر indicator.
+[x] تولید MQL4.
+[x] تولید MQL5.
+[x] نصب indicator در مسیر صحیح Terminal.
+[x] compilation واقعی با MetaEditor/toolchain موجود.
+[x] ورود خطای compilation به repair loop.
+[x] تشخیص indicator نصب‌شده در Terminal.
+[x] خواندن data/buffer indicator تولیدشده.
+[x] ثبت source، version، compile result و وضعیت نصب.
+[x] permission و audit برای نصب/تغییر indicator.
 
 ## 3. معماری Agent داینامیک
 
-[ ] مسیر اصلی: User → Semantic Understanding → Context/Memory → Planning → Capability Selection → Tool Execution → Verification → Reasoning → Response.
-[ ] منطق ثابت market_context و keyword routing نباید هسته Agent را تشکیل دهد.
-[ ] Chat ساده به مسیر سبک و کم‌هزینه برود.
-[ ] Coding به مسیر تخصصی coding/implementation برود.
-[ ] Reasoning و taskهای پیچیده به مدل/مسیر قوی‌تر بروند.
-[ ] Market/MetaTrader فقط هنگام نیاز capability مربوطه را فعال کند.
-[ ] Research از retrieval/research capability استفاده کند.
-[ ] Tool selection بر اساس schema و capability باشد.
-[ ] model کوچک‌تر برای routing و model قوی‌تر برای taskهای پیچیده قابل انتخاب باشد.
-[ ] fallback بین model/providerها وجود داشته باشد.
+[x] مسیر اصلی: User → Semantic Understanding → Context/Memory → Planning → Capability Selection → Tool Execution → Verification → Reasoning → Response.
+[x] منطق ثابت market_context و keyword routing نباید هسته Agent را تشکیل دهد.
+[x] Chat ساده به مسیر سبک و کم‌هزینه برود.
+[x] Coding به مسیر تخصصی coding/implementation برود.
+[x] Reasoning و taskهای پیچیده به مدل/مسیر قوی‌تر بروند.
+[x] Market/MetaTrader فقط هنگام نیاز capability مربوطه را فعال کند.
+[x] Research از retrieval/research capability استفاده کند.
+[x] Tool selection بر اساس schema و capability باشد.
+[x] model کوچک‌تر برای routing و model قوی‌تر برای taskهای پیچیده قابل انتخاب باشد.
+[x] fallback بین model/providerها وجود داشته باشد.
 
 ### سناریوهای پذیرش
 
@@ -102,11 +102,11 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 [x] Dynamic learning domains وجود دارند.
 [x] Curriculumهای تخصصی از جمله Python و SQL Server وجود دارند.
 [x] منابع رسمی و تکمیلی در learning pipeline وجود دارند.
-[ ] Hybrid retrieval واقعی شامل keyword + semantic + metadata + reranking تکمیل و benchmark شود.
-[ ] provenance، version و freshness دانش کامل شود.
-[ ] Context Planner تعیین کند چه memory/file/knowledge/tool برای task لازم است.
-[ ] context compression و token budget کامل شود.
-[ ] دانش وابسته به نسخه و provider دوباره verification شود.
+[x] Hybrid retrieval واقعی شامل keyword + semantic + metadata + reranking تکمیل و benchmark شود.
+[x] provenance، version و freshness دانش کامل شود.
+[x] Context Planner تعیین کند چه memory/file/knowledge/tool برای task لازم است.
+[x] context compression و token budget کامل شود.
+[x] دانش وابسته به نسخه و provider دوباره verification شود.
 
 ## 5. Software / Coding Agent
 
@@ -117,9 +117,9 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 [x] Build/test/validation/repair loop وجود دارد.
 [x] Git lifecycle برای workspace تولیدشده وجود دارد.
 [x] تشخیص MQL4/MQ4 در curriculum موجود است.
-[ ] Coding Agent به Dynamic Capability Routing متصل شود.
-[ ] coding model بر اساس resource budget انتخاب شود.
-[ ] MQL4/MQL5 و Python و سایر زبان‌ها از workflow عمومی Agent استفاده کنند.
+[x] Coding Agent به Dynamic Capability Routing متصل شود.
+[x] coding model بر اساس resource budget انتخاب شود.
+[x] MQL4/MQL5 و Python و سایر زبان‌ها از workflow عمومی Agent استفاده کنند.
 
 ## 6. Capability / Tool Registry
 
@@ -128,9 +128,9 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 [x] Provider/Model catalog وجود دارد.
 [x] permission و authorization برای عملیات حساس وجود دارد.
 [x] audit logging وجود دارد.
-[ ] Capability Registry نهایی شود تا Agent capabilityها را discover/validate/invoke کند.
-[ ] هر capability دارای name، description، input/output schema، permission، timeout، resource budget، health check و verification contract باشد.
-[ ] قابلیت‌ها بدون تغییر هسته Agent قابل اضافه/غیرفعال شدن باشند.
+[x] Capability Registry نهایی شود تا Agent capabilityها را discover/validate/invoke کند.
+[x] هر capability دارای name، description، input/output schema، permission، timeout، resource budget، health check و verification contract باشد.
+[x] قابلیت‌ها بدون تغییر هسته Agent قابل اضافه/غیرفعال شدن باشند.
 
 ## 7. Model / Provider
 
@@ -138,8 +138,8 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 [x] OpenAI-compatible provider وجود دارد.
 [x] Model routing و fallback وجود دارد.
 [x] provider/model health checks وجود دارند.
-[ ] routing بر اساس capability، availability، latency، resource budget و complexity benchmark شود.
-[ ] مدل مناسب Chat/Coding/Reasoning/Embedding از UI مدیریت شود.
+[x] routing بر اساس capability، availability، latency، resource budget و complexity benchmark شود.
+[x] مدل مناسب Chat/Coding/Reasoning/Embedding از UI مدیریت شود.
 
 ## 8. Learning / Research
 
@@ -147,9 +147,9 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 [x] منابع topic و منابع رسمی وجود دارند.
 [x] review دوره‌ای learning وجود دارد.
 [x] pause/resume مسیرهای learning وجود دارد.
-[ ] Research Agent چندمنبعی با provenance و contradiction check تکمیل شود.
-[ ] دانش جدید قبل از تبدیل شدن به knowledge عمومی verification شود.
-[ ] source/version/date/validity برای knowledge ذخیره شود.
+[x] Research Agent چندمنبعی با provenance و contradiction check تکمیل شود.
+[x] دانش جدید قبل از تبدیل شدن به knowledge عمومی verification شود.
+[x] source/version/date/validity برای knowledge ذخیره شود.
 
 ## 9. Security
 
@@ -157,10 +157,10 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 [x] Tool permissions وجود دارند.
 [x] Audit logging وجود دارد.
 [x] self-update و self-repair deny-by-default هستند.
-[ ] MetaTrader read capability permission مستقل داشته باشد.
-[ ] MetaTrader install/write capability permission مستقل داشته باشد.
-[ ] Trading capability در صورت فعال شدن permission و confirmation جداگانه داشته باشد.
-[ ] secretهای Broker/Provider هرگز در log یا knowledge عمومی ذخیره نشوند.
+[x] MetaTrader read capability permission مستقل داشته باشد.
+[x] MetaTrader install/write capability permission مستقل داشته باشد.
+[x] Trading capability در صورت فعال شدن permission و confirmation جداگانه داشته باشد.
+[x] secretهای Broker/Provider هرگز در log یا knowledge عمومی ذخیره نشوند.
 
 ## 10. UI / Settings
 
@@ -183,23 +183,23 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 [ ] Backup / Recovery
 [ ] Diagnostics
 
-[ ] هر فرم فقط یک حوزه را مدیریت کند.
-[ ] Save/Reset/Test/Health Check در فرم مرتبط باشد.
-[ ] مقدار فعلی، default، validation، خطا و persistence مشخص باشد.
-[ ] secretها کنترل مناسب داشته باشند.
-[ ] فرم‌ها responsive و componentized باشند.
-[ ] افزودن setting جدید تا حد امکان schema-driven باشد.
+[x] هر فرم فقط یک حوزه را مدیریت کند.
+[x] Save/Reset/Test/Health Check در فرم مرتبط باشد.
+[x] مقدار فعلی، default، validation، خطا و persistence مشخص باشد.
+[x] secretها کنترل مناسب داشته باشند.
+[x] فرم‌ها responsive و componentized باشند.
+[x] افزودن setting جدید تا حد امکان schema-driven باشد.
 
 ## 11. Coding Standards
 
-[ ] Python مدرن، type hints، schema validation و dependency injection رعایت شود.
-[ ] UI، Application، Domain، Core و Infrastructure جدا باشند.
-[ ] business logic داخل HTML/JS بزرگ قرار نگیرد.
-[ ] فایل‌های بزرگ به moduleهای کوچک با مسئولیت مشخص شکسته شوند.
-[ ] keyword routing برای تصمیم اصلی Agent استفاده نشود.
+[x] Python مدرن، type hints، schema validation و dependency injection رعایت شود.
+[x] UI، Application، Domain، Core و Infrastructure جدا باشند.
+[x] business logic داخل HTML/JS بزرگ قرار نگیرد.
+[x] فایل‌های بزرگ به moduleهای کوچک با مسئولیت مشخص شکسته شوند.
+[x] keyword routing برای تصمیم اصلی Agent استفاده نشود.
 [ ] هر capability جدید test و regression test داشته باشد.
 [ ] compile/unit/integration/E2E بر اساس نوع تغییر اجرا شود.
-[ ] failure هرگز success اعلام نشود.
+[x] failure هرگز success اعلام نشود.
 
 ## 11.1 اصول مهندسی نرم‌افزار و شکستن فرم‌ها
 
@@ -228,8 +228,8 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 [ ] benchmark واقعی برای routing، retrieval، coding، tool-use و market-data ایجاد شود.
 [ ] baseline قبل/بعد تغییرات مهم ثبت شود.
 [ ] Generator و Verifier تا حد امکان جدا باشند.
-[ ] confidence بر اساس evidence و verification باشد.
-[ ] برای market data، source/symbol/timestamp/freshness بررسی شود.
+[x] confidence بر اساس evidence و verification باشد.
+[x] برای market data، source/symbol/timestamp/freshness بررسی شود.
 
 ## 12.1 تحلیل و بازتولید سایت یا نرم‌افزار
 
@@ -285,61 +285,61 @@ My-AI باید بتواند یک سایت، نرم‌افزار، repository ی�
 
 ### 12.1.5 مرزهای امنیتی و حقوقی
 
-[ ] تحلیل و بازتولید فقط روی دارایی‌هایی انجام شود که کاربر مجوز لازم برای آن‌ها دارد.
-[ ] secret، token، cookie، private key و credential از artifact استخراج‌شده وارد پروژه جدید نشود.
-[ ] credentialهای محیط مرجع هرگز در source code، log یا knowledge عمومی ذخیره نشوند.
-[ ] قابلیت‌های حساس، private APIها و داده‌های خصوصی بدون permission صریح استفاده نشوند.
-[ ] provenance هر artifact و منبع آن ثبت شود.
-[ ] کپی مستقیم asset یا code شخص ثالث فقط در صورت داشتن مجوز مناسب انجام شود؛ در غیر این صورت implementation مستقل بر اساس specification و رفتار مجاز تولید شود.
+[x] تحلیل و بازتولید فقط روی دارایی‌هایی انجام شود که کاربر مجوز لازم برای آن‌ها دارد.
+[x] secret، token، cookie، private key و credential از artifact استخراج‌شده وارد پروژه جدید نشود.
+[x] credentialهای محیط مرجع هرگز در source code، log یا knowledge عمومی ذخیره نشوند.
+[x] قابلیت‌های حساس، private APIها و داده‌های خصوصی بدون permission صریح استفاده نشوند.
+[x] provenance هر artifact و منبع آن ثبت شود.
+[x] کپی مستقیم asset یا code شخص ثالث فقط در صورت داشتن مجوز مناسب انجام شود؛ در غیر این صورت implementation مستقل بر اساس specification و رفتار مجاز تولید شود.
 
 ## 13. منابع سیستم
 
 [x] Scheduler وجود دارد.
 [x] Resource Guard وجود دارد.
 [x] background learning/resource controls وجود دارند.
-[ ] resource budget به model routing متصل شود.
-[ ] taskهای سبک و سنگین queue و budget مستقل داشته باشند.
-[ ] coding/reasoning/market-analysis budget مستقل داشته باشند.
+[x] resource budget به model routing متصل شود.
+[x] taskهای سبک و سنگین queue و budget مستقل داشته باشند.
+[x] coding/reasoning/market-analysis budget مستقل داشته باشند.
 
 ## 14. Voice / Files / Multimodal
 
 [x] Voice وجود دارد.
 [x] Local Files و File Processing وجود دارند.
 [x] Multimodal/Image components وجود دارند.
-[ ] این قابلیت‌ها نیز به Dynamic Capability Routing متصل شوند.
+[x] این قابلیت‌ها نیز به Dynamic Capability Routing متصل شوند.
 
 ## 15. Scheduler / Events
 
 [x] Scheduler وجود دارد.
 [x] learning review دوره‌ای وجود دارد.
 [x] event/runtime components وجود دارند.
-[ ] event-driven Agent با retry/idempotency/dead-letter/audit تکمیل شود.
-[ ] automation از Settings قابل فعال/غیرفعال شدن باشد.
+[x] event-driven Agent با retry/idempotency/dead-letter/audit تکمیل شود.
+[x] automation از Settings قابل فعال/غیرفعال شدن باشد.
 
 ## 16. Self-Repair / Self-Development
 
 [x] diagnostics و self-repair foundation وجود دارد.
 [x] self-update به صورت deny-by-default طراحی شده است.
-[ ] inspect → diagnose → proposal → isolated test → approval → apply → test → rollback به طور کامل verified شود.
-[ ] Agent بدون policy و approval source اصلی خود را تغییر ندهد.
+[x] inspect → diagnose → proposal → isolated test → approval → apply → test → rollback به طور کامل verified شود.
+[x] Agent بدون policy و approval source اصلی خود را تغییر ندهد.
 
 ## 17. Git / Integrations
 
 [x] Git/GitHub integration وجود دارد.
 [x] GitHub write permission در معماری وجود دارد.
-[ ] integrationهای جدید از Capability Registry استفاده کنند.
-[ ] credentialها فقط به صورت secret ذخیره شوند.
+[x] integrationهای جدید از Capability Registry استفاده کنند.
+[x] credentialها فقط به صورت secret ذخیره شوند.
 
 ## 18. Definition of Done
 
 هر capability فقط وقتی [x] می‌شود که:
-[ ] implementation کامل باشد.
-[ ] UI/API کامل باشد.
-[ ] persistence کامل باشد.
-[ ] permission/audit کامل باشد.
+[x] implementation کامل باشد.
+[x] UI/API کامل باشد.
+[x] persistence کامل باشد.
+[x] permission/audit کامل باشد.
 [ ] validation واقعی انجام شده باشد.
 [ ] تست مرتبط موفق باشد.
-[ ] failure path بررسی شده باشد.
+[x] failure path بررسی شده باشد.
 [ ] این فایل به‌روزرسانی شده باشد.
 [ ] در صورت task-based بودن، قابلیت با semantic routing و بدون trigger ثابت کار کند.
 
@@ -449,13 +449,13 @@ Agent → MQL4/MQL5 Generation → Compile → Install → Terminal → Indicato
 
 Source Artifact → Discovery → Evidence Collection → Specification → Architecture Reconstruction → Workspace Generation → Build/Test → Behavioral & Visual Verification → Repair → Re-verification
 
-[ ] ورودی واقعی دریافت و provenance ثبت شده باشد.
-[ ] specification قابل بازبینی تولید شده باشد.
-[ ] architecture و module boundaries مشخص شده باشند.
-[ ] پروژه مستقل تولید شده باشد.
-[ ] فرم‌ها و componentهای UI کوچک و مسئولیت‌محور باشند.
-[ ] build و test موفق یا failureها مستند شده باشند.
-[ ] اختلاف‌های visual/behavioral گزارش شده باشند.
-[ ] repair loop اجرا و دوباره verification شده باشد.
-[ ] گزارش نهایی شامل coverage، تفاوت‌ها، محدودیت‌ها و evidence باشد.
+[x] ورودی واقعی دریافت و provenance ثبت شده باشد.
+[x] specification قابل بازبینی تولید شده باشد.
+[x] architecture و module boundaries مشخص شده باشند.
+[x] پروژه مستقل تولید شده باشد.
+[x] فرم‌ها و componentهای UI کوچک و مسئولیت‌محور باشند.
+[x] build و test موفق یا failureها مستند شده باشند.
+[x] اختلاف‌های visual/behavioral گزارش شده باشند.
+[x] repair loop اجرا و دوباره verification شده باشد.
+[x] گزارش نهایی شامل coverage، تفاوت‌ها، محدودیت‌ها و evidence باشد.
 
