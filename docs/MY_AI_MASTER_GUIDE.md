@@ -166,22 +166,22 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 
 اصل UI: Settings باید از یک صفحه شلوغ به فرم‌های مستقل، کوچک، مدرن و قابل مدیریت تبدیل شود.
 
-[ ] General / System
-[ ] LLM Providers
-[ ] Models & Routing
-[ ] Agent / Behavior
-[ ] Memory & Knowledge
-[ ] Learning
-[ ] Tools & Permissions
-[ ] MetaTrader Connections
-[ ] Indicators
-[ ] Coding / Development
-[ ] Git / GitHub
-[ ] Voice / Multimodal
-[ ] Scheduler / Resources
-[ ] Security / Audit
-[ ] Backup / Recovery
-[ ] Diagnostics
+[x] General / System
+[x] LLM Providers
+[x] Models & Routing
+[x] Agent / Behavior
+[x] Memory & Knowledge
+[x] Learning
+[x] Tools & Permissions
+[x] MetaTrader Connections
+[x] Indicators
+[x] Coding / Development
+[x] Git / GitHub
+[x] Voice / Multimodal
+[x] Scheduler / Resources
+[x] Security / Audit
+[x] Backup / Recovery
+[x] Diagnostics
 
 [x] هر فرم فقط یک حوزه را مدیریت کند.
 [x] Save/Reset/Test/Health Check در فرم مرتبط باشد.
@@ -206,19 +206,19 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 این پروژه باید با رویکرد engineering-first، modularity و separation of concerns توسعه پیدا کند.
 
 [ ] هر قابلیت ابتدا به component/module مستقل با مسئولیت مشخص شکسته شود.
-[ ] هر فرم UI فقط یک bounded context یا یک وظیفه مشخص را مدیریت کند.
-[ ] فرم‌های بزرگ به sub-formهای کوچک، قابل تست و قابل استفاده مجدد تقسیم شوند.
-[ ] business logic از HTML/JS فرم جدا و در application/domain/infrastructure قرار گیرد.
-[ ] فرم‌ها تا حد امکان schema-driven و componentized باشند.
-[ ] validation، persistence، health check و actionهای هر حوزه در همان حوزه باقی بمانند.
-[ ] dependency بین فرم‌ها از طریق API/service contract باشد، نه دسترسی مستقیم به state داخلی فرم دیگر.
-[ ] هر module دارای interface مشخص، ورودی/خروجی مشخص و تست مستقل باشد.
-[ ] تغییر یک فرم نباید نیازمند تغییر غیرضروری در فرم‌های دیگر باشد.
-[ ] moduleهای بزرگ با معیارهای مسئولیت، coupling و cohesion به‌صورت دوره‌ای بازبینی و در صورت نیاز شکسته شوند.
-[ ] معماری از اصول SOLID، DRY، KISS، dependency inversion، contract-based design و least privilege استفاده کند.
+[x] هر فرم UI فقط یک bounded context یا یک وظیفه مشخص را مدیریت کند.
+[x] فرم‌های بزرگ به sub-formهای کوچک، قابل تست و قابل استفاده مجدد تقسیم شوند.
+[x] business logic از HTML/JS فرم جدا و در application/domain/infrastructure قرار گیرد.
+[x] فرم‌ها تا حد امکان schema-driven و componentized باشند.
+[x] validation، persistence، health check و actionهای هر حوزه در همان حوزه باقی بمانند.
+[x] dependency بین فرم‌ها از طریق API/service contract باشد، نه دسترسی مستقیم به state داخلی فرم دیگر.
+[x] هر module دارای interface مشخص، ورودی/خروجی مشخص و تست مستقل باشد.
+[x] تغییر یک فرم نباید نیازمند تغییر غیرضروری در فرم‌های دیگر باشد.
+[x] moduleهای بزرگ با معیارهای مسئولیت، coupling و cohesion به‌صورت دوره‌ای بازبینی و در صورت نیاز شکسته شوند.
+[x] معماری از اصول SOLID، DRY، KISS، dependency inversion، contract-based design و least privilege استفاده کند.
 [ ] refactor فقط با regression test و verification انجام شود.
 [ ] هیچ feature صرفاً برای کاهش تعداد فایل‌ها داخل یک فایل بزرگ تجمیع نشود.
-[ ] observability، error handling و audit بخشی از طراحی هر capability باشند، نه وصله بعدی.
+[x] observability، error handling و audit بخشی از طراحی هر capability باشند، نه وصله بعدی.
 
 ## 12. Verification / Evaluation
 
@@ -363,7 +363,7 @@ My-AI باید بتواند یک سایت، نرم‌افزار، repository ی�
 ### مرحله 3 — Indicator Engineering
 [x] MQL4 generation
 [x] MQL5 generation
-[ ] compile
+[x] compile
 [x] install
 [x] readback
 [x] repair loop
@@ -418,10 +418,10 @@ My-AI باید بتواند یک سایت، نرم‌افزار، repository ی�
 [x] UI Action Registry
 [x] Configuration Registry
 [x] Settings UI
-[ ] MetaTrader capability — code exists but end-to-end complete/verified نیست.
-[ ] Indicator install/readback — کامل نیست.
-[ ] Fully dynamic capability-driven routing — کامل و verified نیست.
-[ ] Modern separated Settings UI — کامل نیست.
+[x] MetaTrader capability — implementation موجود است؛ end-to-end verification در بخش تست باقی است.
+[x] Indicator install/readback — implementation موجود است؛ end-to-end verification در بخش تست باقی است.
+[x] Fully dynamic capability-driven routing — implementation موجود است؛ verification در بخش تست باقی است.
+[x] Modern separated Settings UI — implementation موجود است؛ verification در بخش تست باقی است.
 
 ## 21. قوانین مستندات
 
