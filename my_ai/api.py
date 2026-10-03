@@ -1104,7 +1104,15 @@ def chat(r:ChatRequest, request:Request):
         if any(x in low for x in ("تایید آپدیت","تأیید آپدیت","تایید بروزرسانی","تأیید بروزرسانی","تایید به روزرسانی","تأیید به روزرسانی","confirm update","approve update","apply update")):
             if user["role"] != "admin":
                 raise HTTPException(403,"Self-update requires administrator approval.")
-        answer=agent.chat(msg,sid,attachments=attachments)
+        try:
+            answer=agent.chat(msg,sid,attachments=attachments)
+        except Exception as exc:
+            error_text=str(exc)
+            try:
+                _persist_api_chat_turn(sid,msg,"خطا در پاسخ‌گویی: "+error_text)
+            except Exception:
+                logger.exception("Failed to persist chat error")
+            raise HTTPException(502,error_text) from exc
         user_message=fetch_all("SELECT id FROM conversations WHERE session_id=? AND role='user' ORDER BY id DESC LIMIT 1",(sid,))
         if attachments and user_message:
             execute("UPDATE chat_attachments SET conversation_id=? WHERE session_id=? AND conversation_id IS NULL",(user_message[0]["id"],sid))
