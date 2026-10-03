@@ -384,11 +384,11 @@ My-AI باید بتواند یک سایت، نرم‌افزار، repository ی�
 [x] permissions form
 
 ### مرحله 6 — Verification and Optimization
-[x] benchmarks
-[x] regression suite
+[ ] benchmarks
+[ ] regression suite
 [x] hardware-aware budgets
-[x] latency/token measurement
-[x] reliability verification
+[ ] latency/token measurement
+[ ] reliability verification
 
 ## 20. ماژول‌ها و قابلیت‌های موجود در repository
 
