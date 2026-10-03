@@ -1,5 +1,3 @@
-import ast
-
 from scripts.hardcoded_env_inventory import inventory
 
 
