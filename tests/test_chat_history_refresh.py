@@ -46,3 +46,17 @@ def test_user_message_is_snapshotted_before_waiting_for_ai_response():
     html = Path("my_ai/static/index.html").read_text(encoding="utf-8")
     assert "add(m,'user',shownFiles, null, askedAt.toISOString());saveLocalHistory();" in html
     assert "setLang('fa');loadLocalHistory();loadSessions()" in html
+
+
+def test_chat_request_has_a_hard_30_second_client_deadline():
+    from pathlib import Path
+    html = Path("my_ai/static/index.html").read_text(encoding="utf-8")
+    assert "setTimeout(function(){ctl.abort()},30000)" in html
+    assert "درخواست پس از ۳۰ ثانیه متوقف شد" in html
+
+
+def test_chat_api_persists_failures_instead_of_losing_the_turn():
+    from pathlib import Path
+    api = Path("my_ai/api.py").read_text(encoding="utf-8")
+    assert "try:\n            answer=agent.chat(msg,sid,attachments=attachments)" in api
+    assert "_persist_api_chat_turn(sid,msg,\"خطا در پاسخ‌گویی: \"+error_text)" in api
