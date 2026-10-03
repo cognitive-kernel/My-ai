@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 from .config import settings
+from .backup_crypto import encrypt_file, decrypt_file
 from .backup_crypto import MAGIC, decrypt_file, encrypt_file
 from .settings_store import get_setting
 
