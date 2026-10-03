@@ -37,7 +37,7 @@ jobs:
       matrix:
         test_file: ${{ fromJSON(needs.discover.outputs.matrix) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 1
+    timeout-minutes: 2
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -46,8 +46,30 @@ jobs:
       - run: python -m pip install --upgrade "setuptools>=83"
       - run: pip install -r requirements.lock
       - run: pip install -e .[dev] --no-deps
+      - name: Install browser dependencies for E2E files
+        if: ${{ startsWith(matrix.test_file, 'tests/e2e/') }}
+        run: |
+          pip install playwright pytest-playwright
+          playwright install --with-deps chromium
+      - name: Start application for E2E files
+        if: ${{ startsWith(matrix.test_file, 'tests/e2e/') }}
+        env:
+          OLLAMA_BASE_URL: http://127.0.0.1:11434
+          MYAI_OFFLINE_STRICT: "true"
+        shell: bash
+        run: |
+          nohup uvicorn my_ai.api:app --host 127.0.0.1 --port 8000 > /tmp/my-ai-e2e.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/health; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/my-ai-e2e.log
+          exit 1
       - name: Run exactly one test file (hard 30s timeout)
         shell: bash
+        env:
+          BASE_URL: http://127.0.0.1:8000
+          E2E_PASSWORD: test-password
         run: |
           set +e
           timeout --signal=TERM --kill-after=5s 30s pytest -q "${{ matrix.test_file }}"
@@ -56,3 +78,6 @@ jobs:
             echo "TEST_TIMEOUT file=${{ matrix.test_file }} timeout=30s"
           fi
           exit "$rc"
+      - name: Show E2E server log on failure
+        if: ${{ failure() && startsWith(matrix.test_file, 'tests/e2e/') }}
+        run: cat /tmp/my-ai-e2e.log || true
