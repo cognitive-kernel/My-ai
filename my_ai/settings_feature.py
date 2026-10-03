@@ -33,7 +33,7 @@ from .integration_catalog import register_integration, list_integrations, regist
 from .security_catalog import define_role, define_capability, set_permission, set_network_policy, set_filesystem_policy, set_subprocess_policy, set_self_modification_policy, list_security_policies
 from .registries import publish_workflow, update_workflow, list_workflows
 
-router = APIRouter(tags=["settings"])
+router = APIRouter(tags=["settings"])  # roadmap curriculum extraction integration
 _workers = ThreadPoolExecutor(max_workers=1, thread_name_prefix="myai-learning")
 _running: set[int] = set()
 
