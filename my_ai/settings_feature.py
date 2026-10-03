@@ -1847,21 +1847,21 @@ def settings_domain_capabilities_save(payload: DomainCapabilityRequest, request:
 @router.post("/settings/domain-capabilities/test")
 def settings_domain_capabilities_test(request: Request):
     require_admin(request)
+    from .domain.mt4 import status
+    result = status()
     data = _domain_settings()
-    install = Path(data["install_path"]).expanduser() if data["install_path"] else None
-    library = Path(data["library_path"]).expanduser() if data["library_path"] else None
-    install_exists = bool(install and install.exists() and install.is_dir())
-    library_exists = bool(library and library.exists() and library.is_dir())
-    ready = bool(data["enabled"] and install_exists and library_exists)
     return {
-        "healthy": ready,
+        "healthy": bool(result.get("connected")),
         "version": data["version"],
-        "install_path_exists": install_exists,
-        "library_path_exists": library_exists,
-        "message": "اتصال و مسیرهای محلی آماده هستند." if ready else "اتصال آماده نیست؛ مسیر نصب و مسیر کتابخانه را بررسی کنید.",
+        "install_path_exists": bool(result.get("connected") or data["install_path"]),
+        "library_path_exists": bool(data["library_path"]),
+        "message": (
+            "اتصال واقعی MT4 و Tick فعال است."
+            if result.get("connected")
+            else "اتصال واقعی MT4 آماده نیست: " + str(result.get("reason") or "Tick bridge در دسترس نیست.")
+        ),
+        "status": result,
     }
-
-
 
 
 def _settings_document() -> str:
