@@ -115,3 +115,26 @@ def test_router_regression_corpus_covers_ambiguous_and_high_risk_requests():
         assert intents.issubset(set(result.intents))
         if primary in {"code_execution", "git_write", "database_import"}:
             assert result.requires_confirmation is True
+
+
+def test_read_only_currency_price_lookup_is_not_code_execution():
+    from my_ai.domain.router import classify
+
+    class FakeClassifier:
+        def structured_chat_json(self, message, schema, system=None):
+            return {
+                "primary": "code_execution",
+                "intents": ["code_execution"],
+                "action": "execute",
+                "confidence": 0.99,
+                "language": None,
+                "topic": None,
+                "goal": "read the current AUD/USD price",
+                "project_path": None,
+                "urls": [],
+            }
+
+    intent = classify("قیمت الان AUD/USD چنده؟", classifier=FakeClassifier())
+    assert intent.name == "chat"
+    assert intent.requires_confirmation is False
+    assert intent.args["action"] == "answer"

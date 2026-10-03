@@ -4,7 +4,7 @@ import json
 import logging
 import re
 from html import escape
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 NAV_STYLE = """
 <style id="myAiGlobalNavStyle">
@@ -24,7 +24,7 @@ def _nav(path: str, help_anchor: str | None = None) -> str:
 <a class="brand" href="/">My-AI</a>
 <div class="group"><a class="{active('/')}" href="/">چت اصلی</a><a class="{active('/learning')}" href="/learning">پیشرفت و یادگیری</a><a class="{active('/image')}" href="/image">ساخت تصویر</a></div>
 <span class="sep"></span>
-<div class="group"><a class="{active('/settings')}" href="/settings/sections">تنظیمات</a><a class="{active('/self-diagnostics')}" href="/self-diagnostics">گزارش سلامت</a><a class="{active('/help')}" href="/help">راهنمای کامل</a></div>
+<div class="group"><a class="{active('/settings')}" href="/settings">تنظیمات</a><a class="{active('/self-diagnostics')}" href="/self-diagnostics">گزارش سلامت</a><a class="{active('/help')}" href="/help">راهنمای کامل</a></div>
 <a class="help" href="/help#{help_anchor}" target="_blank">راهنمای این صفحه</a>
 </nav>"""
 
@@ -86,7 +86,7 @@ def install_ui_extensions(app) -> None:
 
     @app.get('/settings/sections', response_class=HTMLResponse)
     async def settings_sections_page():
-        return HTMLResponse(_settings_sections(), headers={'Cache-Control':'no-store'})
+        return RedirectResponse(url='/settings', status_code=307)
 
     @app.get('/settings/section/{slug}', response_class=HTMLResponse)
     async def settings_section_page(slug: str):
@@ -112,7 +112,7 @@ def install_ui_extensions(app) -> None:
         response=await call_next(request)
         if not hasattr(response,'body') or not response.body:return response
         content_type=response.headers.get('content-type','')
-        if 'text/html' not in content_type or path in {'/login','/register'}:return response
+        if 'text/html' not in content_type:return response
         if path=='/learning':
             body=_learning_page()
         else:

@@ -9,9 +9,18 @@ from .access_policy import assert_mutation_allowed
 DOCS_DIR = Path(__file__).resolve().parent.parent / "docs" / "help"
 DOC_FILES = {"chat":"chat.md","learning":"learning.md","coding":"coding.md","security":"security.md","git":"github.md","memory":"memory.md","scheduler":"scheduler.md","voice":"voice.md","api":"api.md","docker":"docker.md","network-policy":"network-policy.md","self-development":"self-development.md"}
 DOC_TITLES = {"chat":"چت و گفتگو","learning":"یادگیری","coding":"برنامه‌نویسی","security":"امنیت و پن‌تست","git":"Git / GitHub","memory":"حافظه","scheduler":"Scheduler","voice":"صدا","api":"API","docker":"Docker","network-policy":"سیاست آفلاین و شبکه","self-development":"خودپایش و توسعه خودکار"}
+DOC_FALLBACK_FILES = {"security":"../SECURITY.md"}
+
+def _doc_path(component: str) -> Path:
+    key=(component or "chat").lower().strip()
+    primary=DOCS_DIR/DOC_FILES.get(key,"chat.md")
+    if primary.is_file():
+        return primary
+    fallback=DOCS_DIR/DOC_FALLBACK_FILES.get(key)
+    return (DOCS_DIR/fallback) if fallback else primary
 def local_help(component):
     key=(component or "chat").lower().strip()
-    p=DOCS_DIR/DOC_FILES.get(key,"chat.md")
+    p=_doc_path(key)
     return p.read_text(encoding="utf-8") if p.exists() else ""
 def local_help_html(component):
     out=[]

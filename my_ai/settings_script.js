@@ -341,13 +341,13 @@ async function saveControlRecordGUI(){
   try{var ns=byId("cp_namespace").value,name=byId("cp_name").value.trim(),payload=JSON.parse(byId("cp_payload").value||"{}");var x=await req("/settings/control-plane/"+encodeURIComponent(ns),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name,payload:payload,enabled:byId("cp_enabled").checked})});setText("cp_out","ذخیره شد: "+x.name+" v"+x.version);await loadControlRecordsGUI()}
   catch(e){setText("cp_out","خطا: "+e.message)}
 }
-async function savePromptGUI(){try{await req("/settings/prompts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:byId("prompt_name").value.trim(),text:byId("prompt_text").value,task:byId("prompt_task").value.trim()||"default",version:"1",enabled:false})});setText("registry_agent_out","Prompt منتشر شد.")}catch(e){setText("registry_agent_out","خطا: "+e.message)}}
-async function testPromptGUI(){try{var name=byId("prompt_name").value.trim(),input=byId("prompt_test_input").value.trim();if(!name||!input)throw Error("نام Prompt و ورودی آزمایشی الزامی است");var j=await req("/settings/prompts/"+encodeURIComponent(name)+"/test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({input:input})});setText("registry_agent_out","نتیجه تست:\n"+j.output)}catch(e){setText("registry_agent_out","خطا: "+e.message)}}
-async function activatePromptGUI(){try{await req("/settings/prompts/"+encodeURIComponent(byId("prompt_name").value.trim())+"/activate",{method:"POST"});setText("registry_agent_out","Prompt فعال شد.")}catch(e){setText("registry_agent_out","خطا: "+e.message)}}
-async function savePolicyGUI(){try{await req("/settings/policies",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:byId("policy_name").value.trim(),policy:JSON.parse(byId("policy_payload").value||"{}"),version:"1",enabled:false})});setText("registry_agent_out","Policy منتشر شد.")}catch(e){setText("registry_agent_out","خطا: "+e.message)}}
-async function proposePluginGUI(){try{await req("/settings/plugins",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:byId("plugin_name").value.trim(),source:byId("plugin_source").value.trim(),version:byId("plugin_version").value.trim(),capabilities:byId("plugin_caps").value.split(",").map(function(x){return x.trim()}).filter(Boolean),checksum:""})});setText("registry_agent_out","Plugin پیشنهاد شد.")}catch(e){setText("registry_agent_out","خطا: "+e.message)}}
-async function approvePluginGUI(){try{await req("/settings/plugins/"+encodeURIComponent(byId("plugin_name").value.trim())+"/approve",{method:"POST"});setText("registry_agent_out","Plugin تأیید شد.")}catch(e){setText("registry_agent_out","خطا: "+e.message)}}
-async function rejectPluginGUI(){try{await req("/settings/plugins/"+encodeURIComponent(byId("plugin_name").value.trim())+"/reject",{method:"POST"});setText("registry_agent_out","Plugin رد شد.")}catch(e){setText("registry_agent_out","خطا: "+e.message)}}
+async function savePromptGUI(){try{await req("/settings/prompts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:byId("prompt_name").value.trim(),text:byId("prompt_text").value,task:byId("prompt_task").value.trim()||"default",version:"1",enabled:false})});setText("prompt_out","Prompt منتشر شد.")}catch(e){setText("prompt_out","خطا: "+e.message)}}
+async function testPromptGUI(){try{var name=byId("prompt_name").value.trim(),input=byId("prompt_test_input").value.trim();if(!name||!input)throw Error("نام Prompt و ورودی آزمایشی الزامی است");var j=await req("/settings/prompts/"+encodeURIComponent(name)+"/test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({input:input})});setText("prompt_out","نتیجه تست:\n"+j.output)}catch(e){setText("prompt_out","خطا: "+e.message)}}
+async function activatePromptGUI(){try{await req("/settings/prompts/"+encodeURIComponent(byId("prompt_name").value.trim())+"/activate",{method:"POST"});setText("prompt_out","Prompt فعال شد.")}catch(e){setText("prompt_out","خطا: "+e.message)}}
+async function savePolicyGUI(){try{await req("/settings/policies",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:byId("policy_name").value.trim(),policy:JSON.parse(byId("policy_payload").value||"{}"),version:"1",enabled:false})});setText("registry_agent_out","Policy منتشر شد.")}catch(e){setText("prompt_out","خطا: "+e.message)}}
+async function proposePluginGUI(){try{await req("/settings/plugins",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:byId("plugin_name").value.trim(),source:byId("plugin_source").value.trim(),version:byId("plugin_version").value.trim(),capabilities:byId("plugin_caps").value.split(",").map(function(x){return x.trim()}).filter(Boolean),checksum:""})});setText("registry_agent_out","Plugin پیشنهاد شد.")}catch(e){setText("prompt_out","خطا: "+e.message)}}
+async function approvePluginGUI(){try{await req("/settings/plugins/"+encodeURIComponent(byId("plugin_name").value.trim())+"/approve",{method:"POST"});setText("registry_agent_out","Plugin تأیید شد.")}catch(e){setText("prompt_out","خطا: "+e.message)}}
+async function rejectPluginGUI(){try{await req("/settings/plugins/"+encodeURIComponent(byId("plugin_name").value.trim())+"/reject",{method:"POST"});setText("registry_agent_out","Plugin رد شد.")}catch(e){setText("prompt_out","خطا: "+e.message)}}
 async function loadProfilesGUI(){
   try{
     var j=await req("/settings/profiles"),box=byId("profiles");
@@ -397,70 +397,145 @@ async function pauseCourse(id){try{await req("/settings/courses/"+id+"/pause",{m
 
 async function loadCourses(){var box=byId("courses");if(!box)return;try{var j=await req("/settings/courses");box.innerHTML=(j.items||[]).map(function(c){return "<div class=\"card\"><h3>"+esc(c.name)+"</h3><p>"+esc(c.description)+"</p><div class=\"bar\"><div class=\"fill\" style=\"width:"+c.progress_percent+"%\">"+c.progress_percent+"%</div></div><p class=\"muted\">"+c.completed_topics+" از "+c.total_topics+" سرفصل کامل شده"+(c.current?" · اکنون: "+esc(c.current.title)+" · مرحله: "+esc(c.current.phase):"")+"</p><button type=\"button\" onclick=\"startCourse("+c.id+")\">شروع / ادامه یادگیری</button> <button type=\"button\" onclick=\"pauseCourse("+c.id+")\">توقف</button></div>"}).join("")||"آموزشی نیست"}catch(e){box.textContent="خطا در بارگذاری آموزش‌ها: "+e.message}}
 
-loadSettings();loadRegistry();loadUsers();loadPermissions();loadCourses();loadUIActions();loadProviderCatalog();setInterval(loadCourses,10000);setInterval(loadResourceStatus,5000);
+async function hydratePersistedSettings(){
+  try{
+    var state=await req("/settings/persisted"), v=state.values||{};
+    var aliases={
+      su_enabled:"self_update.enabled",su_approved:"self_update.approved",su_health:"self_update.health_url",
+      sr_enabled:"self_repair.enabled",sr_approval:"self_repair.require_approval",
+      lf_enabled:"learning.fast_enabled",lf_interval:"learning.interval_seconds",lf_retries:"learning.max_retries",
+      cpu_percent:"resources.cpu_percent",cpu_threads:"resources.cpu_threads",ram_percent:"resources.ram_percent",gpu_layers:"resources.gpu_layers",
+      log_level:"logging.level"
+    };
+    Object.keys(v).forEach(function(key){
+      var id=key.replace(new RegExp("\\.","g"),"_").replace(/[^A-Za-z0-9_-]/g,"_");
+      if(!aliases[id])aliases[id]=key;
+    });
+    Object.keys(aliases).forEach(function(id){
+      var el=byId(id),key=aliases[id],value=v[key];
+      if(!el||value===undefined||value===null)return;
+      if(el.type==="checkbox")el.checked=String(value).toLowerCase()==="true"||value===true;
+      else if(el.type!=="password"||value!=="********")el.value=value;
+    });
+  }catch(e){console.warn("settings hydration failed",e)}
+}
+
+async function refreshDomainSettingsAfterBootstrap(){
+  if(typeof loadDomainSettings!=="function")return;
+  try{await loadDomainSettings()}catch(e){console.warn("domain settings hydration failed",e)}
+}
+
+loadSettings().then(function(){return hydratePersistedSettings()}).catch(function(){});
+setTimeout(refreshDomainSettingsAfterBootstrap,0);
+loadRoadmapOptions();loadRegistry();loadUsers();loadPermissions();loadCourses();loadUIActions();loadProviderCatalog();setInterval(loadCourses,10000);setInterval(loadResourceStatus,5000);
 
 loadLearningSourcesCatalog();loadRoutingGUI();loadControlNamespacesGUI();loadProfilesGUI();
 
 
+function loadRoadmapOptions(){
+  var box=byId("roadmap-options-list"), filter=byId("roadmap-filter"); if(!box)return;
+  function render(items){
+    var q=(filter&&filter.value||"").trim().toLocaleLowerCase();
+    box.innerHTML=(items||[]).map(function(section){
+      var matches=(section.items||[]).filter(function(item){return !q || (String(item.title)+" "+String(section.section)).toLocaleLowerCase().indexOf(q)>=0;});
+      if(!matches.length)return "";
+      return "<details class='topic' open><summary><b>"+esc(section.section)+"</b> <span class='muted'>("+matches.length+")</span></summary>"+
+        matches.map(function(item){return "<label style='display:block;margin:6px 0'><input type='checkbox' checked disabled> "+esc(item.title)+"</label>"}).join("")+"</details>";
+    }).join("")||"گزینه‌ای مطابق جست‌وجو پیدا نشد.";
+  }
+  if(filter)filter.addEventListener("input",function(){if(window.__myaiRoadmapOptions)render(window.__myaiRoadmapOptions)});
+  req("/settings/roadmap-options").then(function(j){window.__myaiRoadmapOptions=j.items||[];render(window.__myaiRoadmapOptions);}).catch(function(e){box.textContent="خطا در بارگذاری گزینه‌های نقشه توسعه: "+e.message});
+}
+
 function moduleGuiEsc(v){return esc(v)}
 function moduleGuiKey(v){return encodeURIComponent(String(v)).replace(/%/g,"_")}
-function moduleGuiId(prefix,namespace){return prefix+moduleGuiKey(namespace)}
+function moduleGuiId(prefix,namespace,field){return prefix+moduleGuiKey(namespace)+"-"+moduleGuiKey(field)}
+async function moduleGuiReq(url,opt,timeoutMs){
+  var controller=new AbortController(), timer=setTimeout(function(){controller.abort()},timeoutMs||30000);
+  try{
+    var options=Object.assign({},opt||{}, {signal:controller.signal});
+    return await req(url,options);
+  }catch(e){
+    if(e&&e.name==="AbortError") throw Error("عملیات پس از ۳۰ ثانیه متوقف شد.");
+    throw e;
+  }finally{clearTimeout(timer)}
+}
+function moduleGuiInput(schema,namespace){
+  var id=moduleGuiId("mg-field-",namespace,schema.name), value=schema.default;
+  if(schema.type==="boolean"){
+    return "<label><input id='"+id+"' type='checkbox' "+(value?"checked":"")+"> "+moduleGuiEsc(schema.label)+"</label>";
+  }
+  if(schema.type==="select"){
+    return "<label>"+moduleGuiEsc(schema.label)+"<select id='"+id+"'>"+(schema.choices||[]).map(function(x){return "<option value='"+moduleGuiEsc(x)+"'"+(x===value?" selected":"")+">"+moduleGuiEsc(x)+"</option>"}).join("")+"</select></label>";
+  }
+  if(schema.type==="json"){
+    return "<label>"+moduleGuiEsc(schema.label)+"<textarea id='"+id+"' rows='5'>"+moduleGuiEsc(schema.default||"{}")+"</textarea></label>";
+  }
+  var type=schema.type==="number"?"number":"text";
+  var min=schema.min!=null?" min='"+schema.min+"'":"", max=schema.max!=null?" max='"+schema.max+"'":"";
+  return "<label>"+moduleGuiEsc(schema.label)+"<input id='"+id+"' type='"+type+"' value='"+moduleGuiEsc(schema.default==null?"":schema.default)+"'"+min+max+"></label>";
+}
 async function loadModuleGui(){
   var box=byId("module-gui-list"); if(!box)return;
   try{
-    var j=await req("/settings/control-plane/namespaces");
-    var items=j.items||j.namespaces||[];
+    var j=await moduleGuiReq("/settings/module-forms",{method:"GET"},30000);
+    var items=j.items||[];
     if(!items.length){box.textContent="ماژول قابل تنظیمی ثبت نشده است";return;}
-    box.innerHTML=items.map(function(ns){
-      var name=typeof ns==="string"?ns:(ns.name||ns.namespace||"");
-      var key=moduleGuiKey(name);
+    box.innerHTML=items.map(function(schema){
+      var ns=schema.namespace, key=moduleGuiKey(ns);
       return "<details class='moduleCard'>"+
-        "<summary>"+moduleGuiEsc(name)+"</summary>"+
-        "<div class='moduleFields'>"+
-        "<label>نام رکورد<input id='mg-name-"+key+"' placeholder='مثلاً default'></label>"+
-        "<label>تنظیمات ماژول<textarea id='mg-payload-"+key+"' rows='7' placeholder='{&quot;enabled&quot;:true}'></textarea></label>"+
-        "<label><input id='mg-enabled-"+key+"' type='checkbox' checked> فعال</label>"+
-        "</div>"+
-        "<div class='moduleActions'><button type='button' onclick='saveModuleGui("+JSON.stringify(name)+")'>ذخیره</button>"+
-        "<button type='button' onclick='loadModuleRecordsGui("+JSON.stringify(name)+")'>نمایش رکوردها</button></div>"+
-        "<div class='moduleActions'><button type='button' onclick='moduleActionGUI("+JSON.stringify(name)+",\"start\")'>Start</button>"+
-        "<button type='button' onclick='moduleActionGUI("+JSON.stringify(name)+",\"pause\")'>Pause</button>"+
-        "<button type='button' onclick='moduleActionGUI("+JSON.stringify(name)+",\"resume\")'>Resume</button>"+
-        "<button type='button' onclick='moduleActionGUI("+JSON.stringify(name)+",\"stop\")'>Stop</button>"+
-        "<button type='button' onclick='moduleActionGUI("+JSON.stringify(name)+",\"retry\")'>Retry</button></div>"+
+        "<summary>"+moduleGuiEsc(ns)+" · فرم "+moduleGuiEsc(schema.group)+"</summary>"+
+        "<div class='moduleFields'>"+schema.fields.map(function(f){return moduleGuiInput(f,ns)}).join("")+"</div>"+
+        "<div class='moduleActions'><button type='button' onclick='saveModuleGui("+JSON.stringify(ns)+")'>ذخیره فرم</button>"+
+        "<button type='button' onclick='loadModuleRecordsGui("+JSON.stringify(ns)+")'>نمایش رکوردها</button>"+
+        "<button type='button' onclick='loadModuleRecordsGui("+JSON.stringify(ns)+")'>ویرایش رکورد</button></div>"+
+        "<div class='moduleActions'><button type='button' onclick='moduleActionGUI("+JSON.stringify(ns)+",\"start\")'>Start</button>"+
+        "<button type='button' onclick='moduleActionGUI("+JSON.stringify(ns)+",\"pause\")'>Pause</button>"+
+        "<button type='button' onclick='moduleActionGUI("+JSON.stringify(ns)+",\"resume\")'>Resume</button>"+
+        "<button type='button' onclick='moduleActionGUI("+JSON.stringify(ns)+",\"stop\")'>Stop</button>"+
+        "<button type='button' onclick='moduleActionGUI("+JSON.stringify(ns)+",\"retry\")'>Retry</button></div>"+
         "<div id='mg-action-"+key+"' class='muted'>آخرین عملیات: —</div>"+
         "<div id='mg-records-"+key+"' class='muted moduleRecords'></div></details>";
     }).join("");
-  }catch(e){box.textContent="خطا در بارگذاری ماژول‌ها: "+e.message}
+  }catch(e){box.textContent="خطا در بارگذاری فرم‌های ماژول: "+e.message}
 }
 async function moduleActionGUI(namespace,action){
   var key=moduleGuiKey(namespace), out=byId("mg-action-"+key);
   if(out)out.textContent="در حال اجرای "+action+"...";
   try{
-    var j=await req("/settings/control-plane/actions",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:action,namespace:namespace,target_id:null})});
+    var j=await moduleGuiReq("/settings/control-plane/actions",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:action,namespace:namespace,target_id:null})},30000);
     if(out)out.textContent="آخرین عملیات: "+action+" · id="+j.id+" · "+(j.status||"started");
     if(j.id)await pollModuleActionGUI(namespace,j.id);
   }catch(e){if(out)out.textContent="خطا: "+e.message}
 }
 async function pollModuleActionGUI(namespace,id){
-  var key=moduleGuiKey(namespace), out=byId("mg-action-"+key), attempts=0;
-  while(attempts++<10){
+  var key=moduleGuiKey(namespace), out=byId("mg-action-"+key), deadline=Date.now()+30000;
+  while(Date.now()<deadline){
     try{
-      var j=await req("/settings/control-plane/actions/"+encodeURIComponent(id));
+      var j=await moduleGuiReq("/settings/control-plane/actions/"+encodeURIComponent(id),{method:"GET"},5000);
       if(out)out.textContent="آخرین عملیات: "+j.action+" · "+j.status+" · "+j.progress+"%"+(j.error?" · "+j.error:"");
       if(["completed","failed","cancelled"].indexOf(String(j.status))>=0)return;
       await new Promise(function(resolve){setTimeout(resolve,1000)});
     }catch(e){if(out)out.textContent="خطا در وضعیت عملیات: "+e.message;return}
   }
+  if(out)out.textContent="عملیات پس از ۳۰ ثانیه متوقف شد؛ وضعیت worker بررسی نشده باقی ماند.";
 }
-
 async function saveModuleGui(namespace){
   try{
-    var key=moduleGuiKey(namespace), name=byId("mg-name-"+key).value.trim(), raw=byId("mg-payload-"+key).value.trim();
-    if(!name)throw Error("نام رکورد الزامی است");
-    var payload=raw?JSON.parse(raw):{};
-    if(!payload || typeof payload!=="object" || Array.isArray(payload))throw Error("تنظیمات باید JSON object باشد");
-    await req("/settings/control-plane/"+encodeURIComponent(namespace),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name,payload:payload,enabled:byId("mg-enabled-"+key).checked})});
+    var schemaResponse=await moduleGuiReq("/settings/module-forms",{method:"GET"},30000);
+    var schema=(schemaResponse.items||[]).find(function(x){return x.namespace===namespace});
+    if(!schema)throw Error("schema ماژول پیدا نشد");
+    var name=prompt("نام رکورد", "default");
+    if(!name||!name.trim())throw Error("نام رکورد الزامی است");
+    var payload={};
+    schema.fields.forEach(function(f){
+      var el=byId(moduleGuiId("mg-field-",namespace,f.name)); if(!el)return;
+      if(f.type==="boolean")payload[f.name]=!!el.checked;
+      else if(f.type==="number")payload[f.name]=Number(el.value);
+      else if(f.type==="json")payload[f.name]=el.value?JSON.parse(el.value):{};
+      else payload[f.name]=el.value;
+    });
+    await moduleGuiReq("/settings/control-plane/"+encodeURIComponent(namespace),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name.trim(),payload:payload,enabled:true})},30000);
     setText("module-gui-out","ماژول "+namespace+" / "+name+" ذخیره شد."); await loadModuleRecordsGui(namespace);
   }catch(e){setText("module-gui-out","خطا: "+e.message)}
 }

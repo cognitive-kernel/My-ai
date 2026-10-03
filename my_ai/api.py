@@ -1052,6 +1052,25 @@ def chat(r:ChatRequest, request:Request):
         learn_intent=intent.name == "learning"
         sid=r.session_id or execute("INSERT INTO chat_sessions(title,kind,language,user_id) VALUES(?,?,?,?)",(msg[:60] or "گفتگوی جدید","learning" if learn_intent else "chat",requested,user["id"]))
         _save_chat_attachments(sid,attachments); policy=parse_command(msg); security_words=policy.security; fix_requested=policy.security_action=="fix"
+
+        # Read-only market quotes are a registered capability. Do not send them
+        # through the general LLM path: the configured MT4 adapter is the source
+        # of truth for the terminal/broker quote.
+        capability = intent.args.get("capability") if isinstance(intent.args, dict) else None
+        if capability == "market.quote":
+            from .domain.mt4 import MT4Unavailable, quote as mt4_quote
+            symbol = str(intent.args.get("symbol") or "").upper()
+            quote_data = None
+            try:
+                quote_data = mt4_quote(symbol)
+                answer = (
+                    f"{quote_data['symbol']}: Bid={quote_data['bid']:.5f} | Ask={quote_data['ask']:.5f} "
+                    f"| زمان Tick: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(quote_data['timestamp']))}"
+                )
+            except MT4Unavailable as exc:
+                answer = f"قیمت از MT4 دریافت نشد: {exc}"
+            _persist_api_chat_turn(sid, msg, answer)
+            return {"type":"market_quote","answer":answer,"data":{"quote":quote_data,"source":"mt4","connected":quote_data is not None},"session_id":sid}
         if security_words:
             if not tool_allowed(user,"security","execute"):
                 raise HTTPException(403,"Tool permission denied: security:execute")
@@ -1104,7 +1123,15 @@ def chat(r:ChatRequest, request:Request):
         if any(x in low for x in ("تایید آپدیت","تأیید آپدیت","تایید بروزرسانی","تأیید بروزرسانی","تایید به روزرسانی","تأیید به روزرسانی","confirm update","approve update","apply update")):
             if user["role"] != "admin":
                 raise HTTPException(403,"Self-update requires administrator approval.")
-        answer=agent.chat(msg,sid,attachments=attachments)
+        try:
+            answer=agent.chat(msg,sid,attachments=attachments)
+        except Exception as exc:
+            error_text=str(exc)
+            try:
+                _persist_api_chat_turn(sid,msg,"خطا در پاسخ‌گویی: "+error_text)
+            except Exception:
+                logger.exception("Failed to persist chat error")
+            raise HTTPException(502,error_text) from exc
         user_message=fetch_all("SELECT id FROM conversations WHERE session_id=? AND role='user' ORDER BY id DESC LIMIT 1",(sid,))
         if attachments and user_message:
             execute("UPDATE chat_attachments SET conversation_id=? WHERE session_id=? AND conversation_id IS NULL",(user_message[0]["id"],sid))
