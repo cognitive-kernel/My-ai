@@ -23,13 +23,13 @@ def test_mt4_connector_reads_real_bridge_tick(monkeypatch, tmp_path):
     (bridge / "my_ai_tick.json").write_text(json.dumps(payload), encoding="utf-8")
 
     values = {
-        "mt4.enabled": True,
-        "mt4.install_path": str(tmp_path),
-        "mt4.library_path": "",
-        "mt4.bridge_file": "MQL4/Files/my_ai_tick.json",
-        "mt4.max_tick_age_seconds": 10,
-        "mt4.account": "12345",
-        "mt4.server": "Demo-Server",
+        "domain.mt4mt5.enabled": True,
+        "domain.mt4mt5.install_path": str(tmp_path),
+        "domain.mt4mt5.library_path": "",
+        "domain.mt4mt5.bridge_file": "MQL4/Files/my_ai_tick.json",
+        "domain.mt4mt5.max_tick_age_seconds": 10,
+        "domain.mt4mt5.account": "12345",
+        "domain.mt4mt5.server": "Demo-Server",
     }
     monkeypatch.setattr(mt4, "get_bool", lambda key, default=False: bool(values.get(key, default)))
     monkeypatch.setattr(mt4, "get_setting", lambda key, default=None: values.get(key, default))
@@ -49,11 +49,11 @@ def test_mt4_connector_rejects_stale_tick(monkeypatch, tmp_path):
     payload = {"symbol": "AUDUSD", "bid": 0.69, "ask": 0.70, "timestamp": time.time() - 60}
     (bridge / "my_ai_tick.json").write_text(json.dumps(payload), encoding="utf-8")
     values = {
-        "mt4.enabled": True,
-        "mt4.install_path": str(tmp_path),
-        "mt4.library_path": "",
-        "mt4.bridge_file": "MQL4/Files/my_ai_tick.json",
-        "mt4.max_tick_age_seconds": 10,
+        "domain.mt4mt5.enabled": True,
+        "domain.mt4mt5.install_path": str(tmp_path),
+        "domain.mt4mt5.library_path": "",
+        "domain.mt4mt5.bridge_file": "MQL4/Files/my_ai_tick.json",
+        "domain.mt4mt5.max_tick_age_seconds": 10,
     }
     monkeypatch.setattr(mt4, "get_bool", lambda key, default=False: bool(values.get(key, default)))
     monkeypatch.setattr(mt4, "get_setting", lambda key, default=None: values.get(key, default))
