@@ -14,6 +14,7 @@ TOOL_RULES = (
     ("/code/run", "code-execution"),
     ("/code/generate", "code-generation"),
     ("/chat", "chat"),
+    ("/learn/", "learning"),
     ("/learn/url", "learning"),
     ("/learning/", "learning"),
     ("/scheduler/", "scheduler"),

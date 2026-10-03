@@ -92,6 +92,12 @@ class VoiceSynthesizeRequest(BaseModel):
     output_path: str
 
 
+class TopicResearchRequest(BaseModel):
+    topic: str
+    domains: list[str] = Field(default_factory=list)
+    limit: int = 6
+
+
 class URLRequest(BaseModel):
     url: HttpUrl
     topic: str = "Python"

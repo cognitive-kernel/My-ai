@@ -181,6 +181,16 @@ class LearningEngine:
                 )
         return knowledge
 
+    def find_authoritative_references(self, topic: str, domains=None, limit: int = 6):
+        """Find source references for a topic, prioritizing configured authoritative sources."""
+        topic = str(topic or "").strip()
+        if not topic:
+            raise ValueError("Topic is required.")
+        limit = max(1, min(int(limit), 20))
+        requested_domains = [str(x).strip() for x in (domains or []) if str(x).strip()]
+        results = self.web.search(topic, domains=requested_domains or None, limit=limit)
+        return {"topic": topic, "sources": results, "count": len(results)}
+
     def study_url(self,url,topic="Python"):
         title,source=self.web.fetch(url)
         note=self.llm.chat(

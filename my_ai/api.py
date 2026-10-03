@@ -56,7 +56,7 @@ from .api_models import (
     CodeRequest, GitRequest, ImportRequest, KnowledgeUpdateRequest, LanguageRequest,
     LearnRequest, PermissionRequest, ProjectRequest, ProjectBuildRequest, ProgramRequest, PythonToolRequest,
     RepairRequest, SchedulerRequest, SecurityRequest, SelfUpdateRequest, SkillEvidenceRequest,
-    SkillRevalidateRequest, SQLQueryRequest, SQLiteQueryRequest, ToolRequest, URLRequest,
+    SkillRevalidateRequest, SQLQueryRequest, SQLiteQueryRequest, ToolRequest, TopicResearchRequest, URLRequest,
     VoiceSynthesizeRequest, VoiceTranscribeRequest,
 )
 from .readiness import build_readiness
@@ -1111,6 +1111,14 @@ def chat(r:ChatRequest, request:Request):
     except HTTPException:
         raise
     except Exception as e: raise HTTPException(502,str(e))
+
+@app.post("/learn/references")
+def learn_references(r: TopicResearchRequest, request: Request):
+    require_user(request)
+    try:
+        return learner.find_authoritative_references(r.topic, r.domains, r.limit)
+    except Exception as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 @app.post("/learn/url")
 def learn_url(r:URLRequest, request:Request):
