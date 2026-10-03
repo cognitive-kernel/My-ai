@@ -34,6 +34,7 @@ from .security_catalog import define_role, define_capability, set_permission, se
 from .registries import publish_workflow, update_workflow, list_workflows
 from .metatrader_adapter import test_connection as mt_test_connection, quote as mt_quote, bars as mt_bars, indicator as mt_indicator, compile_indicator as mt_compile_indicator, install_indicator as mt_install_indicator
 from . import settings_ui
+from .capability_registry import discover as discover_capabilities, health as capability_health
 
 router = APIRouter(tags=["settings"])  # roadmap curriculum extraction integration
 _workers = ThreadPoolExecutor(max_workers=1, thread_name_prefix="myai-learning")
@@ -1947,3 +1948,13 @@ def install(app: Any) -> None:
             return html.replace("<h1>My-AI ", "<h1>My-AI "+link+" ", 1)
         api_module.page = page_with_learning
 
+
+@router.get("/settings/capability-registry")
+def settings_capability_registry(request: Request):
+    require_admin(request)
+    return {"capabilities": discover_capabilities()}
+
+@router.get("/settings/capability-registry/{name}/health")
+def settings_capability_health(name: str, request: Request):
+    require_admin(request)
+    return capability_health(name)
