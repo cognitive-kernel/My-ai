@@ -225,8 +225,8 @@ My-AI باید یک Agent داینامیک و local-first باشد، نه مجم
 [x] self-diagnostics وجود دارد.
 [x] readiness و observability وجود دارند.
 [x] Eval Harness وجود دارد.
-[ ] benchmark واقعی برای routing، retrieval، coding، tool-use و market-data ایجاد شود.
-[ ] baseline قبل/بعد تغییرات مهم ثبت شود.
+[ ] benchmark واقعی برای routing، retrieval، coding، tool-use و market-data ایجاد و آماده اجرا شده؛ اجرای benchmark و ثبت baseline باقی است.
+[ ] سازوکار مقایسه baseline قبل/بعد ایجاد شده؛ ثبت baseline واقعی پس از اجرای benchmark باقی است.
 [x] Generator و Verifier تا حد امکان جدا باشند.
 [x] confidence بر اساس evidence و verification باشد.
 [x] برای market data، source/symbol/timestamp/freshness بررسی شود.
@@ -267,17 +267,17 @@ My-AI باید بتواند یک سایت، نرم‌افزار، repository ی�
 [x] تولید migration/schema/configuration مورد نیاز در صورت مجاز بودن.
 [x] ایجاد mock/stub برای dependencyهایی که در محیط بازتولید قابل دسترسی نیستند.
 [x] تولید README و runbook برای اجرای پروژه بازتولیدشده.
-[ ] اجرای build، lint، unit، integration و E2E test متناسب با پروژه.
-[ ] اجرای visual regression و behavioral comparison در صورت وجود محیط مرجع.
-[ ] اجرای verification loop و اصلاح اختلاف‌ها به‌صورت مرحله‌ای.
-[ ] ثبت تفاوت‌های باقی‌مانده بین مرجع و بازتولیدشده.
+[ ] orchestration و scaffold اجرای build/lint/unit/integration/E2E در reproduction آماده شده؛ اجرای واقعی تست باقی است.
+[ ] verifier برای visual/behavioral comparison پیاده‌سازی شده؛ اجرای مقایسه با محیط مرجع باقی است.
+[ ] verification/repair loop پیاده‌سازی شده؛ اجرای واقعی loop باقی است.
+[ ] ثبت تفاوت‌ها در verifier پیاده‌سازی شده؛ تولید گزارش واقعی پس از اجرا باقی است.
 
 ### 12.1.4 Fidelity و Verification
 
 [x] مقایسه ساختاری route/component/API/data-flow بین مرجع و بازتولید.
-[ ] مقایسه screenshot و visual layout در viewportهای مختلف.
-[ ] مقایسه interaction و state transitionها.
-[ ] مقایسه response schema و error behavior در محیط مجاز.
+[ ] زیرساخت مقایسه screenshot آماده شده؛ اجرای viewportهای واقعی باقی است.
+[ ] behavioral comparison زیرساخت دارد؛ اجرای سناریوهای واقعی باقی است.
+[ ] contract comparison زیرساخت دارد؛ اجرای مقایسه روی محیط مرجع باقی است.
 [x] اندازه‌گیری coverage بازتولید نسبت به specification استخراج‌شده.
 [x] هیچ ادعای «عیناً مشابه» بدون evidence و test report پذیرفته نشود.
 [x] هر اختلاف باید به requirement، evidence یا محدودیت محیطی trace شود.
@@ -320,7 +320,7 @@ My-AI باید بتواند یک سایت، نرم‌افزار، repository ی�
 
 [x] diagnostics و self-repair foundation وجود دارد.
 [x] self-update به صورت deny-by-default طراحی شده است.
-[ ] inspect → diagnose → proposal → isolated test → approval → apply → test → rollback به طور کامل verified شود.
+[ ] lifecycle کامل inspect → diagnose → proposal → isolated test → approval → apply → test → rollback پیاده‌سازی شده؛ verification اجرایی باقی است.
 [x] Agent بدون policy و approval source اصلی خود را تغییر ندهد.
 
 ## 17. Git / Integrations
@@ -337,11 +337,11 @@ My-AI باید بتواند یک سایت، نرم‌افزار، repository ی�
 [x] UI/API کامل باشد.
 [x] persistence کامل باشد.
 [x] permission/audit کامل باشد.
-[ ] validation واقعی انجام شده باشد.
-[ ] تست مرتبط موفق باشد.
+[ ] validation runtime آماده اجراست؛ اجرای validation واقعی باقی است.
+[ ] تست‌های مرتبط آماده‌اند؛ اجرای آن‌ها باقی است.
 [x] failure path بررسی شده باشد.
 [ ] این فایل به‌روزرسانی شده باشد.
-[ ] در صورت task-based بودن، قابلیت با semantic routing و بدون trigger ثابت کار کند.
+[ ] semantic routing و capability dispatch پیاده‌سازی شده؛ اجرای acceptance tests باقی است.
 
 ## 19. ترتیب اجرای توسعه
 
@@ -358,7 +358,7 @@ My-AI باید بتواند یک سایت، نرم‌افزار، repository ی�
 [x] Capability Registry
 [x] dynamic tool selection
 [x] schema-based calls
-[ ] verification loop
+[ ] verification loop پیاده‌سازی شده؛ اجرای acceptance verification باقی است.
 
 ### مرحله 3 — Indicator Engineering
 [x] MQL4 generation
@@ -384,11 +384,11 @@ My-AI باید بتواند یک سایت، نرم‌افزار، repository ی�
 [x] permissions form
 
 ### مرحله 6 — Verification and Optimization
-[ ] benchmarks
+[ ] benchmark harness پیاده‌سازی شده؛ اجرای benchmark باقی است.
 [ ] regression suite
 [x] hardware-aware budgets
-[ ] latency/token measurement
-[ ] reliability verification
+[ ] measurement برای latency در routing benchmark و budget موجود است؛ اندازه‌گیری واقعی باقی است.
+[ ] reliability verification infrastructure موجود است؛ اجرای verification باقی است.
 
 ## 20. ماژول‌ها و قابلیت‌های موجود در repository
 
